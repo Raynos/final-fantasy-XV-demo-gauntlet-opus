@@ -126,7 +126,7 @@ export function corestones(rng: Rng, n: number, overlap = 0.38): Corestone[] {
   // than the original, and leaving the base at 1.0 turns a boulder field into
   // a field of towers.
   const s0 = rng.range(0.55, 0.70);
-  const taper = rng.range(0.10, 0.22);
+  const taper = rng.range(0.04, 0.28);
   // The lean drifts: a random walk in the horizontal offset rather than n
   // independent draws, so the stack has a direction instead of a wobble. It is
   // **clamped**, because the overlap is what hides the seam and a course
@@ -135,14 +135,39 @@ export function corestones(rng: Rng, n: number, overlap = 0.38): Corestone[] {
   // floating rock, which is the single defect four consecutive blind judges
   // have named in this project.
   const lean = 0.30;
+  // **One FABRIC azimuth for the whole stack, not a free turn per course.**
+  //
+  // A corestone stack is one joint block that weathered apart along its own
+  // bedding, so its courses share a plan orientation. Yawing each course over a
+  // full turn is not extra variety, it is the mushroom: `Rocks._stack` spreads
+  // the anchor's `sx`/`sz` -- two independent gaussians at sd 0.30, so a mean
+  // cross-section anisotropy of 1.70 -- over every course, and two courses at
+  // ninety degrees to each other present a cap far wider than the neck beneath
+  // it from some azimuths even though every width rule in this file is
+  // satisfied. Measured on the shipped generator by `src/tools/probes/mushroom.mts`,
+  // over 16 viewing azimuths per object: the plan reads a p99 cap ratio of
+  // **1.28** and the thing the game draws reads **3.68, with a maximum of 7.4**.
+  // The whole width guarantee was stated on the local x axis of an object that
+  // is looked at from every azimuth.
+  //
+  // The jitter is deliberately small: enough that two courses are not a
+  // machined extrusion, far too little to swing the long axis across the short
+  // one.
+  const fabric = rng.next() * Math.PI * 2;
+  const twist = rng.gauss(0, 0.20);
   let ax = rng.gauss(0, 0.09), az = rng.gauss(0, 0.09);
   for (let i = 0; i < n; i++) {
-    const s = s0 * (1 - i * taper) * rng.range(0.88, 1.12);
-    const sy = rng.range(0.52, 1.00);
+    // Narrowing is free and widening is capped by `stackPlan`, so the jitter is
+    // deliberately asymmetric: a waisted course is a silhouette, a proud one is
+    // a cap. Widened after the fabric alignment below took a degree of freedom
+    // out of the family — measured, `rock:stack` went 23.8 -> 22.8 distinct and
+    // this is where it is bought back, on a parameter that cannot mushroom.
+    const s = s0 * (1 - i * taper) * rng.range(0.74, 1.14);
+    const sy = rng.range(0.44, 1.06);
     out.push({
       dx: THREE.MathUtils.clamp(ax, -lean, lean) * s,
       dz: THREE.MathUtils.clamp(az, -lean, lean) * s,
-      s, sy, yaw: rng.next() * Math.PI * 2,
+      s, sy, yaw: fabric + twist * i + rng.gauss(0, 0.16),
     });
     ax += rng.gauss(0, 0.13); az += rng.gauss(0, 0.13);
   }
@@ -960,17 +985,17 @@ interface TorArchetype {
  */
 const TORS: TorArchetype[] = [
   {
-    key: 'fin', w: 0.14, n: [3, 5], h: [12, 22], ar: [0.85, 1.55], thin: [0.34, 0.54],
-    taper: [0.06, 0.24], lap: [0.40, 0.64], bed: [0.00, 0.30], lean: [0.05, 0.22],
-    drift: 0.30, kinds: ['spire', 'slab', 'bedded'],
+    key: 'fin', w: 0.14, n: [3, 5], h: [12, 22], ar: [0.85, 1.55], thin: [0.26, 0.62],
+    taper: [0.06, 0.24], lap: [0.40, 0.64], bed: [0.00, 0.44], lean: [0.05, 0.22],
+    drift: 0.62, kinds: ['spire', 'slab', 'bedded'],
   },
   {
-    key: 'boss', w: 0.30, n: [2, 4], h: [6, 12], ar: [0.42, 0.82], thin: [0.55, 1.0],
+    key: 'boss', w: 0.30, n: [2, 4], h: [6, 12], ar: [0.42, 0.82], thin: [0.40, 1.0],
     taper: [0.01, 0.14], lap: [0.24, 0.44], bed: [0.00, 0.24], lean: [0.00, 0.10],
     drift: 0.70, kinds: ['granite', 'bedded', 'slab', 'worn'],
   },
   {
-    key: 'pinnacle', w: 0.32, n: [4, 7], h: [14, 30], ar: [0.70, 1.40], thin: [0.55, 1.0],
+    key: 'pinnacle', w: 0.32, n: [4, 7], h: [14, 30], ar: [0.70, 1.40], thin: [0.38, 1.0],
     taper: [0.08, 0.24], lap: [0.34, 0.58], bed: [0.02, 0.28], lean: [0.03, 0.20],
     drift: 0.32, kinds: ['granite', 'bedded', 'slab', 'spire'],
   },
@@ -979,9 +1004,9 @@ const TORS: TorArchetype[] = [
     // so the outline steps in and out instead of tapering. It is the one form
     // whose silhouette is *not* a monotone ramp, which is exactly why it is
     // here — see the bedding term in `torPlan`.
-    key: 'hoodoo', w: 0.24, n: [3, 6], h: [9, 19], ar: [0.60, 1.30], thin: [0.55, 1.0],
-    taper: [-0.04, 0.10], lap: [0.30, 0.52], bed: [0.18, 0.42], lean: [0.02, 0.18],
-    drift: 0.26, kinds: ['bedded', 'slab', 'granite'],
+    key: 'hoodoo', w: 0.24, n: [3, 6], h: [9, 19], ar: [0.60, 1.30], thin: [0.38, 1.0],
+    taper: [-0.04, 0.10], lap: [0.30, 0.52], bed: [0.18, 0.52], lean: [0.02, 0.18],
+    drift: 0.46, kinds: ['bedded', 'slab', 'granite'],
   },
 ];
 
@@ -1232,6 +1257,23 @@ export function torPlan(
   const bed = _r2(rng, arch.bed);
   const beta = [Math.PI, (2 * Math.PI) / 3, Math.PI / 2][Math.floor(rng.next() * 3)];
   const phase = rng.next() * Math.PI * 2;
+  // **One FABRIC azimuth for the whole tor.** See {@link corestones} for the
+  // measurement: a per-course free turn, on a cross-section stated as `thin`
+  // (0.34 for a fin), presents a cap up to 2.6x wider than its own neck from
+  // some viewing azimuth while every width rule below is satisfied. That is
+  // the mushroom, and it is why the judge kept seeing one after `a1b1cd4`
+  // fixed the lateral-step half of it: the rule was stated on the local x axis
+  // of an object that is looked at from every azimuth. A tor is one rock mass
+  // parted along one joint set, so its courses share a plan orientation.
+  const fabric = rng.next() * Math.PI * 2;
+  // ...and a **progressive twist** on top of it, which is the half of the free
+  // turn that was worth keeping. A joint set is not perfectly planar and a
+  // differentially weathered stack shears slightly as it rises, so the courses
+  // rotate together instead of independently. It costs nothing in cap ratio —
+  // adjacent courses stay within `twist / (n - 1)` of each other — and it is a
+  // real silhouette parameter now that the fabric is shared, because the tor's
+  // cross-section no longer averages itself out over its own height.
+  const twist = rng.gauss(0, 0.30);
   // The lean: an azimuth the eye reads and a magnitude the bench measures.
   const leanTop = _r2(rng, arch.lean);
   const leanAz = rng.next() * Math.PI * 2;
@@ -1251,7 +1293,7 @@ export function torPlan(
     // Width tapers with height and steps with the bedding; the height of each
     // course tapers more gently, so the stack narrows rather than shrinking.
     let wz = w0 * Math.max(0.20, 1 - i * taper + bed * Math.cos(i * beta + phase))
-      * rng.range(0.82, 1.18);
+      * rng.range(0.72, 1.20);
     // **A course may be at most a seventh wider than the one it stands on.**
     // The bedding term is what puts a proud caprock on a hoodoo, and unchecked
     // it also puts a table three metres wider than its own neck — which is a
@@ -1260,7 +1302,13 @@ export function torPlan(
     if (i > 0) wz = Math.min(wz, wPrev * 1.15);
     const wPrev0 = i > 0 ? wPrev : Infinity;
     let hz = h0 * (1 - i * taper * 0.6) * rng.range(0.76, 1.30);
-    let dz = wz * thin * rng.range(0.80, 1.26);
+    // **The depth axis takes the same cap as the width axis**, because with the
+    // courses aligned on one fabric it is the other axis the eye sees the tor
+    // from. `thin` is per-tor but the +-26% jitter on top of it is per-course,
+    // so an unclamped pair can differ by 1.26/0.80 = 1.58 in depth with their
+    // widths agreeing to 15% — a cap seen edge-on, which is exactly the shape
+    // the width rule exists to forbid seen face-on.
+    let dz = wz * thin * rng.range(0.88, 1.12);
     // **All three finished half-extents are named, and the instance scales are
     // solved backwards from them.** `s` is the mesh's long axis and that is a
     // different axis for different kinds, so anything stated in `s` is stated
@@ -1291,7 +1339,7 @@ export function torPlan(
     const lean = leanTop * t;
     courses.push({
       kind, dx: cx, dy: y + h, dz: cz, s, sx, sy, sz,
-      yaw: rng.next() * Math.PI * 2,
+      yaw: fabric + twist * (n > 1 ? i / (n - 1) : 0) + rng.gauss(0, 0.14),
       // The jitter on top of the lean stays small. A block tilted independently
       // of the stack it is in reads as a collapse, and the per-instance jitter
       // that suits a boulder lying in soil turns every tor into rubble.
