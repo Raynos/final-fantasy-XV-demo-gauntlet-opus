@@ -36,39 +36,31 @@ every rock's value** (near boulder luma 45.1 -> 78.9) — four judge rounds call
 that "dark smudges" — and **640 tube triangles per tree disagree with their own
 vertex normals**, which is most of why trunks read as posts in dirt.
 
-## The grade — round 11, 2026-08-24: **3/10, 12 identified, 0 fooled**
+## The grade — round 12, 2026-08-24: **3.5/10**, 12 identified, 0 fooled
 
-**The instrument was validated before it was believed.** `--control` is an
-if/else that *replaces* the round, so it was run first and separately: 24
-plate-vs-plate composites came back **0 HIGH / 21 LOW**, the judge saying unasked
-that it *"could not find a WebGL demo frame anywhere in this set"*. That is the
-calibration `compare.mts`'s own docstring demands. Then the real round: **12 of
-12 HIGH, all correct, 0 hesitation.**
+**The instrument was validated first.** `--control` is an if/else that *replaces*
+the round, so it was run separately: 24 plate-vs-plate composites came back
+**0 HIGH / 21 LOW**, the judge saying unasked that it *"could not find a WebGL
+demo frame anywhere in this set"*. Round 11 then scored **3/10**; round 12, after
+the head, hair, cloud, seating and postfx work, scores **3.5** — and the judge
+says the half point is **entirely atmospheric**.
 
-Its ranking, worst first, with the class of each — note **three of five are
-authoring, not rendering**:
+Round 11's top five, re-graded by round 12:
 
-1. **The characters have no faces** (modelling absence). Checked against the
-   frame rather than trusted: the eyes are *now visible*, last night's fix
-   worked, and that exposed **no mouth at all**, a nose that is a bump,
-   asymmetric eyes, burlap-weave skin, a seam where the hair shell meets the
-   neck. **`handoff/characters.md`'s "do not rebuild the head" is not supported
-   by `tmp/shots/judge-r11/hero_portrait.png`** and should be re-opened.
-2. **Nobody chose where anything goes** (authoring) — rocks in a line, one bush
-   tiling a valley with canopies interpenetrating, no sight-line to anything.
-   This **survived the Matérn work**, which fixed the statistics without
-   supplying composition.
-3. **The sky is a particle system, not weather** (rendering + authoring) —
-   identical evenly-spaced puffs casting no light, in **seven of twelve frames**.
-   Costed by the judge at one day, with the widest reach in the set.
-4. **One tiling texture per surface, at the wrong scale** (rendering) — a ridge
-   whose fissure pattern repeats at ridge scale reads centimetres tall.
-5. **Terrain silhouettes are primitives** (modelling) — the regional strike fixed
-   the ridge *belts*; `_cone`/`_volcano` are untouched and still radially
-   symmetric.
+| | verdict |
+|---|---|
+| characters have no faces | **still present, marginally better** — eyes and skin now, still no mouth in the close-up |
+| nobody chose where anything goes | **unchanged**, and now the most damaging cue after the cones |
+| the sky is a particle system | **partially better** — real cirrus banding and scattering in two frames |
+| one tiling texture per surface | **still present** |
+| terrain silhouettes are primitives | **still present, and now the single worst thing** |
 
-Defects it caught that no gate does: a slab floats in `zone_longwythe`, god rays
-cross branches unoccluded, and a haven canopy's shadow does not match it.
+Its costed one-point lever: *"break the horizon silhouette. Every wide shot fails
+at the same place — the skyline. That single change fixes cues 1 and 2, which
+between them appear in seven of the twelve demo panels, and it costs no rendering
+work."* `_peak` is rebuilt against exactly that (`spurs + strike + cliff bands +
+talus fan`; radial CV 0 -> **39-52%**, max/min up to **9.1**); the rock family and
+the head are in flight.
 
 ## Gates — 15/16 on a quiet tree, 2026-08-24
 
@@ -92,23 +84,24 @@ not yet understood.
 regressions — see `LANDMINES.md`. **Check `daemon --health` uptime and run
 `cleanup.mts` before believing a leased-page gate.**
 
-## Perf — uncertified
+## Perf — `perf` CERTIFIED and PASSING; `gameplay` FAILS
 
-Prior certified pair (`project/baseline-*.json`): perf mean **243.7 fps** /
-worst 148, gameplay worst segment **92.2 fps**. A third run on 2026-08-23
-certified and **FAILED** at mean 166.4 / worst 51 on `bestiary_necromancer`,
-but that shot has read 179 / 150 / 51 across three runs and its baseline row
-already carried `p95 31.8 ms` — it is spike-dominated and the machine was
-loaded. **Not re-run after last night**: seven lanes were on the tree all night
-and `perf` takes an exclusive lease. **Run it on an idle machine before reading
-any of it as a regression.**
+**`perf.mts` PASS on a quiet machine, `RULER_VALID: true`**: every shot >= 60 fps,
+mean **188.5 fps**, worst **66 fps** (`cine_hammerhead`), noise floor 17% of a
+5.6 ms median frame. That is the first certified pass in days, and it took
+**killing 96 orphaned vite servers holding 39.7 GB** that `cleanup.mts` could not
+see — see `LANDMINES.md`. Every voided run before it was measuring that.
 
-Cost tracks **draw calls** — ~8.7 us each, corr 0.801 vs 0.628 for triangles —
-so **a new visible `InstancedMesh` costs four draws**. Per-instance variation is
-free. Across the 12 judged shots: **532-743 against a budget of 800**, so the
-night's geometry did not spend it. `town_forecourt` is the exception at **991**,
-and `handoff/town.md` records a **7.6x disagreement between two instruments**
-measuring it, to reconcile before acting on either.
+**`gameplay.mts` FAILS**, and it is the primary perf gate: worst segment
+**streaming-traverse at 51.2 fps**, **17 hitches**, worst frame **168.9 ms**
+(`sprint+turn`) against `BRIEF.md`'s hard *"no frame may exceed 33 ms"*. The
+prior baseline was 92.2 fps and 2 hitches, so this is a real regression from a
+night of new streamed content — and `menu-open` appears **six times** in the
+worst-frame list, which is not streaming at all. A lane is on it.
+
+Cost tracks **draw calls** — ~8.7 us each, corr 0.801 against 0.628 for
+triangles; a new visible `InstancedMesh` costs **four**. Judged shots run
+**532-744 of 800**, so the budget is not the problem: **frame-time spikes are**.
 
 ## Still weak
 
