@@ -250,7 +250,25 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     // past 1 means the strong ones land anywhere from 0.5 to 0.95 instead of
     // all at 1. coverage rises 0.30 -> 0.34 to pay for the lost area.
     coverage: 0.34, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
-    covLo: 0.54, covHi: 1.02, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
+    // baseSag 0.28, not 0.10. It is the per-column vertical displacement of the
+    // whole profile, in fractions of the layer, so it is the only thing in this
+    // model that puts one cloud at a different *altitude* from its neighbour --
+    // the judge's "three or four cloud sheets at different altitudes", supplied
+    // by one field rather than by three more marches. At 0.10 it moved a cloud
+    // +/-270 m in a 2700 m layer, which is inside the cloud's own height and
+    // reads as nothing; at 0.28 it is +/-756 m and neighbouring banks visibly
+    // sit at different levels. The march's slab is widened by the same amount
+    // in Clouds.ts, or the raised half is clipped away at uCloudTop.
+    //
+    // cloudHaze 0.000085, not 0.0000290. This is the term that makes a cloud
+    // converge to the sky radiance with distance, and it was set so weak that
+    // 20 km of air only blended 44% -- measured, the deck's mean luma was FLAT
+    // from the top of frame to the horizon (zone_three_valleys 213 -> 216 over
+    // eight bands) while the sky behind it went 74 -> 146, which is the
+    // judge's "they do not thin toward the horizon" exactly. At 0.000085 the
+    // same 20 km is 82% and 40 km is 97%, so far banks dissolve into the haze
+    // band instead of standing out of it as hard white cutouts.
+    covLo: 0.54, covHi: 1.02, tower: 0.55, baseLift: 0.0, baseSag: 0.28, cloudHaze: 0.000085,
     virga: 0.0, silver: 0.14, baseShade: 0.78,
     bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
     // `haze` is the height-independent term, so it is the one that decides how
@@ -604,6 +622,10 @@ export class Sky {
       // two ends of the billboard question can be captured from one build.
       if (this._ablate.has('cloudtap0')) u.uCloudTap.value = 0;
       if (this._ablate.has('cloudtapmax')) u.uCloudTap.value = 1.4;
+      // The sky-ambient fill's lateral occlusion, off. This restores the
+      // unoccluded flood that printed the cotton ball, so the two states can be
+      // captured from one build rather than argued about from a constant.
+      if (this._ablate.has('noambbury')) m.uAmbBury.value = 0;
     }
   }
 

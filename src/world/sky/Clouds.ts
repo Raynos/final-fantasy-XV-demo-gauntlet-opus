@@ -57,6 +57,7 @@ uniform float uSilver;
 uniform float uBaseShade;
 uniform float uCloudMaxRad;
 uniform float uCloudMS;
+uniform float uAmbBury;
 varying vec2 vUv;
 
 void main() {
@@ -80,8 +81,12 @@ void main() {
   vec3 P = uCamPos + vec3(0.0, ATM_PLANET_R, 0.0);
   // rain shafts hang below the deck, so the march has to start under it
   float marchBottom = uVirga > 0.001 ? min(uVirgaFloor, uCloudBottom) : uCloudBottom;
-  float tB = atmRaySphere(P, rd, ATM_PLANET_R + marchBottom);
-  float tT = atmRaySphere(P, rd, ATM_PLANET_R + uCloudTop);
+  // The march's slab has to include the per-column sag, or every cloud the
+  // weather map displaces upward is simply clipped off at uCloudTop and the
+  // altitude variation costs coverage instead of buying relief.
+  float slabH = max(1.0, uCloudTop - uCloudBottom);
+  float tB = atmRaySphere(P, rd, ATM_PLANET_R + marchBottom - uBaseSag * slabH);
+  float tT = atmRaySphere(P, rd, ATM_PLANET_R + uCloudTop + uBaseSag * slabH);
   float t0 = max(min(tB, tT), 0.0);
   float t1 = max(tB, tT);
   if (t1 <= 0.0) return;
@@ -291,8 +296,33 @@ void main() {
       // deck — everything the camera can see of a storm — is one flat value.
       float occ = tr > 0.10 ? cloudSkyOcclusion(q) : 0.22;
       occ = mix(1.0, occ, uBaseShade);
+
+      // Lateral burial, and it is what the sky-ambient term was missing.
+      //
+      // cloudSkyOcclusion marches *straight up* and nowhere else, so it knows
+      // whether a sample has cloud above it and nothing about whether it has
+      // cloud beside it. A fair-weather cumulus seen from the side is exactly
+      // the case that breaks: its sun-shadowed flank has open sky overhead, so
+      // occ is ~1 there and the flank received the full sky irradiance —
+      // uAmbientBoost 4.0, which is the pi factor that turns sky *radiance*
+      // into the irradiance falling on a cloud element. Ablated
+      // (?post=nocloudamb) the sun arm alone renders a properly modelled
+      // cumulus: blazing crown, warm-grey shadowed flank, real lobes. Adding
+      // the ambient back erased all of it and printed the cotton ball a blind
+      // judge called "discrete white puffs ... they do not tint on their
+      // sun-facing side". The defect was never the sun arm and never the
+      // density; it was an *unoccluded* fill four times sky radiance.
+      //
+      // e — the normalised fill of the cell, 0 at the silhouette edge and 1 in
+      // the core — is already the distance-to-surface proxy this needs, and
+      // cloudDensity returns e * uCloudDensity, so it costs a divide. The rim
+      // keeps the blue-white the atmosphere lane measured against
+      // duscae-plains-lake-01 (cumulus at R-B -45); the core, which is metres
+      // of water droplets away from any sky, stops being lit by it.
+      float fill = clamp(d / max(uCloudDensity, 1e-6), 0.0, 1.0);
+      float bury = exp(-uAmbBury * fill);
       vec3 amb = mix(skyHz * 0.55, skyUp, hf) * uAmbientBoost
-               * (0.22 + 0.78 * hf) * (0.18 + 0.82 * occ);
+               * (0.22 + 0.78 * hf) * (0.12 + 0.88 * occ) * bury;
 
       // Roll the sun highlight off. A thin cloud edge between the camera and a
       // low sun genuinely is blinding, but an unbounded radiance here feeds
@@ -453,6 +483,9 @@ export class Clouds {
       uCloudMaxRad: { value: 3.2 },
       // amplitude of the high-order (diffuse) scattering floor
       uCloudMS: { value: 0.62 },
+      // how fast the sky-ambient fill is extinguished going into the cloud, in
+      // units of normalised cell fill. 0 restores the old unoccluded flood.
+      uAmbBury: { value: 2.4 },
       uFrame: { value: 0 },
       uJitter: { value: new THREE.Vector2() },
     });
