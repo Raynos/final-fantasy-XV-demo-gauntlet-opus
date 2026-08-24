@@ -54,6 +54,28 @@ const DRAW_BY_TYPE = {
   fishing: 650, parking: 600,
 };
 const DRAW_R = 900;
+/**
+ * The range at which each kind's **base** is read against the ground.
+ *
+ * Not the same number as `DRAW_BY_TYPE` and that is the whole point.
+ * `handoff/modeling.md` paid for this one already: *"a cull distance for `Seat`
+ * is the range at which the object's BASE is read against the ground, not the
+ * range at which the object is visible... seating a haven at 1200 m to protect
+ * a silhouette nobody can resolve sinks it at the range a player camps on it."*
+ * `_base` was still being handed the draw distance, so a landmark on a summit
+ * was seated on the clipmap's lower envelope at **1500 m** -- and a coarse ring
+ * chord cuts tens of metres under a sharp peak. `floatcheck` read
+ * `longwythe_peak` as 38.82 m into the ground with a 4.6 m stele on it.
+ *
+ * A tomb is a landmark at a kilometre and a room at ten metres; it is seated
+ * for the ten.
+ */
+const SEAT_BY_TYPE: Record<string, number> = {
+  town: 600, imperial: 500, tomb: 400, landmark: 400, outpost: 300,
+  reststop: 300, chocobo: 350, menace: 350, dungeon: 350, haven: 300,
+  fishing: 250, parking: 250,
+};
+const SEAT_R = 300;
 /** Types the rest of the codebase already builds; we must not double up. */
 const SKIP_IDS = new Set(['hammerhead']);
 
@@ -350,7 +372,7 @@ export class PoiKits {
     const hi = hs[Math.min(hs.length - 1, Math.floor((hs.length - 1) * 0.88))];
     // Still bounded against the point the map actually names, in both
     // directions -- a deck three metres over the named spot is a plateau.
-    return Math.max(Math.min(hi, h0 + 2.4), h0 - drop);
+    return Math.max(Math.min(hi, h0 + 3.2), h0 - drop);
   }
 
   /**
@@ -1787,7 +1809,13 @@ export class PoiKits {
     // Waymark stele on a two-course base, its face carved.
     const b = bag();
     const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.06 });
-    b.shell.push(box(2.4, 0.34, 1.8, { y: 0.17, arris: 0.05 }));
+    // Sunk 250 mm: this kit takes no apron, so its base course is the only
+    // thing that meets the ground and the deck is seated at the footprint's
+    // 88th percentile -- which is above grade at the point the stele stands on
+    // by up to a couple of hundred millimetres. `floatcheck` reads that as a
+    // compound entirely in the air (`keycatrich_ruins`, 0.15 m). A waymark that
+    // has stood for a century is bedded in, not resting on top.
+    b.shell.push(box(2.4, 0.75, 1.8, { y: -0.18, arris: 0.05 }));
     b.shell.push(box(2.0, 0.26, 1.5, { y: 0.44, arris: 0.05 }));
     b.shell.push(xform(box(1.15, 3.3, 0.55, { arris: 0.055 }), { rz: rng.gauss(0, 0.03), y: 2.2 }));
     b.trim.push(box(1.35, 0.2, 0.75, { y: 3.92, arris: 0.04 }));
@@ -2017,7 +2045,7 @@ export class PoiKits {
     const yaw = this._yaw(p, rng);
     const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
-    const cull = DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R;
+    const cull = SEAT_BY_TYPE[p.type] || SEAT_R;
     const base = this._base(p.x, p.z, probe, 2.2, cull);
     // Published before the kit runs, so `_apron` can grade against the real
     // ground without every kit having to carry the coordinates itself.

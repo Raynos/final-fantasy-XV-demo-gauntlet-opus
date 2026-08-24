@@ -363,6 +363,8 @@ export function gradePad(o: PadOpts): PadResult {
   const C_SPOIL = [0.74, 0.70, 0.65];
 
   const groundAt = (wx: number, wz: number) => coverY(eco, wx, wz, r * 0.35, cull) - base;
+  /** How far below the deck the earthwork may reach before it is a cliff. */
+  const plunge = Math.max(6, r * 0.5);
   /**
    * How far under the ground the earthwork buries itself once it has met it.
    *
@@ -436,13 +438,19 @@ export function gradePad(o: PadOpts): PadResult {
           if (y >= g - 1e-3) y = g - bury(wx, wz);
           if (y > crestY) { crestY = y; crestS = s; }
         }
-        // The outermost station **always** meets the ground, whatever slope
-        // that takes. Without this the reach cap can end the batter in mid-air
-        // on a steep site and the whole compound is then a platform floating on
-        // nothing -- which is exactly what `floatcheck` caught: 13 POIs in the
-        // air, `tomb_rogue` by 8.64 m. An earthwork's last requirement is that
-        // it touches the hill; the slopes it prefers come second.
-        if (last) y = g - bury(wx, wz);
+        // The outermost station reaches for the ground whatever slope that
+        // takes, because the reach cap can otherwise end the batter in mid-air
+        // on a steep site and leave the whole compound floating on nothing --
+        // `floatcheck` caught exactly that, 13 POIs in the air.
+        //
+        // But *only* down to `plunge`. Reaching without a limit is the same
+        // mistake with the sign flipped: a pad whose footprint clips a cliff
+        // finds ground fifty metres down and hangs a fifty-metre curtain off
+        // its own edge, which `floatcheck` then reads as a compound buried
+        // 56 m into the hill (`disc_overlook`, `greyshire`, 23 of them). Past
+        // the limit it is a retaining wall, and the other three sides of the
+        // pad are what keep the compound on the ground.
+        if (last) y = Math.max(g - bury(wx, wz), -plunge);
         if (Math.abs(y - g) < 0.14) toe = Math.max(toe, s);
       }
       pos.push(ct * s, y, st * s);
