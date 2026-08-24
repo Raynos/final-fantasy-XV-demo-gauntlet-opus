@@ -78,7 +78,21 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
       // surface flat and puts the whole term into a thin V-shaped valley on the
       // cell boundary — a joint. It also mips away with distance the way a
       // crack should, because it is now the map's HIGHEST-frequency content.
-      const crack = THREE.MathUtils.smoothstep(w.f2 - w.f1, 0, 0.0625);
+      //
+      // The width of that valley is then varied **per cell**, off the cell's
+      // own feature-point id, over 0.35x to 1.9x. Photographed at 35 m
+      // (`tmp/crop/fin/og-tor-r1.png`) a constant width reads as a net of
+      // identical cracks — dried mud, which is `handoff/rocks.md`'s own open
+      // item 7 about the near field, arriving from the other direction. Real
+      // jointing has tight joints and open ones. Using the *id* rather than a
+      // smooth field is deliberate: a low-frequency multiplier would put low-
+      // frequency energy back into the map, which is the thing being removed
+      // here. The seam is still exactly zero on the boundary itself whichever
+      // side you approach from, so the field stays continuous, and it is a pure
+      // redistribution — measured mean and spread of `h` are unchanged to three
+      // decimals (0.537 / 0.085).
+      const rim = ((w.id * 0.6180339887) % 1 + 1) % 1;
+      const crack = THREE.MathUtils.smoothstep(w.f2 - w.f1, 0, 0.0625 * (0.35 + 1.55 * rim));
       const grain = n.fbm2(u * 22, v * 22, 4) * 0.5 + 0.5;
       const big = n.fbm2(u * 4, v * 4, 3) * 0.5 + 0.5;
       // 0.27 and not the old 0.42 because the term's own mean went 0.592 ->
