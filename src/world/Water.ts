@@ -174,8 +174,14 @@ export class Water {
 
     this.enabled = this.bodies.length > 0;
     if (this.enabled) this._collectReflectRoots(game);
-    if (this.enabled) this._buildShore(game, terrain);
-    this._buildRivers(game, terrain);
+    // Both generators hard-error on a winding or attribute defect, which is the
+    // whole point of them — but a throw inside `init` never sets `GAME.ready`,
+    // so the entire game hangs at boot and every other lane's capture times out
+    // with no message. `console.error` is the right loudness: `shoot.mts` exits
+    // non-zero on any page error, so nothing can ship green, and the world still
+    // boots so the defect can be photographed.
+    try { if (this.enabled) this._buildShore(game, terrain); } catch (err) { console.error('[Water] shore ribbon:', err); }
+    try { this._buildRivers(game, terrain); } catch (err) { console.error('[Water] rivers:', err); }
   }
 
   /**
