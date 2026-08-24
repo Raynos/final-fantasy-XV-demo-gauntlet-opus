@@ -22,7 +22,7 @@ import type { PostFX } from '../PostFX.ts';
  * resolution where it actually matters, and it costs one dependent texture
  * fetch per step with no extra scene pass.
  *
- *   post.contact.enabled / .intensity / .length / .thickness / .stepPx
+ *   post.contact.enabled / .intensity / .length / .thickness / .stepPx / .thicknessTrack
  */
 export class ContactShadowPass extends FilterPass {
   _lightDir!: THREE.Vector3;
@@ -36,6 +36,13 @@ export class ContactShadowPass extends FilterPass {
   /** Screen-space budget for one march step, in pixels. See the shader. */
   stepPx!: number;
   thickness!: number;
+  /**
+   * How far the acceptance window follows the screen-space cap on the march.
+   * 0 reproduces the fixed-metre window that painted the mid-face blob, which
+   * is what makes a one-boot A/B of this change possible; 1 keeps the window at
+   * the ratio to the march it was authored at. See the shader.
+   */
+  thicknessTrack!: number;
   tint!: THREE.Color;
   constructor(fx: PostFX) {
     super(fx);
@@ -46,6 +53,7 @@ export class ContactShadowPass extends FilterPass {
     this.bias = 0.030;          // metres, kills self-shadow acne
     this.maxDistance = 55;      // metres; contacts stop mattering past this
     this.stepPx = 6.0;          // pixels per step, ceiling — the crosshatch fix
+    this.thicknessTrack = 1.0;  // 0 = window fixed in metres (the blob), 1 = it follows the cap
     this.tint = new THREE.Color(0x2b3a52);   // cool shadow, never neutral grey
     this._lightDir = new THREE.Vector3(0.4, 0.8, 0.3);
     this._lightTgt = new THREE.Vector3();
@@ -66,6 +74,7 @@ export class ContactShadowPass extends FilterPass {
         uTint: { value: new THREE.Vector3(0.17, 0.23, 0.32) },
         uFrame: { value: 0 },
         uStepPx: { value: 6.0 },
+        uThickTrack: { value: 1.0 },
       },
       defines: { CS_STEPS: 12 },
       fragmentShader: /* glsl */`
@@ -74,7 +83,7 @@ export class ContactShadowPass extends FilterPass {
         uniform vec2 uTexel;
         uniform mat4 uInvViewProj, uViewProj;
         uniform vec3 uCamPos, uLightDir, uTint;
-        uniform float uNear, uFar, uIntensity, uFrame, uStepPx;
+        uniform float uNear, uFar, uIntensity, uFrame, uStepPx, uThickTrack;
         uniform vec4 uParams;
         varying vec2 vUv;
         ${CHUNK_COLOR}
@@ -116,7 +125,8 @@ export class ContactShadowPass extends FilterPass {
 
           // Step length grows with distance so a far-away character still gets
           // a contact of the right *world* size rather than a sub-pixel one.
-          float len = uParams.x * (1.0 + dist * 0.045);
+          float lenW = uParams.x * (1.0 + dist * 0.045);
+          float len = lenW;
 
           // ...and is then capped so a step can never cross more of the screen
           // than the depth buffer can resolve. **This is the crosshatch fix.**
@@ -157,6 +167,49 @@ export class ContactShadowPass extends FilterPass {
           float pxWorld = length(worldFromDepth(vUv + vec2(uTexel.x, 0.0), d, uInvViewProj) - P);
           len = min(len, pxWorld * uStepPx * float(CS_STEPS));
 
+          // The cap above shortens the march. **The acceptance window has to
+          // come with it**, and the fix that landed the cap left it behind.
+          //
+          // \`thickness\` = 0.45 m is not an independent constant: it was authored
+          // against \`length\` = 0.50 m, i.e. 0.9x the march, which is what makes
+          // it mean "an occluder about as deep as the distance I am willing to
+          // walk". At hero_portrait the cap cuts the march to 0.045 m and left
+          // the window at 0.45 — **10x the march** — so the test \`diff < thick\`
+          // stopped rejecting anything at all and every ray that dipped behind
+          // the face reported a hit. The occlusion term went hard 0 -> 1 across
+          // a jagged boundary: the lobed, stair-stepped blob over the mid-face
+          // and neck that head-r2 measured at 3.634/255 against \`--ablate
+          // nocontact\`. The old bug was a step too long; this was a *window* far
+          // too wide for the march it was guarding.
+          //
+          // \`lenScale\` is exactly 1 wherever the cap does not bite (past ~9.6 m),
+          // so this is a no-op there by construction rather than by measurement.
+          //
+          // Measured on hero_portrait, mid-face rect against the same frame with
+          // the pass off, mean /255 (the pass-off side repeats to 0.15; the
+          // shipped configuration repeats to 0.54 across three stages):
+          //
+          //     shipped                         11.77  11.23  11.73
+          //     thickness 0.45 -> 0.10           8.28
+          //     thickness 0.45 -> 0.06           2.16
+          //     thickness 0.45 -> 0.03           0.46   (nothing left at all)
+          //     **window tracks the cap**        1.19
+          //     ...and the bias tracking too     2.37   (worse: bias is what
+          //                                             rejects the self-hit)
+          //     ...and 3x the steps             11.61   (which is 3x the *reach*
+          //                                             too, and the blob returns
+          //                                             — see the note below)
+          //
+          // Two measured negatives worth keeping. **The step count is innocent**:
+          // at a fixed 72 px reach, 12 steps and 36 steps produce the identical
+          // blob, so this was never the quantisation of \`occ\` into 13 levels that
+          // the shape of it suggests. And **the reach itself matters**: at three
+          // times the capped reach the blob comes back even with the window kept
+          // proportional, because 13 cm of march at 0.6 m genuinely reaches the
+          // rest of the face. See src/tools/probes/blobhunt.mts.
+          float lenScale = len / lenW;
+          float thick = uParams.y * mix(1.0, lenScale, uThickTrack);
+
           float stepLen = len / float(CS_STEPS);
           float bias = uParams.z * (1.0 + dist * 0.10);
           // Rotating the dither every frame is what lets TAA average it away.
@@ -180,7 +233,7 @@ export class ContactShadowPass extends FilterPass {
             float sceneZ = viewDepth(sceneD, uNear, uFar);
             float rayZ = viewDepth(clip.z / clip.w * 0.5 + 0.5, uNear, uFar);
             float diff = rayZ - sceneZ;
-            if (diff > bias && diff < uParams.y) {
+            if (diff > bias && diff < thick) {
               // nearer hits are the real contact; distant ones fade out
               occ = max(occ, 1.0 - float(i) / float(CS_STEPS) * 0.55);
             }
@@ -209,6 +262,7 @@ export class ContactShadowPass extends FilterPass {
     u.uFar.value = fx.rnd.camera.far;
     u.uParams.value.set(this.length, this.thickness, this.bias, this.maxDistance);
     u.uStepPx.value = this.stepPx;
+    u.uThickTrack.value = this.thicknessTrack;
     u.uFrame.value = fx.frame;
     u.uIntensity.value = this.intensity;
     u.uTint.value.set(this.tint.r, this.tint.g, this.tint.b);
