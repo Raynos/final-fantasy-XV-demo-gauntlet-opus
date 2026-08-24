@@ -960,17 +960,17 @@ interface TorArchetype {
  */
 const TORS: TorArchetype[] = [
   {
-    key: 'fin', w: 0.14, n: [3, 5], h: [11, 19], ar: [0.85, 1.55], thin: [0.34, 0.54],
+    key: 'fin', w: 0.14, n: [3, 5], h: [12, 22], ar: [0.85, 1.55], thin: [0.34, 0.54],
     taper: [0.06, 0.24], lap: [0.40, 0.64], bed: [0.00, 0.30], lean: [0.05, 0.22],
     drift: 0.30, kinds: ['spire', 'slab', 'bedded'],
   },
   {
-    key: 'boss', w: 0.34, n: [2, 4], h: [5.5, 10.5], ar: [0.42, 0.82], thin: [0.55, 1.0],
+    key: 'boss', w: 0.34, n: [2, 4], h: [6, 12], ar: [0.42, 0.82], thin: [0.55, 1.0],
     taper: [0.01, 0.14], lap: [0.24, 0.44], bed: [0.00, 0.24], lean: [0.00, 0.10],
     drift: 0.70, kinds: ['granite', 'bedded', 'slab', 'worn'],
   },
   {
-    key: 'pinnacle', w: 0.28, n: [4, 7], h: [12, 23], ar: [0.70, 1.40], thin: [0.55, 1.0],
+    key: 'pinnacle', w: 0.28, n: [4, 7], h: [14, 30], ar: [0.70, 1.40], thin: [0.55, 1.0],
     taper: [0.08, 0.24], lap: [0.34, 0.58], bed: [0.02, 0.28], lean: [0.03, 0.20],
     drift: 0.32, kinds: ['granite', 'bedded', 'slab', 'spire'],
   },
@@ -979,7 +979,7 @@ const TORS: TorArchetype[] = [
     // so the outline steps in and out instead of tapering. It is the one form
     // whose silhouette is *not* a monotone ramp, which is exactly why it is
     // here — see the bedding term in `torPlan`.
-    key: 'hoodoo', w: 0.24, n: [3, 6], h: [8, 16], ar: [0.60, 1.30], thin: [0.55, 1.0],
+    key: 'hoodoo', w: 0.24, n: [3, 6], h: [9, 19], ar: [0.60, 1.30], thin: [0.55, 1.0],
     taper: [-0.04, 0.10], lap: [0.30, 0.52], bed: [0.18, 0.42], lean: [0.02, 0.18],
     drift: 0.26, kinds: ['bedded', 'slab', 'granite'],
   },
@@ -1612,7 +1612,22 @@ export class Rocks {
       const near = p.fromParent < 1.0;
       const edge = p.fromParent > 1.2;
       const table = edge ? dress.frag : dress.kinds;
-      const kind = K.get(pickWeighted(table, hashU(p.seed, 11, 0x9e37))) ?? (edge ? K_PEBBLE : K_COBBLE);
+      // **The kind is chosen per CLUSTER, not per child.**
+      //
+      // Drawn per child, a zone's weight table is a *mixture* and every cluster
+      // in the zone is the same mixture — which is uniformity dressed up as
+      // variety, and it is exactly what the scatter lane measured on the
+      // undergrowth: a bush's nearest neighbour was the same species only
+      // 32-43% of the time, and the frame read as an even salad. `Cluster.ts`
+      // chooses species per grove for the same reason and gets 88-96%. A real
+      // boulder field is one bed shedding one kind of block, so clusters should
+      // differ from *each other* rather than each being a fair sample of the
+      // zone. `p.px`/`p.pz` are the parent's own position, so the draw is
+      // constant across a cluster; 28% of children still draw for themselves,
+      // because a bed with nothing else in it is the other failure.
+      const clusterU = hashU(Math.round(p.px), Math.round(p.pz), edge ? 0x2f9e : 0x2f9d);
+      const kindU = hashU(p.seed, 12, 0x77a1) < 0.72 ? clusterU : hashU(p.seed, 11, 0x9e37);
+      const kind = K.get(pickWeighted(table, kindU)) ?? (edge ? K_PEBBLE : K_COBBLE);
       const it = this._item(kind, p.x, p.z, rng, edge ? d * 0.7 : d, dress);
       if (edge) {
         // The scree shares one orientation **fabric**.
