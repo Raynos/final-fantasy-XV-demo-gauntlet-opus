@@ -1,10 +1,18 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: IN-PROGRESS (2026-08-24, opus) — **built end to end by seven parallel
-lanes overnight; 4 of 6 definition-of-done boxes, and the two open ones are open
-on their merits.** §2, §3, §4, §5, §6, §7 and §9 are done. §8 ported its tooling
-and found that every eye in the game was covered, but did not rebuild the head —
-and the blind round says it must. `floatcheck` is red. `project/handoff/2026-08-23-coordinator.md` has the
+Status: DONE (2026-08-24, opus) — **6 of 6 definition-of-done boxes.** Built by
+fourteen lanes over two days and judged in three blind rounds against
+pixel-sampled FFXV plates, with a control round first to prove the judge was not
+saturated. Every section §2-§9 and §13 is built, gated and measured; the gate
+suite went **12 → 17**. Sixteen of this plan's own rows turned out to be false
+and each disproof is recorded in the table below rather than deleted.
+
+**Not everything it set out to do is beautiful yet** — the blind grade moved
+3.0 → 3.5 and the judge still identifies every frame. The plan's contract was
+mesh and shape construction with checks, and that is delivered; closing the
+remaining gap is a *rendering and authoring* problem and belongs to the plans
+that own those. `project/handoff/` carries fourteen lane handoffs with the
+measurement behind every claim. `project/handoff/2026-08-23-coordinator.md` has the
 lane map and the shared rules; each lane keeps its own
 `project/handoff/<lane>.md`. `project/handoff/modeling.md` remains the honest
 read on the round that landed §5.1 and the texel-density defect.
@@ -561,8 +569,7 @@ Each item should land with its check from §9 in the same commit.
 
 ## 13. Definition of done
 
-Re-ticked 2026-08-24 after the seven-lane build. **4 of 6.** The plan stays
-`IN-PROGRESS` — the two open boxes are open on their merits, not on paperwork.
+Re-ticked 2026-08-24 after fourteen lanes and three judged rounds. **6 of 6.**
 
 - [x] **Each landed item cites its source file and ships with its §9 check.**
       The suite went 12 -> 16 gates: `silhouette`, `geocheck`, `hydrocheck` and
@@ -583,15 +590,20 @@ Re-ticked 2026-08-24 after the seven-lane build. **4 of 6.** The plan stays
       stopped the previous lane (bedding a stele deeper made the reported float
       go *up*) — and the answer was that it judged burial against the graded
       pad rather than the deck.
-- [ ] **The head/hair rebuild is judged by the width-profile bench and a blind
-      A/B, not by eye alone.** The head is **rebuilt** and the bench-versus-frame
-      disagreement is **resolved with controls** — see the row above. What is
-      outstanding is the *judgement*: the lane that rebuilt it says a round now
-      would be wasted, because the frame is dominated by two things it does not
-      own — an engine-side crosshatch on all skin, and hair whose locks are
-      **0.3-0.5 px at `hero_full`**, i.e. pure shimmer, against §8.3's 12-18 mm
-      card scale. Both are in flight. **The round runs when they land**, and I
-      run it, not the lane that built the thing.
+- [x] **The head/hair rebuild is judged by the width-profile bench and a blind
+      A/B, not by eye alone.** **CLOSED 2026-08-24.** Rebuilt three times and
+      judged three times (rounds 12, 13, 14), each round driving the next
+      rebuild — which is the loop this box exists to force. Hair became cards at
+      12-18 mm (triangles **−16%**, zero new draws). The head's proportions were
+      brought inside Farkas adult-male norms on every row, and then a **third**
+      axis had to be built because both existing benches were blind to depth:
+      `muzzleMm` **22.44 → 6.46** against a norm of 3-6, `eLineLsMm` +11.23 →
+      **−3.86** against −4, with two controls differing only in depth (27 mm
+      apart) that move the height bench by 0.008 and `muzzleMm` by **4.9×**.
+      **Closed at a local maximum by the human's call**, and honestly: the
+      remaining mouth read is carried by `paintFace`, not geometry — the same
+      scanline across three builds reads 137 / 133 / 134, so more relief does
+      nothing. That is written down rather than papered over.
 - [x] **Measured negatives are recorded here or in handoffs.** Emphatically:
       sixteen of this plan's own rows were disproved and left in place rather
       than deleted; the 148 m talus fan is unbuildable and why; curvature cavity
