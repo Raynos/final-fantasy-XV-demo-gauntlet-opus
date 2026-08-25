@@ -103,6 +103,7 @@ export class MaterialPatch {
       uniform float uActorHaze;
       uniform vec2  uAerialNear;
       uniform float uSpecIBL;
+      uniform float uEnvDiffuse;
       uniform float uSkyDim;
       uniform float uOvercast;
       uniform float uNight;
@@ -137,6 +138,18 @@ export class MaterialPatch {
     const maps = ShaderChunk.lights_fragment_maps.replace(
       'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
       'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * mix( 1.0, uSpecIBL, material.roughness );'
+    ).replace(
+      // The env cube is specular-only since 3.8(a): its diffuse irradiance is
+      // now the SH probe's job, and the probe can carry the sky's *direction*
+      // where a cube's cosine convolution arrives as one unaimable flood. Both
+      // at once would double-count, which is the failure FFXV-opus's own audit
+      // found on exactly this path. Gated per-material rather than by
+      // overwriting `ShaderChunk` globally: a chunk override reaches materials
+      // this patch has deliberately never touched, and CSM already writes to
+      // `onBeforeCompile` here — two systems editing one global string is how
+      // the shader-audit landmine got written.
+      'iblIrradiance += getIBLIrradiance( geometryNormal );',
+      'iblIrradiance += getIBLIrradiance( geometryNormal ) * uEnvDiffuse;'
     );
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', maps);
 

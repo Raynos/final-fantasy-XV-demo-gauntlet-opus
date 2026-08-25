@@ -732,12 +732,14 @@ export class Water {
         u.uSunDir.value.copy(sky.sun.position).normalize();
         u.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
       }
-      // The hemisphere light is the scene's own answer to "how bright is the
-      // sky right now", and it is already weather- and time-driven. Reading it
-      // rather than re-deriving one keeps the water in step with the terrain
-      // beside it under every preset.
-      if (sky && sky.ambient) {
-        u.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
+      // `sky.fill` is the scene's own answer to "how bright and what colour is
+      // the sky right now", already weather- and time-driven. Reading it rather
+      // than re-deriving one keeps the water in step with the terrain beside it
+      // under every preset. (It used to be a `HemisphereLight` read through as
+      // if it were a struct; 3.8(a) replaced the light with the SH probe and
+      // left the published answer, which is all this ever wanted.)
+      if (sky && sky.fill) {
+        u.uAmbient.value.copy(sky.fill.color).multiplyScalar(sky.fill.intensity);
       }
     }
     if (this.shoreMat) {
@@ -748,7 +750,7 @@ export class Water {
         s.uSunDir.value.copy(sky.sun.position).normalize();
         s.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
       }
-      if (sky && sky.ambient) s.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
+      if (sky && sky.fill) s.uAmbient.value.copy(sky.fill.color).multiplyScalar(sky.fill.intensity);
     }
     for (const m of this.riverMats) {
       const r = m.uniforms as RiverUniforms;
@@ -758,7 +760,7 @@ export class Water {
         r.uSunDir.value.copy(sky.sun.position).normalize();
         r.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
       }
-      if (sky && sky.ambient) r.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
+      if (sky && sky.fill) r.uAmbient.value.copy(sky.fill.color).multiplyScalar(sky.fill.intensity);
     }
   }
 

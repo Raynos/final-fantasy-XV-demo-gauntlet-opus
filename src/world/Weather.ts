@@ -323,8 +323,8 @@ export class Weather {
       hours = sky.hours;
       sunI = sky.sun.intensity;
       sunCol.copy(sky.sun.color);
-      ambI = sky.ambient.intensity * (sky.u ? sky.u.uSkyDim.value : 1);
-      skyCol.copy(sky.ambient.color);
+      ambI = sky.fill.intensity * (sky.u ? sky.u.uSkyDim.value : 1);
+      skyCol.copy(sky.fill.color);
       u.uSunDir.value.copy(sky.sunDir);
     }
 

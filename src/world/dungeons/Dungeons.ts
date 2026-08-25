@@ -542,7 +542,7 @@ export class Dungeons {
     const sky = this.sky;
     if (!sky || this._saved) return;
     this._saved = {
-      ambient: sky.ambient ? sky.ambient.intensity : 0,
+      ambient: sky.probe ? sky.probe.light.intensity : 0,
       env: this.game.scene.environmentIntensity,
       shadows: sky.csm ? sky.csm.lights.map((l) => l.castShadow) : [],
       domeVisible: sky.dome ? sky.dome.visible : true,
@@ -558,7 +558,7 @@ export class Dungeons {
     const saved = this._saved;
     if (sky.csm) sky.csm.lights.forEach((l, i) => { l.castShadow = saved.shadows[i] !== false; });
     if (sky.dome) sky.dome.visible = saved.domeVisible;
-    if (sky.ambient) sky.ambient.intensity = saved.ambient;
+    if (sky.probe) sky.probe.light.intensity = saved.ambient;
     this.game.scene.environmentIntensity = saved.env;
     if (this.game.post) this.game.post.autoGrade = saved.autoGrade;
     // force a full recompute so the sun, exposure and grade come back exactly
@@ -746,7 +746,7 @@ export class Dungeons {
       u.uHazeBase.value = atm.haze;
       u.uCloudShadowStrength.value = 0.0;
       if (sky.csm) for (const l of sky.csm.lights) l.intensity = 0;
-      if (sky.ambient) sky.ambient.intensity = 0;
+      if (sky.probe) sky.probe.light.intensity = 0;
       if (sky.godRays) sky.godRays.compositeMaterial.uniforms.uIntensity.value = 0;
       if (sky.dome) sky.dome.visible = false;
     }

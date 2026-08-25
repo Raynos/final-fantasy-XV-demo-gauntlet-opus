@@ -3,6 +3,34 @@ import { CSM } from 'three/examples/jsm/csm/CSM.js';
 import { Atmosphere } from './sky/Atmosphere.ts';
 import { Clouds } from './sky/Clouds.ts';
 import { MaterialPatch } from './sky/MaterialPatch.ts';
+import { SkyProbe } from './sky/SkyProbe.ts';
+
+/**
+ * Probe intensity. 1.0 is "the sky's own irradiance, unmodified".
+ *
+ * It is deliberately *flat* — no golden-hour trim, where the env cube it
+ * replaced carried `lerp(1.0, 0.30, golden)`. That trim existed for a reason
+ * that stops being true here: a single-number env intensity multiplies a probe
+ * which, at low sun, integrates the whole sunset band and comes out uniformly
+ * amber, so the only way to stop it staining the shade was to turn it down. An
+ * L2 probe has that amber *where the sunset is* and blue in the zenith and on
+ * the anti-solar side, which is the warm-key-cool-fill opposition the golden
+ * hour is made of. Dialling it back would throw away the thing that was built.
+ *
+ * The specular env keeps the old trim (`_envIntensity`) — a mirror really does
+ * want to reflect the amber, and it is not what fills shade.
+ */
+const PROBE_GAIN = 1.0;
+
+/**
+ * How much of the light reaching the ground comes back up.
+ *
+ * A dry grass/dirt landscape is around 0.2-0.3 albedo, and the dome's
+ * below-horizon radiance is already a haze stand-in for distant ground rather
+ * than the ground underfoot, so this sits at the low end on purpose: it is the
+ * *remaining* factor after that, not the full albedo.
+ */
+const GROUND_BOUNCE = 0.55;
 import { GodRaysPass } from './sky/GodRays.ts';
 import { SHOTS } from '../game/Shots.ts';
 import type { Game } from '../game/Game.ts';
@@ -167,6 +195,14 @@ export interface AtmosphereUniforms {
    */
   uAerialNear: THREE.IUniform<THREE.Vector2>;
   uSpecIBL: THREE.IUniform<number>;
+  /**
+   * Whether the env cube still contributes *diffuse* irradiance. 0 since
+   * 3.8(a): the SH probe is the diffuse ambient and the cube is specular-only,
+   * so counting the cube's irradiance again would double the flood the probe
+   * was built to make aimable. `?post=noprobe` puts it back to 1 and turns the
+   * probe off, which is the before/after A/B from a single build.
+   */
+  uEnvDiffuse: THREE.IUniform<number>;
 }
 
 /**
@@ -369,7 +405,17 @@ export class Sky {
   _shotSeen!: string | null;
   _weatherExternal!: boolean;
   _windOffset!: THREE.Vector2;
-  ambient!: THREE.HemisphereLight;
+  /**
+   * The sky's diffuse fill, published as data for the systems that want to know
+   * how bright and what colour the sky is right now — `Water`'s ambient tint,
+   * `Weather`'s fog colour, `Dungeons`' save/restore.
+   *
+   * It used to be a `HemisphereLight` those systems read *through*, which meant
+   * a light nobody could see was the repo's canonical answer to a question that
+   * is not about lights at all. The light is gone (see `probe`); the answer is
+   * still here.
+   */
+  fill!: { color: THREE.Color, intensity: number };
   atmo!: Atmosphere;
   cascadeRes!: number[];
   cascadeStride!: number[];
@@ -388,6 +434,8 @@ export class Sky {
   /** The conditions in force right now, cross-fading toward `target`. */
   params!: SkyPreset;
   patch!: MaterialPatch;
+  /** The scene's whole diffuse ambient. See `sky/SkyProbe.ts`. */
+  probe!: SkyProbe;
   pmrem!: THREE.PMREMGenerator;
   sun!: THREE.DirectionalLight;
   sunDir!: THREE.Vector3;
@@ -565,8 +613,16 @@ export class Sky {
     this.sun = new THREE.DirectionalLight(0xfff2dc, 3.2);
     this.moon = new THREE.DirectionalLight(0xb9cdf5, 0.0);
 
-    this.ambient = new THREE.HemisphereLight(0x9fc0ee, 0x4a4636, 0.18);
-    scene.add(this.ambient);
+    // The scene's diffuse ambient, in one place: an L2 SH probe re-projected
+    // from the live sky dome, with the env cube demoted to specular-only (see
+    // `uEnvDiffuse` below and `sky/SkyProbe.ts` for what it replaced and why).
+    // Built here, before the boot-time `renderer.compile()`, because
+    // `NUM_LIGHT_PROBES` is a program define exactly like the light counts
+    // `LightBudget` pins — adding the probe later would recompile every program
+    // in the scene mid-session, which is the 9.5 s freeze in `LANDMINES.md`.
+    this.probe = new SkyProbe();
+    scene.add(this.probe.light);
+    this.fill = { color: new THREE.Color(0x9fc0ee), intensity: 0.18 };
 
     this.patch = new MaterialPatch(this.csm, this.u);
 
@@ -611,12 +667,25 @@ export class Sky {
     // `?post=noactorhaze` collapses the actor law back onto the terrain law, so
     // the split can be diffed rather than argued about.
     if (this._ablate.has('noactorhaze')) u.uAerialNear.value.set(0, 1e-3);
-    // The two unshadowable diffuse ambients, ablatable separately (`noambient`,
-    // `noenv`; applied at their per-frame assignment sites, not here). Both feed
-    // shade, neither is occluded by anything, and sibling-ports 3.8 asks
-    // whether they double-count -- the FFXV-opus repo found its own probe was
-    // the ambient flood that was killing its shadows. Answering that needs each
-    // arm removable on its own, which is what these two tokens are for.
+    // `noambient` and `noenv` (applied at their per-frame assignment sites, not
+    // here) were built to ask whether the two diffuse ambients double-counted.
+    // They did, and 3.8(a) answered it: `noambient` is now the SH probe, which
+    // is the *whole* diffuse ambient, and `noenv` is the env cube, which is now
+    // specular only. The tokens keep their names because the question each one
+    // answers is unchanged -- what is this arm worth -- but what they remove is
+    // no longer the same kind of thing, and a reading taken before that change
+    // does not compare.
+    //
+    // `noambient` no longer moves `fill`, so it no longer moves `Weather`'s fog
+    // colour as a side effect. That coupling was a confound in the 3.8
+    // measurement: ablating "the ambient" also re-tinted the air in front of
+    // everything being measured.
+    // `?post=noprobe` -- the whole of 3.8(a), reversed, from one build: the SH
+    // probe off and the env cube's diffuse irradiance back on. This is the A/B
+    // the change has to be judged by, and it has to be a runtime dial rather
+    // than a revert, because the two states must be captured from *one* tree or
+    // the comparison also carries whatever else moved between two commits.
+    if (this._ablate.has('noprobe')) { this.probe.light.intensity = 0; u.uEnvDiffuse.value = 1; }
     if (this._ablate.has('noclouds')) { u.uCloudCoverage.value = 0; u.uCloudShadowStrength.value = 0; }
     if (this._ablate.has('nocloudshadow')) u.uCloudShadowStrength.value = 0;
     if (this._ablate.has('nocirrus')) u.uCirrus.value = 0;
@@ -735,6 +804,7 @@ export class Sky {
       // 900 m, which is past anything an actor is legible at anyway.
       uAerialNear: { value: new THREE.Vector2(120, 900) },
       uSpecIBL: { value: 0.30 },
+      uEnvDiffuse: { value: 0.0 },
     };
   }
 
@@ -944,24 +1014,37 @@ export class Sky {
 
     // --- ambient / IBL -----------------------------------------------------
     // Golden hour: the *only* thing that stops the frame collapsing to one hue
-    // is that the fill opposes the key. The image-based probe cannot supply it
-    // — it integrates the sunset band and comes out amber — so the hemisphere
-    // fill is deliberately driven the other way, coolest and strongest exactly
-    // when the sun is lowest. Warm key vs blue fill is the whole look.
+    // is that the fill opposes the key. A *scalar* image-based probe cannot
+    // supply that — it integrates the sunset band and comes out uniformly amber
+    // — which is why this used to be a separately-authored hemisphere fill
+    // driven the other way, and why the env cube was turned down to 0.30
+    // through the golden band to stop it staining the shade.
+    //
+    // The L2 probe (3.8(a)) does supply it: the amber lives in the sun's
+    // azimuth near the horizon and the zenith and anti-solar side stay blue, in
+    // one integral, with no second light to keep in step. So `skyTint` below is
+    // no longer a light — it is the published answer to "what colour is the sky
+    // fill", which `Water` and `Weather` still need and which nothing else
+    // computes. Warm key vs blue fill is still the whole look; it now comes out
+    // of the sky rather than beside it.
     const golden = smoothstep(24, 3, elevDeg) * smoothstep(-7, 1.5, elevDeg);
     const skyTint = new THREE.Color().setRGB(
       lerp(0.10, 0.62, day), lerp(0.14, 0.75, day), lerp(0.34, 1.0, day)
     );
     // push the fill toward a saturated sky blue through the golden band
     skyTint.lerp(new THREE.Color(0.26, 0.45, 0.92), 0.72 * golden);
-    this.ambient.color.copy(skyTint);
+    this.fill.color.copy(skyTint);
     // ground bounce stays warm ochre: it is the *only* warm fill and it comes
     // from below, which is what a real sunlit landscape does to a standing figure
-    this.ambient.groundColor.setRGB(
+    // ...and it is an *albedo* now, not a light. The probe multiplies the
+    // dome's own below-horizon radiance by it, so ground bounce can never
+    // exceed the light there is to bounce — which is what the free-floating
+    // `HemisphereLight.groundColor` constant could do, and did, at night.
+    this.probe.groundAlbedo.setRGB(
       0.16 * day + 0.03 + 0.12 * golden,
       0.14 * day + 0.025 + 0.07 * golden,
       0.11 * day + 0.035 + 0.02 * golden
-    );
+    ).multiplyScalar(GROUND_BOUNCE);
     // Night needs real sky fill, not just a key. With too little of it the moon
     // becomes a binary light: faces turned to it read as snow and everything
     // else falls to black, which looks like a broken exposure rather than
@@ -974,8 +1057,10 @@ export class Sky {
     const fillBase = lerp(0.155, 0.16, day) * p.ambient;
     // `?post=noambient` -- see `_ablateWeather`. Applied here and not there
     // because this line runs every frame and would overwrite a one-shot zero.
-    this.ambient.intensity = this._ablate.has('noambient')
-      ? 0 : fillBase + 0.54 * golden * p.ambient;
+    this.fill.intensity = fillBase + 0.54 * golden * p.ambient;
+    // `?post=noambient` -- now the *probe*, which since 3.8(a) is the whole
+    // diffuse ambient rather than the inert half of two. See `_ablateWeather`.
+    this.probe.light.intensity = this._ablate.has('noambient') ? 0 : PROBE_GAIN;
 
     // The probe is baked from the sky dome, so at low sun it is a bucket of
     // amber. Dialling it back through the golden band hands that job to the
@@ -1092,6 +1177,11 @@ export class Sky {
     const prev = this.envRT;
     // analytic clouds for the probe: cheap and it is blurred to irradiance anyway
     this.envRT = this.pmrem.fromScene(this.envScene, 0.0, 1, 20000);
+    // Diffuse and specular ambient are re-derived from the *same* dome on the
+    // same tick, on purpose. Split them across two triggers and the two halves
+    // of one ambient end up describing different hours, which is unfalsifiable
+    // from a frame and shows up only as shade that does not match its own sky.
+    this.probe.update(this.game.renderer, this.envScene);
     // `?post=noenv` -- the same every-frame caveat as `noambient` above.
     this.game.scene.environment = this._ablate.has('noenv') ? null : this.envRT.texture;
     this.game.scene.environmentIntensity = this._envIntensity != null ? this._envIntensity : 1.0;
