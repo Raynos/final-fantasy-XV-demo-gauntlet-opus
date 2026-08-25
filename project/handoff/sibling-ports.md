@@ -95,7 +95,14 @@ terrain and vegetation albedo. **It is a ground-albedo row and always was.**
 
 ## Next step, exactly
 
-1. **The perf re-baseline, then Wave 3's frame-cost split.** The one open box.
+0. **`project/baseline-perf.json` still holds the 2026-08-23 numbers.** The
+   2026-08-25 run that certified and passed was taken without `--out`, so the
+   published baseline is the text in the archived plan's §10 and in
+   `STATUS.md`, not the JSON. `perf --baseline project/baseline-perf.json`
+   therefore compares against the old file. Re-run with `--out
+   project/baseline-perf.json` on a quiet box and the mismatch goes away; until
+   then, do not read a diff against that file as a regression.
+1. **Wave 3's frame-cost split.** The re-baseline box is closed.
    `perf.mts --agent <you>` now works; the ruler prints its own contention
    verdict, and `--wait-lease` means you can queue behind another agent rather
    than measuring on top of them. The split (pixel-scaled vs fixed cost) is
