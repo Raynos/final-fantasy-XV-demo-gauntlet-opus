@@ -132,21 +132,53 @@ export function contention(): Contention {
    * `ps -A -o pid=,args=` gives the pid as a field, so it can be compared as a
    * number. The whole process group goes too — a tool that spawns a child
    * `.mts` is still one lane, not two.
+   *
+   * **And exclude ancestors, not just descendants** — the second version walked
+   * parent -> child only, which misses the shell that *launched* the tool. An
+   * agent harness runs a tool as `bash -c 'source …snapshot.sh && node
+   * src/tools/bootprof.mts --n 3'`, so the wrapper shell's own command line
+   * contains the string `src/tools/bootprof.mts` and matches the tool regex
+   * below. It is self's parent, never its child, so the descendant walk never
+   * reached it: **every harness tool invoked through an agent shell reported
+   * `CONTENDED (another lane is running <itself>)` and voided its own run on a
+   * completely idle machine.** Same failure as the pid-string bug above, one
+   * level up, and it survived because the two lanes that hit it were reading
+   * the boot times rather than the verdict.
+   *
+   * Ancestors go in as a chain, and their *other* children deliberately do
+   * not: a second tool started from the same agent session is a real second
+   * lane and must still count.
    */
   const self = process.pid;
   const rows = sh('ps -A -o pid=,ppid=,args=').split('\n');
-  const mine = new Set<number>([self]);
-  for (const r of rows) {
-    const m = r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
-    if (m && mine.has(Number(m[2]))) mine.add(Number(m[1]));
+  const parsed = rows
+    .map((r) => r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/))
+    .filter((m): m is RegExpMatchArray => Boolean(m))
+    .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), args: m[3] }));
+  const byParent = new Map<number, number[]>();
+  const parentOf = new Map<number, number>();
+  for (const p of parsed) {
+    parentOf.set(p.pid, p.ppid);
+    const kids = byParent.get(p.ppid);
+    if (kids) kids.push(p.pid); else byParent.set(p.ppid, [p.pid]);
   }
+  const mine = new Set<number>([self]);
+  // Descendants: the tool's own children are the same lane.
+  for (const queue = [self]; queue.length; ) {
+    for (const kid of byParent.get(queue.shift()!) ?? []) {
+      if (mine.has(kid)) continue;
+      mine.add(kid);
+      queue.push(kid);
+    }
+  }
+  // Ancestors: the shell, and the shell's shell, that got us here.
+  for (let up = parentOf.get(self); up && up > 1 && !mine.has(up); up = parentOf.get(up)) mine.add(up);
   const otherTools = [
     ...new Set(
-      rows
-        .map((r) => r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/))
-        .filter((m): m is RegExpMatchArray => Boolean(m) && !mine.has(Number(m![1])))
-        .filter((m) => /node .*src\/tools\/[\w-]+\.mts/.test(m[3]))
-        .map((m) => (m[3].match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
+      parsed
+        .filter((p) => !mine.has(p.pid))
+        .filter((p) => /node .*src\/tools\/[\w-]+\.mts/.test(p.args))
+        .map((p) => (p.args.match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
         .filter((n): n is string => Boolean(n) && n !== 'daemon'),
     ),
   ].sort();
