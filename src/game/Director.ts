@@ -62,6 +62,8 @@ export class Director {
   home!: THREE.Vector3;
   homeHeading!: number;
   hunts!: HuntRuntime;
+  /** Whether {@link HuntRuntime.init} has run — see {@link Director._armHunts}. */
+  _huntsArmed!: boolean;
   live!: boolean;
   /** What kind of moment the HUD should dress for. Written by
    *  `EncounterDirector._publishMode()` and read by `HUD._resolveMode()`;
@@ -111,7 +113,15 @@ export class Director {
     // holds its own reference to the encounter director. The back-pointer that
     // used to be written here (`encounters.huntRuntime`) was never declared and
     // never read by anything.
-    this.hunts = bootPhase('Director.hunts', () => new HuntRuntime(this.encounters).init());
+    //
+    // Constructed always; **armed only when the game is actually going to be
+    // played.** `init()` walks the already-accepted quests and calls
+    // `dir.startSetPiece` for each, which builds a boss — 209 ms of boot — and
+    // under `?shoot` the `setLive(false)` five lines below ends that boss
+    // again immediately. Every capture in this repo paid for a fight that was
+    // torn down before a frame was drawn.
+    this.hunts = bootPhase('Director.hunts', () => new HuntRuntime(this.encounters));
+    this._huntsArmed = false;
 
     // The capture harness boots straight into a posed shot and must not have
     // a wandering pack walk into frame; a real session starts playing.
@@ -122,11 +132,25 @@ export class Director {
   }
 
   /**
+   * Subscribe the hunt runtime to the quest log and stage anything already
+   * accepted. Idempotent, and deferred rather than skipped: a posed boot can
+   * still be handed to a player — the dev suite does it, and `play()` and the
+   * boss-fight path both call `setLive(true)` — and a hunt runtime that never
+   * subscribed would leave those sessions with a quest log nothing listens to.
+   */
+  _armHunts() {
+    if (this._huntsArmed || !this.hunts) return;
+    this._huntsArmed = true;
+    this.hunts.init();
+  }
+
+  /**
    * Turn the live encounter loop on or off. The screenshot scenarios author
    * the world by hand and must not have a wandering sabertusk walk into frame.
    */
   setLive(on: boolean) {
     this.live = on;
+    if (on) this._armHunts();
     if (this.encounters) {
       this.encounters.enabled = on;
       if (!on) {
