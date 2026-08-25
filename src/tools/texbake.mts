@@ -24,7 +24,7 @@ import http from 'node:http';
 import net from 'node:net';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { lease, buildServer } from './harness.mts';
 import { resolveBuild } from './identity.mts';
@@ -52,6 +52,16 @@ export const TEX_SOURCES = [
   'src/world/props/PropMaterials.ts',
   'src/world/dungeons/kit/InteriorMaterials.ts',
   'src/world/sky/CloudTextures.ts',
+  // The chart is rasterised from the *terrain* — so everything that moves the
+  // heightfield moves the sheet. This list mirrors `bake.mts`'s own; a chart
+  // baked against a previous terrain is the stale-cache failure with no
+  // symptom, and the two artifacts are rebuilt together anyway.
+  'src/world/map/Chart.ts',
+  'src/world/map/WorldMap.ts',
+  'src/world/terrain/Field.ts',
+  'src/world/terrain/Road.ts',
+  'src/world/terrain/Layers.ts',
+  'src/world/map/RoadGraph.ts',
 ];
 
 /**
@@ -200,6 +210,30 @@ async function generateAll(log: (...a: unknown[]) => void) {
       (await load('src/world/sky/CloudTextures.ts')).buildCloudTextures({
         baseSize: 64, detailSize: 48, weatherSize: 512, seed: 1337,
       });
+    }],
+    ['chart', async () => {
+      // The relief chart, 2048^2, and the one job that needs *data* rather
+      // than only code: it rasterises the terrain's own elevation grid.
+      //
+      // It reads `terrain.bin.gz` rather than rebuilding the field — the field
+      // is a 420k-droplet erosion run and this is a texture bake. The vite
+      // plugin runs `bake()` before `texBake()`, so the artifact is there; if
+      // it is not, skip, and the browser rasterises for real exactly as it did
+      // before. Only `h` and `ctrl` are decoded: the chart reads nothing else,
+      // so the road network and the normals are not rebuilt here.
+      const gz = path.join(BAKE_DIR, 'terrain.bin.gz');
+      if (!existsSync(gz)) { log('chart: no terrain bake yet — skipping'); return; }
+      const buf = gunzipSync(await readFile(gz));
+      const codec = await load('src/world/terrain/FieldCodec.ts');
+      const c = codec.unpackContainer(new Uint8Array(buf));
+      const hs = c.section('h'), cs = c.section('ctrl');
+      if (!hs || !cs) { log('chart: terrain bake has no h/ctrl — skipping'); return; }
+      const h = codec.decodeF32Planes(hs.bytes, codec.sectionField(hs, 'n'));
+      const ctrl = codec.decodePlanes8(cs.bytes, codec.sectionField(cs, 'w'), codec.sectionField(cs, 'h'), codec.sectionField(cs, 'ch'));
+      const N = Math.round(Math.sqrt(h.length));
+      // `bakeChart` wants a `Terrain`; it reads `field.h`, `field.ctrl` and
+      // `field.N` and nothing else, so that is what it is given.
+      (await load('src/world/map/Chart.ts')).bakeChart({ field: { h, ctrl, N } });
     }],
     ['dungeons', async () => {
       const m = await load('src/world/dungeons/kit/InteriorMaterials.ts');

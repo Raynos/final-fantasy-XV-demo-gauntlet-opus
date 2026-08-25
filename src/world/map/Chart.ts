@@ -1,6 +1,7 @@
 import { worldMap, WORLD } from './WorldMap.ts';
 import type { Biome, ZoneWeights } from './WorldMap.ts';
 import type { Terrain } from '../Terrain.ts';
+import { bakedBytes } from '../../engine/TexBake.ts';
 
 /**
  * THE CHART OF LUCIS — a baked relief map of the whole continent.
@@ -144,7 +145,6 @@ export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = 
   const size = opt.size || (field ? field.N : 1024);
   const mPerPx = WORLD.size / size;
   const ppm = 1 / mPerPx;
-  const SEA = WORLD.seaLevel;
 
   // ---- elevation ---------------------------------------------------------
   let H;
@@ -160,6 +160,58 @@ export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = 
     }
   }
   const ctrl = field && field.ctrl && field.N === size ? field.ctrl : null;
+
+  // ---- the raster, from the bake when one is resident --------------------
+  //
+  // Every pixel of the sheet is a pure function of the elevation grid, the
+  // control planes and the zone table — the same shape as a generated texture,
+  // and 458 ms of a 6.7 s cold boot. `TexBake` serves both planes.
+  //
+  // The water mask is one byte a pixel, so it is stored through a half-width
+  // entry: `(size/2)^2` RGBA texels is exactly `size^2` bytes. The container
+  // indexes on width and height and never looks at the bytes, so this needs no
+  // format change — only an even `size`, which a heightfield grid always is.
+  //
+  // `raster` is memoised across the two lookups so a miss on either plane
+  // rasterises once rather than twice.
+  let raster: { d: Uint8ClampedArray, water: Uint8Array } | null = null;
+  const run = () => (raster ||= rasterChart(H, ctrl, size, mPerPx, ppm));
+  const cacheable = size % 2 === 0;
+  const rgba = cacheable
+    ? bakedBytes(`map/chart/rgba@${size}`, size, size,
+      () => new Uint8Array(run().d.buffer))
+    : new Uint8Array(run().d.buffer);
+  const water = cacheable
+    ? bakedBytes(`map/chart/water@${size}`, size >> 1, size >> 1, () => run().water)
+    : run().water;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const c = canvas.getContext('2d')!;
+  const img = c.createImageData(size, size);
+  img.data.set(rgba);
+  c.putImageData(img, 0, 0);
+  const ms = now() - t0;
+  return new Chart(canvas, ppm, size, H, water, ms);
+}
+
+/**
+ * Rasterise the sheet: every pixel of the chart, and the water mask.
+ *
+ * Split out of {@link bakeChart} because it is the whole cost — 458 ms of
+ * cold boot at 2048^2 — and because it touches no DOM. That makes it
+ * cacheable through `TexBake` exactly like a generated texture, and lets
+ * `src/tools/texbake.mts` run it under Node against the terrain artifact.
+ *
+ * @param H the elevation grid, `size^2`, row-major
+ * @param ctrl the terrain's control planes, or null when the grid is resampled
+ * @param size side of the square image, px
+ * @param mPerPx metres per pixel
+ * @param ppm pixels per metre
+ */
+function rasterChart(H: Float32Array, ctrl: Uint8Array | null, size: number, mPerPx: number, ppm: number) {
+  const SEA = WORLD.seaLevel;
 
   // ---- local relief: elevation against a 96 m blurred surface -------------
   // Built on a 16 m coarse grid, which is all the smoothness this needs and a
@@ -230,12 +282,14 @@ export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = 
     }
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const c = canvas.getContext('2d')!;
-  const img = c!.createImageData(size, size);
-  const d = img.data;
+  // The raster writes into a **`Uint8ClampedArray`**, and that is not
+  // cosmetic: `d[o] = r + grain` relies on clamping and round-half-to-even
+  // at every one of 4.2 million texels. A plain `Uint8Array` wraps and
+  // truncates instead, which would change the sheet wherever a channel
+  // rounds a tie or the grain pushes past an end. The bake stores the same
+  // bytes through a `Uint8Array` view of the same buffer — a reinterpret,
+  // not a conversion.
+  const d = new Uint8ClampedArray(size * size * 4);
   const water = new Uint8Array(size * size);
 
   // Light directions. North is -Z, so the classic north-west raking key is
@@ -413,9 +467,7 @@ export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = 
     }
   }
 
-  c!.putImageData(img, 0, 0);
-  const ms = now() - t0;
-  return new Chart(canvas, ppm, size, H, water, ms);
+  return { d, water };
 }
 
 // ------------------------------------------------------------------ helpers
