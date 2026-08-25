@@ -91,10 +91,34 @@ function buildAlphaMips(data: Uint8Array, size: number, alphaRef = 0.42, tinyFad
     }
     // binary-search an alpha scale that restores the original coverage
     if (nw >= MIN_COVERAGE_SIZE && nh >= MIN_COVERAGE_SIZE) {
+      // **Answer the search from a histogram, not from the pixels.**
+      //
+      // `coverageOf(dst, scale)` counts texels where `(a/255) * scale >=
+      // alphaRef`, and that predicate reads nothing but `a`. Twelve bisection
+      // steps therefore walked this level's whole alpha channel twelve times
+      // to re-derive twelve counts over the same 256 possible values — the
+      // largest cost in the card bakes after `crownNormalTex`, and the same
+      // mistake: work that does not vary hoisted inside the loop that varies.
+      //
+      // One pass builds the histogram; `suffix[a]` is then how many texels are
+      // at least `a`. Because the predicate is monotone in `a`, the qualifying
+      // set is always a suffix, so a scan for its first member gives the exact
+      // count the per-texel loop would have returned. Same float predicate,
+      // same counts, same scale out.
+      const hist = new Int32Array(256);
+      for (let i = 3; i < dst.length; i += 4) hist[dst[i]]++;
+      const suffix = new Int32Array(257);
+      for (let a = 255; a >= 0; a--) suffix[a] = suffix[a + 1] + hist[a];
+      const total = dst.length / 4;
+      const coverageAt = (scale: number) => {
+        let aMin = 256;
+        for (let a = 0; a < 256; a++) if ((a / 255) * scale >= alphaRef) { aMin = a; break; }
+        return suffix[aMin] / total;
+      };
       let lo = 0.25, hi = 4;
       for (let it = 0; it < 12; it++) {
         const mid = (lo + hi) * 0.5;
-        if (coverageOf(dst, mid) < target) lo = mid; else hi = mid;
+        if (coverageAt(mid) < target) lo = mid; else hi = mid;
       }
       // never more than a stop of correction: past that the level has stopped
       // resolving the silhouette and is only being made opaque
