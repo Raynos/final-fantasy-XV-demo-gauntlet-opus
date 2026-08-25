@@ -859,7 +859,7 @@ turns out to have been finished all along, because every row was read this time.
 
 | left over | owner |
 |---|---|
-| 3.6 coverage economics — and widen tier-D's *reach* before its colour | `2026-08-21-fable-procedural-modeling` (owns `src/world/veg/`); the terrain half is `TerrainMaterial.ts:1231` |
+| 3.6 coverage economics — and widen tier-D's *reach* before its colour | **unassigned.** `2026-08-21-fable-procedural-modeling` owned `src/world/veg/` and is itself archived, so that directory has no live owner; the terrain half is `TerrainMaterial.ts:1231` |
 | Occluding indirect diffuse. 3.8(a) fixed aimability and the double-count, not occlusion — GTAO is a post multiply, not AO bound in-material | unassigned; needs a lighting lane |
 | The daylight grade's shadow-warmth row, **re-filed from the ambient to ground albedo** — the whole diffuse ambient is worth 2.6 of a 15-point gap | whoever next owns terrain/vegetation albedo |
 | Wave 3's frame-cost split, and post consolidation behind it | `2026-08-22-opus-phase4` (WS-0b perf) |

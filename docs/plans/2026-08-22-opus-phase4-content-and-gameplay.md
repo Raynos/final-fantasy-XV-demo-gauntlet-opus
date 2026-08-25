@@ -23,7 +23,7 @@ is unevidenced; 0 of 5 boxes tick.**
 | workstream | state |
 |---|---|
 | 0 re-audit | **DONE**, and it overturned the audit's central claim |
-| WS-0b rendering perf | **STILL UNOWNED** — and now *unmeasurable*: the ruler correctly refuses a contended tree and the tree has not been quiet. Two gates formally uncertified |
+| WS-0b rendering perf | **STILL UNOWNED, but no longer unmeasurable.** A certified full-corpus baseline exists as of 2026-08-25 — `RULER_VALID: true`, floor 16%, mean 218.1 fps, worst 140 (`poi_reststop`), every shot over 60. `bestiary_necromancer` read 51 fps on 2026-08-23 and reads **172**: that failure was the machine. **Three things arrive here from `2026-08-21-fable-sibling-ports` (DONE) — see WS-0b's own row below** |
 | WS-1 the wire | **DONE** — `Interaction` has the E verb back, quest coordinates derive from `WorldMap` instead of being typed |
 | WS-2 encounters / party AI / death | partial — `CombatBridge`, `PartyState`, `BossFight.resolveStrike` now executes for the first time. The "photo booth" finding is **not** closed |
 | WS-3 Hammerhead / NPCs / verb | **DONE** — five named NPCs, camp prompts at every haven |
@@ -77,7 +77,7 @@ has become a named, measured, unowned problem.
 | # | workstream | depends on | notes |
 |---|---|---|---|
 | **0** | **Re-audit against the gates** | — | **DONE.** (The "`integration` 18/18" here was the count at the time; it is 27 now. Numbers in this table are historical.) |
-| **WS-0b** | **Rendering performance** | — | Now concrete: `vista_dawn` 37.9, `walk` 49.8. Runs parallel, whole-run. **Assign an owner** — it has never had one |
+| **WS-0b** | **Rendering performance** | — | Runs parallel, whole-run. **Assign an owner** — it has never had one. The baseline is now published and passing (see above), so this is no longer about certifying the tree; it is about the three items below |
 | **WS-1** | **The wire**: RPG ↔ UI ↔ combat ↔ world | 0 | Still the first content workstream. Scope it from the re-audit, not from the original list |
 | **WS-2** | Encounters, party combat AI, death | WS-1 | The "photo booth" fix |
 | **WS-3** | Hammerhead, NPCs, the interaction verb | WS-1 | The first place a player stands still and *does* something |
@@ -85,6 +85,39 @@ has become a named, measured, unowned problem.
 | **WS-5** | Camp, cook, rest, day cycle | WS-1, WS-3 | |
 | **WS-6** | The Regalia | WS-1, WS-3 | Note `SHOT_STAGES` and the two-Regalia trap in `project/archive/handoff/cineui.md` §6.3 |
 | **WS-7** | Character fidelity | — | Parallel, whole-run. **Start from `project/handoff/heroart.md`** — hands and outfits are untouched and are the largest single art gap |
+
+### WS-0b's inbox, from the sibling-ports plan
+
+`docs/plans/2026-08-21-fable-sibling-ports.md` closed DONE on 2026-08-25 and
+handed three items here rather than ticking them.
+
+1. **The frame-cost split** (pixel-scaled vs fixed), Wave 3's last open item.
+   MGS5's method and the reason it matters: theirs split 17.8 + 7.4 ms, and *no
+   post deletion could reach 16.7*. Ours decides whether the walk-segment fix is
+   shadows, post consolidation or render scale — and **post consolidation is
+   gated on its answer**, so do not start it first.
+   `perf.mts <shots> --w 1600 --h 900` against `--w 800 --h 450` fits
+   `t = fixed + pixels·k` from two points.
+2. **A noise floor per shot in `perf.mts`, and do (1) after it, not before.**
+   The split was attempted twice on 2026-08-25 and voided both times at a
+   35-37% floor. The reason is item 3 below, and the shortcut is a trap: the
+   floor is measured on `shots[0]`, so leading the run with a quiet shot buys a
+   "valid" run, and quoting heavy shots against that floor is precisely the
+   self-flattery `perf.mts`'s ruler exists to prevent. §6.2 already measured a
+   16x spread in per-shot floors for `imgdiff.mts`; the same lesson has never
+   been applied here.
+3. **The order of the arguments decides whether a run certifies.** `perf A B`
+   and `perf B A` can disagree about the same machine and the same build —
+   measured within minutes on one box, 16% led by `hero_closeup` against 35% led
+   by `poi_reststop`. In `LANDMINES.md`.
+
+Also arriving, though not WS-0b's: **the daylight grade's shadow-warmth row is
+re-filed from the ambient probe to ground albedo.** Two handoffs blamed the
+probe. The whole diffuse ambient, ablated outright under pinned exposure, is
+worth **2.6 points of a 15-point gap** — `imagestats.mts`'s docstring explains
+it: outdoors the darkest quartile is mostly ground, so `sh(R-B)` reads terrain
+and vegetation albedo, not fill colour. Whoever next owns terrain albedo owns
+this.
 
 ## 4. How to parallelise this
 

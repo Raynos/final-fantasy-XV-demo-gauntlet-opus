@@ -76,8 +76,10 @@ let reloadFrames = 0, sawReload = false, longest = 0, run = 0;
 for (let f = 0; f < 1800; f++) {
   step(1);
   if ((f % 30) === 0) enc._refreshThreats();
-  const any = shooters.some((e) => e.reloading);
-  if (any) { reloadFrames++; sawReload = true; run++; longest = Math.max(longest, run); }
+  // Not named `any`: `anycheck.mts` matches the word, and a zero-ceiling gate
+  // is right to flag it rather than try to tell an identifier from a type.
+  const headDown = shooters.some((e) => e.reloading);
+  if (headDown) { reloadFrames++; sawReload = true; run++; longest = Math.max(longest, run); }
   else run = 0;
 }
 out.push(`  ${spends} attack(s) swung, ${dries} emptied a magazine: ${JSON.stringify(byAttack)}`);
