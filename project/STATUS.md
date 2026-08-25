@@ -19,10 +19,10 @@ rather than say so.** Memory is fully attributed and its rows were met outright.
 
 Three things from it that outlive the lane: **`bootprof.mts --play`** — every
 boot number this project ever quoted was a `?shoot=1` number, the harness's page
-and not the one `TODO.md` is about; **`ruler.mts` was crying wolf** — every
-harness tool run from an agent shell printed `CONTENDED (another lane is running
-<itself>)` on an idle machine, because the self-exclusion walk never reached the
-wrapper shell that launched it, so `VERDICT:` is worth believing again; and
+and not the one `TODO.md` is about; **`ruler.mts` was crying wolf** — a harness
+tool piped into `grep` printed `CONTENDED (another lane is running <itself>)` on
+an idle machine, because it matched command lines rather than executables, so
+`VERDICT:` is worth believing again; and
 **three of four boot wins were accidental costs, not missing caches** — work
 that does not vary, sitting inside the loop that varies.
 

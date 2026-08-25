@@ -275,9 +275,11 @@ Two more of this document's premises were wrong, on top of the three the
 And three instruments were wrong in ways that had been silently degrading the
 evidence:
 
-- **`ruler.mts` counted the tool's own wrapper shell as a rival lane**, so every
-  harness tool run from an agent shell printed `CONTENDED (another lane is
-  running bootprof)` on an idle machine and declared its own numbers void.
+- **`ruler.mts` counted any process whose command line *mentioned* a tool as a
+  rival lane** — the wrapper shell that launched it, and the second subshell
+  bash forks for a pipeline. So a harness tool piped into `grep` printed
+  `CONTENDED (another lane is running bootprof)` on an idle machine and declared
+  its own numbers void. Fixed by matching the executable (`ps -o ucomm=`).
 - **`imgdiff.mts` refused baked-against-`?nobake=1` at a single sha** — which is
   precisely the check this plan's determinism row requires. A capture's manifest
   now records the variant.

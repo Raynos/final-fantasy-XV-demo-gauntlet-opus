@@ -78,15 +78,21 @@ The two genuine caches, both through the Node bake (`tex.bin.gz`, now 35.4 MB /
 
 None of the above could have been honestly measured without them.
 
-1. **`ruler.mts` counted the tool's own wrapper shell as a rival lane.** An agent
-   harness runs `bash -c '... && node src/tools/bootprof.mts'`; that shell's
-   command line contains the tool path and it is self's *parent*, so the
-   parent-to-child self-exclusion walk never reached it. Every harness tool run
-   this way printed `CONTENDED (another lane is running bootprof)` on an idle
-   machine and declared its own numbers void. Same bug as the pid-string version
-   the code comment already records, one level up. It survived because the lanes
-   that hit it read the times and skipped the verdict — which is what a guard
-   that cries wolf trains people to do.
+1. **`ruler.mts` counted processes that merely *mention* a tool as rival lanes.**
+   Two shapes did, and both are how agents invoke the harness: the wrapper shell
+   (`bash -c '... && node src/tools/bootprof.mts'`, self's *parent*) and — the
+   one that fired on nearly every run — **a pipeline's other stage**. Piping a
+   tool into `grep` makes bash fork a second subshell, and a
+   forked-but-not-exec'd bash carries its parent's whole command line while
+   being a *sibling*, which no ancestor walk can reach. Every such run printed
+   `CONTENDED (another lane is running bootprof)` on an idle machine and
+   declared its own numbers void. **The fix is `ps -o ucomm=` — match the
+   executable, not the command line.** Verified both ways: a piped `bootprof`
+   reads `quiet`, a genuinely concurrent `perf.mts` is still caught. That was
+   three failed attempts at excluding self before this one — by string, by pid,
+   by ancestry — each fixing a real case and leaving another. It survived
+   because the lanes that hit it read the times and skipped the verdict, which
+   is what a guard that cries wolf trains people to do.
 2. **`imgdiff.mts` refused baked-against-`?nobake=1` at a single sha**, which is
    exactly the check this plan's determinism row requires. A manifest now records
    the capture `variant`, and the refusal keys on build *and* variant. Pass 1 got
