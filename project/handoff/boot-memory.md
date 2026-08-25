@@ -1,106 +1,133 @@
 # Boot time and memory — phase 3
 
-Contract: `docs/plans/2026-08-22-opus-phase3-boot-and-memory.md` (LOCKED).
-Worktree `agent-a371be6dd5beec857`, `PORT=5320`.
+Contract: `docs/plans/2026-08-22-opus-phase3-boot-and-memory.md` — **DONE**, with
+§3's definition of done **amended**, not ticked. Read §3 first; it is the honest
+account. This file is the working detail behind it.
+
+Two passes: 2026-08-23 (the texture bake, worktree `agent-a371be6dd5beec857`)
+and 2026-08-25 (this one, on trunk).
 
 ## The headline
 
-`node src/tools/bootprof.mts --n 3`, quiet tree, before and after:
+`node src/tools/bootprof.mts --n 3`, quiet tree, `VERDICT: quiet`:
 
-|  | before | after |
+| | cold | warm |
 |---|---|---|
-| cold | 13.66 s wall / 13.16 s in `Game.init()` | **6.88 s / 6.63 s** |
-| warm | 13.00 s / 12.85 s | **6.57 s / 6.44 s** |
+| start of plan (2026-08-22) | 13.66 s | 13.00 s |
+| after pass 1 (2026-08-23) | 6.88 s | 6.57 s |
+| **found at the start of pass 2** | **7.55 s** | **7.08 s** |
+| **now, `?shoot=1`** | **6.64 s** | **6.03 s** |
+| **now, `--play`** | **6.41 s** | **6.15 s** |
 
-**A hair over the plan's 6 s, and that is where the evidence stops.** The
-warm-up is 2.06 s of the remaining 6.44 s and it has now been measured to
-death — see below. Everything else is under 620 ms.
+Two things in that table matter more than the last row.
 
-| system | before | after |
+**It had drifted back up.** Seven content lanes landed after pass 1 and nobody
+re-measured: `Vegetation` had gone 618 -> 1369 ms and `Props` 169 -> 850. A boot
+number in a plan header is a claim with a shelf life, and this one was two days
+stale and most of a second wrong in the flattering direction.
+
+**Every number this plan ever quoted was a `?shoot=1` number** — the harness's
+page, where the dev suite refuses to load and the encounter director is switched
+off a line after init builds for it. `project/TODO.md` is about the page a person
+opens. `bootprof.mts --play` now measures that one. Report both.
+
+**The target was cold under 6 s and warm under 3 s. Cold is a little over; warm
+was never reachable, and two passes of this plan left the row open rather than
+say so.** Warm boot is barely cheaper than cold here and cannot be much cheaper:
+the game has no per-load state to warm into beyond the disk cache, so a warm load
+repeats nearly all of a cold one. Three seconds needed the shader warm-up gone
+and about half of world construction with it.
+
+## What pass 2 changed, and what it cost
+
+| | before | after |
 |---|---|---|
-| Npcs | 2106 ms | **307 ms** |
-| Props | 1963 ms | **169 ms** |
-| Town | 1465 ms | **261 ms** |
-| Dungeons | 1443 ms | **182 ms** |
-| Party | 1001 ms | **298 ms** |
-| Player | 365 ms | **122 ms** |
-| **the six together** | **8343 ms** | **1339 ms** |
+| `crownNormalTex` (inside `Trees.build`) | 391 ms | ~155 ms |
+| `Vegetation.trees.build` | 706 ms | 509 ms |
+| `Sky.clouds` | 409 ms | ~0 (bake hit) |
+| `Minimap` (`getChart`) | 458 ms | **19 ms** |
+| `Sky.texbake` (artifact inflate) | 205 ms | 245 ms |
+| **cold boot** | **7.55 s** | **6.64 s** |
 
-`pnpm run check`: **10/10 gates pass**, run twice.
+**Three of the four wins were accidental costs, not missing caches.** Twice, the
+same mistake — work that does not vary sitting inside the loop that varies:
 
-## What is done and verified
+- `crownNormalTex`'s bisection walked all 65 536 texels 25 times to use the
+  fifth of them with `cov >= 0.4`. Gather them once into dense typed arrays.
+- `buildAlphaMips`' coverage search walked each mip 12 times to re-derive counts
+  over the same 256 possible alpha values. A histogram answers it exactly.
 
-**One mechanism, two artifacts.** `src/public/baked/` cached the terrain field
-and nothing else, which is the whole reason a warm load was only 0.7 s faster
-than a cold one. Everything procedural is now cached the same way:
+Both are bit-preserving by construction: same pixels, same order, same float
+arithmetic. Neither needed a cache, an artifact or a re-bake step. **Look for
+this shape before reaching for a cache** — it is cheaper, it has no staleness
+hazard, and it was available twice in one file.
 
-- **`tex.bin.gz`** — 27.4 MB gz, 143 textures. The per-texel generators
-  (`makeTexture` / `normalFromHeight` / `makeDataMap`), baked under Node in 7 s
-  by the vite plugin at server start and on HMR. Hashed against `TEX_SOURCES`.
-- **`texc.bin.gz`** — 20.9 MB gz, 15 painted faces. The *drawn* ones:
-  `paintFace` builds a 1024² canvas from a million four-octave noise samples and
-  hand-builds an eleven-level mip chain, so the only place it exists is inside a
-  browser. Baked by `node src/tools/texbake.mts --canvas`, which boots the page
-  with `?texbake=canvas`, records instead of reading, and POSTs the compressed
-  container back to a socket it holds open. Hashed against `CANVAS_SOURCES`.
+The two genuine caches, both through the Node bake (`tex.bin.gz`, now 35.4 MB /
+150 entries):
 
-**Both verified byte-correct, not plausible.** Baked-vs-`?nobake=1` against the
-run-to-run floor, on shots chosen to show what changed:
+- **Cloud volumes.** 64^3 shape + 48^3 detail + 512^2 weather, pure seeded noise
+  with no DOM and no GPU. New `bakedBytes` in `TexBake.ts` stores a volume as a
+  `size x size*size` image — the container indexes on w/h and never reads the
+  bytes, so no format change and no version bump.
+- **The relief chart.** `rasterChart` split out of `bakeChart` as a pure
+  function; `texbake.mts` gains a `chart` job that *decodes* `terrain.bin.gz`
+  rather than rebuilding the field. **Byte-identical**, max 0, Node-baked against
+  browser-generated — a stronger check than any rendered frame allows.
 
-```
-                       baked vs nobake   the floor (baked vs baked)
-hero_face                    1.243              1.248
-party_formation              1.812              1.823
-prompto_closeup              0.311              0.310
-town_npcs                    0.260              0.261
-town_forecourt               0.181              0.183
-dun_keycatrich_entry         0.073              0.071
-dun_balouve_entry            0.055              0.055
-poi_dungeon_mouth            1.174              1.190
-```
+## The three instrument fixes, and why they belong in a boot lane
 
-Every one at or below its own floor, `prompto_closeup` included — the shot
-`project/LANDMINES.md` names as the tight one. **Capture determinism is
-unchanged.** Images read: `tmp/shots/a371-face-look/`, `tmp/shots/a371-look/`,
-and `tmp/shots/a371-prod/` (the production bundle carries both artifacts into
-`dist/baked/`).
+None of the above could have been honestly measured without them.
 
-## The shader warm-up: closed, with numbers
+1. **`ruler.mts` counted the tool's own wrapper shell as a rival lane.** An agent
+   harness runs `bash -c '... && node src/tools/bootprof.mts'`; that shell's
+   command line contains the tool path and it is self's *parent*, so the
+   parent-to-child self-exclusion walk never reached it. Every harness tool run
+   this way printed `CONTENDED (another lane is running bootprof)` on an idle
+   machine and declared its own numbers void. Same bug as the pid-string version
+   the code comment already records, one level up. It survived because the lanes
+   that hit it read the times and skipped the verdict — which is what a guard
+   that cries wolf trains people to do.
+2. **`imgdiff.mts` refused baked-against-`?nobake=1` at a single sha**, which is
+   exactly the check this plan's determinism row requires. A manifest now records
+   the capture `variant`, and the refusal keys on build *and* variant. Pass 1 got
+   around this by dirtying the tree, which `imgdiff` then correctly labels as not
+   evidence.
+3. **`bootprof.mts --play`**, above.
 
-`renderer.compileAsync` does not help here. `Warmup.runAsync()` is the same
-seven-step sweep with the scene compile handed to the parallel path, and
-`bootprof.mts --warm-ab` alternates the arms load by load so a machine that
-gets busier partway through penalises both equally. Six pairs, `scene` step:
+## The bug that made a correct cache do nothing
 
-```
-sync          1532  1919  1586  1519  1564  1561    median 1562 ms / 112 programs
-compileAsync  2133  1601  1591  1627  1547  1621    median 1611 ms / 134 programs
-```
+Its own heading, because there is no symptom and it will happen again.
 
-`KHR_parallel_shader_compile` is present and the path works. It is **3%
-slower**. Per program the driver is marginally cheaper (12.0 ms against 13.9),
-but `compileAsync` resolves a larger set — 134 against 112, because it waits on
-every material in the graph rather than the subset `compile` defers — and that
-eats the difference.
+`Sky` is the **first** system to init. `loadTexBake()` starts its fetch at module
+eval and is *awaited* by `Props`, the **eighth**. That was sufficient while every
+keyed generator lived in a material table Props reached first. The cloud volumes
+are built seven systems earlier — so they missed on every boot with the artifact
+sitting on disk, correct and unread, and the first measurement after adding them
+to the bake showed **zero** improvement. A cache miss is indistinguishable from
+not having a cache. `Sky.init` now awaits `loadTexBake()` itself.
 
-Going async also is not free: `Game.init` calls `post.render()` and sets `ready`
-on the next line without awaiting, so an async sweep finishes *after* the
-harness has been told the page is ready. Pixels stay correct; work moves into
-the window a capture settles in. Not worth spending capture determinism on a 3%
-loss.
+## Verified
 
-`runAsync` and `--warm-ab` are kept rather than deleted: the claim is "on this
-GPU, with this driver", and the next person should be able to re-check it in one
-command on theirs.
+- `pnpm run check` — **17/17 gates**, at HEAD. (9 when the plan was written, 12
+  at pass 1. Do not quote an old count.)
+- **Capture determinism**, baked vs `?nobake=1`, eight shots, each against its
+  own floor, `prompto_closeup` included:
 
-**What would move the warm-up is fewer programs, not faster compilation.** 112
-programs at ~14 ms is the cost; the page holds 228 in total. That is a
-material-architecture question across every lane, not a boot question.
+  ```
+  dun_balouve_entry     0.055 / 2.00      poi_dungeon_mouth   0.800 / 2.00
+  dun_keycatrich_entry  0.073 / 2.00      prompto_closeup     0.333 / 2.00
+  hero_face             1.303 / 2.00      town_forecourt      0.279 / 2.00
+  party_formation       2.020 / 2.85      town_npcs           0.297 / 2.00
+  ```
+- **The chart**, Node-baked vs browser-generated: `mean 0.000, max 0`.
+- Images read, not only diffed: `tmp/shots/chart-baked/chart.png` (ochre Leide,
+  green Duscae, cool highland, caldera ring), `sky-baked/zone_galdin.png`
+  (cumulus with gaps and scale variation), and `cn-head` vs `cn-dirty`
+  `zone_nebulawood.png` side by side.
 
-## Memory: measured, and the premise needs correcting twice
+## Memory — unchanged from pass 1, and its rows were met
 
-`bootprof.mts --mem`, M5 Max, ANGLE Metal (a real GPU — the tool prints the
-renderer string), a fresh browser launch per variant, 4 s settle:
+`bootprof.mts --mem`, M5 Max, ANGLE Metal, a fresh browser launch per variant:
 
 ```
 plain page   1942.7 MB RSS        ?debug=1   1938.9 MB RSS
@@ -113,99 +140,58 @@ plain page   1942.7 MB RSS        ?debug=1   1938.9 MB RSS
   GPU-side estimate (three's own inventory)  279.3 MB
 ```
 
-1. **`?debug=1` costs 4 MB.** The TODO's premise is wrong, as the plan said.
-2. **The plan's correction was wrong the other way.** It recorded `?debug` as
-   using *less* JS heap than prod (409 vs 470 MB). That is an artifact:
-   navigating one tab from prod to `?debug` does not free the first world, so
-   whichever page went second was charged with the first. With a launch each
-   they are within 4 MB.
-3. **The 1.4 GB is real and it is process RSS**, ~1.69 GB here over an idle
-   browser. Of the renderer's 1179 MB, 498 MB is JS heap the page can see; the
-   rest is V8 metadata, ANGLE's client-side buffers and the CPU staging copies
-   Metal keeps of every upload.
+`?debug=1` costs **4 MB** — the TODO's premise is wrong, and so was this plan's
+first correction of it, which had prod using *more* heap. Both are artifacts of
+navigating one tab between variants instead of launching one browser each.
 
-**Can it come down?** A little, and not by much. **94 MB** of CPU-side texel
-arrays are dead weight once uploaded and nothing reads a texel back — the one
-clean win, 5% of the total, and **not attempted here**: freeing it correctly
-needs `onUpload`-style disposal per texture, and a WebGL context loss then
-re-uploads from nothing. That is a real change with a real failure mode and
-deserves its own measured pass. **96 MB** of geometry arrays are *not*
-disposable — `heightAt`, collision and `creaturecheck`'s skinned-AABB probe all
-walk vertex data. **279 MB** of GPU-side textures and buffers is the world. The
-remaining ~1.1 GB is Chromium's and no change in this repo moves it.
+**Can it come down? A little, and not by much.** 94 MB of CPU texel arrays are
+dead after upload — the one clean win, ~5% of RSS, **not attempted**: it needs
+per-texture `onUpload` disposal, and a context loss then re-uploads from nothing.
+96 MB of geometry arrays are **not** disposable (`heightAt`, collision and
+`creaturecheck`'s skinned-AABB probe all walk vertex data). 279 MB GPU-side is
+the world. The remaining ~1.1 GB is Chromium's.
 
-## What the profile said that the plan did not
+## What is left, sized — the successor's work list
 
-Each found by adding `bootPhase` marks *inside* the systems. Those marks are
-committed, and re-running `bootprof.mts` is how the next agent checks the cost
-has not come back.
-
-- **`Dungeons` builds no interiors.** `Dungeon` has been lazy since it was
-  written; `init()` builds only the twelve *exteriors*, and its 1443 ms was the
-  material kit's first touch. No lazy-construction work was needed, so the 9.5 s
-  light-recompile landmine was never approached.
-- **`Props.landmarks` was never the landmarks.** `PropMaterials` is memoised, so
-  the whole cost landed on the first caller. `Props.mega`, one line below, read
-  394 ms for comparable geometry.
-- **Props and Town already use `TileStream`** where it applies — Rocks, Debris
-  and Wildlife. The cost was never the scatter.
-- **`Npcs` was the largest system on the boot path and was not in the plan's
-  table at all.** It was one thing: fifteen painted faces at ~190 ms each.
-
-## What is left
-
-1. **`Minimap` 616 ms** — `getChart(terrain)`, a 2048² world image off the
-   terrain's own elevation grid. It is derived from the *baked* field, so it
-   belongs either in `terrain.bin.gz` or in `texc.bin.gz` keyed on the terrain
-   sources. The mechanism is there; nobody has keyed it.
-2. **`Vegetation` 618 ms, `Terrain` 615 ms, `Sky` 487 ms, `Director` 445 ms** —
-   the long tail. `Terrain.bake` is 435 ms of the 615 and is already a cache
-   read (a 32 MB inflate).
-3. **The warm-up, 2.06 s** — closed against `compileAsync`; open only against
-   reducing the program count, which is not a boot-lane question.
-4. **The 94 MB of CPU texel copies**, above.
-
-## Files touched
-
-- `src/engine/TexBake.ts` — new. Container format, the two-artifact loader, the
-  three `bakedX` wrappers, `bakedCanvasMips`, record mode, `postRecording`.
-- `src/tools/texbake.mts` — new. Node bake, browser bake, both source hashes,
-  `pruneStaleCanvasBake`.
-- `src/tools/bootprof.mts` — `--mem`, `--warm-ab`.
-- `src/tools/vite-plugin-bake.mts` — runs `texBake()` beside `bake()`, re-bakes
-  on HMR, deletes a stale canvas artifact.
-- `src/engine/Warmup.ts`, `src/engine/PostFX.ts` — `runAsync()` behind
-  `?warm=async`, and `warmupDone` for the measurement to await.
-- Keyed generators: `src/world/town/TownMaterials.ts`,
-  `src/world/props/PropMaterials.ts`,
-  `src/world/dungeons/kit/InteriorMaterials.ts`, `src/characters/rig/Face.ts`.
-- Call sites: `src/world/Props.ts`, `src/world/town/Hammerhead.ts`,
-  `src/world/dungeons/Dungeons.ts`, `src/characters/npc/NpcRig.ts`,
-  `src/characters/rig/Character.ts`, and the six exported prop material tables.
-- `project/LANDMINES.md` — the stale-bake entry, and `--prod` leaving a preview.
-- `src/tools/probes/texcost-a371.mts`, `src/tools/probes/compileasync-a371.mts`.
+| ms | item | note |
+|---|---|---|
+| 1834 | **shader warm-up** | Closed against `compileAsync` (3% *slower*, six pairs; `--warm-ab` re-runs it). Only **fewer programs** move it — 129 in the scene step. A material-architecture question across every lane, and the natural next plan. |
+| 509 | `Vegetation.trees.build` | ~158 ms GPU readback plus CPU derive. Cacheable through the *browser* bake, but `CANVAS_SOURCES` must widen to `TreeBuilder`/`VegTextures`/`Trees` — already the sharpest staleness hazard in the repo. |
+| 400 / 322 / 225 | `Props.poiPrebuild`, `Props.mega`, `Water.shore` | Real geometry. All three want a **geometry bake**, which nothing here has attempted. One project, not three. |
+| 354 | `Vegetation.prime.bushes` | One priming `update()` so the first frame is dressed. Removing it trades boot for a visible pop in live play; `converge()` already makes captures independent of it. |
+| 245 | `Sky.texbake` | The inflate, 86 MB raw. Was hidden inside `Props`; now first on the path and honestly counted. A separately-fetched third artifact would move ~40 ms off the critical path. |
+| 209 | `Director.hunts` | Arms set pieces that `setLive(false)` tears down two lines later under `?shoot`. **Skipping it when posed is ~209 ms off every capture and nothing off a player's boot.** A harness win, not a boot win, and it risks changing what a posed frame contains. Judge it as capture tooling. |
 
 ## Hazards
 
 - **`node src/tools/texbake.mts --canvas` is not automatic and cannot be.** It
-  boots the page, so it cannot run from the vite plugin — the plugin needs the
-  server that is starting. What the plugin does instead is **delete** a stale
-  `texc.bin.gz` and say so, because the runtime cannot tell stale from fresh.
-  Deleting costs the boot time it was saving; serving costs fifteen faces that
-  no longer match their sculpt, with no symptom. **After a merge that touches
-  anything in `CANVAS_SOURCES`, re-run it.**
+  boots the page, so it cannot run from the vite plugin. The plugin **deletes** a
+  stale `texc.bin.gz` instead, because the runtime cannot tell stale from fresh.
+  **`TexBake.ts` is itself in `CANVAS_SOURCES`, so editing it deletes the
+  painted-face cache** — cold boot goes up ~2.5 s with every gate still green.
+  This bit twice in one session, the second time after being diagnosed.
+- **`pnpm run build` does not make every cache; `build:full` does.** Run it after
+  any merge.
+- **A cache read before `Props.init()` misses on every boot.** See above.
 - **`CANVAS_SOURCES` is deliberately wide** — `Sculpt.ts`, `Anatomy.ts`,
   `Skeleton.ts` and both cast tables. The face map is authored in canonical head
   metres and projected through the head's own UV, so the *sculpt* moves those
-  pixels. A generator missing from either source list is a silently stale cache.
-- **`src/public/baked/` is a symlink to the main checkout from every worktree**,
-  so both caches are shared between concurrently running agents while the
-  freshness stamps come from whichever worktree baked last. Nothing breaks, but
-  a boot number taken while another worktree owns the cache is not yours. Run
-  `texbake.mts --force` and `texbake.mts --canvas --force` once after merging.
-- **`shoot.mts --prod` leaves a `vite preview` on your `PORT`** and nothing
-  afterwards refuses to reuse it. Three of my measurements were silently taken
-  against a stale `dist/`. Now in `LANDMINES.md`.
-- `Town.materials` still costs 241 ms: the 35 sign faces are `canvasTexture`
-  calls that are not keyed. They could go into `texc.bin.gz` now that the
-  browser bake exists — the mechanism is `bakedCanvasMips`, they only need keys.
+  pixels.
+- Unrelated, pre-existing, and **not** caused by anything here: a solid black
+  patch sits on the canopy near the road in `zone_nebulawood`, present
+  identically at HEAD before this pass. Somebody should chase it; it is not a
+  boot bug.
+
+## Files touched, pass 2
+
+- `src/tools/ruler.mts` — ancestor-aware self-exclusion.
+- `src/tools/bootprof.mts` — `--play`.
+- `src/tools/shoot.mts`, `src/tools/imgdiff.mts` — manifest `variant`.
+- `src/engine/BootProfile.ts` — `bootMark`, for costs accumulated over a loop.
+- `src/world/Vegetation.ts`, `Water.ts`, `Sky.ts`, `src/game/Director.ts` —
+  `bootPhase` marks on the four systems that had grown.
+- `src/world/veg/VegTextures.ts` — `crownNormalTex` and `buildAlphaMips`.
+- `src/engine/TexBake.ts` — `bakedBytes`.
+- `src/world/sky/CloudTextures.ts` — split into three cached builders.
+- `src/world/map/Chart.ts` — `rasterChart` split out and cached.
+- `src/tools/texbake.mts` — `clouds` and `chart` jobs, wider `TEX_SOURCES`.

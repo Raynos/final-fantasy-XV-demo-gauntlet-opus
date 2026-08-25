@@ -37,6 +37,23 @@ export function bootPhase<T>(name: string, fn: () => T): T {
 }
 
 /**
+ * Record a duration that was accumulated rather than measured around one call.
+ *
+ * {@link bootPhase} wraps a single block, which is the right shape for "how
+ * long did this step take". It is the wrong shape for a cost spread over a
+ * loop — twenty-one tree variants each doing geometry *and* an impostor bake
+ * would arrive as twenty-one marks in two interleaved groups, and the question
+ * being asked is which of the two groups the time is in.
+ *
+ * @param name label, conventionally `System.phase`
+ * @param ms accumulated milliseconds
+ */
+export function bootMark(name: string, ms: number) {
+  const p = typeof window !== 'undefined' && window.BOOT_PROFILE;
+  if (p) p.marks.push({ name: `  ${name}`, ms: +ms.toFixed(1) });
+}
+
+/**
  * Install the profiler on a game instance before `init()` is called.
  * @returns the profile record, filled in as boot proceeds
  */

@@ -48,7 +48,7 @@ hook warns on a new plan with no `Status:` line; it does not block.
     |               |               |
     +---------------+---------------+
                     |
-  2026-08-22-opus-phase3-boot-and-memory      alone, after
+  2026-08-22-opus-phase3-boot-and-memory      DONE 2026-08-25 -> project/archive/plans/
                     |
   phase4's WS-0b perf re-baseline             alone, last (needs a quiet machine)
 

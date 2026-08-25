@@ -323,6 +323,20 @@ in this file.
   breaks, but a boot number taken while another worktree owns the cache is not
   yours. `--force` after a merge.
 
+- **`TexBake.ts` is itself in `CANVAS_SOURCES`, so editing it deletes the
+  painted-face cache.** The hash changes, `vite build` prunes the stale
+  artifact, and cold boot goes up ~2.5 s with every gate still green and nothing
+  logged at the point it matters. Re-run `node src/tools/texbake.mts --canvas`
+  after touching it. It bit twice in one session on 2026-08-25, the second time
+  after the first had already been diagnosed.
+- **A cache read before `Props.init()` misses on every boot.** `loadTexBake()`
+  starts at module eval and is *awaited* by `Props`, the eighth system. `Sky` is
+  the first. The cloud volumes were added to the bake, baked correctly, shipped
+  in the artifact — and scored exactly zero improvement, because `store` was
+  still null when they asked and they silently regenerated. There is no warning
+  for this: a miss is indistinguishable from not having a cache. Anything keyed
+  and built before `Props` must await `loadTexBake()` itself.
+
 ## Process
 
 - **Do not trust an agent's report — verify the merge.** Merge, capture, look.
@@ -853,6 +867,35 @@ every commit by every lane, and `withExclusive` cannot queue it because it never
 asks the daemon for anything) and other lanes' harness tools by name. The verdict
 now names which fired. **Do not brief a perf lane that the machine is quiet
 without running `printContention` first.**
+
+### ...and then it cried wolf on an idle machine for weeks
+
+The "other lanes' harness tools by name" trigger above was added to stop two
+lanes measuring through each other. It then stopped anything from measuring at
+all, in a way that reads as a real verdict:
+
+```
+other lanes' tools      : bootprof
+VERDICT: CONTENDED (another lane is running bootprof) — ...
+         boot times below are NOT a baseline. Re-run on a quiet tree.
+```
+
+with nothing else on the box. `contention()` excludes self by pid and walks the
+process tree, but the walk went **parent -> child only** — and an agent harness
+runs a tool as `bash -c 'source …snapshot.sh && node src/tools/bootprof.mts'`.
+That wrapper shell's own command line contains the tool's path, so it matches
+the tool regex, and it is self's *parent*, never its child. Every harness tool
+invoked that way declared its own run void.
+
+This is the same bug as the pid-string version the code comment already
+recorded, one level up, and it survived because the lanes that hit it read the
+boot times and skipped the verdict. Fixed 2026-08-25 by walking ancestors as a
+chain as well as descendants as a tree; a sibling tool started from the same
+session still counts, which is the case the trigger exists for.
+
+**The lesson is not about pids.** A guard that fires on a quiet machine trains
+people to ignore it, and a guard people ignore is worse than no guard — the two
+lanes it was meant to protect had already learned to skip the line.
 
 ## A probe that calls `Game.start()` can poison every later measurement
 

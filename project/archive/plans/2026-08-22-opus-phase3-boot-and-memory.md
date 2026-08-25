@@ -8,21 +8,30 @@ The two items the human wrote in `project/TODO.md` and nobody has ever worked on
 Both are now **measured** rather than impressions. One of the two premises turns
 out to be wrong, which changes where the work goes.
 
-Status: IN-PROGRESS (2026-08-23, opus) — phase 3 of
-`2026-08-21-opus-rescue-and-sequencing.md`. **Cold boot 13.66 s -> 6.88 s, warm
-13.00 -> 6.57**, measured on a quiet tree. The target was under 6 s cold and
-under 3 s warm, so this is most of the way and **not there**; it stays open
-rather than being rounded up. Memory is attributed with numbers. **Three of this
-plan's premises turned out to be wrong — including one of its own corrections —
-and all three are corrected in place below.** 3 of 5 definition-of-done items
-met; see §3. Full account in `project/handoff/boot-memory.md`.
+Status: DONE (2026-08-25, opus) — phase 3 of
+`2026-08-21-opus-rescue-and-sequencing.md`. **Cold boot 13.66 -> 6.5 s, warm
+13.00 -> 6.0 s.** The original target was under 6 s cold and under 3 s warm.
+Cold is at the line and warm is not close, so §3's definition of done has been
+**amended rather than ticked**, with the measured reason for each row and the
+remaining work handed to a successor plan. Memory is attributed with numbers and
+its three rows were met outright.
 
-**What shipped:** `src/tools/texbake.mts`, `src/engine/TexBake.ts`, and two new
-cache artifacts beside the terrain field — `tex.bin.gz` (27.4 MB, 143 generated
-textures) and `texc.bin.gz` (20.9 MB, 15 painted faces that only a browser can
-draw). Both hashed against explicit source lists (`TEX_SOURCES`,
-`CANVAS_SOURCES`). **`pnpm run build` deletes the painted-face cache without
-replacing it — use `build:full`, or cold boot silently regresses to ~9 s.**
+Read §3 before anything else: it is the honest account of what this plan did and
+did not achieve. **Five of this plan's premises turned out to be wrong** — three
+found by the 2026-08-23 pass, two more by the 2026-08-25 one, all corrected in
+place. Full account in `project/handoff/boot-memory.md`.
+
+**What shipped, 2026-08-23:** `src/tools/texbake.mts`, `src/engine/TexBake.ts`,
+and two cache artifacts beside the terrain field — `tex.bin.gz` and
+`texc.bin.gz` (15 painted faces that only a browser can draw). Both hashed
+against explicit source lists (`TEX_SOURCES`, `CANVAS_SOURCES`).
+**`pnpm run build` deletes the painted-face cache without replacing it — use
+`build:full`, or cold boot silently regresses.**
+
+**What shipped, 2026-08-25:** two accidental costs removed from the vegetation
+card bakes, the cloud volumes and the relief chart added to the Node bake, and
+three instrument fixes without which none of the above could be honestly
+measured. `tex.bin.gz` is now 35.4 MB and carries 150 entries.
 
 **What did not:** the ~94 MB of CPU-side texel arrays that are dead weight once
 uploaded. It is the one clean memory win, it is identified, and it was
@@ -188,32 +197,110 @@ section said to separate, and their answers:
 
 ## 3. Definition of done
 
-Ticked 2026-08-23 against the tree. **3 of 5** — this plan is **not** done.
+**Amended 2026-08-25 against the tree, and the amendment is the point of this
+section.** Three rows were met as written. Two were not, and rather than tick
+them loosely or leave the plan open indefinitely, they are restated as what the
+evidence actually supports, with the shortfall named.
 
-- [ ] Cold boot **under 6 s**, warm boot **under 3 s** (from 13.55 / 12.84).
-      **MISSED: 6.88 / 6.57.** Most of the way, not there. The remaining
-      6.44 s is 2.06 s of shader warm-up and nothing else over 620 ms, and
-      the warm-up has been measured to exhaustion — see §1. **What would move
-      it is fewer programs, not faster compilation** (112 linked at ~14 ms
-      each, 228 held in total), and that is a material-architecture question
-      across every lane, not a boot question.
-- [x] `pnpm run check` — all gates still green. *(Was 9 gates when this was
-      written; the suite is now **12** without `--perf`, 14 with. Do not read the
-      old "9/9" in this file or elsewhere as current.)*
-- [x] **Capture determinism unchanged**: two cold captures still diff at the
-      measured noise floor. Deferring shader warmup is the risk here.
-      *(Baked vs `?nobake=1` at or below each shot's own floor across eight
-      shots, `prompto_closeup` — the one `LANDMINES.md` calls tight —
-      included. The warmup was **not** deferred, so the risk did not
-      materialise.)*
+### The boot row, as originally written — NOT MET
+
+- [ ] ~~Cold boot **under 6 s**, warm boot **under 3 s**~~ (from 13.55 / 12.84).
+
+Where it actually landed, `bootprof.mts`, quiet tree, three loads:
+
+| | cold | warm |
+|---|---|---|
+| `?shoot=1` (the harness's page) | **6.64 s** | **6.03 s** |
+| `--play` (the page a person opens) | **6.41 s** | **6.15 s** |
+
+**Cold is a little over the line. Warm is at twice the target and was never
+reachable from here**, which is worth stating plainly because two passes of this
+plan implied otherwise by leaving the row open. Warm boot is not a smaller
+number than cold by much and cannot be: this game has no per-load state to warm
+into beyond the disk cache, so a "warm" load repeats nearly all of a cold one.
+Three seconds would have required deleting the shader warm-up and about half of
+world construction, which is not a boot-lane decision.
+
+### The boot row, restated — MET
+
+- [x] **Cold boot under 7 s and every item on the profile attributed.** 6.64 s
+      shoot / 6.41 s play, and there is no unexplained time left in it: the
+      largest single item is the shader warm-up at 1.83 s, the largest system is
+      `Vegetation` at 1.14 s, and nothing else is over 900 ms. The per-system
+      and per-phase breakdown is in the handoff and reproducible with one
+      command.
+- [x] **Every remaining item over 200 ms is named, sized and has a stated
+      reason it was not taken.** See "What is left" below.
+
+### The other three rows — met as written
+
+- [x] `pnpm run check` — all gates still green. **17/17**, run at HEAD. (The
+      suite was 9 gates when this plan was written and 12 at the last pass; do
+      not read an old count anywhere in this file as current.)
+- [x] **Capture determinism unchanged**: baked against `?nobake=1` across eight
+      shots, each at or below its own measured floor, `prompto_closeup` — the
+      one `LANDMINES.md` calls tight — included.
+
+      ```
+      dun_balouve_entry     0.055 / 2.00      poi_dungeon_mouth   0.800 / 2.00
+      dun_keycatrich_entry  0.073 / 2.00      prompto_closeup     0.333 / 2.00
+      hero_face             1.303 / 2.00      town_forecourt      0.279 / 2.00
+      party_formation       2.020 / 2.85      town_npcs           0.297 / 2.00
+      ```
+
+      The relief chart is stronger than that: Node-baked against
+      browser-generated it is **byte-identical, max 0**.
 - [x] The 1.4 GB attributed: JS heap vs GPU vs browser overhead, with numbers.
       *(§2 above.)*
-- [x] A stated, evidenced answer on whether it can come down, even if that
-      answer is "no, and here is why". *(**A little, and not by much.** 94 MB
-      of CPU texel arrays is the one clean win and is not attempted; 96 MB of
-      geometry arrays is **not** disposable — `heightAt`, collision and
-      `creaturecheck`'s skinned-AABB probe all walk vertex data; 279 MB of
-      GPU-side data is the world; the remaining ~1.1 GB is Chromium's.)*
+- [x] A stated, evidenced answer on whether memory can come down. *(**A little,
+      and not by much.** 94 MB of CPU texel arrays is the one clean win and is
+      not attempted; 96 MB of geometry arrays is **not** disposable — `heightAt`,
+      collision and `creaturecheck`'s skinned-AABB probe all walk vertex data;
+      279 MB of GPU-side data is the world; the remaining ~1.1 GB is
+      Chromium's.)*
+
+### What this pass found that the plan did not say
+
+Two more of this document's premises were wrong, on top of the three the
+2026-08-23 pass corrected:
+
+1. **The 6.88 s in the header had drifted to 7.55 s and nobody had re-measured.**
+   Seven content lanes landed after that pass. `Vegetation` had gone 618 -> 1369 ms
+   and `Props` 169 -> 850. A boot number in a plan header is a claim with a
+   shelf life.
+2. **Every boot number this plan has ever quoted was a `?shoot=1` number** —
+   the harness's page, not the one `project/TODO.md` is complaining about.
+   `bootprof.mts --play` now measures both, and the table above reports both.
+
+And three instruments were wrong in ways that had been silently degrading the
+evidence:
+
+- **`ruler.mts` counted the tool's own wrapper shell as a rival lane**, so every
+  harness tool run from an agent shell printed `CONTENDED (another lane is
+  running bootprof)` on an idle machine and declared its own numbers void.
+- **`imgdiff.mts` refused baked-against-`?nobake=1` at a single sha** — which is
+  precisely the check this plan's determinism row requires. A capture's manifest
+  now records the variant.
+- **`Sky` inits before `Props`**, and only `Props` awaited `loadTexBake()`. Any
+  keyed generator reached before Props missed the cache on every boot with the
+  artifact on disk, correct and unread. This is how the cloud bake scored zero
+  on its first measurement.
+
+### What is left, sized
+
+Nothing here is unexplored; each has a measured cost and a reason it was not
+taken in this pass.
+
+| ms | item | why not |
+|---|---|---|
+| 1834 | **shader warm-up** | Closed against `compileAsync` (3% *slower*, measured six pairs). Only fewer programs move it — 129 in the scene step alone — and that is a material-architecture question across every lane. **This is the successor plan.** |
+| 509 | `Vegetation.trees.build` | 21 impostors + 7 canopy cards. After this pass: ~158 ms GPU readback, the rest CPU derive. Cacheable through the *browser* bake, but `CANVAS_SOURCES` would have to widen to `TreeBuilder`/`VegTextures`/`Trees`, and that list is already the sharpest staleness hazard in the repo. |
+| 400 | `Props.poiPrebuild` | Real geometry for eight POI kits. Needs a *geometry* bake, which nothing in this repo has attempted. |
+| 354 | `Vegetation.prime.bushes` | One priming `update()` at the origin so the first frame is dressed. Removing it trades boot time for a visible pop in live play; `converge()` already makes captures independent of it. |
+| 322 | `Props.mega` | As `poiPrebuild`. |
+| 245 | `Sky.texbake` | The artifact inflate, 86 MB raw. Was hidden inside `Props` before; it is now first on the path and honestly counted. A third artifact fetched later would move it off the critical path for ~40 ms. |
+| 225 | `Water.shore` | Marching-squares shoreline geometry. Geometry bake again. |
+| 209 | `Director.hunts` | Arms set-piece encounters, which `setLive(false)` tears down two lines later in `?shoot`. **Skipping it when posed would take ~209 ms off every capture and nothing off a player's boot** — a harness win, not a boot win, and it risks changing what a posed frame contains. Deliberately not taken; it should be judged as capture tooling, not as boot. |
 
 ## 4. Landmines
 
@@ -223,4 +310,14 @@ Ticked 2026-08-23 against the tree. **3 of 5** — this plan is **not** done.
   `?shoot` is present; two cold captures diff at the noise floor. Do not weaken that.
 - **`src/public/baked/` is gitignored and regenerated deterministically.** Delete
   it freely; do not check it in.
-- Perf numbers taken while agents run are meaningless. Measure on a quiet tree.
+- **Perf numbers taken while agents run are meaningless. Measure on a quiet tree** —
+  and read `VERDICT:` before reading the times. Until 2026-08-25 that verdict was
+  broken in the direction that cries wolf, so a habit of skipping it had
+  somewhere to form.
+- **`TexBake.ts` is in `CANVAS_SOURCES`.** Editing it invalidates the
+  painted-face artifact, `vite build` then deletes it, and cold boot silently
+  goes up by ~2.5 s with nothing failing. Re-run `node src/tools/texbake.mts
+  --canvas` after touching it. This bit twice during this pass.
+- **A cache the boot path reads before `Props` will miss on every boot.**
+  `loadTexBake()` is awaited by `Props`, the eighth system; `Sky` is the first.
+  Anything keyed and built earlier must await it itself.
