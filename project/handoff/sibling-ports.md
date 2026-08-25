@@ -1,13 +1,16 @@
 # Sibling-repo ports — handoff
 
 Owner: opus, 2026-08-25 (third pass). Plan:
-`docs/plans/2026-08-21-fable-sibling-ports.md` — its table is the authority,
-this file is the working state.
+`project/archive/plans/2026-08-21-fable-sibling-ports.md` — **DONE and
+archived**; its §10 is the authority, this file is the working state of what
+came out of it.
 
 ## Where the plan stands
 
-**Waves 1, 2 and 4 are complete. Wave 3's frame-cost split and the perf
-re-baseline are the only open box**, and both wait on the same number.
+**All four waves are complete and the perf re-baseline is published and
+passing** — `RULER_VALID: true`, floor 16%, mean 218.1 fps, worst 140, every
+shot over 60. Wave 3's frame-cost split is the one thing that did not get
+measured, and it went to phase4's WS-0b with the ruler defect that blocked it.
 
 Five of the previous pass's rows were wrong, all in the same direction — work
 called open that was already in the tree. If you read nothing else here, read
@@ -133,8 +136,9 @@ terrain and vegetation albedo. **It is a ground-albedo row and always was.**
 `src/tools/harness.mts`, `src/tools/README.md`,
 `src/tools/probes/{skyprobe,ratecontract,firerhythm}.mts` (new).
 
-Nothing in `src/world/veg/` — it belongs to procedural-modeling, and 3.6 turned
-out not to need it.
+Nothing in `src/world/veg/` — and note that procedural-modeling, which owned it,
+is itself archived, so that directory currently has **no owner**. 3.6's built
+half turned out to live in `TerrainMaterial.ts` anyway.
 
 ## Shots that show the current state
 
