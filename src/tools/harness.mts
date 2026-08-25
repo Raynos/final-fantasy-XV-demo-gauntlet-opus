@@ -350,6 +350,20 @@ export async function withBlankPage<T>(
  * covers a full `perf` or `bootprof` run with room over. `--wait-lease 0`
  * restores fail-fast for a script that would rather report than block.
  */
+/**
+ * The agent identity a timing tool will submit its jobs under.
+ *
+ * Deliberately duplicates `harnessArgs`' rule rather than calling it, for the
+ * same reason `leaseWaitMs` reads argv: `withExclusive` wraps `main`, so it
+ * runs before the tool's own parser and there is no `HarnessArgs` yet.
+ */
+export function leaseAgent(fallback: string, argv: string[] = process.argv): string {
+  if (process.env.HARNESS_AGENT) return process.env.HARNESS_AGENT;
+  const i = argv.indexOf('--agent');
+  const v = i >= 0 ? argv[i + 1] : undefined;
+  return v && !v.startsWith('--') ? v : fallback;
+}
+
 export function leaseWaitMs(argv: string[] = process.argv): number {
   const i = argv.indexOf('--wait-lease');
   if (i < 0) return 10 * 60_000;
@@ -358,9 +372,19 @@ export function leaseWaitMs(argv: string[] = process.argv): number {
 }
 
 export async function withExclusive<T>(
-  agent: string, fn: () => Promise<T>, { waitMs = leaseWaitMs() }: { waitMs?: number } = {},
+  label: string, fn: () => Promise<T>, { waitMs = leaseWaitMs() }: { waitMs?: number } = {},
 ): Promise<T> {
   await ensureDaemon();
+  // **Hold the lease under the same identity the tool's own jobs will carry.**
+  // While the lease is out the scheduler runs jobs only from the holding agent
+  // (`j.agent === this.exclusive`), and this used to pass the tool's *name*
+  // while every capture the tool submitted went in under `--agent <whatever>`.
+  // The two agreed by accident, because `harnessArgs` defaults the agent to the
+  // tool's own basename — so `perf.mts` worked and `perf.mts --agent sibling`
+  // deadlocked against its own lease, silently, forever: no browser, no output,
+  // no error, 0.35 s of CPU and a held lease that blocked the whole repository.
+  // Resolved the same way `harnessArgs` resolves it so the two cannot drift.
+  const agent = leaseAgent(label);
   // The pid is what lets the daemon reap this if the tool dies holding it --
   // `perf.mts` exits via process.exit() on a failing shot, which skips every
   // `finally` in the process, so a release that only happens on the happy path
