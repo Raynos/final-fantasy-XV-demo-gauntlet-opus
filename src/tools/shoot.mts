@@ -168,7 +168,19 @@ async function main() {
   const shots = opts.shots.length ? opts.shots : await listShots();
 
   const out = await viaDaemon(opts, shots, outDir);
-  await writeFile(path.join(outDir, 'manifest.json'), manifest(out));
+  // Record what the page was asked for, not only which build drew it. Two
+  // captures of the same commit are *not* the same frames when one of them
+  // passed `--nobake` or ablated a post pass, and `imgdiff` refuses a
+  // same-build comparison on the assumption that they are — which made the
+  // one comparison the bake work actually needs impossible to run without
+  // dirtying the tree. See `imgdiff.mts`'s `provenance`.
+  const variant = [
+    opts.nobake ? 'nobake' : '',
+    opts.ablate ? `post=${opts.ablate}` : '',
+    opts.hide.length ? `hide=${opts.hide.join('+')}` : '',
+  ].filter(Boolean).join(',');
+  await writeFile(path.join(outDir, 'manifest.json'),
+    manifest({ ...out, variant } as typeof out & { variant: string }));
   if (out.errors.length) {
     console.error(`\n${out.errors.length} page error(s):`);
     for (const e of [...new Set<string>(out.errors)].slice(0, 20)) console.error('  ' + e.split('\n')[0]);

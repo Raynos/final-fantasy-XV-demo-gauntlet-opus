@@ -200,17 +200,23 @@ function crc32(buf: Buffer) {
  * written by `shoot.mts`. Say nothing rather than guess.
  */
 function provenance(aDir: string, bDir: string) {
-  const read = (d: string): { build?: string, dirty?: boolean } | null => {
+  const read = (d: string): { build?: string, dirty?: boolean, variant?: string } | null => {
     try { return JSON.parse(readFileSync(path.join(d, 'manifest.json'), 'utf8')) as { build?: string }; }
     catch { return null; }
   };
   const a = read(aDir), b = read(bDir);
   if (!a?.build || !b?.build) return;
-  console.log(`A: ${a.build}${a.dirty ? ' (LIVE TREE)' : ''}    B: ${b.build}${b.dirty ? ' (LIVE TREE)' : ''}`);
+  const tag = (m: { build?: string, dirty?: boolean, variant?: string }) =>
+    `${m.build}${m.variant ? ` [${m.variant}]` : ''}${m.dirty ? ' (LIVE TREE)' : ''}`;
+  console.log(`A: ${tag(a)}    B: ${tag(b)}`);
   if (a.dirty || b.dirty) {
     console.log('  note: a dirty-build frame is of somebody\'s live working tree and is not evidence.');
   }
-  if (a.build === b.build && !a.dirty) {
+  // Same build *and* the same request. `--nobake`, `--post=` and `--hide=` all
+  // make one commit draw genuinely different frames — the cache is keyed on
+  // the query, so both sides really were captured — and baked-against-unbaked
+  // at one sha is exactly the comparison the texture bakes have to pass.
+  if (a.build === b.build && (a.variant || '') === (b.variant || '') && !a.dirty) {
     console.error(`\nREFUSED: both sides are ${a.build}. A build is byte-identical to itself by\n`
       + 'construction — the second capture was almost certainly served from the frame\n'
       + 'cache — so this diff says nothing about the code. Capture the other side at a\n'
