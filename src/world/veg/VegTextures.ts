@@ -536,8 +536,23 @@ export function crownNormalTex(rgba: Uint8Array, size: number, opts: {broad?: nu
   for (let i = 0; i < n; i++) h[i] = B[i] * (1 - fineMix) + F[i] * fineMix;
 
   // central differences, then a scale taken from the field's own p90 gradient
+  // `mags` is a **Float64Array**, not the `number[]` this used to push into: a
+  // boxed array of tens of thousands of doubles sorted through a JS comparator
+  // was 89 ms across the 28 card bakes on the boot path, and a typed array
+  // sorts numerically by default in native code.
+  //
+  // Sixty-four bits, not thirty-two, even though `gx`/`gy` are `Float32Array`:
+  // `Math.hypot` of two float32s is a *double*, so a `Float32Array` here would
+  // round every candidate before sorting and hand back a p90 a few ulp off the
+  // one this used to pick. It would not survive a byte of the encoded normal —
+  // but "the same number, arrived at faster" is a claim worth actually being
+  // able to make, and the wider element buys nothing back in time.
+  //
+  // `magN` is the fill cursor: the sort runs over `subarray(0, magN)`, so the
+  // untouched tail of zeroes cannot drag the percentile down.
   const gx = new Float32Array(n), gy = new Float32Array(n);
-  const mags: number[] = [];
+  const mags = new Float64Array(n);
+  let magN = 0;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x;
@@ -545,11 +560,11 @@ export function crownNormalTex(rgba: Uint8Array, size: number, opts: {broad?: nu
       const ym = Math.max(0, y - 1) * size + x, yp = Math.min(size - 1, y + 1) * size + x;
       gx[i] = (h[xp] - h[xm]) * 0.5;
       gy[i] = (h[yp] - h[ym]) * 0.5;
-      if (cov[i] > 0.02) mags.push(Math.hypot(gx[i], gy[i]));
+      if (cov[i] > 0.02) mags[magN++] = Math.hypot(gx[i], gy[i]);
     }
   }
-  mags.sort((a, b) => a - b);
-  const g90 = mags.length ? Math.max(1e-6, mags[Math.min(mags.length - 1, (mags.length * 0.90) | 0)]) : 1;
+  const sorted = mags.subarray(0, magN).sort();
+  const g90 = magN ? Math.max(1e-6, sorted[Math.min(magN - 1, (magN * 0.90) | 0)]) : 1;
 
   // The bare dome, before the up bias.
   const dx = new Float32Array(n), dy = new Float32Array(n), dz = new Float32Array(n);
@@ -572,16 +587,38 @@ export function crownNormalTex(rgba: Uint8Array, size: number, opts: {broad?: nu
   // dome averages 0.30-0.35, and that gap alone dropped the impostors' mean
   // lambert to 0.313 and the stand cards' to 0.186 against the near ring's
   // 0.370 — a band that had stopped being noisy and started being *dark*.
+  // **Compact the covered pixels before solving, not inside the solve.**
+  //
+  // `meanUpAt` is evaluated up to 25 times by the bisection below, and it only
+  // ever reads pixels with `cov >= 0.4` — which on a tree card is the
+  // silhouette, a fifth or so of the image. Walking all 65 536 of them every
+  // pass to reject four fifths cost 286 ms across the 28 card bakes on the
+  // boot path: the single largest item inside `Vegetation`. Gathering the
+  // covered pixels once turns each pass into a dense walk over just those, and
+  // hoists the constant weight sum out of the loop entirely.
+  //
+  // Same pixels, same order, same arithmetic. The order matters and is
+  // preserved exactly — the accumulation is float, so a reordering would move
+  // the answer in the last bits.
+  let covN = 0;
+  for (let i = 0; i < n; i++) if (cov[i] >= 0.4) covN++;
+  const cDx = new Float32Array(covN), cDy = new Float32Array(covN);
+  const cDz = new Float32Array(covN), cW = new Float32Array(covN);
+  let covW = 0;
+  for (let i = 0, k = 0; i < n; i++) {
+    const c = cov[i];
+    if (c < 0.4) continue;
+    cDx[k] = dx[i]; cDy[k] = dy[i]; cDz[k] = dz[i]; cW[k] = c;
+    covW += c;
+    k++;
+  }
   const meanUpAt = (u: number) => {
-    let acc = 0, w = 0;
-    for (let i = 0; i < n; i++) {
-      const c = cov[i];
-      if (c < 0.4) continue;
-      const ny = dy[i] + u;
-      acc += (ny / (Math.hypot(dx[i], ny, dz[i]) || 1)) * c;
-      w += c;
+    let acc = 0;
+    for (let k = 0; k < covN; k++) {
+      const ny = cDy[k] + u;
+      acc += (ny / (Math.hypot(cDx[k], ny, cDz[k]) || 1)) * cW[k];
     }
-    return w > 0 ? acc / w : 1;
+    return covW > 0 ? acc / covW : 1;
   };
   let lo = 0, hi = 24;
   if (meanUpAt(hi) > targetUp) {
