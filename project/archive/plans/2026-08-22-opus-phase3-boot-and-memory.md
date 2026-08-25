@@ -9,12 +9,15 @@ Both are now **measured** rather than impressions. One of the two premises turns
 out to be wrong, which changes where the work goes.
 
 Status: DONE (2026-08-25, opus) — phase 3 of
-`2026-08-21-opus-rescue-and-sequencing.md`. **Cold boot 13.66 -> 6.5 s, warm
-13.00 -> 6.0 s.** The original target was under 6 s cold and under 3 s warm.
-Cold is at the line and warm is not close, so §3's definition of done has been
-**amended rather than ticked**, with the measured reason for each row and the
-remaining work handed to a successor plan. Memory is attributed with numbers and
-its three rows were met outright.
+`2026-08-21-opus-rescue-and-sequencing.md`. **Cold boot 13.66 -> 6.64 s, warm
+13.00 -> 6.03 s** (`?shoot`; 6.41 / 6.15 on a player's page).
+
+**The original target was under 6 s cold and under 3 s warm, and neither was
+met.** Cold is a little over. Warm is at twice the target and was never
+reachable from here. So §3's definition of done is **amended rather than
+ticked**: the shortfall is stated, three rows were met as written, the boot row
+is restated as what the evidence supports, and the remaining work is sized and
+handed on. Memory is attributed with numbers and its rows were met outright.
 
 Read §3 before anything else: it is the honest account of what this plan did and
 did not achieve. **Five of this plan's premises turned out to be wrong** — three
