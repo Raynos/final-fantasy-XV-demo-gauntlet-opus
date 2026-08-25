@@ -1,6 +1,6 @@
 {
-  "measured": "2026-08-23; landmark_meteor, poi_haven and zone_longwythe re-measured 2026-08-24",
-  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts. These are COLD floors: two --cold captures of one build reproduce to 0.4-0.83/255. Two WARM captures (the daemon reuses pages, which is how every tool actually runs) differ by 2.9-5.4/255 on the same three shots \u2014 4-6x these numbers. Do not read a warm diff against a cold floor; see project/handoff/finish.md.",
+  "measured": "2026-08-25",
+  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts.",
   "floors": {
     "hero_full": 2.254,
     "hero_portrait": 0.185,
@@ -14,6 +14,11 @@
     "vista_noon": 0.385,
     "zone_fallgrove": 0.69,
     "zone_longwythe": 1.231,
-    "zone_three_valleys": 0.742
+    "zone_three_valleys": 0.742,
+    "combat_armiger": 2.065,
+    "combat_hud": 1.854,
+    "combat_magic_fire": 2.478,
+    "combat_stagger": 2.27,
+    "combat_wide": 2.284
   }
 }

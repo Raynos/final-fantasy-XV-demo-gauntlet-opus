@@ -62,8 +62,6 @@ export class Director {
   home!: THREE.Vector3;
   homeHeading!: number;
   hunts!: HuntRuntime;
-  /** Whether {@link HuntRuntime.init} has run — see {@link Director._armHunts}. */
-  _huntsArmed!: boolean;
   live!: boolean;
   /** What kind of moment the HUD should dress for. Written by
    *  `EncounterDirector._publishMode()` and read by `HUD._resolveMode()`;
@@ -114,14 +112,18 @@ export class Director {
     // used to be written here (`encounters.huntRuntime`) was never declared and
     // never read by anything.
     //
-    // Constructed always; **armed only when the game is actually going to be
-    // played.** `init()` walks the already-accepted quests and calls
-    // `dir.startSetPiece` for each, which builds a boss — 209 ms of boot — and
-    // under `?shoot` the `setLive(false)` five lines below ends that boss
-    // again immediately. Every capture in this repo paid for a fight that was
-    // torn down before a frame was drawn.
-    this.hunts = bootPhase('Director.hunts', () => new HuntRuntime(this.encounters));
-    this._huntsArmed = false;
+    // **Armed here, at boot, even under `?shoot`.** `init()` stages every
+    // accepted quest's set piece, and under `?shoot` the `setLive(false)`
+    // below tears the boss down again — 209 ms spent on a fight no frame ever
+    // shows. Deferring it to the first `setLive(true)` was tried (2026-08-25)
+    // and **reverted**: the staging is load-bearing for the *posed combat
+    // scenarios*. Two cold captures either side of that change, against floors
+    // measured for the purpose, moved `combat_stagger` 3.300/255 (floor 2.27)
+    // and `combat_armiger` 2.232 (floor 2.06), with creatures visibly at
+    // different points in their animation. Building and discarding the boss
+    // advances state the scenarios inherit. Do not re-try this without
+    // re-baselining every combat shot on purpose.
+    this.hunts = bootPhase('Director.hunts', () => new HuntRuntime(this.encounters).init());
 
     // The capture harness boots straight into a posed shot and must not have
     // a wandering pack walk into frame; a real session starts playing.
@@ -132,25 +134,11 @@ export class Director {
   }
 
   /**
-   * Subscribe the hunt runtime to the quest log and stage anything already
-   * accepted. Idempotent, and deferred rather than skipped: a posed boot can
-   * still be handed to a player — the dev suite does it, and `play()` and the
-   * boss-fight path both call `setLive(true)` — and a hunt runtime that never
-   * subscribed would leave those sessions with a quest log nothing listens to.
-   */
-  _armHunts() {
-    if (this._huntsArmed || !this.hunts) return;
-    this._huntsArmed = true;
-    this.hunts.init();
-  }
-
-  /**
    * Turn the live encounter loop on or off. The screenshot scenarios author
    * the world by hand and must not have a wandering sabertusk walk into frame.
    */
   setLive(on: boolean) {
     this.live = on;
-    if (on) this._armHunts();
     if (this.encounters) {
       this.encounters.enabled = on;
       if (!on) {
