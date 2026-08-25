@@ -44,7 +44,8 @@ hook warns on a new plan with no `Status:` line; it does not block.
   2026-08-21-     2026-08-21-     2026-08-22-                     parallel
   fable-sibling-  fable-          opus-phase4-
   ports           procedural-     content-and-
-                  modeling        gameplay
+  DONE 08-25 ->   modeling        gameplay
+  archive/plans/  DONE -> archive
     |               |               |
     +---------------+---------------+
                     |
@@ -54,7 +55,10 @@ hook warns on a new plan with no `Status:` line; it does not block.
     WS-1 head · WS-2 programs · WS-3          one agent each, no collisions
     geometry bake · WS-4 canopy patch
                     |
-  phase4's WS-0b perf re-baseline             alone, last (needs a quiet machine)
+  phase4's WS-0b perf                         the re-baseline is PUBLISHED and
+    frame-cost split · per-shot floor          PASSING (2026-08-25). What is
+                                               left is the cost split, and the
+                                               ruler defect that blocked it
 
   2026-08-21-opus-rescue-and-sequencing       never staffed — it is the sequence
 ```
