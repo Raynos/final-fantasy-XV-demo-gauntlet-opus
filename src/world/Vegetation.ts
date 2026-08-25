@@ -4,6 +4,7 @@ import { GrassField } from './veg/GrassField.ts';
 import { Bushes } from './veg/Bushes.ts';
 import { Trees } from './veg/Trees.ts';
 import { VegUniforms, VEG_ACTOR_MAX, installAlphaCardGuard } from './veg/VegMaterial.ts';
+import { bootPhase } from '../engine/BootProfile.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -44,23 +45,31 @@ export class Vegetation {
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.45
       : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0;
 
-    this.ecology = new Ecology(game, game.seed ?? 1337);
-    installAlphaCardGuard(game.scene);
+    bootPhase('Vegetation.ecology', () => {
+      this.ecology = new Ecology(game, game.seed ?? 1337);
+      installAlphaCardGuard(game.scene);
+    });
 
-    this.grass = new GrassField(this.ecology, game.scene, { quality });
-    this.grass.build();
+    bootPhase('Vegetation.grass.build', () => {
+      this.grass = new GrassField(this.ecology, game.scene, { quality });
+      this.grass.build();
+    });
 
-    this.bushes = new Bushes(this.ecology, game.scene, { quality });
-    this.bushes.build(game.renderer);
+    bootPhase('Vegetation.bushes.build', () => {
+      this.bushes = new Bushes(this.ecology, game.scene, { quality });
+      this.bushes.build(game.renderer);
+    });
 
-    this.trees = new Trees(this.ecology, game.scene, { quality });
-    this.trees.build(game.renderer);
+    bootPhase('Vegetation.trees.build', () => {
+      this.trees = new Trees(this.ecology, game.scene, { quality });
+      this.trees.build(game.renderer);
+    });
 
     // prime around the origin so the first rendered frame is already dressed
     const c = new THREE.Vector3(0, 0, 0);
-    for (let i = 0; i < 60; i++) this.grass.update(c);
-    this.bushes.update(c);
-    this.trees.update(c);
+    bootPhase('Vegetation.prime.grass', () => { for (let i = 0; i < 60; i++) this.grass.update(c); });
+    bootPhase('Vegetation.prime.bushes', () => this.bushes.update(c));
+    bootPhase('Vegetation.prime.trees', () => this.trees.update(c));
 
     this._camPos = new THREE.Vector3();
     this._gust = 0;

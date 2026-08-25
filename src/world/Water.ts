@@ -12,6 +12,7 @@ import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts'
 import { buildRivers, type RiverStats } from './water/River.ts';
 import { makeRiverWaterMaterial, makeRiverBankMaterial, type RiverUniforms } from './water/RiverMaterial.ts';
 import type { Game } from '../game/Game.ts';
+import { bootPhase } from '../engine/BootProfile.ts';
 
 /**
  * Lakes and pools.
@@ -163,14 +164,17 @@ export class Water {
     if (!terrain) return;
 
     this.noise = new Noise(4242);
-    this._buildTextures();
-    this._buildReflection(game);
-    this._bindBed(terrain);
+    bootPhase('Water.textures', () => this._buildTextures());
+    bootPhase('Water.reflection', () => this._buildReflection(game));
+    bootPhase('Water.bed', () => this._bindBed(terrain));
 
     // Find basins on a coarse grid; group them into a few lake surfaces.
-    const bodies = this._findBasins(terrain);
-    for (const t of this._findTarns(terrain, bodies)) bodies.push(t);
-    for (const b of bodies) this._makeSurface(game, b);
+    const bodies = bootPhase('Water.basins', () => {
+      const found = this._findBasins(terrain);
+      for (const t of this._findTarns(terrain, found)) found.push(t);
+      return found;
+    });
+    bootPhase('Water.surfaces', () => { for (const b of bodies) this._makeSurface(game, b); });
 
     this.enabled = this.bodies.length > 0;
     if (this.enabled) this._collectReflectRoots(game);
@@ -180,8 +184,8 @@ export class Water {
     // with no message. `console.error` is the right loudness: `shoot.mts` exits
     // non-zero on any page error, so nothing can ship green, and the world still
     // boots so the defect can be photographed.
-    try { if (this.enabled) this._buildShore(game, terrain); } catch (err) { console.error('[Water] shore ribbon:', err); }
-    try { this._buildRivers(game, terrain); } catch (err) { console.error('[Water] rivers:', err); }
+    try { bootPhase('Water.shore', () => { if (this.enabled) this._buildShore(game, terrain); }); } catch (err) { console.error('[Water] shore ribbon:', err); }
+    try { bootPhase('Water.rivers', () => this._buildRivers(game, terrain)); } catch (err) { console.error('[Water] rivers:', err); }
   }
 
   /**

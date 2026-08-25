@@ -14,6 +14,7 @@ import type { VFX } from '../combat/VFX.ts';
 import type { TrailRibbon } from '../combat/Trails.ts';
 import type { Terrain } from '../world/Terrain.ts';
 import { SET_PIECES } from './encounters/SpawnTables.ts';
+import { bootPhase } from '../engine/BootProfile.ts';
 
 /** Where the player was parked by a scenario, so every frame can re-assert it. */
 interface FrozenPlayer {
@@ -101,16 +102,16 @@ export class Director {
     await this.encounters.init(game);
 
     this.partyAI = game.add(new PartyAI(), 'PartyAI');
-    await this.partyAI.init(game);
+    await bootPhase('Director.partyAI', () => this.partyAI.init(game));
 
     this.downed = game.add(new Downed(), 'Downed');
-    await this.downed.init(game);
+    await bootPhase('Director.downed', () => this.downed.init(game));
 
     // `HuntRuntime` drives itself off the RPG's `quest-updated` events and
     // holds its own reference to the encounter director. The back-pointer that
     // used to be written here (`encounters.huntRuntime`) was never declared and
     // never read by anything.
-    this.hunts = new HuntRuntime(this.encounters).init();
+    this.hunts = bootPhase('Director.hunts', () => new HuntRuntime(this.encounters).init());
 
     // The capture harness boots straight into a posed shot and must not have
     // a wandering pack walk into frame; a real session starts playing.

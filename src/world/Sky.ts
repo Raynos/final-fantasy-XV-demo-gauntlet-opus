@@ -8,6 +8,7 @@ import { SHOTS } from '../game/Shots.ts';
 import type { Game } from '../game/Game.ts';
 import { isWeatherName } from './Weather.ts';
 import type { WeatherName } from './Weather.ts';
+import { bootPhase } from '../engine/BootProfile.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
@@ -431,16 +432,22 @@ export class Sky {
 
     this.u = this._makeUniforms();
 
-    this.atmo = new Atmosphere(renderer);
-    this.u.uSkyLut.value = this.atmo.skyViewRT.texture;
-    this.u.uTransLut.value = this.atmo.transmittanceRT.texture;
+    bootPhase('Sky.atmosphere', () => {
+      this.atmo = new Atmosphere(renderer);
+      this.u.uSkyLut.value = this.atmo.skyViewRT.texture;
+      this.u.uTransLut.value = this.atmo.transmittanceRT.texture;
+    });
 
-    this.clouds = new Clouds(renderer, this.u);
-    this.u.uCloudTex.value = this.clouds.texture;
-    this.u.uCloudShadowMap.value = this.clouds.shadowTexture;
+    bootPhase('Sky.clouds', () => {
+      this.clouds = new Clouds(renderer, this.u);
+      this.u.uCloudTex.value = this.clouds.texture;
+      this.u.uCloudShadowMap.value = this.clouds.shadowTexture;
+    });
 
-    this.dome = this.atmo.createDome(this.u);
-    scene.add(this.dome);
+    bootPhase('Sky.dome', () => {
+      this.dome = this.atmo.createDome(this.u);
+      scene.add(this.dome);
+    });
 
     // --- key light (sun by day, moon by night) via cascaded shadow maps ----
     //
@@ -464,7 +471,7 @@ export class Sky {
     // which calls the split callback.
     this._csmNear = game.camera.near;
 
-    this.csm = new CSM({
+    this.csm = bootPhase('Sky.csm', () => new CSM({
       camera: game.camera,
       parent: scene,
       cascades: 3,
@@ -504,7 +511,7 @@ export class Sky {
       lightFar: 1400,
       lightMargin: 150,
       lightDirection: new THREE.Vector3(-1, -1, -1).normalize(),
-    });
+    }));
     this.csm.fade = true;
     const normalBias = [0.022, 0.05, 0.12];
     this.csm.lights.forEach((l, i) => {
