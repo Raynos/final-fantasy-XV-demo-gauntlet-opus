@@ -300,6 +300,40 @@ export function bakedCanvasMips(key: string, build: () => HTMLCanvasElement[]): 
   return mips;
 }
 
+/**
+ * Raw RGBA bytes, served from the bake when one is resident.
+ *
+ * The three wrappers below all end in a square `DataTexture` that
+ * `TextureGen` built one texel at a time. Not everything generated on the boot
+ * path has that shape: the cloud field is two **3D** volumes and a 512^2
+ * weather map, produced by one function that fills whole `Uint8Array`s rather
+ * than answering per-texel calls. It is pure, deterministic and Node-safe —
+ * exactly what `tex.bin.gz` is for — and none of the existing wrappers can
+ * carry it.
+ *
+ * A volume is stored as a `size x size*size` image. The container is indexed
+ * on `w`/`h` and never looks at the bytes, so a flattened volume needs no
+ * format change and no version bump; the caller hands back the same linear
+ * array it would have computed.
+ *
+ * **The key must carry every parameter that changes the bytes**, because a
+ * dimension mismatch is the only thing `take` can detect on its own. Sizes and
+ * seed go in the key, so changing one is a clean miss rather than a stale hit;
+ * changing the *code* is covered by `TEX_SOURCES`.
+ *
+ * @param key namespaced cache key
+ * @param w width the bytes are indexed at
+ * @param h height the bytes are indexed at
+ * @param build fills and returns `w * h * 4` bytes the slow way
+ */
+export function bakedBytes(key: string, w: number, h: number, build: () => Uint8Array): Uint8Array {
+  const hit = take(key, w, h);
+  if (hit) return hit;
+  const data = build();
+  if (recorder) record(key, w, h, data);
+  return data;
+}
+
 /** {@link makeTexture}, served from the bake when one is resident. */
 export function bakedTexture(key: string, size: number, fn: TexelFn, opts: TextureOpts = {}): THREE.Texture {
   return cached(key, size, opts, () => makeTexture(size, fn, opts));

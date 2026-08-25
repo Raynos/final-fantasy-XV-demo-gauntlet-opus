@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bakedBytes } from '../../engine/TexBake.ts';
 
 /**
  * Procedural, tileable noise volumes for the volumetric cloud raymarcher.
@@ -142,54 +143,165 @@ function stretch(v: Float32Array, lo: number, hi: number) {
 }
 
 /**
- * Build the cloud noise set.
+ * The base shape volume: perlin-worley in R, three worley octaves in GBA.
+ *
+ * Split out of {@link buildCloudTextures} so the whole thing — the point
+ * grids included — sits inside one function that returns nothing but bytes.
+ * That is what lets {@link bakedBytes} skip it outright on a cache hit; with
+ * the grids built by the caller they would be rebuilt on every boot to feed a
+ * loop that never runs.
  */
-export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize = 512, seed = 1337 }: {baseSize?:number, detailSize?:number, weatherSize?:number, seed?:number} = {}): {base:THREE.Data3DTexture, detail:THREE.Data3DTexture, weather:THREE.DataTexture} {
-  // ---- base volume -------------------------------------------------------
-  const g4 = makePointGrid(4, seed + 1);
-  const g8 = makePointGrid(8, seed + 2);
-  const g16 = makePointGrid(16, seed + 3);
-  const g24 = makePointGrid(24, seed + 4);
+function bakeCloudBase(baseSize: number, seed: number): Uint8Array {
+    const g4 = makePointGrid(4, seed + 1);
+    const g8 = makePointGrid(8, seed + 2);
+    const g16 = makePointGrid(16, seed + 3);
+    const g24 = makePointGrid(24, seed + 4);
 
-  const nBase = baseSize * baseSize * baseSize;
-  const chR = new Float32Array(nBase);
-  const ch8 = new Float32Array(nBase);
-  const ch16 = new Float32Array(nBase);
-  const ch24 = new Float32Array(nBase);
-  let i = 0;
-  for (let z = 0; z < baseSize; z++) {
-    const fz = z / baseSize;
-    for (let y = 0; y < baseSize; y++) {
-      const fy = y / baseSize;
-      for (let x = 0; x < baseSize; x++) {
-        const fx = x / baseSize;
-        // worley octaves (inverted so high = dense)
-        const w4 = worley3(g4, 4, fx * 4, fy * 4, fz * 4);
-        const w8 = worley3(g8, 8, fx * 8, fy * 8, fz * 8);
-        const w16 = worley3(g16, 16, fx * 16, fy * 16, fz * 16);
-        const w24 = worley3(g24, 24, fx * 24, fy * 24, fz * 24);
-        const wf = w4 * 0.625 + w8 * 0.25 + w16 * 0.125;
-        // perlin-worley: dilate the perlin fbm by the worley fbm
-        const p = valueFbm3(fx * 4, fy * 4, fz * 4, 4, 4, seed + 11);
-        chR[i] = clamp01(remap(p, wf - 1, 1, 0, 1));
-        ch8[i] = w8; ch16[i] = w16; ch24[i] = w24;
+    const nBase = baseSize * baseSize * baseSize;
+    const chR = new Float32Array(nBase);
+    const ch8 = new Float32Array(nBase);
+    const ch16 = new Float32Array(nBase);
+    const ch24 = new Float32Array(nBase);
+    let i = 0;
+    for (let z = 0; z < baseSize; z++) {
+      const fz = z / baseSize;
+      for (let y = 0; y < baseSize; y++) {
+        const fy = y / baseSize;
+        for (let x = 0; x < baseSize; x++) {
+          const fx = x / baseSize;
+          // worley octaves (inverted so high = dense)
+          const w4 = worley3(g4, 4, fx * 4, fy * 4, fz * 4);
+          const w8 = worley3(g8, 8, fx * 8, fy * 8, fz * 8);
+          const w16 = worley3(g16, 16, fx * 16, fy * 16, fz * 16);
+          const w24 = worley3(g24, 24, fx * 24, fy * 24, fz * 24);
+          const wf = w4 * 0.625 + w8 * 0.25 + w16 * 0.125;
+          // perlin-worley: dilate the perlin fbm by the worley fbm
+          const p = valueFbm3(fx * 4, fy * 4, fz * 4, 4, 4, seed + 11);
+          chR[i] = clamp01(remap(p, wf - 1, 1, 0, 1));
+          ch8[i] = w8; ch16[i] = w16; ch24[i] = w24;
+          i++;
+        }
+      }
+    }
+    // widen the histograms so coverage has somewhere to threshold
+    stretch(chR, 0.015, 0.985);
+    stretch(ch8, 0.02, 0.98);
+    stretch(ch16, 0.02, 0.98);
+    stretch(ch24, 0.02, 0.98);
+
+    const out = new Uint8Array(nBase * 4);
+    for (let k = 0; k < nBase; k++) {
+      out[k * 4] = (chR[k] * 255) | 0;
+      out[k * 4 + 1] = (ch8[k] * 255) | 0;
+      out[k * 4 + 2] = (ch16[k] * 255) | 0;
+      out[k * 4 + 3] = (ch24[k] * 255) | 0;
+    }
+  return out;
+}
+
+/** The detail volume: three worley octaves that erode the base's edges. */
+function bakeCloudDetail(detailSize: number, seed: number): Uint8Array {
+    const d8 = makePointGrid(8, seed + 21);
+    const d16 = makePointGrid(16, seed + 22);
+    const d32 = makePointGrid(24, seed + 23);
+    const detailData = new Uint8Array(detailSize * detailSize * detailSize * 4);
+    let i = 0;
+    for (let z = 0; z < detailSize; z++) {
+      const fz = z / detailSize;
+      for (let y = 0; y < detailSize; y++) {
+        const fy = y / detailSize;
+        for (let x = 0; x < detailSize; x++) {
+          const fx = x / detailSize;
+          detailData[i++] = (clamp01(worley3(d8, 8, fx * 8, fy * 8, fz * 8)) * 255) | 0;
+          detailData[i++] = (clamp01(worley3(d16, 16, fx * 16, fy * 16, fz * 16)) * 255) | 0;
+          detailData[i++] = (clamp01(worley3(d32, 24, fx * 24, fy * 24, fz * 24)) * 255) | 0;
+          detailData[i++] = 255;
+        }
+      }
+    }
+  return detailData;
+}
+
+/** The weather map: coverage in R, cloud type in G, large-scale variation in B. */
+function bakeCloudWeather(weatherSize: number, seed: number): Uint8Array {
+    const nW = weatherSize * weatherSize;
+    const wCov = new Float32Array(nW);
+    const wType = new Float32Array(nW);
+    const wVar = new Float32Array(nW);
+    const wData = new Uint8Array(nW * 4);
+    let i = 0;
+    for (let y = 0; y < weatherSize; y++) {
+      const fy = y / weatherSize;
+      for (let x = 0; x < weatherSize; x++) {
+        const fx = x / weatherSize;
+        // Cell size, which is the number that decides whether the sky reads as a
+        // field of cumulus or as two enormous smears.
+        //
+        // uWeatherTile is 27 km, so a base frequency of N puts the dominant
+        // coverage blob at 27000/N metres. It was 4 -- a 6.8 km blob. Measured
+        // off duscae-plains-lake-01, a FFXV fair-weather cumulus subtends about
+        // 3.4 deg of a 55 deg frame at ranges of 8-30 km, which back-solves to
+        // 1.2-2.4 km across. We were drawing single clouds five times the width
+        // of the reference's, and once a cloud is 6.8 km wide there is nothing
+        // in a 50 deg field of view except its middle: no silhouette, no gaps,
+        // no scale variation with distance, and nothing for the shape volume to
+        // carve. That is the shape of "blurry billboard" -- not a filter, and
+        // not the march resolution. Marching at full resolution instead of 0.45
+        // (4.9x the fill) changed this crop by almost nothing, which is what
+        // proved the defect was in the field and not in the sampling of it.
+        //
+        // 12 puts the blob at 2.25 km, inside the reference's range. The tile
+        // stays at 27 km on purpose: shrinking uWeatherTile would have been the
+        // one-line version of this and it would repeat the same cloud four times
+        // across a 46 km view.
+        const wx = valueFbm2(fx * 8 + 4.1, fy * 8 + 1.7, 8, 3, seed + 31);
+        const wy = valueFbm2(fx * 8 + 9.3, fy * 8 + 7.2, 8, 3, seed + 32);
+        const cov = valueFbm2(fx * 12 + wx * 0.9, fy * 12 + wy * 0.9, 12, 4, seed + 33);
+        // ridged streaks give the banks a wind-blown direction
+        const streak = 1 - Math.abs(valueFbm2(fx * 15 + wy, fy * 5.0, 15, 3, seed + 34) * 2 - 1);
+        wCov[i] = cov * (0.72 + 0.42 * streak);
+        // Type and variation stay well below the coverage frequency. They are
+        // what gives *neighbouring* clouds different heights and densities --
+        // the "scale variation" the round-10 judge said the deck had none of --
+        // so they have to span several cells each, not one.
+        wType[i] = valueFbm2(fx * 5, fy * 5, 5, 3, seed + 35);
+        // 7, not 20. This channel's job is to make one cloud different from the
+        // next, and at 20 cells over the 27 km tile its features were 1.35 km --
+        // *finer* than a 2.25 km cloud, so it varied within each cloud and
+        // averaged out between them. Every cloud came out the same size and the
+        // same density, which is what a blind judge called "a grid-ish scatter of
+        // identical white puff sprites". At 7 it spans 3.9 km, so neighbours
+        // differ and the difference survives being seen from 10 km away.
+        wVar[i] = valueFbm2(fx * 7, fy * 7, 7, 3, seed + 36);
         i++;
       }
     }
-  }
-  // widen the histograms so coverage has somewhere to threshold
-  stretch(chR, 0.015, 0.985);
-  stretch(ch8, 0.02, 0.98);
-  stretch(ch16, 0.02, 0.98);
-  stretch(ch24, 0.02, 0.98);
+    stretch(wCov, 0.01, 0.99);
+    stretch(wType, 0.03, 0.97);
+    stretch(wVar, 0.03, 0.97);
+    for (let k = 0; k < nW; k++) {
+      wData[k * 4] = (wCov[k] * 255) | 0;
+      wData[k * 4 + 1] = (wType[k] * 255) | 0;
+      wData[k * 4 + 2] = (wVar[k] * 255) | 0;
+      wData[k * 4 + 3] = 255;
+    }
+  return wData;
+}
 
-  const baseData = new Uint8Array(nBase * 4);
-  for (let k = 0; k < nBase; k++) {
-    baseData[k * 4] = (chR[k] * 255) | 0;
-    baseData[k * 4 + 1] = (ch8[k] * 255) | 0;
-    baseData[k * 4 + 2] = (ch16[k] * 255) | 0;
-    baseData[k * 4 + 3] = (ch24[k] * 255) | 0;
-  }
+/**
+ * Build the cloud noise set.
+ *
+ * The three arrays are pure functions of `(size, seed)` and the code that
+ * makes them, so they come from `tex.bin.gz` when a bake is resident — 409 ms
+ * of the boot path otherwise, and the largest single item in `Sky`. The two
+ * volumes are stored flattened, `size x size*size`; see {@link bakedBytes}.
+ *
+ * Every parameter that changes the bytes is in the key, so a size or seed
+ * change misses cleanly instead of serving the previous sky.
+ */
+export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize = 512, seed = 1337 }: {baseSize?:number, detailSize?:number, weatherSize?:number, seed?:number} = {}): {base:THREE.Data3DTexture, detail:THREE.Data3DTexture, weather:THREE.DataTexture} {
+  const baseData = bakedBytes(`sky/cloud/base@${baseSize}#${seed}`, baseSize, baseSize * baseSize,
+    () => bakeCloudBase(baseSize, seed));
   const base = new THREE.Data3DTexture(baseData, baseSize, baseSize, baseSize);
   base.format = THREE.RGBAFormat;
   base.type = THREE.UnsignedByteType;
@@ -198,25 +310,8 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize
   base.colorSpace = THREE.NoColorSpace;
   base.needsUpdate = true;
 
-  // ---- detail volume -----------------------------------------------------
-  const d8 = makePointGrid(8, seed + 21);
-  const d16 = makePointGrid(16, seed + 22);
-  const d32 = makePointGrid(24, seed + 23);
-  const detailData = new Uint8Array(detailSize * detailSize * detailSize * 4);
-  i = 0;
-  for (let z = 0; z < detailSize; z++) {
-    const fz = z / detailSize;
-    for (let y = 0; y < detailSize; y++) {
-      const fy = y / detailSize;
-      for (let x = 0; x < detailSize; x++) {
-        const fx = x / detailSize;
-        detailData[i++] = (clamp01(worley3(d8, 8, fx * 8, fy * 8, fz * 8)) * 255) | 0;
-        detailData[i++] = (clamp01(worley3(d16, 16, fx * 16, fy * 16, fz * 16)) * 255) | 0;
-        detailData[i++] = (clamp01(worley3(d32, 24, fx * 24, fy * 24, fz * 24)) * 255) | 0;
-        detailData[i++] = 255;
-      }
-    }
-  }
+  const detailData = bakedBytes(`sky/cloud/detail@${detailSize}#${seed}`, detailSize, detailSize * detailSize,
+    () => bakeCloudDetail(detailSize, seed));
   const detail = new THREE.Data3DTexture(detailData, detailSize, detailSize, detailSize);
   detail.format = THREE.RGBAFormat;
   detail.type = THREE.UnsignedByteType;
@@ -225,68 +320,8 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize
   detail.colorSpace = THREE.NoColorSpace;
   detail.needsUpdate = true;
 
-  // ---- weather map -------------------------------------------------------
-  const nW = weatherSize * weatherSize;
-  const wCov = new Float32Array(nW);
-  const wType = new Float32Array(nW);
-  const wVar = new Float32Array(nW);
-  const wData = new Uint8Array(nW * 4);
-  i = 0;
-  for (let y = 0; y < weatherSize; y++) {
-    const fy = y / weatherSize;
-    for (let x = 0; x < weatherSize; x++) {
-      const fx = x / weatherSize;
-      // Cell size, which is the number that decides whether the sky reads as a
-      // field of cumulus or as two enormous smears.
-      //
-      // uWeatherTile is 27 km, so a base frequency of N puts the dominant
-      // coverage blob at 27000/N metres. It was 4 -- a 6.8 km blob. Measured
-      // off duscae-plains-lake-01, a FFXV fair-weather cumulus subtends about
-      // 3.4 deg of a 55 deg frame at ranges of 8-30 km, which back-solves to
-      // 1.2-2.4 km across. We were drawing single clouds five times the width
-      // of the reference's, and once a cloud is 6.8 km wide there is nothing
-      // in a 50 deg field of view except its middle: no silhouette, no gaps,
-      // no scale variation with distance, and nothing for the shape volume to
-      // carve. That is the shape of "blurry billboard" -- not a filter, and
-      // not the march resolution. Marching at full resolution instead of 0.45
-      // (4.9x the fill) changed this crop by almost nothing, which is what
-      // proved the defect was in the field and not in the sampling of it.
-      //
-      // 12 puts the blob at 2.25 km, inside the reference's range. The tile
-      // stays at 27 km on purpose: shrinking uWeatherTile would have been the
-      // one-line version of this and it would repeat the same cloud four times
-      // across a 46 km view.
-      const wx = valueFbm2(fx * 8 + 4.1, fy * 8 + 1.7, 8, 3, seed + 31);
-      const wy = valueFbm2(fx * 8 + 9.3, fy * 8 + 7.2, 8, 3, seed + 32);
-      const cov = valueFbm2(fx * 12 + wx * 0.9, fy * 12 + wy * 0.9, 12, 4, seed + 33);
-      // ridged streaks give the banks a wind-blown direction
-      const streak = 1 - Math.abs(valueFbm2(fx * 15 + wy, fy * 5.0, 15, 3, seed + 34) * 2 - 1);
-      wCov[i] = cov * (0.72 + 0.42 * streak);
-      // Type and variation stay well below the coverage frequency. They are
-      // what gives *neighbouring* clouds different heights and densities --
-      // the "scale variation" the round-10 judge said the deck had none of --
-      // so they have to span several cells each, not one.
-      wType[i] = valueFbm2(fx * 5, fy * 5, 5, 3, seed + 35);
-      // 7, not 20. This channel's job is to make one cloud different from the
-      // next, and at 20 cells over the 27 km tile its features were 1.35 km --
-      // *finer* than a 2.25 km cloud, so it varied within each cloud and
-      // averaged out between them. Every cloud came out the same size and the
-      // same density, which is what a blind judge called "a grid-ish scatter of
-      // identical white puff sprites". At 7 it spans 3.9 km, so neighbours
-      // differ and the difference survives being seen from 10 km away.
-      wVar[i] = valueFbm2(fx * 7, fy * 7, 7, 3, seed + 36);
-      i++;
-    }
-  }
-  stretch(wCov, 0.01, 0.99);
-  stretch(wType, 0.03, 0.97);
-  stretch(wVar, 0.03, 0.97);
-  for (let k = 0; k < nW; k++) {
-    wData[k * 4] = (wCov[k] * 255) | 0;
-    wData[k * 4 + 1] = (wType[k] * 255) | 0;
-    wData[k * 4 + 2] = (wVar[k] * 255) | 0;
-    wData[k * 4 + 3] = 255;
-  }
+  const wData = bakedBytes(`sky/cloud/weather@${weatherSize}#${seed}`, weatherSize, weatherSize,
+    () => bakeCloudWeather(weatherSize, seed));
   const weather = new THREE.DataTexture(wData, weatherSize, weatherSize, THREE.RGBAFormat);
   weather.wrapS = weather.wrapT = THREE.RepeatWrapping;
   weather.minFilter = THREE.LinearMipmapLinearFilter;

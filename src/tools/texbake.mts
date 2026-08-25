@@ -51,6 +51,7 @@ export const TEX_SOURCES = [
   'src/world/town/TownMaterials.ts',
   'src/world/props/PropMaterials.ts',
   'src/world/dungeons/kit/InteriorMaterials.ts',
+  'src/world/sky/CloudTextures.ts',
 ];
 
 /**
@@ -190,6 +191,15 @@ async function generateAll(log: (...a: unknown[]) => void) {
       // `Rocks.build()` uses.
       const m = await load('src/world/props/PropMaterials.ts');
       m.rockMaterial(); m.rockMaterial(0x6a5849, 0.93);
+    }],
+    ['clouds', async () => {
+      // The one entry that is not a material table. `Clouds`' constructor is
+      // the only caller and its arguments are the cache key, so they are
+      // repeated here verbatim — a mismatch is a clean miss (the container is
+      // indexed on width and height), never a stale sky.
+      (await load('src/world/sky/CloudTextures.ts')).buildCloudTextures({
+        baseSize: 64, detailSize: 48, weatherSize: 512, seed: 1337,
+      });
     }],
     ['dungeons', async () => {
       const m = await load('src/world/dungeons/kit/InteriorMaterials.ts');

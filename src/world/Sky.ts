@@ -9,6 +9,7 @@ import type { Game } from '../game/Game.ts';
 import { isWeatherName } from './Weather.ts';
 import type { WeatherName } from './Weather.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
+import { loadTexBake } from '../engine/TexBake.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
@@ -431,6 +432,19 @@ export class Sky {
     scene.fog = null;            // aerial perspective replaces flat fog
 
     this.u = this._makeUniforms();
+
+    // **Sky is the first system to init, and the cloud volumes are baked.**
+    //
+    // `TexBake` starts its fetch at module eval and `Props.init()` — the
+    // eighth system — awaits it, which was enough back when every keyed
+    // generator lived in a material table Props reached first. The cloud
+    // volumes do not: they are built here, seven systems earlier, so without
+    // this await the store is still null when they ask and they miss the cache
+    // on *every* boot while the artifact sits on disk, correct and unread.
+    //
+    // Idempotent — `loadTexBake` memoises the in-flight promise, so Props'
+    // await stays where it is and costs nothing the second time.
+    await bootPhase('Sky.texbake', () => loadTexBake());
 
     bootPhase('Sky.atmosphere', () => {
       this.atmo = new Atmosphere(renderer);
