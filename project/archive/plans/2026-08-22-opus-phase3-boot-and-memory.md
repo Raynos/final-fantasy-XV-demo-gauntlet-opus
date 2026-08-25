@@ -305,7 +305,7 @@ taken in this pass.
 | 322 | `Props.mega` | As `poiPrebuild`. |
 | 245 | `Sky.texbake` | The artifact inflate, 86 MB raw. Was hidden inside `Props` before; it is now first on the path and honestly counted. A third artifact fetched later would move it off the critical path for ~40 ms. |
 | 225 | `Water.shore` | Marching-squares shoreline geometry. Geometry bake again. |
-| 209 | `Director.hunts` | Arms set-piece encounters, which `setLive(false)` tears down two lines later in `?shoot`. **Skipping it when posed would take ~209 ms off every capture and nothing off a player's boot** — a harness win, not a boot win, and it risks changing what a posed frame contains. Deliberately not taken; it should be judged as capture tooling, not as boot. |
+| 209 | `Director.hunts` | **Tried 2026-08-25 and reverted — closed, do not re-open casually.** Arming the set pieces is torn down by `setLive(false)` two lines later under `?shoot`, and deferring it did save 209 ms off every capture with a player's boot unchanged. But building and discarding the `BossFight` advances state the **posed combat scenarios** inherit: two cold captures either side moved `combat_stagger` to 3.300/255 against a floor of 2.27, with the sabertusk visibly at a different point in its walk. Moving judged combat frames to save harness time is the wrong trade. |
 
 ## 4. Landmines
 

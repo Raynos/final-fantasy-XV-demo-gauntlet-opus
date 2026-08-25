@@ -166,7 +166,29 @@ the world. The remaining ~1.1 GB is Chromium's.
 | 400 / 322 / 225 | `Props.poiPrebuild`, `Props.mega`, `Water.shore` | Real geometry. All three want a **geometry bake**, which nothing here has attempted. One project, not three. |
 | 354 | `Vegetation.prime.bushes` | One priming `update()` so the first frame is dressed. Removing it trades boot for a visible pop in live play; `converge()` already makes captures independent of it. |
 | 245 | `Sky.texbake` | The inflate, 86 MB raw. Was hidden inside `Props`; now first on the path and honestly counted. A separately-fetched third artifact would move ~40 ms off the critical path. |
-| 209 | `Director.hunts` | Arms set pieces that `setLive(false)` tears down two lines later under `?shoot`. **Skipping it when posed is ~209 ms off every capture and nothing off a player's boot.** A harness win, not a boot win, and it risks changing what a posed frame contains. Judge it as capture tooling. |
+| ~~209~~ | `Director.hunts` | **Tried and reverted 2026-08-25. Closed.** Deferring the arming to the first `setLive(true)` did what it claimed — `Director` 297 -> 98 ms under `?shoot`, `--play` flat — but building and discarding the `BossFight` advances state the **posed combat scenarios** inherit. Cold captures either side: `combat_stagger` **3.300/255 against floor 2.27**, the sabertusk visibly at a different point in its walk; reverting put it back to 1.521. Do not re-try without deliberately re-baselining every combat shot. |
+
+## The finding that came out of trying the last item
+
+**Boot work that looks discardable can be load-bearing for a posed scenario.**
+The set-piece boss staged at boot is destroyed before any capture draws a frame,
+which reads as pure waste — and removing it moved the combat corpus, because the
+scenarios inherit the state that building and discarding it advanced. Nothing
+about `combat_stagger` says it depends on a boss that no longer exists.
+
+Two measurement notes from the same hour, both of which nearly gave the wrong
+answer:
+
+- **`project/noise-floors.json` covers 18 shots of 142.** Everything else falls
+  back to `DEFAULT_LIMIT` = 2.0, a placeholder. The combat shots had no measured
+  floor at all, so "over floor" meant nothing until they were calibrated (they
+  land at 1.85-2.48).
+- **The recorded floors are COLD and the daemon reuses pages.** A warm diff runs
+  4-6x them. The first evidence here was a warm full-corpus 3.106 on
+  `combat_stagger`, which looked like a regression and was inside warm noise;
+  the cold pair that decided it read 3.300 against 2.27. Both directions of that
+  error are available: noise looking like a change, and a change hiding in
+  noise. **Calibrate, then diff cold against cold.**
 
 ## Hazards
 

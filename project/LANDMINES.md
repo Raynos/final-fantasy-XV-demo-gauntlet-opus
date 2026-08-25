@@ -227,6 +227,19 @@ in this file.
   table whose slot 0 is Noctis.
 - **Boulders hung off cliff faces** — sunk along −Y instead of the surface normal.
 
+- **Boot work that looks discardable can be load-bearing for a posed scenario.**
+  `Director.init` arms `HuntRuntime`, which stages every accepted quest's set
+  piece — building a `BossFight` — and under `?shoot` the `setLive(false)` two
+  lines later tears it straight back down. 209 ms spent on a fight no frame ever
+  shows, and deferring it is obviously correct until you measure: two cold
+  captures either side moved `combat_stagger` to **3.300/255 against a floor of
+  2.27**, with the sabertusk at a visibly different point in its walk.
+  Constructing and discarding the boss advances state the posed *combat*
+  scenarios inherit, and nothing about those scenarios says so. Tried and
+  reverted 2026-08-25. **Before deleting boot work on the grounds that its
+  output is thrown away, diff the corpus cold — the output is not the only
+  thing it produced.**
+
 ## Harness and measurement
 
 - **Toggling one post pass and settling four frames is not an ablation.** Three
@@ -274,6 +287,28 @@ in this file.
 - **`tmp/` is disposable by design** and gets cleared. A probe worth keeping goes
   in `src/tools/`, not `tmp/`. A shared scratchpad is shared — another agent
   overwrote a live probe script mid-session; name scratch files with your agent id.
+
+- **A recorded noise floor exists for 18 shots out of 142.** Every other shot is
+  checked against `DEFAULT_LIMIT` = 2.0 in `imgdiff.mts`, which is a placeholder
+  and not a measurement — and `imgdiff` prints it in the same `floor` column as
+  a real one, so "0.8, floor 2.00" and "0.8, floor 2.00" mean entirely different
+  things depending on whether the shot is in `project/noise-floors.json`. Check
+  the file before believing the column. Calibrate what you care about first:
+  two `--cold` captures of one build, then `imgdiff --calibrate`.
+- **...and those floors are COLD floors, while every tool captures WARM.** The
+  file's own note says a warm pair differs by 4-6x a cold one, because the
+  daemon reuses pages. Both errors are live: on 2026-08-25 a warm full-corpus
+  diff read 3.106/255 on `combat_stagger` against a *default* 2.0 and looked
+  like a regression when it was noise — and the same gap can hide a real change
+  the other way. **Diff cold against cold, against a floor you measured.**
+- **`imgdiff` refuses a same-build comparison, and two of those refusals are
+  wrong.** `--nobake`, `--post=` and `--hide=` make one commit draw genuinely
+  different frames, and `--cold` deliberately bypasses the frame cache — so two
+  `--cold` captures of one build *are* the floor measurement, not a cache hit.
+  A capture's manifest now records a `variant` and the refusal keys on build
+  plus variant; `--calibrate` is exempt outright. If you hit the refusal on a
+  comparison you know is real, check whether it is one of these before working
+  around it by dirtying the tree, which makes the result "not evidence".
 
 ## Baked caches
 
