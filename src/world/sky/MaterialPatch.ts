@@ -124,6 +124,19 @@ export class MaterialPatch {
     // already replaced the global one) and patch that.
     const shadowCall = 'directLight.color *= atmCloudShadow( vAtmWorld );';
     let lightsBegin = ShaderChunk.lights_fragment_begin
+      // An L2 projection of a sky that is bright above and near-black below
+      // overshoots, and three's `shGetIrradianceAt` does not clamp — so the down
+      // lobe can come back **negative** and subtract light from anything facing
+      // the ground. Measured at 22:00 before this line: −0.0017. Small, but
+      // negative irradiance is not a small kind of wrong, and it grows with the
+      // up/down contrast, which is exactly what a good sky has.
+      //
+      // Clamped here rather than de-ringed at projection time: windowing the
+      // higher bands would also smooth away the directionality that is the
+      // entire point of the probe, to fix a defect that only ever shows on the
+      // one lobe where the light really is zero.
+      .split('irradiance += getLightProbeIrradiance( lightProbe, geometryNormal );')
+      .join('irradiance += max( getLightProbeIrradiance( lightProbe, geometryNormal ), vec3( 0.0 ) );')
       .split('getDirectionalLightInfo( directionalLight, directLight );')
       .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\t' + shadowCall)
       .split('getDirectionalLightInfo( directionalLights[0], directLight );')

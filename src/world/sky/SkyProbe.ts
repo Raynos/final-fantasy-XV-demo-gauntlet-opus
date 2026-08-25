@@ -33,14 +33,18 @@ import * as THREE from 'three';
  * session closing. 16x16x6 half-float texels is 1,536 of them; the readback is a
  * pipeline flush on a path that already runs at most a few times a second.
  *
- * WHY THE GROUND ALBEDO. The dome renders below its own horizon as the horizon
- * colour dimmed to 0.55 (`sky.glsl.ts`) — a haze stand-in for distant ground,
- * which is right for a *view* ray and wrong for irradiance: it means the lower
- * hemisphere hands back cool sky light rather than warm bounce off dirt. So the
- * downward texels are multiplied by a ground albedo before projection. That is
- * where the dead `HemisphereLight.groundColor` goes: not deleted, but turned
- * from a free-floating constant into what it always claimed to be — an albedo
- * modulating light that actually exists.
+ * WHY THE GROUND IS SUBSTITUTED, NOT SCALED. The dome renders below its own
+ * horizon as the horizon colour dimmed to 0.55 (`sky.glsl.ts`) — a haze stand-in
+ * for distant ground, which is right for a *view* ray and wrong for irradiance:
+ * that light is blue, and it has been through the atmosphere on its way to the
+ * eye rather than off the ground on its way to the subject. So the downward
+ * texels are **replaced** by {@link groundRadiance}, a Lambertian ground lit by
+ * the key. Scaling them by an albedo instead — which is what the first version
+ * did — returns grey: a warm albedo times blue haze is neutral, and the probe
+ * readout measured exactly that, R−B +0.9 on the down lobe against an albedo
+ * whose own R:B is 1.31. That is where the dead `HemisphereLight.groundColor`
+ * goes: not deleted, but turned from a free-floating constant into what it
+ * always claimed to be — an albedo modulating light that actually exists.
  */
 export class SkyProbe {
   /** Cosine-blend width across the horizon, in units of `dir.y`. */
@@ -58,8 +62,26 @@ export class SkyProbe {
   /**
    * Albedo of the ground the lower hemisphere bounces off. Sky writes this per
    * frame from the same curve that used to drive `HemisphereLight.groundColor`.
+   * Kept separately from {@link groundRadiance} because the probe readout wants
+   * to print both, and because a bounce that is wrong is almost always wrong in
+   * the *light*, not in the albedo.
    */
   groundAlbedo = new THREE.Color(0.30, 0.26, 0.20);
+
+  /**
+   * Radiance leaving the ground, in the renderer's units. Sky writes it as
+   * `keyIrradiance * albedo / pi` each time the probe is re-projected.
+   *
+   * This *replaces* the dome's below-horizon texels rather than scaling them,
+   * and that distinction was the whole first attempt's failure. `sky.glsl.ts`
+   * draws under its own horizon as horizon haze dimmed to 0.55 — correct for a
+   * view ray, and completely wrong as an irradiance source, because it is sky
+   * light, blue, and has already been through the atmosphere on its way to the
+   * eye rather than off the ground on its way to the subject. Multiplying it by
+   * a warm albedo returns grey: measured, the down lobe came back at R−B +0.9
+   * where the albedo's own R:B is 1.31.
+   */
+  groundRadiance = new THREE.Color(0, 0, 0);
 
   /** The light itself. Added to the scene by `Sky`; one, always visible. */
   light = new THREE.LightProbe();
@@ -105,7 +127,7 @@ export class SkyProbe {
     for (let j = 0; j < 9; j++) c[j].set(0, 0, 0);
 
     const pixelSize = 2 / n;
-    const ga = this.groundAlbedo;
+    const gr = this.groundRadiance;
     const feather = SkyProbe.HORIZON_FEATHER;
     let totalWeight = 0;
 
@@ -148,9 +170,9 @@ export class SkyProbe {
         // band of the wrong colour on anything near horizontal.
         if (dir.y < feather) {
           const k = Math.min(1, (feather - dir.y) / (2 * feather));
-          r *= 1 - k + k * ga.r;
-          g *= 1 - k + k * ga.g;
-          b *= 1 - k + k * ga.b;
+          r += k * (gr.r - r);
+          g += k * (gr.g - g);
+          b += k * (gr.b - b);
         }
 
         THREE.SphericalHarmonics3.getBasisAt(dir, this._basis);

@@ -1034,17 +1034,35 @@ export class Sky {
     // push the fill toward a saturated sky blue through the golden band
     skyTint.lerp(new THREE.Color(0.26, 0.45, 0.92), 0.72 * golden);
     this.fill.color.copy(skyTint);
-    // ground bounce stays warm ochre: it is the *only* warm fill and it comes
-    // from below, which is what a real sunlit landscape does to a standing figure
-    // ...and it is an *albedo* now, not a light. The probe multiplies the
-    // dome's own below-horizon radiance by it, so ground bounce can never
-    // exceed the light there is to bounce — which is what the free-floating
-    // `HemisphereLight.groundColor` constant could do, and did, at night.
+    // Ground bounce is the *only* warm fill and it comes from below, which is
+    // what a real sunlit landscape does to a standing figure. It is an albedo
+    // now, not a light: what it multiplies is the light that actually reaches
+    // the ground, so it can never invent bounce out of a dark scene the way the
+    // free-floating `HemisphereLight.groundColor` constant could, and did.
     this.probe.groundAlbedo.setRGB(
       0.16 * day + 0.03 + 0.12 * golden,
       0.14 * day + 0.025 + 0.07 * golden,
       0.11 * day + 0.035 + 0.02 * golden
     ).multiplyScalar(GROUND_BOUNCE);
+    // ...and what it multiplies is the KEY, not the sky dome's own below-horizon
+    // texels. The first version of this multiplied the dome, and the probe
+    // readout (`probes/skyprobe.mts`) caught it: the dome renders under its own
+    // horizon as horizon *haze* dimmed to 0.55 — right for a view ray, wrong for
+    // irradiance — so the down lobe came back at R−B **+0.9**, i.e. neutral,
+    // after being multiplied by an albedo whose own R:B is 1.31. A warm albedo
+    // times blue haze is grey. That is why the change moved shadow warmth 0.6 of
+    // a 15.7 gap it was supposed to close a quarter of: the warm fill it was
+    // built to supply was being cancelled by its own input.
+    //
+    // Sunlit ground is lit by the sun. Lambert: radiance = E * albedo / pi, with
+    // E the irradiance on a horizontal surface — key times its own cosine, plus
+    // the sky. Both are already computed for the exposure meter below.
+    const groundE = sunPower * Math.max(this.sunDir.y, 0)
+      + moonPower * Math.max(this.moonDir.y, 0)
+      + 6.0 * lerp(0.155, 0.16, day) * p.ambient * u.uSkyDim.value;
+    this.probe.groundRadiance.copy(sunPower > moonPower ? this.sun.color : this.moon.color)
+      .multiply(this.probe.groundAlbedo)
+      .multiplyScalar(groundE / Math.PI);
     // Night needs real sky fill, not just a key. With too little of it the moon
     // becomes a binary light: faces turned to it read as snow and everything
     // else falls to black, which looks like a broken exposure rather than
