@@ -6,6 +6,15 @@
  *   node src/tools/bootprof.mts --n 3      # 3 loads, report each
  *   node src/tools/bootprof.mts --mem      # attribute the resident memory instead
  *   node src/tools/bootprof.mts --warm-ab  # A/B the shader warm-up, sync vs compileAsync
+ *   node src/tools/bootprof.mts --play     # boot as a PLAYER, not as the harness
+ *
+ * **`--play` is the number `project/TODO.md` is about.** Everything else here
+ * loads `?shoot=1`, which is the harness's own path: the dev suite refuses to
+ * load, the encounter director is switched off, and some boot work is done and
+ * then thrown away by that switch. That is the right default — it is what
+ * every capture in this repo pays — but it is not what "starting a new page
+ * takes forever" refers to, and quoting a shoot-mode number as *the* boot time
+ * overstates how fast the game a person opens actually is. Report both.
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.
@@ -148,12 +157,13 @@ function tail(busyBefore: boolean) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  let n = 2, nobake = false, mem = false, warmAb = false;
+  let n = 2, nobake = false, mem = false, warmAb = false, play = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--n') n = Number(argv[++i]);
     else if (argv[i] === '--nobake') nobake = true;
     else if (argv[i] === '--mem') mem = true;
     else if (argv[i] === '--warm-ab') warmAb = true;
+    else if (argv[i] === '--play') play = true;
   }
 
   // A boot number is as contention-sensitive as a frame time, and this tool had
@@ -196,7 +206,7 @@ async function main() {
       // penalises both arms equally rather than whichever went second.
       const async = warmAb && run % 2 === 1;
       const t0 = Date.now();
-      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}`
+      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra${play ? '' : '&shoot=1'}${nobake ? '&nobake=1' : ''}`
         + `${async ? '&warm=async' : ''}`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
