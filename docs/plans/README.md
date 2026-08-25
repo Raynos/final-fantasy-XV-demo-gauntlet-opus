@@ -50,6 +50,10 @@ hook warns on a new plan with no `Status:` line; it does not block.
                     |
   2026-08-22-opus-phase3-boot-and-memory      DONE 2026-08-25 -> project/archive/plans/
                     |
+  2026-08-25-opus-after-phase3                four independent workstreams,
+    WS-1 head · WS-2 programs · WS-3          one agent each, no collisions
+    geometry bake · WS-4 canopy patch
+                    |
   phase4's WS-0b perf re-baseline             alone, last (needs a quiet machine)
 
   2026-08-21-opus-rescue-and-sequencing       never staffed — it is the sequence

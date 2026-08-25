@@ -132,7 +132,7 @@ Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
 strata, the world map, the opening cutscene, warp-strike VFX, km-scale shadow,
 and now a real drainage network, shorelines, rivers, and eyes.
 
-## Next, in order
+## Next — `docs/plans/2026-08-25-opus-after-phase3.md`, WS-1..4, in order
 
 1. **The head.** The judge's #1 and the round's whole 3/10: no mouth, a bump for
    a nose, asymmetric eyes, burlap skin. Re-open `handoff/characters.md`'s "do
@@ -141,7 +141,7 @@ and now a real drainage network, shorelines, rivers, and eyes.
    set. Fewer, varied, hand-placed sheets at different altitudes, sun-tinted
    undersides, fading into a horizon haze band. Delete the even scatter.
 3. **Composition, not density.** The Matérn work fixed the statistics
-   (Clark-Evans 0.930 -> 0.741) and the judge still says nobody chose where
+   (Clark-Evans 0.930 -> 0.741); the judge still says nobody chose where
    anything goes. Hero silhouettes and sight-lines are the missing half.
 4. **Grounding** — GTAO gathers at 0.62 m, `ContactShadowPass` marches 0.5 m
    (gated at 55 m), and the graded shots' nearest ground is 61-80 m, so a boulder
