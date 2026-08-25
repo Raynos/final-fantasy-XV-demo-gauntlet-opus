@@ -273,14 +273,31 @@ async function main() {
   const worst = rows.reduce((a, b) => (a.fps < b.fps ? a : b));
   const meanFps = rows.reduce((s, r) => s + r.fps, 0) / rows.length;
   const medianFrame = quantiles(rows.map((r) => r.thru)).median;
-  const validity = validate(floor, medianFrame, floorStart.iqrMs);
+  // **Judge the floor against the frame it was measured on, not against the
+  // run's median.** Those are different shots whenever `shots[0]` is not the
+  // median-cost one, and the ratio was being printed as if they were the same:
+  // `perf poi_reststop ...` divided poi_reststop's 2.03 ms floor by a 5.5 ms
+  // median belonging to some other shot and called it 37%, where against its
+  // own 6.8 ms frame it is 30%. Both void here, but the number was not the one
+  // the sentence claimed, and the sentence is the whole product.
+  //
+  // It also means the *order of the arguments* decides whether a run certifies:
+  // `perf A B` and `perf B A` can disagree about the same machine and the same
+  // build. That is not fixed here -- fixing it needs a floor per shot, which is
+  // §6.2's lesson applied to `perf.mts` and not just to `imgdiff.mts` -- but the
+  // ratio now at least compares like with like, and the floor line says which
+  // shot it belongs to.
+  const floorRow = rows.find((r) => r.name === shots[0]);
+  const floorFrame = floorRow ? floorRow.thru : medianFrame;
+  const validity = validate(floor, floorFrame, floorStart.iqrMs);
 
   console.log('-'.repeat(80));
   console.log(`mean ${meanFps.toFixed(1)} fps   worst ${worst.fps.toFixed(0)} fps (${worst.name})`);
   console.log(
     `noise floor: start IQR ${floorStart.iqrMs.toFixed(2)} ms / end IQR ${floorEnd.iqrMs.toFixed(2)} ms, ` +
     `bias ${floor.biasMs >= 0 ? '+' : ''}${floor.biasMs.toFixed(2)} ms; ` +
-    `${((floor.iqrMs / medianFrame) * 100).toFixed(0)}% of the median ${medianFrame.toFixed(1)} ms frame`,
+    `${((floor.iqrMs / floorFrame) * 100).toFixed(0)}% of ${shots[0]}'s own ${floorFrame.toFixed(1)} ms frame `
+    + `(run median ${medianFrame.toFixed(1)} ms)`,
   );
   console.log(`RULER_VALID: ${validity.valid}`);
 

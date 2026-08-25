@@ -270,6 +270,17 @@ in this file.
   the change simply had no effect — `bootPhase` marks added minutes earlier just
   do not appear. `ps -o command= -p $(lsof -ti :$PORT -sTCP:LISTEN)` names it in
   one line; the tell is the word `preview`.
+- **`perf.mts`'s ruler measures its noise floor on `shots[0]`**, so **the order
+  of the arguments decides whether a run certifies**. `perf A B` and `perf B A`
+  can disagree about the same machine and the same build. Measured this way:
+  the full corpus (led by `hero_closeup`, a quiet shot) certified at a 16%
+  floor, while a six-shot subset of the *same* machine minutes later, led by
+  `poi_reststop`, voided at 35%. Both readings are honest about their own lead
+  shot; neither is a property of the machine. **Do not lead a run with a quiet
+  shot to get a low floor and then quote a heavy one against it** — that is the
+  exact self-flattery the ruler exists to prevent. The real fix is a floor per
+  shot, which is §6.2's lesson applied to `perf.mts` and not just `imgdiff.mts`,
+  and it is not built.
 - **The noise floor is per-shot, not the constant 1.5–1.9 everyone quotes.**
   `prompto_closeup` measures 0.373. The determinism work would have been declared
   finished at 2.068 without measuring the floor for that specific shot.
