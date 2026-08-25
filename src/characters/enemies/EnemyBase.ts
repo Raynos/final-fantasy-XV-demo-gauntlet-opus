@@ -155,6 +155,19 @@ export interface EnemyAttack extends Partial<AttackTiming> {
   phase?: number;
   /** fires a projectile instead of sweeping an arc. */
   ranged?: boolean;
+  /**
+   * Shots before a reload. Ranged only; absent means the weapon never reloads.
+   *
+   * This is the head-down window, and it is the point of the whole fire model:
+   * a shooter on a flat cooldown offers the player nothing to time against, so
+   * a firefight is a damage race decided by stats. Three exploitable gaps,
+   * MGS5's list: the aim settle (our `telegraph`), the rest between bursts
+   * (our `cooldown`), and this one — long, obvious, and worth crossing ground
+   * for.
+   */
+  magazine?: number;
+  /** seconds head-down when {@link magazine} runs out. 2.6-3.4 is the reference. */
+  reload?: number;
   /** hits everything inside `hitRadius`, not only what is inside `arc`. */
   aoe?: boolean;
   /** cannot be phase-blocked. */
@@ -558,6 +571,12 @@ export class Enemy {
   _kb!: THREE.Vector3 | null;
   _atkCooldown!: number;
   _lostTimer!: number;
+  /** Rounds left before {@link StrikeSpec.reload}; per attack id. */
+  _mag!: Map<string, number>;
+  /** Seconds this shooter has been settled on its current target. */
+  _settled!: number;
+  /** True while head-down reloading — the window the player is meant to use. */
+  reloading!: boolean;
   _roleTimer!: number;
   _senseTimer!: number;
   _strafeDir!: number;
@@ -635,6 +654,9 @@ export class Enemy {
     this.attackId = null;
     this._swung = false;
     this._atkCooldown = 0;
+    this._mag = new Map();
+    this._settled = 0;
+    this.reloading = false;
 
     this.boss = !!type.boss;
     this.phaseIndex = 0;         // boss phase, driven by BossFight
@@ -1163,15 +1185,29 @@ export class Enemy {
    * The distance this creature actually wants to fight at — the range of its
    * *shortest* attack, not its longest. Without this a melee enemy parks at
    * the edge of its leap range and swings at nothing.
+   *
+   * **Unless it has a gun.** Taking the shortest attack unconditionally meant
+   * an MT soldier stationed at its *bayonet's* 2.6 m and its rifle was
+   * decoration: measured over 15 s of live fight, 18 bayonet strikes against 2
+   * volleys. A firefight cannot have a rhythm if the shooter closes to melee
+   * inside the first burst, so the whole of Wave 4's cover-and-fire model was
+   * running on a tenth of the attacks and nobody had counted.
+   *
+   * So a shooter stations in its shortest *ranged* band instead. The melee is
+   * not removed and is still chosen when the player closes into it — that is
+   * the answer to being rushed, which is what a bayonet is for.
    */
   get fightRange() {
     if (!this.attacks || !this.attacks.length) return this.attackRange * this.scale;
-    let m = Infinity;
+    let m = Infinity, r = Infinity;
     for (const a of this.attacks) {
       if (a.phase != null && a.phase > this.phaseIndex) continue;
       if (a.lunge) continue;                     // a leap is an opener, not a station
-      m = Math.min(m, a.range || this.attackRange);
+      const range = a.range || this.attackRange;
+      m = Math.min(m, range);
+      if (a.ranged) r = Math.min(r, range);
     }
+    if (Number.isFinite(r)) m = r;
     if (!Number.isFinite(m)) m = this.reach / this.scale;
     return m * this.scale;
   }
@@ -1180,7 +1216,27 @@ export class Enemy {
     this.attack = a;
     this.attackId = a ? a.id : null;
     this._swung = false;
+    // A fresh wind-up is a fresh aim: the settle clock starts here, so a
+    // shooter that has just re-acquired shoots worse than one that has been
+    // holding the same lane. That is the term the player is playing against
+    // when they break line and re-enter somewhere else.
+    this._settled = 0;
     this.setState('telegraph');
+  }
+
+  /**
+   * Take a round out of the magazine; true when that emptied it.
+   *
+   * Per attack id rather than per enemy: a sniper's rifle and its sidearm are
+   * not one magazine, and keying it on the enemy would make switching attacks a
+   * free reload.
+   */
+  _spendRound(a: EnemyAttack): boolean {
+    if (!a.ranged || !a.magazine) return false;
+    const id = a.id || 'anon';
+    const left = (this._mag.get(id) ?? a.magazine) - 1;
+    this._mag.set(id, left > 0 ? left : a.magazine);
+    return left <= 0;
   }
 
   _endAttack() {
@@ -1208,7 +1264,10 @@ export class Enemy {
     /** Frame delta, so `pose()` can advance stride phase and springs. */
     this._dt = dt;
     if (this.frozenPose) return;
-    if (this._atkCooldown > 0) this._atkCooldown -= dt;
+    if (this._atkCooldown > 0) {
+      this._atkCooldown -= dt;
+      if (this._atkCooldown <= 0) this.reloading = false;
+    }
     this.moveSpeed = 0;
 
     if (this.dead) {
@@ -1500,6 +1559,35 @@ export class Enemy {
     }
     if (dist > want * 2.6 + 4) { this.setState('chase'); return; }
 
+    // Head down, so get into something. This is MGS5's "cover scored as
+    // *between* self and threat", built on the concealment sampler rather than
+    // on an obstacle graph the enemies do not have and should not grow: what
+    // makes a spot good is that it hides you from where the shot is coming
+    // from, and vegetation cover already answers exactly that question, with
+    // the same law perception uses.
+    //
+    // It runs only while reloading on purpose. A shooter that seeks cover
+    // whenever it can never presents a shot, and a firefight where nobody is
+    // ever exposed is not a rhythm, it is a stalemate. The reload is when
+    // being in the open is *expensive*, so it is when moving is worth the
+    // animation.
+    if (this.reloading && ctx.concealment) {
+      const at = ctx.concealment;
+      const p = this.root.position;
+      const lx = (p.x - tp.x) / Math.max(dist, 1e-3), lz = (p.z - tp.z) / Math.max(dist, 1e-3);
+      let bx = 0, bz = 0, best = at(p.x, p.z) + 0.05;   // hysteresis: staying put wins ties
+      for (let i = 0; i < 6; i++) {
+        const ang = this.slotAngle * 0.7 + (i / 6) * Math.PI * 2;
+        const cx = p.x + Math.sin(ang) * 6.5, cz = p.z + Math.cos(ang) * 6.5;
+        // Cover you have to cross the shooter's line to reach is not cover.
+        const away = (Math.sin(ang) * lx + Math.cos(ang) * lz) * 0.5 + 0.5;
+        const score = at(cx, cz) * (0.55 + 0.45 * away);
+        if (score > best) { best = score; bx = cx - p.x; bz = cz - p.z; }
+      }
+      const bl = Math.hypot(bx, bz);
+      if (bl > 0.35) { this._move(dt, bx / bl, bz / bl, this.speed * 0.9, ctx); return; }
+    }
+
     // Hold the assigned bearing on the ring, and let the whole ring rotate
     // slowly, so the pressure on the player keeps coming from a new angle.
     this.slotAngle += this._strafeDir * dt * 0.45;
@@ -1514,6 +1602,7 @@ export class Enemy {
 
   _tickTelegraph(dt: number, ctx: EnemyCtx, tp: THREE.Vector3 | null, _dist: number) {
     const a = this.attack;
+    this._settled += dt;
     this._face(tp, dt, a && a.tracking != null ? a.tracking : 2.4);
     // There used to be an `a.approachDuring` branch here that closed the
     // distance through the wind-up. **No attack in the bestiary declares that
@@ -1540,7 +1629,14 @@ export class Enemy {
       else if (ctx && ctx.onEnemyStrike) ctx.onEnemyStrike(this);
     }
     if (this.stateTime > this._timing('attack')) {
-      this._atkCooldown = (a && a.cooldown != null ? a.cooldown : this.attackCooldown);
+      const dry = a ? this._spendRound(a) : false;
+      // Head down. Long enough to be worth crossing ground for, and long
+      // enough that the player can *see* it is different from a burst rest --
+      // a reload the same length as a cooldown is not a gap, it is a pause.
+      this._atkCooldown = dry
+        ? (a && a.reload != null ? a.reload : 3.0)
+        : (a && a.cooldown != null ? a.cooldown : this.attackCooldown);
+      this.reloading = dry;
       this.setState('recover');
     }
   }

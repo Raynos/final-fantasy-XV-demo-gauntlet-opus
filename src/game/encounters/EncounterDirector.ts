@@ -472,7 +472,6 @@ export class EncounterDirector {
     const fx = Math.sin(e.heading), fz = Math.cos(e.heading);
     const origin = e.root.position;
 
-    if (a.ranged) this._tracer(e, a);
 
     for (const t of this.threats) {
       const tp = threatPos(t);
@@ -488,7 +487,11 @@ export class EncounterDirector {
         const dot = (dx / d) * fx + (dz / d) * fz;
         if (dot < Math.cos(arc)) continue;
       }
-      if (a.ranged && this.rng.next() > 0.72) continue;    // ranged fire misses often
+      if (a.ranged) {
+        const p = this._hitChance(e, a, t, d);
+        if (this.rng.next() > p) { this._missNear(e, tp, d); continue; }
+        this._tracer(e, a, tp);
+      }
       this.damageThreat(t, e, a);
     }
     if (a.aoe && this.vfx) {
@@ -501,14 +504,100 @@ export class EncounterDirector {
     }
   }
 
+  /**
+   * How likely this shot is to land, as a ladder the player can climb.
+   *
+   * It replaces `rng.next() > 0.72` — a flat 28% miss the player could neither
+   * see nor influence, which makes a firefight a damage race decided by stats.
+   * Every term here is something the player is *doing*, and every one of them
+   * is already computed elsewhere in this repo; none of it is new state.
+   *
+   * The ordering matters more than the constants. Moving beats standing,
+   * moving across the shooter's line beats moving along it (a target closing
+   * head-on is barely harder to hit than a stationary one, which is why
+   * charging a shooter should be a decision and not a dodge), distance costs
+   * accuracy, and standing in grass costs the shooter more the further away it
+   * is — that last one is `Enemy.concealment`, reused rather than re-derived so
+   * the thing that hides you from being *seen* is the thing that spoils a shot
+   * at you.
+   *
+   * `_settled` is the aim: a shooter that has been holding the same lane for a
+   * second is dangerous, one that just re-acquired is not. That is what makes
+   * breaking line and re-entering somewhere else a real move rather than a
+   * cosmetic one.
+   */
+  _hitChance(e: Enemy, a: StrikeSpec, t: EncounterThreat, d: number): number {
+    const HIT_BASE = 0.86;
+    let p = HIT_BASE;
+
+    // Aim settle: 0.55x on the first shot after re-acquiring, full by ~1.2 s.
+    const settle = THREE.MathUtils.clamp((e._settled ?? 1) / 1.2, 0, 1);
+    p *= 0.55 + 0.45 * settle;
+
+    // Speed, and the direction of it. `lateral` is the component across the
+    // shooter's line; a pure closer barely gains.
+    const tp = threatPos(t);
+    const v = (t as { velocity?: THREE.Vector3 }).velocity;
+    const speed = v ? Math.hypot(v.x, v.z) : 0;
+    let lateral = 0;
+    if (tp && v && d > 1e-3 && speed > 1e-3) {
+      const lx = (tp.x - e.root.position.x) / d, lz = (tp.z - e.root.position.z) / d;
+      // |cross| of the unit line-of-fire with the unit velocity
+      lateral = Math.abs(lx * (v.z / speed) - lz * (v.x / speed));
+    }
+    const mv = THREE.MathUtils.clamp(speed / 5.0, 0, 1);
+    p *= 1 - mv * (0.16 + 0.34 * lateral);
+
+    // Range, against the attack's own reach rather than an absolute.
+    p *= 1 - 0.30 * THREE.MathUtils.clamp(d / (a.range || 20), 0, 1);
+
+    // Concealment, from the same sampler perception uses — `_concealFactor` is
+    // the enemy's own, so grass that hides you from being *seen* is the same
+    // grass that spoils a shot at you, with one law and one set of constants.
+    if (tp) p *= e._concealFactor(t, tp, d, this.enemies ? this.enemies._ctx : null);
+
+    return THREE.MathUtils.clamp(p, 0.08, 0.95);
+  }
+
+  /**
+   * A shot that went past. It has to be *visible*, or a miss and a shooter
+   * that is not firing look identical from behind cover.
+   *
+   * The tracer terminates at the scattered point rather than at the target,
+   * which is the whole difference: before this, a miss still drew a line
+   * ending exactly on the player and then quietly did nothing, so the only
+   * feedback for 28% of incoming fire was the damage that did not arrive.
+   */
+  _missNear(e: Enemy, tp: THREE.Vector3, d: number) {
+    if (!this.vfx) return;
+    // Scatter grows with range: a near miss at 5 m is 0.4 m wide, at 30 m it
+    // is two metres and reads as a spray rather than as a shot at somebody else.
+    const spread = 0.35 + 0.055 * d;
+    const ang = this.rng.next() * Math.PI * 2;
+    const r = spread * (0.55 + 0.45 * this.rng.next());
+    const mx = tp.x + Math.sin(ang) * r;
+    const mz = tp.z + Math.cos(ang) * r;
+    const my = tp.y + 1.1 + (this.rng.next() - 0.5) * spread;
+    this._tracer(e, { hitRadius: 0, mult: 0, arc: 0, ranged: true } as StrikeSpec,
+      this._tmp2.set(mx, my, mz));
+    // Where it struck, if it struck the ground near enough to raise dust.
+    const g = this.ground(mx, mz).clone();
+    if (my - g.y < 1.6) {
+      this.vfx.dustPuff({
+        pos: g, count: 5, radius: 0.22, speed: 2.4, life: 0.5,
+        size: 0.22, grow: 2.2, up: 1.1, intensity: 0.35,
+      });
+    }
+  }
+
   /** A visible line for ranged shots so the player can read where it came from. */
-  _tracer(e: Enemy, a: StrikeSpec) {
+  _tracer(e: Enemy, a: StrikeSpec, to: THREE.Vector3 | null) {
     if (!this.vfx) return;
     const from = e.centre();
     from.y += e.height * 0.15 * e.scale;
-    const tp = threatPos(this.threats[0]);
+    const tp = to || threatPos(this.threats[0]);
     if (!tp) return;
-    this._tmp.set(tp.x, tp.y + 1.1, tp.z);
+    this._tmp.set(tp.x, to ? tp.y : tp.y + 1.1, tp.z);
     const b = this.vfx.acquireBeam();
     const hot = a.element === 'dark' ? 0xb070ff : a.element === 'lightning' ? 0xbfe0ff : 0xffd0a0;
     b.uniforms.uHead.value.set(hot);

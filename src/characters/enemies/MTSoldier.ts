@@ -68,7 +68,12 @@ export const MT_SOLDIER = {
   timing: { telegraph: 0.5, strike: 0.1, attack: 0.42, recover: 0.75 },
   attacks: [
     { id: 'volley', range: 16, minRange: 3.5, weight: 4, mult: 0.7, poise: 4, hitRadius: 1.0,
-      ranged: true, telegraph: 0.55, strike: 0.12, attack: 0.5, recover: 0.8, cooldown: 1.6 },
+      // Four rounds then head down. An MT on a flat 1.6 s cooldown gives the
+      // player nothing to time against; four bursts and a 2.9 s reload gives
+      // them a window they can cross ground in, which is the whole reason the
+      // fire model has gaps in it at all.
+      ranged: true, telegraph: 0.55, strike: 0.12, attack: 0.5, recover: 0.8, cooldown: 1.6,
+      magazine: 4, reload: 2.9 },
     { id: 'bayonet', range: 2.6, weight: 2, mult: 1.2, poise: 14, hitRadius: 1.6,
       telegraph: 0.4, strike: 0.14, attack: 0.42, recover: 0.7, cooldown: 1.2 },
   ],

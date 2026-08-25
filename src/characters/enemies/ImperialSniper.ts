@@ -52,7 +52,11 @@ export const IMPERIAL_SNIPER = {
     {
       id: 'snipe', range: 34, minRange: 8, weight: 4, mult: 1.8, poise: 34, hitRadius: 1.0,
       ranged: true, telegraph: 1.4, strike: 0.12, attack: 0.55, recover: 1.15,
-      cooldown: 3.8, tracking: 1.1,
+      // A bolt gun: every shot is a reload, and the long settle is already in
+      // `telegraph: 1.4`. `magazine: 3` is the clip, and 3.4 s is the top of
+      // the reference's 2.6-3.4 band because a sniper caught reloading should
+      // be the most punishable thing in the encounter.
+      cooldown: 3.8, tracking: 1.1, magazine: 3, reload: 3.4,
     },
     {
       id: 'buttstroke', range: 3, weight: 2, mult: 0.5, poise: 18, hitRadius: 1.9, arc: 1.2,
