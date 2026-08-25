@@ -889,13 +889,34 @@ invoked that way declared its own run void.
 
 This is the same bug as the pid-string version the code comment already
 recorded, one level up, and it survived because the lanes that hit it read the
-boot times and skipped the verdict. Fixed 2026-08-25 by walking ancestors as a
-chain as well as descendants as a tree; a sibling tool started from the same
-session still counts, which is the case the trigger exists for.
+boot times and skipped the verdict.
+
+**Walking ancestors fixed half of it, and the other half fired immediately.**
+Pipe a tool anywhere — `node src/tools/bootprof.mts | grep VERDICT`, which is
+the most ordinary thing anyone does with one — and bash forks a second subshell
+for the right-hand stage. A forked-but-not-yet-exec'd bash still carries its
+parent's whole command line, and it is a **sibling** of the tool, so no ancestor
+walk can ever reach it:
+
+```
+92643 41713  bash -c '… node src/tools/bootprof.mts … | …'   the wrapper
+92645 92643  node src/tools/bootprof.mts --n 1               self
+92646 92643  bash -c '… node src/tools/bootprof.mts … | …'   the pipe's other half
+```
+
+**The fix is to stop treating a command line as evidence of what a process is
+running.** `ps -o ucomm=` gives the *executable*; a shell that has not exec'd
+reads `bash` whatever its arguments say. Both shapes fall out at once, and the
+ancestor walk becomes belt-and-braces rather than the only defence. Verified
+both ways: a piped `bootprof` reads `quiet`, and a genuinely concurrent
+`perf.mts` is still caught.
 
 **The lesson is not about pids.** A guard that fires on a quiet machine trains
 people to ignore it, and a guard people ignore is worse than no guard — the two
-lanes it was meant to protect had already learned to skip the line.
+lanes it was meant to protect had already learned to skip the line. Note also
+that it took *three* attempts to exclude self correctly, each fixing a real case
+and each leaving another: by string, by pid, by ancestry, and finally by
+executable.
 
 ## A probe that calls `Game.start()` can poison every later measurement
 

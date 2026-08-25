@@ -150,11 +150,14 @@ export function contention(): Contention {
    * lane and must still count.
    */
   const self = process.pid;
-  const rows = sh('ps -A -o pid=,ppid=,args=').split('\n');
+  // `ucomm` is the **executable**, and it is what makes this check honest.
+  // See the `busy` comment below: a command line is not evidence that the
+  // process is running the thing its command line names.
+  const rows = sh('ps -A -o pid=,ppid=,ucomm=,args=').split('\n');
   const parsed = rows
-    .map((r) => r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/))
+    .map((r) => r.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/))
     .filter((m): m is RegExpMatchArray => Boolean(m))
-    .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), args: m[3] }));
+    .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), ucomm: m[3], args: m[4] }));
   const byParent = new Map<number, number[]>();
   const parentOf = new Map<number, number>();
   for (const p of parsed) {
@@ -173,11 +176,38 @@ export function contention(): Contention {
   }
   // Ancestors: the shell, and the shell's shell, that got us here.
   for (let up = parentOf.get(self); up && up > 1 && !mine.has(up); up = parentOf.get(up)) mine.add(up);
+  /**
+   * **Match the executable, not the command line.**
+   *
+   * The command-line-only version of this counted processes that merely
+   * *mention* a tool. Two shapes do, and both are how agents actually invoke
+   * the harness:
+   *
+   *   1. The wrapper shell — `bash -c 'source …snapshot.sh && node
+   *      src/tools/bootprof.mts'` — handled above by walking ancestors.
+   *   2. **A pipeline's other stage.** `node src/tools/bootprof.mts | grep …`
+   *      makes bash fork a second subshell, and a forked-not-yet-exec'd bash
+   *      still carries the parent's whole command line. It is a *sibling* of
+   *      the tool, so no ancestor walk can reach it:
+   *
+   *          92643 41713  bash -c '… node src/tools/bootprof.mts … | …'   wrapper
+   *          92645 92643  node src/tools/bootprof.mts --n 1               self
+   *          92646 92643  bash -c '… node src/tools/bootprof.mts … | …'   the pipe
+   *
+   *      Piping a tool into `grep` or `tail` is the most ordinary thing an
+   *      agent does with one, so this fired on almost every run.
+   *
+   * `ucomm` is the accounting name of the *executable*. A shell that has not
+   * exec'd reads `bash` whatever its arguments say, so both shapes fall out at
+   * once and the ancestor walk above becomes belt-and-braces rather than the
+   * only defence.
+   */
   const otherTools = [
     ...new Set(
       parsed
         .filter((p) => !mine.has(p.pid))
-        .filter((p) => /node .*src\/tools\/[\w-]+\.mts/.test(p.args))
+        .filter((p) => p.ucomm === 'node')
+        .filter((p) => /src\/tools\/[\w-]+\.mts/.test(p.args))
         .map((p) => (p.args.match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
         .filter((n): n is string => Boolean(n) && n !== 'daemon'),
     ),
