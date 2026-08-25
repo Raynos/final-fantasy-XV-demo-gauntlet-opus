@@ -19,6 +19,12 @@ import { SkyProbe } from './sky/SkyProbe.ts';
  *
  * The specular env keeps the old trim (`_envIntensity`) — a mirror really does
  * want to reflect the amber, and it is not what fills shade.
+ *
+ * It is **not** a brightness knob, and do not reach for it as one. Measured:
+ * 1.0 -> 0.80 moved the daylight slice's mean luma from 114.8 to 115.3 and its
+ * clipping from 2.81% to 2.94% — i.e. slightly *up*, because closed-loop
+ * exposure meters the scene and gives back what you took away. Turning the
+ * probe down under a closed loop removes fill and keeps the exposure.
  */
 const PROBE_GAIN = 1.0;
 
