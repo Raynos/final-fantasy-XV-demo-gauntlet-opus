@@ -72,7 +72,7 @@ export interface HarnessArgs {
  * shared flag breaks every hand-rolled parser unless they can all ask what the
  * shared ones are.
  */
-export const HARNESS_VALUE_FLAGS = ['build', 'lane', 'agent', 'deadline', 'q', 'post', 'ablate'];
+export const HARNESS_VALUE_FLAGS = ['build', 'lane', 'agent', 'deadline', 'q', 'post', 'ablate', 'wait-lease'];
 export const HARNESS_SWITCHES = ['dirty', 'cold', 'nobake', 'prod'];
 
 /** True if `argv[i]` is a shared flag; the caller skips it and its value. */
@@ -102,6 +102,7 @@ export function isHarnessFlag(a: string): 'switch' | 'value' | null {
 export const HARNESS_FLAGS: ReadonlyMap<string, 0 | 1> = new Map<string, 0 | 1>([
   ['--build', 1], ['--dirty', 0], ['--lane', 1], ['--agent', 1],
   ['--deadline', 1], ['--cold', 0], ['--prod', 0], ['--ablate', 1], ['--post', 1],
+  ['--wait-lease', 1],
 ]);
 
 /**
@@ -334,13 +335,44 @@ export async function withBlankPage<T>(
  * chromiums; under per-worktree daemons that was unfixable, since a daemon
  * cannot quiesce browsers it does not own. It is fixable now, and this is where.
  */
-export async function withExclusive<T>(agent: string, fn: () => Promise<T>): Promise<T> {
+/**
+ * How long to queue for the quiet lane, from `--wait-lease <seconds>`.
+ *
+ * Read from `process.argv` rather than threaded through `HarnessArgs` because
+ * `withExclusive` wraps `main` — it runs *before* the tool's own parser, so
+ * there is no parsed value to hand it yet. The flag is registered in
+ * `HARNESS_FLAGS` / `HARNESS_VALUE_FLAGS` so the strict parsers skip it.
+ *
+ * The default waits rather than failing. Two agents both wanting a timing run
+ * in the same hour is the normal case on a shared trunk, not an error: the
+ * lease already serialises them correctly, and failing the second one just
+ * pushes it toward measuring on a box the first one is using. Ten minutes
+ * covers a full `perf` or `bootprof` run with room over. `--wait-lease 0`
+ * restores fail-fast for a script that would rather report than block.
+ */
+export function leaseWaitMs(argv: string[] = process.argv): number {
+  const i = argv.indexOf('--wait-lease');
+  if (i < 0) return 10 * 60_000;
+  const v = Number(argv[i + 1]);
+  return Number.isFinite(v) && v >= 0 ? v * 1000 : 10 * 60_000;
+}
+
+export async function withExclusive<T>(
+  agent: string, fn: () => Promise<T>, { waitMs = leaseWaitMs() }: { waitMs?: number } = {},
+): Promise<T> {
   await ensureDaemon();
   // The pid is what lets the daemon reap this if the tool dies holding it --
   // `perf.mts` exits via process.exit() on a failing shot, which skips every
   // `finally` in the process, so a release that only happens on the happy path
   // is not a release.
-  await call('/exclusive', { agent, pid: process.pid });
+  //
+  // `waitMs` queues behind whoever holds it rather than failing. Two agents
+  // wanting the quiet lane in the same hour is the normal case here, not an
+  // error: the request is serialised, which is the point of the lease, and the
+  // one that arrives second waits instead of measuring on a busy box.
+  if (waitMs > 0) console.log(`[harness] requesting the quiet lane as ${agent} (will wait up to ${Math.round(waitMs / 1000)} s)`);
+  await call('/exclusive', { agent, pid: process.pid, waitMs },
+    { timeout: Math.max(waitMs + 60_000, 45 * 60_000) });
   // Stamp the state the measurement was taken under, before it is taken. A perf
   // number without this is not comparable, and two sessions arguing about a
   // regression that was really a busy box costs an afternoon.

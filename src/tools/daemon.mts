@@ -338,6 +338,8 @@ export interface HealthResponse {
   bootMs: number;
   idleSec: number;
   exclusive: string | null;
+  /** Agents queued behind the lease, in arrival order. */
+  exclusiveQueue: string[];
   resetDrift: Record<string, string>;
 }
 
@@ -930,7 +932,18 @@ class Scheduler {
    * or leaves a dead holder in place, and this leaves neither.
    */
   private exclusivePid = 0;
+  private exclusiveSince = 0;
   private exclusiveWaiters: (() => void)[] = [];
+  /**
+   * Agents queued for the lease, in arrival order.
+   *
+   * Without this the lease was first-come-fail-rest: a second timing tool threw
+   * `already held by <holder>` and the agent behind it had to invent its own
+   * polling loop, or — worse — measure anyway on a contended box, which is the
+   * exact failure 2.4 exists to close. One repository-wide lease is right; a
+   * lease you cannot *queue* for only moves the contention into the humans.
+   */
+  private leaseQueue: { holder: string, pid: number, grant: () => void }[] = [];
 
   /** Drop an exclusive lease whose holder is gone. Cheap; called before every decision. */
   reapExclusive() {
@@ -1055,18 +1068,63 @@ class Scheduler {
    * cannot quiesce browsers it does not own. Here "the machine is quiet" is a
    * property that can be enforced rather than hoped for.
    */
-  async takeExclusive(holder: string, pid: number): Promise<void> {
+  async takeExclusive(holder: string, pid: number, waitMs = 0): Promise<void> {
     this.reapExclusive();
-    if (this.exclusive) throw new Error(`exclusive lease already held by ${this.exclusive}`);
+    if (this.exclusive) {
+      const heldFor = Math.round((Date.now() - this.exclusiveSince) / 1000);
+      const who = `${this.exclusive} (pid ${this.exclusivePid}, held ${heldFor} s)`;
+      if (waitMs <= 0) {
+        throw new Error(`exclusive lease already held by ${who}`
+          + `; pass --wait-lease <sec> to queue behind it instead of failing`);
+      }
+      await new Promise<void>((resolve, reject) => {
+        const entry = {
+          holder, pid,
+          grant: () => { clearTimeout(timer); resolve(); },
+        };
+        const timer = setTimeout(() => {
+          const i = this.leaseQueue.indexOf(entry);
+          if (i >= 0) this.leaseQueue.splice(i, 1);
+          reject(new Error(`waited ${Math.round(waitMs / 1000)} s for the exclusive lease, `
+            + `still held by ${who}`));
+        }, waitMs);
+        // `unref` so a queued client cannot hold the daemon's loop open.
+        (timer as unknown as { unref?: () => void }).unref?.();
+        this.leaseQueue.push(entry);
+      });
+      // `releaseExclusive` has already written the lease over to us, on its own
+      // tick. Re-writing the same three fields below is idempotent; *not*
+      // writing them there would leave `exclusive` null across the microtask
+      // hop that resolves this promise, and a request arriving in that gap
+      // would take a lease we are already standing in line for.
+    }
     this.exclusive = holder;
     this.exclusivePid = pid;
+    this.exclusiveSince = Date.now();
     if (this.busyWorkers) await new Promise<void>((r) => this.exclusiveWaiters.push(r));
   }
+
+  /** How many agents are queued behind the lease, for `--health`. */
+  leaseWaiting(): string[] { return this.leaseQueue.map((e) => e.holder); }
 
   releaseExclusive() {
     this.exclusive = null;
     this.exclusivePid = 0;
+    this.exclusiveSince = 0;
     for (const w of this.exclusiveWaiters.splice(0)) w();
+    // Hand straight to the next in line rather than releasing into a race: the
+    // grant runs synchronously on this tick, before `pump()` can start a job
+    // that the new holder would then have to drain all over again.
+    const next = this.leaseQueue.shift();
+    if (next) {
+      this.exclusive = next.holder;
+      this.exclusivePid = next.pid;
+      this.exclusiveSince = Date.now();
+      console.log(`[daemon] exclusive lease handed to ${next.holder} (pid ${next.pid}), `
+        + `${this.leaseQueue.length} still queued`);
+      next.grant();
+      return;
+    }
     this.pump();
   }
 }
@@ -1640,6 +1698,7 @@ function health(): HealthResponse {
     bootMs: pool.bootMs,
     idleSec: Math.round((Date.now() - lastUsed) / 1000),
     exclusive: sched.exclusive,
+    exclusiveQueue: sched.leaseWaiting(),
     resetDrift,
   };
 }
@@ -1706,7 +1765,7 @@ async function serve() {
           return send(200, { ok: true });
         }
         if (url === '/exclusive') {
-          await sched.takeExclusive(agent, Number(body.pid) || 0);
+          await sched.takeExclusive(agent, Number(body.pid) || 0, Number(body.waitMs) || 0);
           await pool.closeAll();
           return send(200, { ok: true, holder: agent });
         }
