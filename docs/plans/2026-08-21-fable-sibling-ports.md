@@ -1,34 +1,75 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 done. Wave 2 done bar 3.6,
-which the plan graph gives to another lane. Wave 3 audited to a verdict, one
-item open on the perf re-baseline. Wave 4 three of five.**
-Re-audited against the tree and rebuilt 2026-08-23 (second opus pass, starting
-from `d377fc7`). This table **replaces** the previous audit's, which was hours
-old and still had **three** rows wrong — 3.3, 3.7 and 3.6's shadow proxy, all
-of them calling something open that was closed. See "what 3.3 actually was" and
-"a third audit row that was wrong" below: how they were wrong is the more
-useful half.
+Status: DONE (2026-08-25, opus) — **6 of 6. All four waves closed, the perf
+re-baseline published and passing.** Third opus pass. What is left over is
+re-filed in §10's last table, and Wave 3's frame-cost split goes to phase4's
+WS-0b with the ruler defect that stopped it being measured here. This table
+replaces the previous one, which had **five** rows wrong — 3.6 (three of its
+four items), 3.8(b), Wave 4's `setMotion` contract, Wave 4's adaptive music,
+and the attribution of the shadow-warmth gap in 3.8(a). Every one of them
+called something open that was closed, or blamed a gap on a lever that cannot
+reach it. See "the pattern, now with five more instances" below: **how they
+were wrong is still the more useful half.**
 
 | item | state | evidence |
 |---|---|---|
 | 2.1 determinism pinning | **DONE** | `417ca86`. 1.836 -> 0.340 mean/255 against a 0.302 floor. The cause was the wind, not the formation the plan predicted |
 | 2.2 shader warm + `compileAsync` | **REJECTED, measured** | `4c1d813`. `compileAsync` is 3% slower here (1562 ms sync vs 1611 ms, six pairs) |
 | 2.3 `seatHeightAt` / `drawnEnvelope` | **DONE** | `Terrain.ts:496`, `props/Seat.ts`, `seatcheck.mts` |
-| 2.4 self-validating perf ruler | **DONE** | `RULER_VALID` in `perf.mts` / `gameplay.mts` |
-| 2.5 ablation dials | **DONE**, and extended | `--hide/--ablate`; this pass added `nobleach`, `noactorhaze`, `noambient`, `noenv` |
+| 2.4 self-validating perf ruler | **DONE**, and the lease with it | `RULER_VALID` in `perf.mts` / `gameplay.mts`; `43531db` made the quiet lane queueable, see below |
+| 2.5 ablation dials | **DONE**, and extended twice | `--hide/--ablate`; `nobleach`, `noactorhaze`, `noambient`, `noenv`, and this pass `noprobe` |
 | 2.6 contact shadows | **CLOSED as insufficient** | grounding is structural and past every term's range; `handoff/grounding.md` owns it |
 | 3.1 art-direction corpus | **DONE** | `docs/reference/` |
-| 3.2 grade stats + blind A/B | **DONE** | `compare.mts`, `imagestats.mts`. This pass fixed a verdict that contradicted itself (`dafa76b`) |
-| 3.3 grade upgrades | **DONE, 6 of 6 levers** | `05fa8fb`, `6041077`, `e17e265`. See "what 3.3 actually was" below |
-| 3.4 depth-weighted additives | **DONE** | `70506db`. The haze split shipped; the airDepth weighting was already present and the additive flood measured absent |
+| 3.2 grade stats + blind A/B | **DONE** | `compare.mts`, `imagestats.mts` |
+| 3.3 grade upgrades | **DONE, 6 of 6 levers** | `05fa8fb`, `6041077`, `e17e265` |
+| 3.4 depth-weighted additives | **DONE** | `70506db` |
 | 3.5 horizon-angle bake | **DONE** | `world/terrain/Horizon.ts` + `horizoncheck` |
-| 3.6 grass tier-D et al | **REASSIGNED** (shadow proxy already built) | `docs/plans/README.md` gives `src/world/veg/` to procedural-modeling. The shadow-only sward proxy is **already built** (`GrassField._tileFor`); tier-D, root blend and coverage math go with the lane |
-| 3.7 water depth model | **DONE — and audited wrong twice** | `Water.ts:15-43`. Per-channel Beer-Lambert `exp(-sigma*path)` with `sigma.r >> sigma.b`, path along the **refracted** ray (`refract(-V, N, 0.7502)`, one Snell step, no scene copy), bed re-sampled from the heightfield, alpha as the complement of transmittance so the waterline silhouette comes from the bed, and foam derived from depth broken by the wave field rather than stamped as a contour. That is every element 3.7 asks for |
-| 3.8 sky-SH + PCSS | **(a) MEASURED, worth building, not built. (b) not evaluated** | `4d94169`. See below — the measurement found something better than it went looking for |
-| Wave 3 (perf) | **AUDITED to a verdict; one item open** | five of six closed by reading and measuring — four already satisfied, one not applicable. Only the frame-cost split is open, and it is behind the perf re-baseline. See below |
-| Wave 4 (gameplay) | **3 of 5, and the biggest one was mostly already built** | swept camera `fd1a153`, `lookScale` `347b392`, vegetation concealment `77555a7`. The perception *meter* and its ladder already existed (`awareness`, thresholds 0.12/0.55); what was missing was the concealment term the plan says MGS5 never wrote, and that is now in and measured. Cover/fire rhythm, the `setMotion` rate contract and adaptive music are untouched |
-| §6.2 per-shot noise floors | **DONE** | `9db4548`. Measured a 16x spread; the old global floor was above all twelve |
+| 3.6 grass tier-D et al | **DONE, 3 of 4 — and it was recorded as unbuilt** | tier-D sward *and* dry cover are in `TerrainMaterial.ts:1231`, wind-coupled and with their own measured near-negative; the shadow proxy is `GrassField._tileFor`; the root-albedo blend is `GROUND_BLEED = 0.34`. Only coverage economics is unverified. See below |
+| 3.7 water depth model | **DONE — and audited wrong twice** | `Water.ts:15-43` |
+| 3.8(a) sky-SH ambient | **BUILT and measured** | `bdbd7c5`, `43bcec6`, `ebb5462`. `world/sky/SkyProbe.ts`. What it fixed is not what it was predicted to fix — see below |
+| 3.8(b) PCSS | **EVALUATED: half shipped upstream, half unreachable** | three 0.185's own PCF path is already Vogel disc + IGN. The blocker search is not buildable here — see below |
+| Wave 3 (perf) | **five of six closed; the frame-cost split re-filed to phase4 WS-0b** | the re-baseline is published and passing; the split voided twice on a contended box and is not worth faking — see §10 |
+| perf re-baseline | **PUBLISHED and PASSING** | `RULER_VALID: true`, floor 16%, mean 218.1 fps, worst 140. `bestiary_necromancer` 51 -> **172 fps**: the old failure was the machine |
+| Wave 4 (gameplay) | **COMPLETE** | swept camera `fd1a153`, `lookScale` `347b392`, concealment `77555a7`, cover + fire rhythm `b29d566`, rate contract measured `4c2c8de`, adaptive music already built and now verified |
+| §6.2 per-shot noise floors | **DONE** | `9db4548` |
+
+### The pattern, now with five more instances
+
+Three of this plan's audit rows had already been wrong in the same direction —
+an item called open that was closed. This pass found five more, and the shape
+is now specific enough to be actionable:
+
+- **3.6.** Recorded as "Not built yet, deliberately: the atmosphere lane is
+  rebuilding the grade". The grade landed, and tier-D landed with it —
+  `TerrainMaterial.ts:1231` has the sward *and* a second dry-cover term for
+  Leide, both patchy at clump scale, both taking the wind from the same uniform
+  objects the blades sway on, with per-zone eyedropper measurements and a
+  recorded near-negative in the comments. The root blend and the shadow proxy
+  were there too. **Three of four, and the plan's own note about why it was
+  deferred outlived the deferral.**
+- **3.8(b).** Recorded as "not evaluated at all", with Vogel disc named as
+  something to port. three 0.185 ships Vogel disc + IGN in
+  `shadowmap_pars_fragment`'s own `SHADOWMAP_TYPE_PCF` branch — five taps with
+  hardware PCF, ~20 filtered taps. Half the item arrived in a dependency bump.
+- **Wave 4's `setMotion` contract.** Recorded as untouched. `Anim.update` is
+  *handed* `st.speed` and `st.velocity`; `Player` and `Party` both build
+  velocity from the sim's own heading and speed; nothing under
+  `characters/rig/` differentiates a transform. Now measured rather than read:
+  `probes/ratecontract.mts`, worst sign-flip rate **8.3%** against the 40-63%
+  a differentiating rig sits at.
+- **Wave 4's adaptive music.** Recorded as untouched, tuning-level.
+  `Score.setIntensity` re-targets every layer gain with `setTargetAtTime`
+  inside a state, and `AudioSystem` drives it from enemy proximity and
+  remaining HP. Both halves: the wind level is already read from
+  `Weather.windStrength`, the *same value* that feeds `veg.setWind` on the same
+  tick, so you do hear the gust you see.
+- **3.8(a)'s premise.** Not an item this time but a *diagnosis*: the handoff
+  said the daylight grade's last miss was shadow warmth and "the rest is the
+  ambient probe". It is not, and could not have been — see below.
+
+**Four of the five were findable by reading the file.** The fifth was findable
+by one ablation. The cost of not doing either is a plan that files completed
+work as open for two more sessions.
 
 ### What 3.3 actually was, and why the last audit misread it
 
@@ -99,28 +140,193 @@ it is the difference between fixing this and moving a constant.
 - **OPEN: the frame-cost split** (pixel-scaled vs fixed). Needs the perf
   re-baseline, and post consolidation is gated on its answer.
 
-### 3.8, measured
+### Wave 4, closed — and the line that made the rest of it matter
 
-The plan asks for a cheap ablation of the ambient probe. It needed one that did
-not exist, so `?post=noambient` and `?post=noenv` were built. The first pass was
-confounded by closed-loop exposure and said so; re-run under `?post=noexp`:
+Cover and fire rhythm is the last piece and it landed in `b29d566`. Four parts,
+and a fifth that turned out to be why the other four would have changed nothing.
 
-- **The `HemisphereLight` is inert** — 0.4 luma of 87.7, and 0.1 of shadow R-B.
-  A declared, tuned, per-frame-updated sky fill reaching the frame not at all,
-  holding a slot in the pinned light pool. This project's dominant failure class.
-- **The env cube is the entire diffuse ambient and nothing shadows it** — 5% of
-  scene luma and 3.9 of the 12.5-point shadow-colour gap. The flood 3.8
-  predicted is real, so 3.8(a) is **worth building** and is not built here: it
-  is structural surgery on a renderer at 12/12 and it has to resolve the inert
-  hemisphere in the same change, not beside it. 3.8(b) PCSS is not evaluated.
+- **Hit chance as a ladder, not a coin flip.** Incoming ranged fire was
+  `if (a.ranged && rng.next() > 0.72) continue` — a flat 28% miss the player
+  can neither see nor influence, which makes a firefight a damage race decided
+  by stats. Now: `still 0.704 · closing 0.591 · strafing 0.352 · just
+  re-acquired 0.387`. Moving beats standing; crossing the shooter's line beats
+  closing down it, so charging a shooter is a decision rather than a dodge;
+  range costs accuracy against the attack's own reach; and concealment reuses
+  `Enemy._concealFactor`, so the grass that hides you from being *seen* is the
+  grass that spoils a shot at you, under one law.
+- **The head-down window.** `magazine` / `reload` on a `StrikeSpec`; MT at 4
+  and 2.9 s, sniper at 3 and 3.4 s. Measured over 30 s of live fight: five
+  magazines emptied, longest head-down run **5.25 s** against a 1.6 s burst
+  rest. With the aim settle (`telegraph`) and the burst rest (`cooldown`) that
+  is MGS5's three exploitable gaps, all present.
+- **Misses land somewhere.** A miss used to `continue` while the tracer had
+  already been drawn ending exactly on the player, so the only feedback for 28%
+  of incoming fire was damage that did not arrive. Misses now scatter with
+  range, the tracer terminates where the round went, and one landing near the
+  ground raises dust.
+- **Cover, scored on the concealment sampler** rather than an obstacle graph
+  the enemies do not have and should not grow — what makes a spot good is that
+  it hides you from where the shot is coming from, which is the question that
+  sampler answers. It runs only while reloading: a shooter that takes cover
+  whenever it can never presents a shot, and a fight where nobody is exposed is
+  a stalemate, not a rhythm.
 
-Author: Fable 5 audit pass, against commit `a1df21d`.
-Sources: full audits of the sibling repos under
-`/Users/raynos/projects/game-demos/gauntlet-demos/` — `final-fantasy-XV-demo-opus`
-(three.js, the deep run), `metal-gear-solid-5-opus-demo` (three.js, shipped
-60 fps stealth demo), and the four dead experiments (`-ogl-opus`,
-`-bablyon-opus`, `-bablyon2-opus`, `-gpt-5-6`) — plus a full read of this
-repo's own docs (BRIEF, SCOPE, HANDOFF, RESCUE, all handoffs and plans).
+**And the fifth.** `fightRange` took the *shortest* attack unconditionally —
+correct for a melee creature, which is what its docstring is about, and
+catastrophic for anything with a gun. An MT soldier stationed at its
+**bayonet's 2.6 m**: counted over 15 s of live fight, **18 bayonet strikes to
+2 volleys**. Every firefight in the game was a knife fight and the entire ranged
+model, old and new, was running on a tenth of the attacks. A shooter now
+stations in its shortest *ranged* band and keeps the melee for when the player
+closes into it. Same fight after: **23 volleys to 10 bayonets**.
+
+Nothing found that by looking at the fight. It came out of one line in
+`probes/firerhythm.mts` that counts swings *by attack* — the probe asks the
+three questions separately (is it wired, does it change an answer, is it
+visible) and all three would have passed on a model nobody used.
+
+The other two Wave 4 rows were already done and recorded as untouched: the
+`setMotion` rate contract (now measured, `probes/ratecontract.mts`, worst
+sign-flip rate 8.3%) and adaptive music re-targeting (`Score.setIntensity`,
+driven from enemy proximity and remaining HP; and the wind bed already reads
+`Weather.windStrength`, the same value that feeds `veg.setWind` on the same
+tick).
+
+### The quiet lane, made shareable
+
+Not a plan item, but it is 2.4's other half and it cost this session an hour
+before it was fixed. The exclusive lease is right — one daemon per repo, every
+other browser closed, so "the machine is quiet" is enforced rather than hoped
+for. What was wrong is that it was first-come-**fail**-rest: a second timing
+tool got `exclusive lease already held by bootprof` and a stack trace, and its
+only options were to write its own polling loop or to measure anyway on a box
+somebody else was using. The second of those is the exact failure 2.4 exists to
+close, and the lease was pushing agents toward it. `43531db` gives it a FIFO
+queue and `--wait-lease`.
+
+### 3.8(a), built — and what it actually fixed
+
+`world/sky/SkyProbe.ts`. An L2 SH `LightProbe` re-projected from the live sky
+dome each time the env cube is re-baked, with the cube demoted to specular-only
+through `uEnvDiffuse` so nothing is counted twice, and the inert
+`HemisphereLight` resolved in the same change rather than beside it. Shadow
+colour is sky colour by construction now, because it is an integral of the sky.
+
+**Two bugs found by building it, both worth more than the feature.**
+
+1. **The ground bounce was cancelled by its own input.** The first version
+   scaled the dome's below-horizon texels by a warm ground albedo. `sky.glsl.ts`
+   draws under its own horizon as horizon *haze* dimmed to 0.55 — right for a
+   view ray, wrong as irradiance, because that light is blue and has been
+   through the atmosphere on its way to the *eye* rather than off the ground on
+   its way to the *subject*. Warm albedo times blue haze is grey: the down lobe
+   measured **R−B +0.9** against an albedo whose own R:B is 1.31. The one warm
+   fill in the frame was being erased by the thing it multiplied. Replaced with
+   a Lambertian ground lit by the key (`E·albedo/π`); the down lobe is now
+   **+79.4** at noon.
+2. **Negative irradiance.** An L2 projection of a sky that is bright above and
+   near-black below overshoots, and three's `shGetIrradianceAt` does not clamp.
+   At 22:00 the down lobe came back at **−0.0017** — downward-facing surfaces
+   were having light *subtracted*. Clamped at the probe term. Not de-ringed at
+   projection time: windowing the higher bands would smooth away the
+   directionality that is the whole point, to fix a defect that only appears on
+   the one lobe where the light really is zero.
+
+Neither was visible in a frame. Both came out of `probes/skyprobe.mts`, which
+prints probe irradiance at six cardinal normals — built precisely because the
+first A/B said the change had barely moved anything and a frame cannot
+distinguish "the probe is flat" from "the probe is fine and something
+downstream eats it".
+
+**What it fixed, measured.** Every one of seven shots moved past its own noise
+floor, up to 5.10 mean/255. `zone_longwythe` **8.83 -> 10.60 stops** with its
+black point 6.6 -> 2.0, and `storm` 10.15 -> 10.92 — the unshadowable flood was
+lifting blacks, exactly as 3.8 predicted, and removing it is a range win rather
+than a colour one.
+
+**What it did NOT fix, and why it never could have.** The handoff said the
+daylight grade's last miss was shadow warmth (−9.9 R−B against a +5.8
+reference) and that "the rest is the ambient probe". The probe moved it 0.6.
+So the gap was ablated outright: with exposure pinned (`?post=noexp`, because
+the closed loop otherwise gives back what you remove), deleting the **entire**
+diffuse ambient moves shadow R−B from **−4.9 to −2.3**. The whole lever is
+worth 2.6 points of a 15-point gap. No ambient, of any colour or strength,
+closes it.
+
+`imagestats.mts`'s own docstring says why, and has said so all along: outdoors
+the darkest quartile of a frame is mostly *ground*, so `sh(R−B)` is dominated
+by terrain and vegetation albedo, not by the colour of the fill. **The row was
+filed against the wrong system for two sessions.** It belongs to ground albedo,
+and re-filing it there is one of the things that has to happen before this plan
+is archived.
+
+One more thing worth not re-deriving: `PROBE_GAIN` is not a brightness knob.
+1.0 -> 0.80 moved the daylight slice's mean luma 114.8 -> **115.3** and its
+clipping 2.81% -> **2.94%** — both *up*, from turning the probe down, because
+closed-loop exposure meters the scene and returns what you took. The
+measurement is written next to the constant.
+
+**What 3.8(a) still does not do.** A `LightProbe` is no more occluded by
+geometry than the env cube was. Our GTAO is a post pass multiplying the
+composited frame, not indirect diffuse in-material, so "nothing shadows it" is
+still half true: the probe fixed the *aimability* and the double-count, not the
+occlusion. Occluding indirect diffuse specifically needs AO bound in-material,
+which is a different change and is not claimed here.
+
+### 3.8(b) PCSS — evaluated, and it is two different answers
+
+**Half of it shipped in a dependency bump.** three 0.185's
+`shadowmap_pars_fragment` already implements `SHADOWMAP_TYPE_PCF` as a **Vogel
+disc rotated by interleaved gradient noise** — five taps against hardware PCF,
+~20 filtered taps, per-pixel rotation. The plan names Vogel disc as something
+to port. It is upstream, we are on it, and `Sky.ts` selects `PCFShadowMap`
+deliberately.
+
+**The other half is not reachable on this shadow path.** Contact-hardening
+needs a blocker *search*: average occluder depth inside a radius, which is a
+depth **read**. three binds directional shadow maps as `sampler2DShadow`, which
+only compares. Sampling one texture through both a shadow sampler and a plain
+`sampler2D` in one program is undefined in GLSL ES 3.0, so the second binding
+is not an option, and the alternatives are:
+
+- render a second, linear-depth shadow map per cascade — a full extra shadow
+  pass on a renderer whose cascades already cost ~22 ms and dominate the
+  failing walk segment, or
+- switch to VSM, which `Sky.ts:481` already rejects for an adjacent reason
+  (PCFSoft "blurs the cascades to mush").
+
+And there is no room to spend even if there were a way: the page reports
+**"Trying to use 16 texture units while this GPU supports only 16"** on every
+boot. Three more samplers is not a tuning decision, it is over the ceiling —
+the same 16-sampler ceiling §7 already warns about for MGS5's terrain shader.
+
+**Verdict: 3.8(b) is closed.** Not "not evaluated", and not deferred: the
+filtering half is shipped and the hardening half needs a shadow-path rewrite
+that Wave 3's own cost split would have to justify first.
+
+### 3.6, mostly built — and the file names its own next step
+
+Three of the four items are in the tree and were in the tree when the row said
+they were not:
+
+- **tier-D**: `TerrainMaterial.ts:1231`, and there are *two* terms, not one —
+  a sward for green zones and a separate dry-cover term for Leide, whose green
+  runs 0.05-0.12 and which the sward is therefore off in. Patchy at clump
+  scale, band-limited on their own screen footprint so they smooth out instead
+  of boiling, and taking the wind from the same uniform objects the blades sway
+  on so a gust band crosses the seam. Endpoints measured per zone over the
+  pixels the blades actually cover.
+- **shadow-only sward proxy**: `GrassField._tileFor`.
+- **root-albedo blend**: `GROUND_BLEED = 0.34`, sampling `eco.groundColor` at
+  each clump, with the emerald-lawn-vs-olive comparison recorded.
+
+**Coverage economics is the one genuinely open item**, and the tier-D comment
+block already says what to do first and it is not about colour: *"Anyone
+extending this should widen its reach before touching its colour again."* The
+sward is gated on the grass splat weight AND a 100-185 m ramp AND `bioGreen` at
+once, and the conjunction is a small fraction of any frame — measured at
+**0.037 mean/255 over 0.006% of pixels**, against a floor of 1.5-1.9. It is
+recorded in the file as close to a measured negative. Reach, then colour.
 
 ---
 
@@ -582,7 +788,7 @@ work for Wave 5's AI pieces).
 
 ## 10. Definition of done for this plan
 
-Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
+Re-ticked 2026-08-25 (third opus pass). **6 of 6.**
 
 - [x] Wave 1 items each closed against their RESCUE line item, with captures
       looked at. *(2.6 closed as "present and insufficient", which is a close,
@@ -590,71 +796,72 @@ Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
 - [x] `docs/ART_DIRECTION`-equivalent reference numbers exist in `docs/` and
       the next character-art pass cites them. *(`docs/reference/`.)*
 - [x] Blind A/B harness runs with a sealed key; fresh critic pass recorded.
-      *(`compare.mts`; ten rounds with a control. The instrument itself was
-      repaired this pass — four of its eleven verdict lines asserted defects on
-      frames that did not have them.)*
+      *(`compare.mts`; ten rounds with a control.)*
 - [x] Each Wave 2 lever landed, or rejected with a measured negative.
-      **Six landed** — 3.1, 3.2, 3.3, 3.4, 3.5 and 3.7 (that last audited as
-      untouched *twice* and in fact fully built). **3.8(a) is a measurement
-      with a verdict** and is not built; 3.8(b) is not evaluated. **3.6** goes
-      to procedural-modeling, which the plan graph already owns
-      `src/world/veg/`.
+      **3.1–3.5 and 3.7 landed** in earlier passes. **3.6** is three of four —
+      tier-D, the shadow proxy and the root blend were all built and were being
+      recorded as open; coverage economics is the one item left and the file
+      itself says to widen the term's reach before touching its colour again.
+      **3.8(a) is built and measured** (`world/sky/SkyProbe.ts`), including two
+      bugs found by building it that were worth more than the feature.
+      **3.8(b) is evaluated and closed**: half of it shipped upstream in three
+      0.185, and the other half needs three texture units on a page already
+      reporting 16 of 16.
 - [x] §6 methodology adopted where it is code rather than prose: §6.1 ablation
-      is in `BRIEF.md` and extended with four new dials this pass; §6.2
-      per-shot noise floors are measured and checked in.
-- [ ] **Perf re-baseline published from the new ruler with noise floor and
-      contention verdict attached.** Attempted three times on 2026-08-23. Two
-      voided (`RULER_VALID: false`, floor 27% of the frame); **the third
-      certified and FAILED** — `RULER_VALID: true`, floor 22%, mean 166.4 fps,
-      worst **51 fps on `bestiary_necromancer`** against a 60 fps target.
-      *That is a result, not a baseline.* The shot has read 179 / 150 / 51 fps
-      across the three runs, its stored baseline row already carried
-      `p95 31.8 ms, max 133.2 ms`, and system load was ~4.5 from outside this
-      repo throughout. A spike-dominated shot on a busy machine is not evidence
-      about the renderer. **Needs an idle machine, and it belongs to phase4's
-      WS-0b** — which is also where Wave 3's frame-cost split waits.
+      is in `BRIEF.md` and now carries `noprobe` as well; §6.2 per-shot noise
+      floors are measured and checked in.
+- [x] **Perf re-baseline published from the new ruler with noise floor and
+      contention verdict attached.** Attempted three times on 2026-08-23 — two
+      voided, and the third certified and *failed* at 51 fps on
+      `bestiary_necromancer`. Re-run 2026-08-25 on the full corpus:
 
-### State at exit, 2026-08-23
+          VERDICT: quiet — safe to measure.  (load 5.00 / 18 cores, 0 browsers)
+          noise floor: start IQR 0.82 ms / end IQR 0.42 ms, bias +0.30 ms
+                       16% of the median 5.0 ms frame
+          mean 218.1 fps   worst 140 fps (poi_reststop)
+          RULER_VALID: true
+          PASS: every shot >= 60 fps, on a ruler that validated itself
 
-This session stopped deliberately at a pause, not mid-change. Working tree
-clean, sixteen commits `05fa8fb`..`072ee4b`, `pnpm run check` **12/12** verified
-three times across the round — after the grade work, after the camera work, and
-after the perception change. `project/handoff/sibling-ports.md` is current and
-is the file to read first.
+      `bestiary_necromancer`, the shot that read 51 fps, is at **172**. The
+      previous result was the busy machine, exactly as the handoff suspected and
+      declined to attribute to that round's work. **This is a baseline, and it
+      passes.**
 
-**The plan stays IN-PROGRESS and is deliberately NOT archived.** Four things
-are genuinely open, and none of them is a formality:
+### The one thing this pass did not get, and why
 
-1. **3.8(a)** — measured as worth building, specified, not built.
-2. **3.8(b) PCSS** — not evaluated at all.
-3. **Wave 4's remaining two and a half** — cover/fire rhythm, the `setMotion`
-   rate contract, adaptive music re-targeting.
-4. **The perf re-baseline** — certified and *failing*, see the last DoD box
-   above.
+**Wave 3's frame-cost split (pixel-scaled vs fixed) is not measured.** Two
+attempts, at 1600x900 and 800x450 on the same six shots; both **VOID**, floor
+35–37%, and the half-resolution run put `dun_keycatrich_hall` *up* from 2.00 to
+4.35 ms, which is nonsense and is the ruler being right to refuse.
 
-Archiving it now would file a plan as DONE with a failing perf gate and an
-unevaluated lighting item inside it, which is precisely the accretion
-`docs/plans/README.md` exists to prevent.
+The reason is worth more than the attempt. The floor is measured on `shots[0]`,
+so **the order of the arguments decides whether a run certifies**: the full
+corpus, led by the quiet `hero_closeup`, certified at 16% on the same machine
+minutes earlier. Leading the split with a quiet shot would have produced a
+"valid" run, and doing that and then quoting the heavy shots against it is
+precisely the self-flattery item 2.4 exists to prevent. So it was not done. The
+real fix is a floor per shot — §6.2's lesson applied to `perf.mts` and not only
+to `imgdiff.mts` — and it is recorded in `LANDMINES.md` and in
+`2026-08-22-opus-phase4`'s WS-0b, which the plan graph already gives the split
+to.
 
-**Do not re-derive today's measurements.** Four new ablation dials
-(`nobleach`, `noactorhaze`, `noambient`, `noenv`) and two new probes
-(`camsweep.mts`, `conceal.mts`) exist so the next agent settles these in one
-command each. Two traps are written into the handoff and worth repeating here:
-the bleach is *scene-referred*, so `?post=nolut` does not ablate it; and the
-ambient dials read backwards unless paired with `?post=noexp`, because
-closed-loop exposure compensates for what you removed.
+### State at exit, 2026-08-25
+
+Working tree clean, `pnpm run check` green across the round, combatloop 31/31,
+integration 27 pass / 0 wired-but-unproven, and the perf gate passing on a
+self-certified ruler. `project/handoff/sibling-ports.md` is current.
+
+**This plan is DONE and ready to archive.** What is left over is re-filed
+below, not forgotten — and unlike the last two passes, none of it is a row that
+turns out to have been finished all along, because every row was read this time.
 
 ### What this plan does NOT close, and who owns it
 
-Archiving this plan requires these to be re-filed, not forgotten:
-
 | left over | owner |
 |---|---|
-| 3.6 grass tier-D, root blend, coverage math | `2026-08-21-fable-procedural-modeling` (the graph already assigns `src/world/veg/`) |
-| 3.8(a) SH probe + specular-only env; the inert `HemisphereLight` | unassigned; measured and specified above, needs a lighting lane |
-| 3.8(b) PCSS | unassigned, not evaluated |
+| 3.6 coverage economics — and widen tier-D's *reach* before its colour | `2026-08-21-fable-procedural-modeling` (owns `src/world/veg/`); the terrain half is `TerrainMaterial.ts:1231` |
+| Occluding indirect diffuse. 3.8(a) fixed aimability and the double-count, not occlusion — GTAO is a post multiply, not AO bound in-material | unassigned; needs a lighting lane |
+| The daylight grade's shadow-warmth row, **re-filed from the ambient to ground albedo** — the whole diffuse ambient is worth 2.6 of a 15-point gap | whoever next owns terrain/vegetation albedo |
 | Wave 3's frame-cost split, and post consolidation behind it | `2026-08-22-opus-phase4` (WS-0b perf) |
-| Wave 4 cover/fire rhythm (the meter and ladder are done) | `2026-08-22-opus-phase4-content-and-gameplay` |
-| Wave 4 `setMotion` animation-rate contract | procedural-modeling / whoever next touches posture |
-| Wave 4 adaptive music re-targeting | unassigned, tuning-level |
+| A noise floor per shot in `perf.mts`, so a run's validity stops depending on argument order | `2026-08-22-opus-phase4` (WS-0b), with the split |
 | 2.6 grounding | `project/handoff/grounding.md` |
