@@ -10,6 +10,7 @@ import { RoadFurniture } from './props/RoadFurniture.ts';
 import { Outposts } from './props/Outposts.ts';
 import { Wildlife } from './props/Wildlife.ts';
 import { PoiKits } from './props/PoiKits.ts';
+import { Foraging } from './props/Foraging.ts';
 import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
 import { loadTexBake } from '../engine/TexBake.ts';
@@ -24,6 +25,8 @@ export class Props {
   _camPos!: THREE.Vector3;
   debris!: Debris;
   ecology!: Ecology;
+  /** The things lying in the grass. See {@link Foraging}. */
+  foraging!: Foraging;
   game!: Game;
   landmarks!: Landmarks;
   mega!: Megastructures;
@@ -78,6 +81,13 @@ export class Props {
     bootPhase('Props.wildlife', () => {
       this.wildlife = new Wildlife(this.ecology, game.scene, { quality });
       this.wildlife.build();
+    });
+
+    // After `rocks`/`ecology` and before the POI kits: it borrows the same
+    // sampler and registers nothing until the player is standing next to one.
+    bootPhase('Props.foraging', () => {
+      this.foraging = new Foraging(this.ecology, game.scene);
+      this.foraging.stream.flush({ x: 0, z: 0 });
     });
 
     bootPhase('Props.debris', () => {
@@ -195,6 +205,7 @@ export class Props {
       this.rocks.update(p);
     }
     if (this.debris) { this.debris.stream.flush(p); this.debris.update(p); }
+    if (this.foraging) this.foraging.converge(p);
     if (this.wildlife) {
       for (const g of [this.wildlife.birds, this.wildlife.herd, this.wildlife.waders]) {
         if (g && g.stream) g.stream.flush(p);
@@ -222,5 +233,6 @@ export class Props {
     if (this.roadKit) this.roadKit.update(this._camPos);
     if (this.wildlife) this.wildlife.update(dt, t, night, this._camPos);
     if (this.poiKits) this.poiKits.update(dt, t, night, this._camPos, game);
+    if (this.foraging) this.foraging.update(dt, game);
   }
 }
