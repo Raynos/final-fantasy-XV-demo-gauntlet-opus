@@ -10,9 +10,9 @@ still correct and are not repeated here. Read it first. This document says what
 has changed since it was written, what order to actually run the work in, and how
 to parallelise it.
 
-Status: IN-PROGRESS (2026-08-23, opus) — phase 4 of
-`2026-08-21-opus-rescue-and-sequencing.md`. Step 0 (re-audit against the gates)
-is **done, and it overturned the audit's central claim**: `src/game/rpg/**` is
+Status: IN-PROGRESS (2026-08-26, opus) — **the last open phase of the four-phase
+sequence this plan has now absorbed; see §0.** Step 0 (re-audit against the
+gates) is **done, and it overturned the audit's central claim**: `src/game/rpg/**` is
 not orphaned, and WS-2, WS-3 and WS-6 all have real implementations. What was
 genuinely broken was smaller and worse — nothing in the game was pressable, and
 no quest waypoint pointed at a real place. Both fixed.
@@ -37,9 +37,46 @@ is unevidenced; 0 of 5 boxes tick.**
 `uxcheck` **93/93**, not 86/86 or 89/89. See `project/STATUS.md` for the
 current table and treat every count written below as historical.
 
-See `project/handoff/content-wire.md`.
+Its lane's handoff graduated to `project/archive/handoff/content-wire.md` with
+the other 51 on 2026-08-26, and `project/handoff/` is empty — so **this plan has
+no owner.** Its open work is here and in the two plans named at the end of §0,
+and nowhere else.
 
 ---
+
+## 0. Where this plan came from — the four-phase sequence, closed
+
+**This plan absorbed `2026-08-21-opus-rescue-and-sequencing.md` on 2026-08-26.**
+That file is SUPERSEDED and lives at
+`project/archive/plans/2026-08-21-opus-rescue-and-sequencing.md`. It was the
+agreed *order* of work — never a tracker, and never staffed. Three of its four
+phases are closed, so all it had left to say was this plan and a handful of
+lessons, and both are now here.
+
+| phase | outcome |
+|---|---|
+| **1 rescue** | CLOSED. The ledger is `project/archive/RESCUE-2026-08-21.md` — an item-by-item reconstruction of what a force-killed coordinator session left behind, **each claim reconciled against `main` rather than against the handoffs**. Seven items turned out to be already landed; roughly sixty were genuinely abandoned. |
+| **2 TypeScript** | DONE and verified — `anycheck` 0 `any`, both `tsc` projects clean, both wired into the pre-commit hook. `project/archive/plans/2026-08-22-opus-phase2-typescript-port.md`. |
+| **3 boot and memory** | DONE 2026-08-25, and **amended rather than ticked**: cold boot 13.66 -> **6.64 s** (`?shoot`) / **6.41 s** (`--play`), warm **6.03 / 6.15**, against targets of under 6 s cold and under 3 s warm. Warm was never reachable and two passes left the row open rather than say so. `project/archive/plans/2026-08-22-opus-phase3-boot-and-memory.md`. |
+| **4 content and gameplay** | **This file — the only phase still open.** |
+
+The human's sequence, in their words: rescue and finish the abandoned work →
+TypeScript → their own `TODO.md` items → content and gameplay. Phase 4 is last
+deliberately. The port went before it because **its cost scales with the size of
+the codebase and this phase grows the codebase substantially**, in exactly the
+layer (`rpg/**`, the combat event map, `Shot`) where type value is highest. That
+sizing argument is spent now, but the number it turned on is still cited by other
+estimates and is still drifting: 235 modules when the port was written, **291
+modules and ~143,000 lines as of 2026-08-23** (`orphans` counts 302 as of
+2026-08-25), growing ~5k lines a session. Quote that, not an older figure.
+
+**Two boxes in §5 are no longer staffed from here.** The 30-minute playtest and
+the harsh-critic pass are moved by work that now lives in
+`docs/plans/2026-08-25-opus-after-phase3.md` — WS-1, the head, whose own costing
+says nothing in the environment can buy a grade point while that frame exists —
+and in `docs/plans/2026-08-26-opus-the-standing-backlog.md`. They stay listed
+below because they are still the bar this phase is judged against; they are not
+this plan's to schedule.
 
 ## 1. The finding that still governs everything
 
@@ -139,6 +176,29 @@ already paid for:
   commits have never been looked at.
 - **Verify the merge yourself.** Four inherited diagnoses were wrong this session
   and every one was caught by measuring rather than by trusting the handoff.
+
+### Lessons inherited from the rescue
+
+Paid for once already, in §4 of the plan this one absorbed. They are about
+*believing* results, where the bullets above are about not losing work.
+
+- **Control before concluding.** The determinism work would have been declared
+  finished at 2.068 mean/255 against a *remembered* 1.5–1.9 noise floor.
+  Measuring the actual floor for that shot showed **0.305**, so the job was not
+  done. It closed properly later at 0.340 against a measured 0.302.
+- **Pin every integrated phase, not the ones a handoff happens to name.** That
+  determinism residual was **the wind**, and the guess in the handoff — vegetation
+  tile streaming — was wrong. `Weather.resetClock` set only `_snap`, while
+  `_gust` integrates forever and `windDir` drifts permanently, so no preset
+  change and no clock reset ever touched them. Wall-clock streaming budgets were
+  a real second cause worth **0.009**; what they bought was machine-independence,
+  not the number.
+- **Verify a handoff's claims against the source, by reading the file.** Seven
+  rescue items were already fixed when the handoffs called them open, and several
+  reported as applied were not. Two plans have since produced 24 more false rows,
+  always in the same direction — work called open that was already built — and
+  almost always findable by opening the file. Grepping for a word the author
+  might have used is not reading it. **Nothing type-checks a plan.**
 
 ## 5. Definition of done
 

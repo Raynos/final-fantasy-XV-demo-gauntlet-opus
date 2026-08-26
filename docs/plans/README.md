@@ -66,7 +66,11 @@ hook warns on a new plan with no `Status:` line; it does not block.
     water · harness debt · creatures           MEASURED NEGATIVES — read it
                                                before re-opening anything
 
-  2026-08-21-opus-rescue-and-sequencing       never staffed — it is the sequence
+  2026-08-21-opus-rescue-and-sequencing       SUPERSEDED 2026-08-26 -> archive.
+                                              Never staffed — it was the four-
+                                              phase order, and phase 4 was the
+                                              last one open, so it folded into
+                                              phase4 §0 rather than outliving it
 ```
 
 The parallel three collide on two directories. Assign each to **one** of them:

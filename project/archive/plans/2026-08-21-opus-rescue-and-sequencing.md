@@ -1,10 +1,19 @@
 # Rescue and sequencing plan
 
-Status: IN-PROGRESS (2026-08-23, opus). The rescue itself is closed and its
-ledger archived at `project/archive/RESCUE-2026-08-21.md`. This file survives as
-the agreed *sequence*, and nothing else — **it is not a record of work and it is
-not a tracker.** Read it for the order and the reasoning; read the phase plans
-for what is actually built.
+Status: SUPERSEDED (2026-08-26, opus) by
+**`docs/plans/2026-08-22-opus-phase4-content-and-gameplay.md`**, which absorbed
+everything here that was still live — the sequence and its outcomes into its §0,
+the lessons of §4 into its §4. Phase 4 was the only phase still open, so a
+separate file for the order had nothing left to order.
+
+**Read the successor, not this.** This is kept for the reasoning behind the
+order and for the determinism measurements in §3, which are history and are
+recorded nowhere else. Its per-phase rows below were stale when it was archived:
+phase 3 closed DONE on 2026-08-25.
+
+The rescue itself closed long before, its ledger archived at
+`project/archive/RESCUE-2026-08-21.md`. This file was never a record of work and
+never a tracker.
 
 - **Phase 1 (rescue)** — CLOSED, ledger archived.
 - **Phase 2 (TypeScript)** — **DONE and verified**: `anycheck` 0 `any`,
