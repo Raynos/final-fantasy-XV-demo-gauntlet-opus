@@ -9,16 +9,16 @@ passes. **Perf is certified and passing** — see the next section.
 
 ## Perf is no longer uncertified
 
-Full-corpus `perf.mts`, 2026-08-25, on the daemon's quiet lane:
-
-    VERDICT: quiet — safe to measure.   (load 5.00 / 18 cores, 0 browsers)
-    noise floor: start IQR 0.82 / end 0.42 ms — 16% of the median 5.0 ms frame
-    mean 218.1 fps   worst 140 fps (poi_reststop)
-    RULER_VALID: true    PASS: every shot >= 60 fps
+Full-corpus `perf.mts`, 2026-08-25, on the daemon's quiet lane: **`RULER_VALID:
+true`**, floor 0.82/0.42 ms IQR = 16% of the median 5.0 ms frame, verdict
+*quiet* at load 5.00 / 18 cores and 0 browsers, **mean 218.1 fps, worst 140
+(`poi_reststop`), every shot over 60**.
 
 `bestiary_necromancer` read **51 fps** on 2026-08-23 in a run that certified
-itself and failed. It reads **172** here. That failure was the machine — what
-the handoff suspected and correctly refused to blame on that round's work.
+itself and failed. It reads **172** here — that failure was the machine.
+**`project/baseline-perf.json` is older than this**: the passing run was taken
+without `--out`, so a diff against that file is not a regression. Re-run with
+`--out project/baseline-perf.json` on a quiet box to clear it.
 
 **Before quoting the ruler:** its noise floor is measured on `shots[0]`, so
 **the order of the arguments decides whether a run certifies** — the corpus
@@ -33,8 +33,8 @@ fix; it belongs to phase4's WS-0b with the frame-cost split it blocked.
 Graduated to `project/archive/plans/`, 6 of 6, all four waves closed. 3.8(a) is
 built (`world/sky/SkyProbe.ts` — one diffuse ambient, an L2 SH probe, the env
 cube demoted to specular-only, the inert `HemisphereLight` resolved); 3.8(b) is
-evaluated and closed; Wave 4's cover-and-fire rhythm shipped.
-`handoff/sibling-ports.md` is current.
+evaluated and closed; Wave 4's cover-and-fire rhythm shipped. Its handoff
+graduated with it.
 
 One wrong *diagnosis* out of it, which costs more than a stale row: the daylight
 grade's shadow-warmth miss was blamed on the ambient probe across two handoffs.

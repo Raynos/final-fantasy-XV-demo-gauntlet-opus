@@ -96,34 +96,22 @@ row **2.6 points of a 15-point gap**. `imagestats.mts`'s own docstring says why
 — outdoors the darkest quartile is mostly ground, so `sh(R−B)` is dominated by
 terrain and vegetation albedo. **It is a ground-albedo row and always was.**
 
-## Next step, exactly
+## Where the work went
 
-0. **`project/baseline-perf.json` still holds the 2026-08-23 numbers.** The
-   2026-08-25 run that certified and passed was taken without `--out`, so the
-   published baseline is the text in the archived plan's §10 and in
-   `STATUS.md`, not the JSON. `perf --baseline project/baseline-perf.json`
-   therefore compares against the old file. Re-run with `--out
-   project/baseline-perf.json` on a quiet box and the mismatch goes away; until
-   then, do not read a diff against that file as a regression.
-1. **Wave 3's frame-cost split.** The re-baseline box is closed.
-   `perf.mts --agent <you>` now works; the ruler prints its own contention
-   verdict, and `--wait-lease` means you can queue behind another agent rather
-   than measuring on top of them. The split (pixel-scaled vs fixed cost) is
-   what decides whether the walk-segment fix is shadows, post consolidation or
-   render scale, and post consolidation is gated on its answer.
-2. **Re-file the shadow-warmth row against ground albedo**, not the ambient.
-   The daylight slice reads `sh(R−B) −9.2` against a `+5.8` reference and the
-   whole ambient is worth 2.6 of it.
-3. **3.6 coverage economics**, the last unbuilt item in Wave 2 — and the
-   tier-D comment block already says to widen the term's *reach* before
-   touching its colour again. It is gated on the grass splat weight AND a
-   100-185 m ramp AND `bioGreen` simultaneously, and moves 0.037 mean/255 over
-   0.006% of pixels.
-4. **Occluding indirect diffuse.** 3.8(a) fixed the aimability and the
-   double-count, not the occlusion: a `LightProbe` is no more shadowed than the
-   env cube was, because our GTAO is a post multiply on the composited frame
-   rather than AO bound in-material. That is a real, separate change and this
-   plan does not claim it.
+**Nothing is picked up from this file** — `project/README.md` is explicit that a
+handoff is a record, not a queue, and this lane is retired. The authority is the
+archived plan's §10 "What this plan does NOT close" table, which names an owner
+for each of:
+
+- Wave 3's frame-cost split, and post consolidation behind it -> phase4 WS-0b
+- a per-shot noise floor in `perf.mts`, which is what blocked the split -> the same
+- the daylight shadow-warmth row, re-filed from the ambient to **ground albedo**
+- 3.6 coverage economics -> unowned; `src/world/veg/` lost its lane to the archive
+- occluding indirect diffuse -> unowned, needs a lighting lane
+- 2.6 grounding -> `project/handoff/grounding.md`
+
+The one live trap out of this lane is in `STATUS.md` where a reader will meet it:
+`project/baseline-perf.json` is older than the baseline this lane published.
 
 ## Files touched
 
