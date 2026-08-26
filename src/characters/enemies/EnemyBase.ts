@@ -222,7 +222,10 @@ export interface SpeciesDef {
   buriedBase?: boolean;
   /**
    * Authored hints for the encounter code: never opens hostilities, and bolts.
-   * **Nothing reads either of them yet** — see `project/handoff/no-any.md`.
+   *
+   * `passive` is read now — `Enemies.spawn` copies it onto the instance and
+   * `Enemy._think` refuses to open a fight while it is set. `skittish` is
+   * still unread.
    */
   passive?: boolean;
   skittish?: boolean;
@@ -314,6 +317,11 @@ export interface EnemyPack {
   /** one member noticed something — bring the rest in. */
   alert(by: Enemy, target: Threat): unknown;
   onDeath(e: Enemy): unknown;
+  /**
+   * Everyone in it. Read by {@link Enemy.provoke}, which has to clear the
+   * grazing flag on the whole herd rather than on the one animal that was hit.
+   */
+  readonly members: readonly Enemy[];
 }
 
 /** The heightfield an enemy stands on. */
@@ -496,6 +504,21 @@ export class Enemy {
   hearing!: number;
   nocturnal!: boolean;
   aggroRange!: number;
+  /**
+   * Grazing: this animal will not start a fight.
+   *
+   * `Territory.passive` has existed since the spawn tables were written, with
+   * the docstring "a grazing herd: it is scenery until something provokes it",
+   * and **nothing had ever read it** — `EncounterDirector.activate` did not
+   * pass it on and `Enemy` had nowhere to put it. Every dualhorn and anak in
+   * Lucis charged on sight, so the one species class whose whole job is to
+   * make the country feel inhabited rather than hostile did not exist in play.
+   *
+   * It does not make the animal invulnerable or unaware: it still watches, it
+   * still turns to face you, and the moment it or a packmate is hit,
+   * {@link Enemy.provoke} clears this and the herd is a fight like any other.
+   */
+  passive!: boolean;
   /** Rises while the enemy is noticing something, falls when it is not. */
   awareness!: number;
   target!: Threat | null;
@@ -600,6 +623,7 @@ export class Enemy {
     this.speed = s.speed;
     this.attackRange = s.attackRange;
     this.aggroRange = s.aggroRange;
+    this.passive = false;
     this.radius = s.radius;
     this.height = s.height;
     this.damage = s.damage;
@@ -1046,6 +1070,15 @@ export class Enemy {
     // being hit is the loudest possible cue
     if (!this.target && o.source) this.target = o.source;
     this.awareness = 1;
+    // A herd stops grazing the instant one of them is hit, and the whole herd
+    // stops — not just the one that took it. This is the only door out of
+    // {@link Enemy.passive} and it is deliberately one-way for the life of the
+    // spawn: an animal that forgives you mid-fight and goes back to eating is
+    // a bug, and a cleared den re-rolls its own passivity when the territory
+    // respawns.
+    if (this.passive) {
+      this.provoke(o.source || this.target || null);
+    }
     if (this.state === 'idle' || this.state === 'patrol' || this.state === 'sleep' || this.state === 'alert') {
       this.setState('chase');
     }
@@ -1055,6 +1088,27 @@ export class Enemy {
       enemy: this, damage: dmg, staggered, killed: this.dead,
       crit: !!o.blindside, element: o.element || null,
     };
+  }
+
+  /**
+   * Stop grazing. The herd is a fight now.
+   *
+   * Clears `passive` on this animal *and* on every packmate, then hands the
+   * pack its target through the normal `alert` path so the flanking and
+   * engagement-token logic is identical to a predator pack's. Safe to call on
+   * an animal that was never passive.
+   *
+   * @param by what provoked it — usually whoever landed the hit
+   */
+  provoke(by: Threat | null) {
+    this.passive = false;
+    const t = by || this.target;
+    if (this.pack) {
+      for (const m of this.pack.members) m.passive = false;
+      if (t) this.pack.alert(this, t);
+    }
+    if (t) this.target = t;
+    this.awareness = 1;
   }
 
   die(killer: Threat | null = null) {
@@ -1428,7 +1482,14 @@ export class Enemy {
       this.awareness = Math.min(1, this.awareness + bestScore * step * 3.2);
       this.target = best;
       this._lostTimer = 0;
-      if (this.awareness >= 0.55 && (this.state === 'idle' || this.state === 'patrol' || this.state === 'alert')) {
+      // A grazing animal notices you and goes no further than that. It raises
+      // its head, it tracks you, and it keeps eating — which is the difference
+      // between a world with animals in it and a world that attacks on sight.
+      // `provoke()` is the only door out of this, and being hit is what opens
+      // it.
+      if (this.passive && !this.inCombat) {
+        if (this.state === 'idle' || this.state === 'patrol') this.setState('alert');
+      } else if (this.awareness >= 0.55 && (this.state === 'idle' || this.state === 'patrol' || this.state === 'alert')) {
         this.setState('chase');
         if (this.pack) this.pack.alert(this, best);
       } else if (this.awareness > 0.12 && (this.state === 'idle' || this.state === 'patrol')) {

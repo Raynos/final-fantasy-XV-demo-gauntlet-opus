@@ -46,6 +46,13 @@ export interface SpawnPlacement {
   patrolWait?: number;
   /** starts asleep — a night camp, or a daemon that has not risen yet. */
   asleep?: boolean;
+  /**
+   * A grazing animal: it notices the party and will not start a fight.
+   *
+   * `Territory.passive` has carried this meaning since the spawn tables were
+   * written and nothing read it. See `Enemy.passive`.
+   */
+  passive?: boolean;
   pack?: EnemyPack | null;
   leash?: number;
   /** display name, for a named mark. */
@@ -188,6 +195,10 @@ export class Enemies {
       e.patrol = { points: o.patrol, index: 0, wait: o.patrolWait ?? 3, waitTimer: o.patrolWait ?? 3 };
       e.setState('patrol');
     }
+    // Species may declare themselves grazers; a territory may make one of a
+    // species that usually is not. Either is enough — and the reset is
+    // explicit because these instances are pooled and recycled.
+    e.passive = !!(o.passive || type.passive);
     if (o.asleep) e.setState('sleep');
     if (o.pack) { e.pack = o.pack; o.pack.add(e); }
     e.spawnedBy = o.owner || null;

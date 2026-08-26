@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Pack } from './Pack.ts';
 import { TERRITORIES, ROAMERS, SET_PIECES, HUNT_TARGETS, windowOpen } from './SpawnTables.ts';
+import { wildTerritoriesNear, WILD_CELL } from './WildTerritories.ts';
 import { BossFight } from './BossFight.ts';
 import { Dropship } from './Dropship.ts';
 import type { Game } from '../Game.ts';
@@ -15,6 +16,7 @@ import type { CombatSystem } from '../../combat/CombatSystem.ts';
 import type { CombatEvents, CombatEventName } from '../../combat/CombatEvents.ts';
 import type { VFX } from '../../combat/VFX.ts';
 import type { Terrain } from '../../world/Terrain.ts';
+import type { Ecology } from '../../world/veg/Ecology.ts';
 import type { Sky } from '../../world/Sky.ts';
 import type { RpgSystem } from '../rpg/RpgSystem.ts';
 
@@ -124,6 +126,10 @@ export class EncounterDirector {
   suppressRoamers!: boolean;
   terrain!: Terrain | undefined;
   threats!: EncounterThreat[];
+  /** Terrain sampler for the wild dens' site test. See {@link WildTerritories}. */
+  _eco!: Ecology | null;
+  /** Reused buffer for the wild dens of this tick — `_stream` never allocates. */
+  _wild!: Territory[];
   vfx!: VFX | undefined;
   async init(game: Game) {
     this.game = game;
@@ -161,6 +167,13 @@ export class EncounterDirector {
     this.night = 0;
     this.stats = { kills: 0, exp: 0, gil: 0, drops: [] };
     this.encounter = null;            // {name, level, packs:[], boss, startedAt}
+
+    // `Props` owns the sampler every scatter layer in the world already agrees
+    // with; the wild dens ask it the same questions rather than inventing a
+    // second answer to "is this ground standable".
+    const props = game.get('Props');
+    this._eco = (props && props.ecology) || null;
+    this._wild = [];
 
     this._streamTimer = 0;
     this._roamTimer = 26;
@@ -244,6 +257,10 @@ export class EncounterDirector {
           pack, leash: def.radius + 34,
           patrol: patrol ? this._offsetRoute(patrol, i) : null,
           asleep: this._shouldSleep(def),
+          // `Territory.passive` had been authored, documented and never read:
+          // `graze_anak` says "a grazing herd: it is scenery until something
+          // provokes it" and its anaks charged on sight like everything else.
+          passive: !!def.passive,
           owner: def.id,
         });
         e.home.copy(this.ground(def.at[0], def.at[1], this._tmp2));
@@ -906,32 +923,76 @@ export class EncounterDirector {
     if (d.scenario == null) d.mode = this.state;
   }
 
-  /** Activate what is near, retire what is not. */
+  /**
+   * Activate what is near, retire what is not.
+   *
+   * Walks the authored table **and** the wild dens under the player's feet.
+   * The two are the same type and take the same path on purpose: an authored
+   * territory is a *named* place with a hunt pointing at it, a wild one is the
+   * country in between, and nothing downstream of here needs to know which is
+   * which. See {@link WildTerritories} for why the country needed filling —
+   * `walkabout.mts` walked 6.8 km out of Hammerhead in eight directions and
+   * met no living thing at all.
+   *
+   * Generated at 400 m, against the 130 m activation radius, so a den is
+   * decided well before it can be seen and the same cell is offered on every
+   * tick it is in range: the ids are position-derived, so `active` and
+   * `cooldowns` key on them exactly as they do for the authored eighteen.
+   */
   _stream(pressure: Pressure, pp: THREE.Vector3) {
     // timed marks (Ignis' Analyse, Gladio's Coverage) tick on the slow clock
     for (const e of this.enemies.list) if (e.analysed > 0) e.analysed -= 0.5;
     if (this.party) for (const m of this.party.members) if (m.taunting > 0) m.taunting -= 0.5;
 
-    for (const def of TERRITORIES) {
-      const dx = def.at[0] - pp.x, dz = def.at[1] - pp.z;
-      const d = Math.hypot(dx, dz);
-      const open = windowOpen(def.when, pressure) && (!def.nightDepth || pressure.depth >= def.nightDepth);
-      const has = this.active.has(def.id);
-      if (!has) {
-        // budget: ~28 live creatures is a full, dangerous world and about 28
-        // draw calls, which is what the frame can actually afford
-        if (d < 130 && open && !this.cooldowns.has(def.id) && this.enemies.list.length < this.budget) {
-          this.activate(def);
-        }
-      } else {
-        const rec = this.active.get(def.id)!;   // `has` said so on the line above
-        const fighting = rec.pack.alerted && rec.pack.alive > 0;
-        if ((d > 180 && !fighting) || (!open && !fighting)) this.deactivate(def.id);
-        else if (rec.pack.alive === 0) {
-          this.deactivate(def.id);
-          this.cooldowns.set(def.id, def.respawn);
-        }
+    this._wild = wildTerritoriesNear(pp.x, pp.z, 400, pressure, this._eco,
+      this.game.seed ?? 1337);
+
+    // Authored first, so a named place wins the creature budget over the
+    // anonymous country around it when both are in range.
+    for (const def of TERRITORIES) this._streamOne(def, pressure, pp);
+    for (const def of this._wild) this._streamOne(def, pressure, pp);
+
+    // A cleared wild den is remembered by id, and the ids are unbounded across
+    // an 8 km map, so the map would grow for as long as the session lasted.
+    // Anything more than a kilometre behind the player is past its own respawn
+    // several times over by the time they could return to it.
+    if (this.cooldowns.size > 400) {
+      for (const [id] of this.cooldowns) {
+        if (!id.startsWith('wild_')) continue;
+        const bits = id.split('_');
+        const cx = Number(bits[1]), cz = Number(bits[2]);
+        if (Math.hypot(cx * WILD_CELL - pp.x, cz * WILD_CELL - pp.z) > 1000) this.cooldowns.delete(id);
       }
+    }
+  }
+
+  /** One territory's activate/retire decision. Shared by both tables. */
+  _streamOne(def: Territory, pressure: Pressure, pp: THREE.Vector3) {
+    const dx = def.at[0] - pp.x, dz = def.at[1] - pp.z;
+    const d = Math.hypot(dx, dz);
+    const open = windowOpen(def.when, pressure) && (!def.nightDepth || pressure.depth >= def.nightDepth);
+    const has = this.active.has(def.id);
+    if (!has) {
+      // budget: ~28 live creatures is a full, dangerous world and about 28
+      // draw calls, which is what the frame can actually afford
+      //
+      // 170 m, not the 130 m this was written at. A grazing herd you can only
+      // see once you are inside a hundred and thirty metres of it is a herd
+      // that pops into an empty plain; at 170 it is already on the skyline
+      // when you crest the rise, which is most of what "the world has animals
+      // in it" actually looks like. The budget, not the radius, is what bounds
+      // the cost — a den outside it simply does not activate.
+      if (d < 170 && open && !this.cooldowns.has(def.id) && this.enemies.list.length < this.budget) {
+        this.activate(def);
+      }
+      return;
+    }
+    const rec = this.active.get(def.id)!;
+    const fighting = rec.pack.alerted && rec.pack.alive > 0;
+    if ((d > 230 && !fighting) || (!open && !fighting)) this.deactivate(def.id);
+    else if (rec.pack.alive === 0) {
+      this.deactivate(def.id);
+      this.cooldowns.set(def.id, def.respawn);
     }
   }
 }
