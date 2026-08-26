@@ -60,6 +60,12 @@ hook warns on a new plan with no `Status:` line; it does not block.
                                                left is the cost split, and the
                                                ruler defect that blocked it
 
+  2026-08-26-opus-the-standing-backlog        WS-1..10, extracted from the 52
+    head/hair · ground+light · alpha edges ·   handoffs that outlived their
+    clouds · Meteor · perf · content ·         agents. Carries a table of ten
+    water · harness debt · creatures           MEASURED NEGATIVES — read it
+                                               before re-opening anything
+
   2026-08-21-opus-rescue-and-sequencing       never staffed — it is the sequence
 ```
 
