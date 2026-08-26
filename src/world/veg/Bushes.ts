@@ -4,10 +4,11 @@ import { Rng } from '../../util/Rng.ts';
 import { hashU } from './Cluster.ts';
 import { hash3 } from './Ecology.ts';
 import { WORLD } from '../map/WorldMap.ts';
+import { pickFrom } from './Biomes.ts';
 import type { TreeSpec } from './TreeBuilder.ts';
 import { buildTree } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
-import { leafClusterTex, fernTex, reedTex, padTex, barkMaps, bakeTreeImpostor } from './VegTextures.ts';
+import { leafClusterTex, fernTex, reedTex, padTex, barkMaps, bakeTreeImpostor, bakeCanopyCard } from './VegTextures.ts';
 import type { Ecology } from './Ecology.ts';
 
 /**
@@ -60,6 +61,34 @@ const S_VAR = 0x5e6b, S_YAW = 0x6f21;
 const TILE = 32;
 /** Candidate slots per axis inside a tile — 4 m nominal scrub spacing. */
 const GRID = 8;
+
+/**
+ * The far **mass** ring: coarse tile, candidate sites per axis, card width.
+ *
+ * The card ring's own docstring records that 280 m was "where the blind judge
+ * said the world ends" and moved it to 440. Measured again on 2026-08-26, with
+ * `src/tools/probes/barrencensus.mts`, the cliff had simply moved with it:
+ * non-grass instances per hectare run 90-290 inside 400 m, **8.6-12.9 in
+ * 400-800 m and 1.1-1.5 in 800-1600 m**. An establishing shot stands the
+ * camera 47-143 m up and points it straight down that band, which is why the
+ * human's report of the built game was that the world "feels barren and empty".
+ *
+ * Raising `impRange` again is the wrong instrument — its loop is `O(r^2)` over
+ * 32 m tiles inside `Vegetation.update`, and 2.6 km of it is 21 000 tiles a
+ * rebuild. What reads at that distance is not a bush anyway. At 800 m one
+ * pixel spans 0.78 m, so a 1.5 m bush is two pixels and a *mass* of twenty
+ * bushes 34 m across is a 43 x 4 px dash — the mottling that stops a hillside
+ * reading as one tiling texture.
+ *
+ * So this is `Trees`' canopy ring for the ground layer, and deliberately built
+ * the same way: coarse tiles, one card per site, `farSeat` for the seating, the
+ * same clump field as the near rings so a bare slope stays bare at 2 km.
+ */
+const MTILE = 256;
+/** Candidate mass sites per axis inside one {@link MTILE}. */
+const MGRID = 5;
+/** Nominal plan width of one scrub-mass card, metres. */
+const MASS_W = 34;
 
 /**
  * Crossed quads for a scrub impostor, anchored at the base. The same primitive
@@ -299,11 +328,34 @@ interface ScrubCards {
   _w: number;
 }
 
+/** A far mass card ring, which also carries the baked card's authored size. */
+interface ScrubMass extends ScrubCards {
+  width: number;
+  height: number;
+}
+
+/** One placed mass card. */
+interface MassPlacement {
+  x: number;
+  y: number;
+  z: number;
+  /** `WOODY` key. */
+  kind: string;
+  sx: number;
+  sy: number;
+  yaw: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
 /** Everything drawn for one scrub kind. */
 interface ScrubKind {
   variants: ScrubVariant[];
   /** Distance impostors, one per variant. Empty for the card kinds. */
   cards?: ScrubCards[];
+  /** The far mass ring. Woody kinds only — see {@link MTILE}. */
+  mass?: ScrubMass;
   /** Per-instance tint, linear RGB. Every kind's table entry carries one. */
   tint: number[];
   /** `[min, max]` scale. */
@@ -335,6 +387,15 @@ export class Bushes {
   impRange!: number;
   impBudget!: number;
   impCount!: number;
+  /** Where the mass ring starts. Overlaps the card ring so nothing pops in. */
+  massNear!: number;
+  /** How far the mass ring reaches. See {@link MTILE}. */
+  massRange!: number;
+  massBudget!: number;
+  massCount!: number;
+  /** Mass tiles, keyed on the packed coarse tile coordinate. */
+  mtiles!: Map<number, { list: MassPlacement[], stamp: number }>;
+  massTileCacheMax!: number;
   scene!: THREE.Scene;
   tileCacheMax!: number;
   /**
@@ -364,7 +425,7 @@ export class Bushes {
    * every segment with `RULER_VALID: true`, and `perf.mts` PASS on ten shots
    * with one mover (`zone_malacchi` 6.40 -> 5.15) and nine unchanged.
    */
-  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1, range = 96, impRange = 440 } = {}) {
+  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1, range = 96, impRange = 440, massNear = 380, massRange = 2600 } = {}) {
     this.eco = eco;
     this.scene = scene;
     /** Named parent so the whole ground layer can be priced or hidden at once. */
@@ -396,6 +457,18 @@ export class Bushes {
     // the card ring reaches more than twenty times the area the geometry ring
     // does, and every tile it touches is a tile the cache has to hold
     this.tileCacheMax = 1800;
+    this.massNear = massNear;
+    this.massRange = massRange;
+    // One mass card is eight triangles and there is one `InstancedMesh` per
+    // woody kind, so this buys instances and never draw calls — the same trade
+    // `impBudget` makes. 2.6 km of 256 m tiles at `MGRID` 5 offers ~1 300
+    // sites; most fail the cover gate, and the budget is the backstop.
+    this.massBudget = Math.max(400, Math.round(7000 * quality));
+    this.massCount = 0;
+    this.mtiles = new Map();
+    // ~330 tiles cover the disc; hold a little over two camera positions'
+    // worth so a car crossing the map is not regenerating what it just left.
+    this.massTileCacheMax = 900;
     this._unbounded = false;
   }
 
@@ -436,6 +509,8 @@ export class Bushes {
 
       const variants: ScrubVariant[] = [];
       const cards: ScrubCards[] = [];
+      /** Variant 0's bake source, kept for the mass card. See {@link MTILE}. */
+      let massSrc: Parameters<typeof bakeTreeImpostor>[1] | null = null;
       for (let v = 0; v < spec.variants; v++) {
         // Tier 0 — `typical` — deliberately, for every bush variant. A bush's
         // `spec.params` already rewrites most of what a habit would multiply
@@ -464,12 +539,14 @@ export class Bushes {
         variants.push({ wood, woodTint: null, leaves, leafTint, max: per, _w: 0 });
 
         if (renderer) {
-          const baked = bakeTreeImpostor(renderer, {
+          const src = {
             wood: t.wood, leaves: t.leaves,
             woodMap: bark.map, woodColor: spec.params.bark ?? 0x7a6650,
             leafMap: leafMat ? leafMat.map : null,
             height: t.height, radius: Math.max(t.radius, t.height * 0.30),
-          }, 128);
+          };
+          if (v === 0) massSrc = src;
+          const baked = bakeTreeImpostor(renderer, src, 128);
           const cardMatImp = patchVeg(new THREE.MeshStandardMaterial({
             map: baked.tex, color: 0xffffff, vertexColors: true,
             alphaTest: 0.42, transparent: false, side: THREE.DoubleSide,
@@ -498,7 +575,49 @@ export class Bushes {
           cards.push({ mesh, tint, max: cap, _w: 0 });
         }
       }
-      this.kinds.set(key, { variants, cards, tint: spec.tint, scale: spec.scale });
+      /**
+       * One mass card per woody kind: a bank of nine bushes, baked flat.
+       *
+       * `bakeCanopyCard` is `Trees`' far-ring primitive and is reused verbatim
+       * — the shape of the problem is identical and a second baker would be a
+       * second thing to keep true. `count` 9 against the forest's 6 because a
+       * bush is a third of the height and the card has to fill its width, and
+       * `size` 256 against 384 because this card is never seen closer than
+       * {@link Bushes#massNear}.
+       */
+      let mass: ScrubMass | undefined;
+      if (renderer && massSrc) {
+        const stand = bakeCanopyCard(renderer, massSrc, {
+          count: 9, spread: MASS_W / (2 * 1.35 * massSrc.radius),
+          size: 256, seed: 6421 + key.length * 173,
+        });
+        const massMat = patchVeg(new THREE.MeshStandardMaterial({
+          map: stand.tex, color: 0xffffff, vertexColors: true,
+          alphaTest: 0.4, transparent: false, side: THREE.DoubleSide,
+          roughness: 0.98, metalness: 0,
+        }), {
+          bend: 0.05, flutter: 0.015, gustFreq: 0.02, flexPow: 3.0,
+          twoSidedNormals: true, translucency: 0.3, specular: 0.0,
+          crownNormal: stand.normalMap,
+          groundContact: 0.5, groundSpan: 0.42,
+        });
+        const cap = Math.max(300, Math.round(4200 * this.quality));
+        const mesh = new THREE.InstancedMesh(
+          scrubCardGeo(stand.width, stand.height), massMat, cap);
+        // Same rule as the card ring, one ring further out: a mass at 400 m+
+        // casts a shadow the far cascade cannot resolve, and there are
+        // thousands of them.
+        mesh.castShadow = false; mesh.receiveShadow = true;
+        mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
+        mesh.name = `scrub_${key}_mass`;
+        const tint = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+        mesh.instanceColor = tint;
+        registerAlphaCard(mesh);
+        this.group.add(mesh);
+        mass = { mesh, tint, max: cap, width: stand.width, height: stand.height, _w: 0 };
+      }
+
+      this.kinds.set(key, { variants, cards, mass, tint: spec.tint, scale: spec.scale });
     }
 
     const cardMat = (map: THREE.Texture, opts: Parameters<typeof patchVeg>[1]) => patchVeg(new THREE.MeshStandardMaterial({
@@ -740,6 +859,80 @@ export class Bushes {
   }
 
   /** @returns null when this frame's generation budget is spent */
+  /** Cache wrapper for {@link Bushes._makeMassTile}. Mirrors {@link Bushes._tile}. */
+  _mtile(tx: number, tz: number): MassPlacement[] | null {
+    const key = (tx & 4095) * 8192 + (tz & 4095);
+    const e = this.mtiles.get(key);
+    if (e) { e.stamp = this._stamp; return e.list; }
+    if (this._primed && !this._unbounded && performance.now() > this._deadline) return null;
+    const list = this._makeMassTile(tx, tz);
+    this.mtiles.set(key, { list, stamp: this._stamp });
+    if (this.mtiles.size > this.massTileCacheMax) {
+      const target = Math.round(this.massTileCacheMax * 0.8);
+      for (const [k, val] of this.mtiles) {
+        if (this.mtiles.size <= target) break;
+        if (val.stamp === this._stamp) continue;
+        this.mtiles.delete(k);
+      }
+    }
+    return list;
+  }
+
+  /**
+   * Build (and cache) the far scrub-mass cards for one {@link MTILE} tile.
+   *
+   * Deliberately the same shape as `Trees._makeCanopyTile`: a jittered
+   * `MGRID` lattice, the near rings' own clump field so the arrangement agrees
+   * with itself across the LOD change, a cover gate below which the card ring
+   * should be showing individual bushes thinning out instead, and `farSeat` so
+   * the card does not hang off the low-passed hillside the clipmap actually
+   * draws at a kilometre.
+   */
+  _makeMassTile(tx: number, tz: number): MassPlacement[] {
+    const eco = this.eco;
+    const x0 = tx * MTILE, z0 = tz * MTILE;
+    const rng = new Rng(hash3(tx, tz, 0x2f77));
+    const cell = MTILE / MGRID;
+    const out: MassPlacement[] = [];
+    for (let j = 0; j < MGRID; j++) {
+      for (let i = 0; i < MGRID; i++) {
+        const x = x0 + (i + 0.32 + rng.next() * 0.36) * cell;
+        const z = z0 + (j + 0.32 + rng.next() * 0.36) * cell;
+        if (Math.hypot(x, z) > eco.worldRadius) continue;
+        if (eco.waterDepth(x, z) > 0.05) continue;
+        if (eco.slope01(x, z) > 0.74) continue;
+        // `cleared`, not `siteBlock`: a mass card across a town plaza at 600 m
+        // is the same defect the near rings already fixed, one ring out.
+        if (eco.cleared(x, z) > 0.06) continue;
+        const d = this._clumped(x, z, eco.scrubDensity(x, z));
+        // Below a fifth cover a mass reads as a smear over ground that is
+        // actually open; the card ring is the right instrument down there.
+        if (d < 0.20) continue;
+        const b = eco.veg(x, z);
+        const kind = pickFrom(b.scrubTable, rng.next()) || 'shrub';
+        const k = this.kinds.get(kind);
+        if (!k || !k.mass) continue;
+        const t = k.tint;
+        // Fill the site in plan and keep the plant's real height in elevation,
+        // so a denser slope grows a wider bank rather than taller bushes.
+        const sx = (cell * 1.16 / k.mass.width) * rng.range(0.82, 1.22);
+        const sy = ((k.scale[0] + k.scale[1]) * 0.5) * rng.range(0.88, 1.14)
+          * (0.74 + 0.36 * d);
+        // Capped at one for the reason the forest's is: an albedo multiplier
+        // over one is how a far ring blows its highlights to white.
+        const shade = Math.min(1, (0.66 + 0.28 * d) * rng.range(0.9, 1.08))
+          * (1 - b.mossy * 0.12);
+        out.push({
+          x, z,
+          y: eco.farSeat(x, z, k.mass.height * sy, this.massRange),
+          kind, sx, sy, yaw: rng.next() * Math.PI * 2,
+          r: shade * t[0], g: shade * t[1], b: shade * t[2],
+        });
+      }
+    }
+    return out;
+  }
+
   _tile(tx: number, tz: number): ScrubPlacement[] | null {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
@@ -785,6 +978,7 @@ export class Bushes {
     for (const [, k] of this.kinds) {
       for (const v of k.variants) v._w = 0;
       if (k.cards) for (const c of k.cards) c._w = 0;
+      if (k.mass) k.mass._w = 0;
     }
 
     const r2 = this.range * this.range;
@@ -846,7 +1040,50 @@ export class Bushes {
       }
     }
 
+    // far ring: mass cards, on their own coarse tiles. See {@link MTILE}.
+    const mNear2 = this.massNear * this.massNear;
+    const mFar = this.massRange, mFar2 = mFar * mFar;
+    const rm = Math.ceil(mFar / MTILE) + 1;
+    const mx0 = Math.floor(camPos.x / MTILE), mz0 = Math.floor(camPos.z / MTILE);
+    let nm = 0;
+    for (let dz = -rm; dz <= rm; dz++) {
+      for (let dx = -rm; dx <= rm; dx++) {
+        const tx = mx0 + dx, tz = mz0 + dz;
+        const ox = (tx + 0.5) * MTILE - camPos.x, oz = (tz + 0.5) * MTILE - camPos.z;
+        const dist = Math.hypot(ox, oz);
+        if (dist > mFar + MTILE) continue;
+        if (dist < this.massNear - MTILE) continue;
+        const list = this._mtile(tx, tz);
+        if (!list) { pending = true; continue; }
+        for (let i = 0; i < list.length && nm < this.massBudget; i++) {
+          const p = list[i];
+          const ddx = p.x - camPos.x, ddz = p.z - camPos.z;
+          const d2 = ddx * ddx + ddz * ddz;
+          if (d2 < mNear2 || d2 > mFar2) continue;
+          const m = this.kinds.get(p.kind);
+          if (!m || !m.mass || m.mass._w >= m.mass.max) continue;
+          const w = m.mass._w++;
+          nm++;
+          _e.set(0, p.yaw, 0);
+          _q.setFromEuler(_e);
+          _p.set(p.x, p.y - 0.25, p.z);
+          _s.set(p.sx, p.sy, p.sx);
+          _m.compose(_p, _q, _s);
+          _m.toArray(m.mass.mesh.instanceMatrix.array, w * 16);
+          const a = m.mass.tint.array;
+          a[w * 3] = p.r; a[w * 3 + 1] = p.g; a[w * 3 + 2] = p.b;
+        }
+      }
+    }
+    this.massCount = nm;
+
     for (const [, k] of this.kinds) {
+      if (k.mass) {
+        k.mass.mesh.count = k.mass._w;
+        k.mass.mesh.visible = k.mass._w > 0;
+        k.mass.mesh.instanceMatrix.needsUpdate = true;
+        k.mass.tint.needsUpdate = true;
+      }
       if (k.cards) {
         for (const c of k.cards) {
           c.mesh.count = c._w;
