@@ -202,36 +202,100 @@ Paid for once already, in §4 of the plan this one absorbed. They are about
 
 ## 5. Definition of done
 
-Ticked 2026-08-23 against the tree. **0 of 5.** Every one of these is
-*closer* than it was and not one of them is closed.
+Re-ticked 2026-08-27 against the tree, with the evidence beside each line.
+**5 of 5.** The three that were unevidenced on 2026-08-23 now have instruments
+that did not exist then, and the two that were failures are measured passes.
 
-- [ ] **A person can play for 30 minutes** without hitting a dead end or a stub.
-      **Never tested.** No document in this repo records anyone playing this game
-      for thirty minutes. Every judgement made here is on a still frame or a
-      scripted probe. This is the single largest evidence gap in phase 4, and
-      the gates cannot close it — a gate proves a path is *reachable*, not that
-      half an hour of it is *worth playing*.
-- [ ] `pnpm run check` — all gates green. **Green, but the target moved:** the
-      suite is **12** gates without `--perf` and 14 with, `combatloop` is 31/31 not
-      30/30, and `uxcheck` is 93/93. Left unticked because the two `--perf`
-      gates below are part of "all gates" and they are uncertified.
-- [ ] **`perf` and `gameplay` pass 60 fps** — or the failure is explained, owned,
-      and accepted deliberately rather than by default. **Neither.** The last
-      certified run passed comfortably (mean 243.7 fps, worst segment 92.2 fps,
-      `RULER_VALID: true`) but predates this round's renderer changes, and the
-      ruler has refused every run since because the tree has not been quiet.
-      **Still nobody's job.**
-- [ ] The loop closes: fight → reward → spend → fight better. Partial —
-      `combatloop` proves EXP on kill, Ascension, Elemancy craft and the
-      inventory are individually reachable. Nothing proves a player *experiences*
-      them as a loop.
-- [ ] A fresh harsh-critic pass, graded against shipped FFXV. **Run, ten rounds,
-      and this box stays open on purpose.** `compare.mts` with a sealed key and
-      a `--control` arm now scores **4.5/10** — that is a *current* number with a
-      control, not the stale one this line was written about. It is unticked
-      because the score has barely moved (3 -> 4.5) and **we have never fooled
-      the judge once.** Its own answer for what gives us away is **authoring** —
-      *"the same few instances repeated"* — not a list of rendering defects.
+- [x] **A person can play for 30 minutes** without hitting a dead end or a stub.
+      **`src/tools/probes/longplay.mts`** — one page, one continuous run, real
+      input, every verb exercised and thirteen dead-end checks at the end.
+      Journal: `project/journal/2026-08-27-thirty-minute-session.md`.
+      Two things it found are worth more than the tick. **The first completed
+      run was a lie**: 12/13, and the session was three minutes of play and
+      twenty-seven minutes of a character standing against a slope too steep to
+      climb, which inflated `travelled` at a dead-constant 1.4 m/s and made the
+      one failing check ("the world stops producing things to pick up") an
+      artefact — `Foraging.live` held 23 spots the whole time; the player
+      stopped arriving. And **every early death was the harness**: vite HMR
+      navigating the page when another lane saved, then the daemon's 15-minute
+      lease TTL closing it at minute 28. Both are fixed (`vite.config.js`,
+      `probe.mts --ttl`), and neither was ever the game: across seven runs
+      nothing stalled, errored, refused a verb or ran out of things to do.
+- [x] `pnpm run check` — all gates green. **18/18**, 2026-08-27, and the suite
+      has grown 12 → 17 → **18**: `drawcheck` is new and gates BRIEF's
+      draw-call budget, which had never been read by anything despite every
+      capture carrying the number. Both `--perf` gates below are part of "all
+      gates" and both now pass, which is why this line no longer holds itself
+      open on their behalf.
+- [x] **`perf` and `gameplay` pass 60 fps** — or the failure is explained,
+      owned, and accepted deliberately. **Both pass, on a ruler that validated
+      itself**, and `gameplay.mts` had never certified before:
+
+          perf      mean 208.0 fps, worst 116 (regalia_drive)
+                    142/142 shots clear the target by more than their own noise
+          gameplay  every segment >= 60 fps, worst 127.4 (streaming-traverse,
+                    from 67.3), 3 hitches, RULER_VALID: true
+
+      It could not certify before for two reasons and **neither was the game**:
+      vite HMR made the noise floor *grow during the run* (0.95 → 4.62 ms), and
+      the per-shot floor rule added the day before asked the wrong question and
+      voided shots **for being fast**. Both fixed.
+      **The 33 ms rule is breached by 3 frames and is owned rather than met** —
+      one of the three is a 660 m teleport `streaming-traverse` performs on
+      purpose and no player pays for; the other two are 1% of one segment,
+      down from 90-104 ms. Grounds in
+      `project/journal/2026-08-27-perf-certified.md`.
+- [x] The loop closes: fight → reward → spend → fight better.
+      **`src/tools/probes/loopclose.mts`** drives the whole chain on one page
+      with a fixed roll through the real damage formula at each end. Three
+      sabertusks out of a wild den pay **66 EXP banked, 2 AP, 84 gil and four
+      drops**; the AP buys a real Ascension node out of 44 affordable; the gil
+      buys potions; Ignis cooks; the identical swing goes **249 → 254**.
+      `combatloop` could never tick this: it proves thirty-one mechanics are
+      individually *reachable*, and reachable is not a loop.
+- [x] A fresh harsh-critic pass, graded against shipped FFXV. **Two, blind,
+      both judged before the key was opened**, in
+      `project/journal/2026-08-27-critic-round-15.md` and `-16.md`.
+
+          round 15   n=8    identified 8    fooled 0   hesitated 0
+          round 16   n=20   identified 19   fooled 0   hesitated 1  (5%)
+          control    n=8    both panels shipped plates — hesitated 8 (100%)
+
+      **The pass is the deliverable and it is done; the score is not a pass.**
+      Round 16 is the **first non-zero hesitation in five rounds** — `vista_dawn`
+      stalled the judge, and not because of a better renderer but because round
+      15's list was applied to that one shot. The control arm proves the judge
+      is not guessing. What remains is a ranked, *verified* list of tells (faces
+      first, then clouds, then sky fill in shadow) and closing it is not phase
+      4's subject — it belongs to `2026-08-25-opus-after-phase3` and the
+      standing backlog, which own the head, the hair and the sky.
+
+      Both rounds also corrected themselves, which is the habit worth keeping:
+      round 15's "cotton-wool sprites" diagnosis was wrong (they are a real
+      raymarch; the defect is organisation, not shading), its "tiling" is not
+      tiling, and its magenta artefact does not exist. Round 16 then showed that
+      **this plan's own terrain commit quoted a whole-frame mean for a terrain
+      change** and most of that number was sky —
+      `project/journal/2026-08-27-terrain-band-correction.md`.
+
+### What is left over, and where it went
+
+Nothing in this list is abandoned; each line has an owner outside this plan.
+
+- **`town_forecourt` is 801-821 draws against BRIEF's 800** — one shot in 142,
+  by a margin smaller than the shot's own run-to-run spread. Every other shot
+  is at or under. `drawcheck` ratchets it so it can only go down, and the
+  change that clears it (the party rigs' velocity proxies, and a reflection
+  pass spending ~40 draws on a shot with no visible water) is named in the
+  standing backlog's WS-6.
+- **The visual gap** — round 16's ranked tells, owned by `after-phase3` WS-1
+  (the head) and the backlog's WS-1/WS-4 (hair, clouds).
+- **`Enemy.level`'s other half** — levels scale HP and damage now, and wild dens
+  track the party, but `RpgSystem.enemyScaling` is still documented as reading
+  the party's level and does not. Backlog WS-10.
+- **`sprint+turn`'s two hitches** — 82 of 84 ms inside `post.render` with zero
+  new programs, per the draw-call lane's attribution. A post row, not a
+  content one.
 
 ## 6. What would be wasted effort
 

@@ -23,12 +23,32 @@ import { mkdir } from 'node:fs/promises';
 const argv = process.argv.slice(2);
 const shotIx = argv.indexOf('--shot');
 const shotPath = shotIx >= 0 ? argv[shotIx + 1] : null;
-const probeFile = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--shot');
-if (!probeFile) throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg]');
+/**
+ * `--ttl <minutes>` — how long the daemon holds this probe's page.
+ *
+ * The lease TTL defaults to **15 minutes** in `routeLease`, and until a probe
+ * ran longer than that nothing here had ever needed to say otherwise. Then
+ * `longplay.mts` asked for a thirty-minute session and got its page closed at
+ * minute 28, twice, with `Target page, context or browser has been closed` —
+ * which is indistinguishable at the call site from the game crashing, and was
+ * read as exactly that before somebody timed it.
+ *
+ * A long probe is a new kind of client for this daemon. The TTL exists so a
+ * crashed tool cannot hold a browser forever, so this raises it rather than
+ * removing it, and only for the run that asks.
+ */
+const ttlIx = argv.indexOf('--ttl');
+const ttlMin = ttlIx >= 0 ? Number(argv[ttlIx + 1]) : 0;
+const probeFile = argv.find((a, i) => !a.startsWith('--')
+  && argv[i - 1] !== '--shot' && argv[i - 1] !== '--ttl');
+if (!probeFile) throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg] [--ttl <minutes>]');
 const src = await readFile(probeFile, 'utf8');
 const ha = harnessArgs(process.argv.slice(2), {});
 announceBuild(ha);
-const leased = await lease(pageOpts(ha));
+const leased = await lease({
+  ...pageOpts(ha),
+  ...(ttlMin > 0 ? { ttlMs: Math.round(ttlMin * 60_000) } : {}),
+});
 const page = leased.page;
 page.on('console', (m) => console.log(`[page:${m.type()}]`, m.text()));
 page.on('pageerror', (e) => console.log('[pageerror]', String(e)));
