@@ -146,6 +146,31 @@ export class Director {
         this.encounters.active.clear();
         this.encounters.packs.length = 0;
         this.encounters.state = 'field';
+        /**
+         * AND THE ENEMIES THEMSELVES, which this used to leave standing.
+         *
+         * `active` and `packs` are the *bookkeeping*; clearing them told the
+         * encounter system to stop tracking spawns without despawning them.
+         * `HuntRuntime.init()` stages every accepted quest's set piece at boot
+         * (deliberately -- see `init()`), so under `?shoot` the tear-down left
+         * **ten staged enemies alive in the world** on a page whose entire
+         * purpose is a posed capture. That contradicts this method's own
+         * contract two lines up: "must not have a wandering sabertusk walk
+         * into frame".
+         *
+         * It is also, measured, the whole of `drawcheck`'s 60-call
+         * disagreement with itself. Posing one shot repeatedly and restarting
+         * the daemon between series gave `579 514 514 514 514 574 514`, three
+         * times identically: runs 1 and 6 boot a page, the rest reuse one, and
+         * a reused page drew 60 FEWER calls -- ten enemies at roughly six
+         * draws each (mesh, three shadow cascades, velocity proxy). The
+         * *reused* page was right and the freshly booted one was wrong.
+         * `Director.scenario()` already calls `enemies.clear()` on the first
+         * posed shot, so every scenario has always started from an empty field;
+         * this only makes boot agree with it instead of disagreeing for one
+         * shot.
+         */
+        if (this.enemies) { this.enemies.clear(); this.enemies.frozen = false; }
       }
     }
     if (this.partyAI) {
