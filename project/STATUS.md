@@ -77,7 +77,7 @@ numbers:
 
 | | before | after |
 |---|---|---|
-| `pnpm run check`, cold, quiet | ~780 s serial | **~270 s**, two pools |
+| `pnpm run check`, cold, quiet | ~780 s serial | **272.9 s**, 18/18, two pools |
 | `pnpm run check`, tree already graded | ~780 s | **0.68 s** |
 | `drawcheck` (the old critical path) | 269 s | **120 s** alone (`--par 4`), 0.18 s memoised |
 | pre-commit | 1.59 s | **1.04 s**, three jobs at once |

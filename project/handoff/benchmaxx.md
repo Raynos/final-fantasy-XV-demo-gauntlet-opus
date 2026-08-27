@@ -31,7 +31,7 @@ full tree sha, never on a dirty tree); two pools (`cpu` / `browser`,
 longest-first) instead of one serial queue; `HARNESS_LANE=sweep` for the whole
 suite; a ratchet on the suite's own wall time in `project/check-baseline.json`.
 `drawcheck` captures its chunks `--par 4` and memoises a full corpus per sha.
-*Verified:* **18/18 in ~270 s against ~780 s serial.** A second `check` on the same
+*Verified:* **18/18 in 272.9 s against ~780 s serial**, recorded as the ratchet. A second `check` on the same
 clean tree is **0.68 s**, and `drawcheck` on a memoised tree is **0.18 s**.
 
 The one counter-intuitive result: `drawcheck --par 4` halves the gate standalone

@@ -16,7 +16,7 @@ that the root holds `README.md`, `CLAUDE.md`, `BRIEF.md` and build config, and
 this is working state.
 
 > **The single most useful fact below:** the whole gate suite was ~13 minutes,
-> serial, with no memory. It is now **~270 s** cold and **0.68 s** on a tree it
+> serial, with no memory. It is now **272.9 s** cold and **0.68 s** on a tree it
 > has already graded. Everything a human runs between edits — both typechecks
 > and a production build — is **~1.0 s**, run together.
 
@@ -45,13 +45,13 @@ seconds when the cache is current.
 
 ## `pnpm run check` — the 18 gates
 
-**Total ~270 s cold on a quiet box, in two pools; 0.68 s on a tree already
+**Total 272.9 s cold on a quiet box, in two pools; 0.68 s on a tree already
 graded.** It was ~13 minutes, serial, with no cache. Three changes, each
 measured:
 
 | | before | after |
 |---|---|---|
-| whole suite, cold, quiet | ~780 s | **~270 s** |
+| whole suite, cold, quiet | ~780 s | **272.9 s**, 18/18 |
 | whole suite, same clean tree | ~780 s | **0.68 s** (`gatecache`, keyed on the tree sha) |
 | `drawcheck` alone | 269 s | **120 s** (`--par 4`), then **0.18 s** memoised |
 
@@ -198,7 +198,19 @@ before the daemon had a log:
 5. the automatic reset-drift check added three captures at the exact instant a
    suite starts, and timed out on its own screenshot doing it.
 
-**The suite has not yet been observed 18/18 end to end since the last of those
-landed.** Treat a red browser gate as unproven until it reproduces standalone —
-`creaturecheck` and `driftcheck` were each red in-suite and green alone the same
-evening. `LANDMINES.md` carries the rule and the three candidate causes.
+Two more followed, and both were about a page rather than a browser: a
+**lease/evict race** that handed out pages in the middle of closing (it needs
+two leases in the same instant, so parallel gates are what exposed it), and a
+lease being handed a page a `/shots` job had already posed — reset first, but
+reset is a frame-level guarantee, not an animation-state one, and
+`creaturecheck` reported the residue as a content regression.
+
+**With all eight in, the suite ran 18/18 in 272.9 s** — every browser gate green
+together, and `creaturecheck` back to a 12.4 s real boot rather than the 1.4 s
+that gave the last bug away. That is the figure in `project/check-baseline.json`.
+
+The rule stands anyway, because it is cheap: **treat a red browser gate as
+unproven until it reproduces standalone.** `creaturecheck` and `driftcheck` were
+each red in-suite and green alone this evening, and in both cases the gate was
+right and the harness was wrong. `LANDMINES.md` carries it and the candidate
+causes.
