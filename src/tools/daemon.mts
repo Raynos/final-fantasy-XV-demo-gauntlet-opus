@@ -81,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 9;
+export const PROTOCOL = 10;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -1879,6 +1879,8 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
               geometries: number, programs: number, ms: number }[] = [];
             for (const n of names) {
               const t0 = performance.now();
+              // See the note on `resetClock` in the single-shot path below.
+              g.resetClock();
               g.applyShot(n);
               g.settle(s);
               g.applyShot(n);      // re-anchor follow shots after settling
@@ -1909,6 +1911,29 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
     ) => {
       const g = window.GAME;
       void counts;             // the pose is identical either way; see below
+      /**
+       * ZERO THE CLOCK, so the pose depends only on step count.
+       *
+       * `src/tools/README.md` has said all along that this is what
+       * `resetClock()` is for — "zero `time.now`, so a capture depends only on
+       * step count" — and the pose never called it. The consequence is that a
+       * pose inherits whatever frame parity the page happened to be on.
+       *
+       * That is not theoretical. `probes/drawnoise.mts` poses one shot eight
+       * times in a row with NOTHING in between and gets a spread of **20 draw
+       * calls** on `town_wide`, against a gate tolerance of 8. The counts
+       * alternate with **period 2** on `town_wide`, `bestiary_mt`,
+       * `landmark_meteor` and `menu_gear` — something in the frame is on an
+       * every-other-frame schedule, and which side of it a capture lands on
+       * decides the number. `resetClock()` collapses `poi_reststop`'s spread
+       * from 11 to **0** and `town_wide`'s likewise.
+       *
+       * This is why `drawcheck` disagreed with ITSELF on 26 of 142 shots by up
+       * to 60 calls, which in turn is why no optimisation to it could be
+       * validated: a 5.7x speedup was reverted for moving counts by 20, well
+       * inside a noise floor nobody had measured. Fix the ruler first.
+       */
+      g.resetClock();
       g.applyShot(n);
       /**
        * THE SETTLE IS ALWAYS DRAWN, and it was not always so.
