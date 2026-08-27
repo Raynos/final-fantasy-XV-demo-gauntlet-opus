@@ -112,6 +112,12 @@ export interface SpeciesSenses {
   hearing?: number;
   /** awake at night rather than by day. Defaults to `faction === 'daemon'`. */
   nocturnal?: boolean;
+  /**
+   * Seconds this animal holds still after it notices you, before it charges —
+   * the "you have been seen" beat. 1.1 if absent; give a big slow creature
+   * more, a bird or an imp less. See {@link Enemy._rouse}.
+   */
+  rouse?: number;
 }
 
 /** One line of a species' drop table. */
@@ -521,6 +527,29 @@ export class Enemy {
   passive!: boolean;
   /** Rises while the enemy is noticing something, falls when it is not. */
   awareness!: number;
+  /**
+   * Seconds left of the **rouse**: the beat between noticing you and coming
+   * for you.
+   *
+   * Measured before this existed (`probes/fightshape.mts`), a wild den went
+   * from `awareness 0.00` to a full pack charge inside a single 0.22 s sense
+   * tick, and `encounter:spotted` and `encounter:start` fired on the *same
+   * frame*. There was no approach in the game: you walked into a radius and
+   * the fight was already happening. FFXV's packs raise their heads, hold, and
+   * *then* come, and that hold is the whole reason you get to decide anything
+   * about a fight before it starts.
+   *
+   * While it runs the creature is pinned in `alert` — facing you, posturing,
+   * not closing — and {@link Enemy.inCombat} answers false, which is what
+   * keeps the encounter in `field` so the two events are separated by
+   * something a player can act inside. Being hit skips it entirely: see
+   * {@link Enemy.provoke}.
+   */
+  _rouse!: number;
+  /** Seconds of rouse this species takes. */
+  rouseTime!: number;
+  /** Did this enemy have a target last frame? The edge is what arms the rouse. */
+  _hadTarget!: boolean;
   target!: Threat | null;
   home!: THREE.Vector3;
   leash!: number;
@@ -657,8 +686,11 @@ export class Enemy {
     this.fov = sense.fov ?? 1.9;               // half-angle, radians
     this.hearing = sense.hearing ?? 12;
     this.nocturnal = sense.nocturnal ?? (type.faction === 'daemon');
+    this.rouseTime = sense.rouse ?? 1.1;
     /** Rises while the enemy is noticing something, falls when it is not. */
     this.awareness = 0;
+    this._rouse = 0;
+    this._hadTarget = false;
     this.home = new THREE.Vector3();
     this.leash = opts.leash ?? 44;
     this.patrol = null;          // {points:[Vector3], index, wait, waitTimer}
@@ -759,6 +791,8 @@ export class Enemy {
     this.staggered = false;
     this.corpseTime = 0;
     this.awareness = 0;
+    this._rouse = 0;
+    this._hadTarget = false;
     this.target = null;
     this.pack = null;
     this.patrol = null;
@@ -1109,6 +1143,12 @@ export class Enemy {
     }
     if (t) this.target = t;
     this.awareness = 1;
+    // A blow is not a sighting. Whatever is left of the rouse beat is spent:
+    // being shot at buys you nothing, and a pack you opened on must answer
+    // immediately or the ambush the player just set up reads as a bug.
+    this._rouse = 0;
+    this._hadTarget = true;
+    if (this.pack) for (const m of this.pack.members) { m._rouse = 0; m._hadTarget = true; }
   }
 
   die(killer: Threat | null = null) {
@@ -1342,7 +1382,29 @@ export class Enemy {
       if (this.staggerTime <= 0) { this.staggered = false; this.setState('chase'); }
     }
 
+    // Arm the rouse on the edge where this creature acquires a target from a
+    // standing start. It has to be an edge tested around `_sense`, because a
+    // packmate's `Pack.alert` writes `target` and `state` directly and never
+    // comes through here — so watching for the state change would miss every
+    // member of the pack except the one that actually saw you.
+    const wasCalm = !this._hadTarget
+      && (this.state === 'idle' || this.state === 'patrol' || this.state === 'alert' || this.state === 'sleep');
+
     this._sense(dt, ctx);
+
+    if (wasCalm && this.target && !this.passive) this._rouse = this.rouseTime;
+    this._hadTarget = !!this.target;
+
+    // The beat itself: hold the ground, face the threat, posture. `_sense`
+    // will keep pushing the state to `chase` every tick because awareness is
+    // already over the line; pinning it back to `alert` here is what makes the
+    // hold visible, and what keeps `inCombat` false for its duration.
+    if (this._rouse > 0) {
+      this._rouse -= dt;
+      if (this.state === 'chase' || this.state === 'approach' || this.state === 'strafe') {
+        this.setState('alert');
+      }
+    }
 
     const target = this.target;
     const tp = threatPos(target);
@@ -1512,8 +1574,16 @@ export class Enemy {
     }
   }
 
-  /** True while this enemy is actively pursuing or attacking something. */
+  /**
+   * True while this enemy is actively pursuing or attacking something.
+   *
+   * Deliberately false through the rouse beat, even though the pack has
+   * already handed this member a target: `EncounterDirector` enters combat the
+   * frame anything answers true here, and the whole point of the beat is that
+   * "we have seen you" and "the fight has started" are two different moments.
+   */
   get inCombat() {
+    if (this._rouse > 0) return false;
     const s = this.state;
     return s === 'chase' || s === 'approach' || s === 'strafe'
       || s === 'telegraph' || s === 'attack' || s === 'recover';
@@ -1533,6 +1603,8 @@ export class Enemy {
     this.target = null;
     this.awareness = 0;
     this._lostTimer = 0;
+    this._rouse = 0;
+    this._hadTarget = false;
     this._endAttack();
     this.setState('return');
   }
