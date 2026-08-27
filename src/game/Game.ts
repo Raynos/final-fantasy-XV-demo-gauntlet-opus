@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Renderer } from '../engine/Renderer.ts';
+import { Renderer, type QualityTier } from '../engine/Renderer.ts';
 import { PostFX } from '../engine/PostFX.ts';
 import { Time } from '../engine/Time.ts';
 import { Input } from '../engine/Input.ts';
@@ -256,6 +256,9 @@ export class Game {
 
     // one warm frame so lazily-created GPU resources exist before we report ready
     this.post.render();
+    // After the warm frame, so what we record is the state a caller actually
+    // finds on a freshly booted page — see `_boot`.
+    this.captureBootState();
     this.ready = true;
     window.dispatchEvent(new CustomEvent('game-ready'));
   }
@@ -297,6 +300,78 @@ export class Game {
    * zeroed BEFORE the systems reset, so anything that stamps `time.now` (the
    * HUD's banter timer does) stamps zero.
    */
+  /**
+   * The state `reset()` puts back, captured the instant boot finished.
+   *
+   * `reset()` used to return the *systems* to their initial state and leave the
+   * things that live on `Game` itself exactly where the last caller had dragged
+   * them. `src/tools/resetcheck.mts` names them: after a combat-shaped
+   * workload the camera sat at `252.9, 17.5, -170.4` instead of `0, 3, 8`, the
+   * player at `250, 14.6, -175` instead of the origin, and the menu was still
+   * open — across a reset, on a page the next gate would have been handed.
+   *
+   * That is the whole reason `routeLease` hardcodes `cold: true` and every play
+   * gate pays a 7.46 s boot: **188 boots across 190 lease jobs**, the largest
+   * remaining cost in the harness. The fix is not to relax the daemon's rule,
+   * it is to make the rule unnecessary.
+   *
+   * Captured rather than recomputed, because "the state at boot" is the only
+   * definition of correct here that cannot drift away from what actually
+   * happened — a hardcoded `camera.position.set(0, 3, 8)` is a second source of
+   * truth that goes stale the first time boot changes.
+   */
+  private _boot: {
+    playerPos: THREE.Vector3; playerRotY: number; playerHeading: number;
+    playerVel: THREE.Vector3;
+    cameraPos: THREE.Vector3; cameraQuat: THREE.Quaternion; cameraFov: number;
+    invertY: boolean; lookScale: number; quality: QualityTier;
+  } | null = null;
+
+  /** Called once, at the end of boot. See {@link _boot}. */
+  private captureBootState() {
+    const player = this.get('Player');
+    this._boot = {
+      playerPos: player ? player.root.position.clone() : new THREE.Vector3(),
+      playerRotY: player ? player.root.rotation.y : 0,
+      playerHeading: player ? player.heading : 0,
+      playerVel: player && player.velocity ? player.velocity.clone() : new THREE.Vector3(),
+      cameraPos: this.camera.position.clone(),
+      cameraQuat: this.camera.quaternion.clone(),
+      cameraFov: this.camera.fov,
+      invertY: this.input.invertY,
+      lookScale: this.input.lookScale,
+      quality: this.rnd.quality,
+    };
+  }
+
+  /**
+   * Put back what {@link captureBootState} recorded.
+   *
+   * Deliberately tolerant of a missing snapshot: `reset()` is reachable from
+   * photo mode and from the harness before boot has finished, and a reset that
+   * throws is worse than one that restores nothing.
+   */
+  private restoreBootState() {
+    const b = this._boot;
+    if (!b) return;
+    const player = this.get('Player');
+    if (player) {
+      player.root.position.copy(b.playerPos);
+      player.root.rotation.y = b.playerRotY;
+      player.heading = b.playerHeading;
+      if (player.velocity) player.velocity.copy(b.playerVel);
+    }
+    this.camera.position.copy(b.cameraPos);
+    this.camera.quaternion.copy(b.cameraQuat);
+    if (this.camera.fov !== b.cameraFov) {
+      this.camera.fov = b.cameraFov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.input.invertY = b.invertY;
+    this.input.lookScale = b.lookScale;
+    if (this.rnd.quality !== b.quality) this.rnd.setQuality(b.quality);
+  }
+
   reset() {
     this.stop();
     // `instant`, or the leave animates over frames nobody is going to step.
@@ -309,6 +384,12 @@ export class Game {
     this.get('Menus')?.setScreen('main');
     this.get('HUD')?.resetDemo();
     for (const s of this.systems) if (s !== dungeons && s.reset) s.reset();
+    // AFTER the systems, not before: a system's own reset() may move the player
+    // or the lens, and the booted state has to be the one that wins. Re-snap the
+    // party afterwards so the followers land against the restored player rather
+    // than the position they were dragged to.
+    this.restoreBootState();
+    this.get('Party')?.snap();
     // The loading screen is removed rather than faded: the transition needs
     // frames, and a page whose render loop has just been stopped is not
     // guaranteed to get them.

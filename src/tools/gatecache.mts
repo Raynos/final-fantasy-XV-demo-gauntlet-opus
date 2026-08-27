@@ -134,7 +134,12 @@ export function gameHash(): string {
   }
   try {
     for (const b of readdirSync(path.join(ROOT, 'project')).sort()) {
-      if (!b.endsWith('-baseline.json')) continue;
+      // NOT `check-baseline.json`: it is the suite's ratchet on its OWN wall
+      // time, written by the suite at the end of every run. Including it made
+      // the cache self-invalidating — each run stored verdicts under a hash the
+      // next run no longer had, and the hit rate climbed 9 -> 12 -> 18 over
+      // three runs as the recorded number settled. No gate grades against it.
+      if (!b.endsWith('-baseline.json') || b === 'check-baseline.json') continue;
       h.update(b);
       h.update(readFileSync(path.join(ROOT, 'project', b)));
     }

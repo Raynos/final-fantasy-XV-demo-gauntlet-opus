@@ -419,7 +419,11 @@ function portOpen(port: number): Promise<boolean> {
  * config, the argv. See `gatecache.mts` for what is deliberately excluded and
  * the staleness that trades against.
  */
-const keyOf = (g: Gate): string | null => (opts.cache ? inputsKey(g) : null);
+// NOT gated on `opts.cache`: `--no-cache` means do not TRUST a stored verdict,
+// not do not RECORD one. The first version conflated them, so the documented way
+// to re-derive a suite also threw the fresh answers away and left the next run
+// cold — which is the one run that had every right to be warm.
+const keyOf = (g: Gate): string | null => inputsKey(g);
 /** Only for the ratchet and the ledger, which are about a commit, not a verdict. */
 const treeSha = workingTreeDirty() ? null : shaOf(resolveBuild('HEAD'));
 /**
@@ -612,7 +616,7 @@ const busyWhy = health && health.exclusive ? `quiet lane held by ${health.exclus
         : `load ${os.loadavg()[0].toFixed(1)}`;
 const pw = powerWarning();
 if (pw) console.log(`  ${pw}\n`);
-console.log(`  ${treeSha ? `tree ${treeSha.slice(0, 12)}` : 'DIRTY tree — nothing cached, nothing recorded'}`
+console.log(`  ${treeSha ? `tree ${treeSha.slice(0, 12)}` : 'dirty tree (cached by content, not by commit)'}`
   + `  ·  ${quiet ? 'quiet' : `busy (${busyWhy})`}`
   + `  ·  ${opts.serial ? 'serial' : 'parallel'}\n`);
 

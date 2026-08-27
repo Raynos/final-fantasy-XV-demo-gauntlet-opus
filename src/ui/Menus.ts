@@ -263,6 +263,34 @@ export class Menus {
    * and the keys of `screens` are exactly `ScreenName` by construction -- this
    * getter is the one place that says so, rather than each caller asserting.
    */
+  /**
+   * Close, instantly and completely, so a reset page is not still in a menu.
+   *
+   * `open` is *derived* — `update()` computes it from the open amount `a`, so
+   * `setScreen('main')` on its own leaves `a` wherever the last caller's
+   * animation had it and `open` reads true forever after. `resetcheck` sees
+   * exactly that: `menus.open  false -> true` surviving a reset for the
+   * `combat` and `creatures` workloads, on a page the next gate would inherit.
+   *
+   * Everything here is state `update()` would otherwise have to animate down
+   * over frames that a stopped render loop is never going to run.
+   */
+  reset() {
+    this.pending = null;
+    this.name = null;
+    this.stack.length = 0;
+    this.a = 0;
+    this.open = false;
+    this._hideShown();
+    this.root.style.display = 'none';
+    this.root.classList.remove('on');
+    // Hand back what a menu takes from Input while it is up. `_lockHeld` is
+    // nulled rather than set, so the next `_pointerLock` re-asserts whatever is
+    // true then instead of trusting a value from before the reset.
+    this._lockHeld = null;
+    this._inputWas = false;
+  }
+
   get screenNames(): ScreenName[] { return Object.keys(this.screens) as ScreenName[]; }
 
   setScreen(name: ScreenName | null) {
