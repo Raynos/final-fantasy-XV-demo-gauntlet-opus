@@ -103,6 +103,14 @@ const nearest = () => {
   for (const e of hostiles()) { const d = d2(e.position, player.position); if (d < bd) { bd = d; best = e; } }
   return best ? { e: best, d: bd } : null;
 };
+/** Signed angle between where the camera looks and `p`, radians. */
+const bearingOff = (p) => {
+  const want = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
+  let d = want - rig.yaw;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+};
 /** Point the camera so that W walks at `p`. `yaw` is the ORBIT angle. */
 const faceToward = (p) => {
   const yaw = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
@@ -182,11 +190,20 @@ for (let round = 0; round < 3; round++) {
   const startHostiles = hostiles().length;
   const startHp = player.stats.hp;
 
+  // The fight is the enemies *in this fight*, not every hostile in the world.
+  // Scoping it to whatever is within 45 m is what stops the loop marching off
+  // after the next den and reporting a two-minute "fight" that was a walk.
+  const inFight = () => hostiles().filter((e) => d2(e.position, player.position) < 45);
+  let overFor = 0;
   for (let f = 0; f < 60 * 120; f++) {
-    const live = hostiles();
+    const live = inFight();
     if (!live.length) break;
+    if (enc.state !== 'combat') { overFor += dt; if (overFor > 2) break; } else overFor = 0;
     const n = nearest();
-    if (n) faceToward(n.e.position);
+    // Re-aim only when the target has drifted well off screen. A player does
+    // not hold the stick on the enemy every frame, and slamming the yaw every
+    // frame hides whatever the game's own combat framing is doing.
+    if (n && Math.abs(bearingOff(n.e.position)) > 0.85) faceToward(n.e.position);
 
     // The policy a person plays: stay on the target, swing, get out of the way
     // of a telegraph, punish a stagger with a warp-strike, spend a tech bar.
