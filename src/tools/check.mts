@@ -53,6 +53,7 @@ import type { HealthResponse, WaitResponse } from './daemon.mts';
 import { lookup, store, prune } from './gatecache.mts';
 import { appendJob } from './ledger.mts';
 import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
+import { powerState, powerWarning } from './power.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');
@@ -453,8 +454,18 @@ const health = await machineState();
  * a suite time without this stamp is not a number anyone can compare — which is
  * exactly why the ratchet below refuses to grade a run that was not quiet.
  */
+/**
+ * ...and the MACHINE has to be steady, not just idle.
+ *
+ * Load average says nothing about a laptop on battery, in Low Power Mode, or
+ * thermally throttled — all of which change the clocks under a five-minute
+ * four-chromium run. The ratchet grades wall time, so a run whose machine was
+ * drifting must not set or blow a budget. `power.mts` carries the receipts.
+ */
+const power = powerState();
 const quiet = os.loadavg()[0] < os.cpus().length / 3
-  && !(health && (health.workers.busy || health.leases.length || health.exclusive));
+  && !(health && (health.workers.busy || health.leases.length || health.exclusive))
+  && power.steady;
 
 const auxPort = await freePort(basePort + 50);
 /**
@@ -586,7 +597,10 @@ async function pool(gates: Gate[], limit: number): Promise<void> {
 const busyWhy = health && health.exclusive ? `quiet lane held by ${health.exclusive}`
   : health && health.leases.length ? `${health.leases.length} lease(s) live`
     : health && health.workers.busy ? `${health.workers.busy} daemon worker(s) busy`
-      : `load ${os.loadavg()[0].toFixed(1)}`;
+      : !power.steady ? power.label
+        : `load ${os.loadavg()[0].toFixed(1)}`;
+const pw = powerWarning();
+if (pw) console.log(`  ${pw}\n`);
 console.log(`  ${treeSha ? `tree ${treeSha.slice(0, 12)}` : 'DIRTY tree — nothing cached, nothing recorded'}`
   + `  ·  ${quiet ? 'quiet' : `busy (${busyWhy})`}`
   + `  ·  ${opts.serial ? 'serial' : 'parallel'}\n`);

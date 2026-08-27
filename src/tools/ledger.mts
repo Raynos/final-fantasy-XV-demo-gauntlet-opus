@@ -63,6 +63,15 @@ export interface JobRecord {
   rssMb?: number;
   /** Anything the route wants attributed: shot count, gate verdict, error head. */
   note?: string;
+  /**
+   * The machine's power state when this was recorded: `ac`, `battery`, `low`.
+   *
+   * A laptop changes speed underneath a measurement, and nothing here knew.
+   * An evening of A/B runs produced a parallelism sweep of 263/226/239 s and a
+   * conclusion; the machine was on battery for part of it and a 16% spread is
+   * inside what unplugging accounts for. See `power.mts`.
+   */
+  power?: string;
 }
 
 export const ledgerPath = (): string => path.join(repoCacheDir(), 'jobs.jsonl');

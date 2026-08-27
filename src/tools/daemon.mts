@@ -59,6 +59,7 @@ import {
 } from './identity.mts';
 import type { BuildId } from './identity.mts';
 import { appendJob, ledgerPath, daemonLogPath } from './ledger.mts';
+import { powerState } from './power.mts';
 import type { JobRecord } from './ledger.mts';
 
 /**
@@ -80,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 8;
+export const PROTOCOL = 9;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -1249,6 +1250,22 @@ const stats = {
   prewarms: 0,
 };
 
+/**
+ * The machine's power state, sampled at most once a minute.
+ *
+ * `pmset` is three subprocesses and this runs on every job, so it is cached the
+ * same way RSS is. A laptop does not change power source between two captures;
+ * it changes between two SESSIONS, which is the resolution that matters.
+ */
+let powerCache = { at: 0, tag: '' };
+function powerTag(): string {
+  if (Date.now() - powerCache.at > 60_000) {
+    const p = powerState();
+    powerCache = { at: Date.now(), tag: p.steady ? 'ac' : p.source === 'battery' ? `battery${p.percent ?? ''}` : p.label };
+  }
+  return powerCache.tag;
+}
+
 const errHead = (e: unknown): string =>
   (e instanceof Error ? e.message : String(e)).split('\n')[0].slice(0, 120);
 
@@ -1277,6 +1294,7 @@ function recordJob(job: Job, startedAt: number, endedAt: number, verdict: JobRec
     boots: pool.boots,
     reuses: pool.reuses,
     rssMb: pool.lastRssMb || undefined,
+    power: powerTag(),
     note,
   });
 }
@@ -1833,6 +1851,57 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
     }
     try {
       await withPage(rest, async (page, slot, build) => {
+        /**
+         * COUNTS ARE POSED IN ONE ROUND TRIP, NOT ONE PER SHOT.
+         *
+         * The loop below does a `page.evaluate` per shot. That is right when
+         * each shot is followed by a screenshot anyway — but `countsOnly` has
+         * no screenshot, so the only thing between two poses is a CDP round
+         * trip, and it turns out to cost as much as the pose.
+         *
+         * Measured: `probes/posecost.mts` poses all 142 shots inside ONE
+         * evaluate at **860 ms each**. `drawcheck --par 1`, which is the same
+         * poses through 142 separate evaluates, measures **1790 ms each** —
+         * 263 s wall against ~122 s of actual posing. Half the gate was the
+         * protocol.
+         *
+         * So when there is nothing to do between poses, do not come back. The
+         * poses run in the same order, on the same page, with the same
+         * `applyShot/settle/applyShot/settle` — only the boundary between them
+         * moves from the socket into the loop.
+         */
+        if (countsOnly) {
+          const metas = await page.evaluate((
+            [names, s]: [string[], number],
+          ) => {
+            const g = window.GAME;
+            const out: { calls: number, triangles: number, textures: number,
+              geometries: number, programs: number, ms: number }[] = [];
+            for (const n of names) {
+              const t0 = performance.now();
+              g.applyShot(n);
+              g.settle(s);
+              g.applyShot(n);      // re-anchor follow shots after settling
+              g.settle(8);
+              const gl = g.renderer.info;
+              out.push({
+                triangles: gl.render.triangles,
+                calls: gl.render.calls,
+                textures: gl.memory.textures,
+                geometries: gl.memory.geometries,
+                programs: g.renderer.info.programs?.length ?? 0,
+                ms: performance.now() - t0,
+              });
+            }
+            return out;
+          }, [render.map((r) => r.name), settle] as [string[], number],
+          );
+          for (let i = 0; i < render.length; i++) {
+            results.push({ name: render[i].name, file: '', cached: false, ...metas[i] });
+          }
+          counters0 = counters(slot, build);
+          return;
+        }
         for (const { name, key } of render) {
           const t0 = Date.now();
     const meta = await page.evaluate((
