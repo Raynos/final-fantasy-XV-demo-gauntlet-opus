@@ -1014,8 +1014,27 @@ class BrowserPool {
         slot.busy = true;
         return slot;
       }
+      /**
+       * CLAIM IT BEFORE EVICTING IT, not after.
+       *
+       * `evict()` awaits `page.close()`, and this used to set `busy` only once
+       * that returned. In between, a concurrent `lease()` walked the same
+       * slots, found this one still `!busy` with its `key` still set, and
+       * matched it as a warm page — handing out a page that was in the middle
+       * of closing. The next `page.evaluate` then failed with **"Target page,
+       * context or browser has been closed"**, which reads at the call site as
+       * the game crashing.
+       *
+       * It needs two leases in flight at the same instant, which is why it
+       * survived until gates ran in pools and `drawcheck` captured its chunks
+       * in parallel. Seen as `drawcheck VOID` 654 ms into a job whose page had
+       * already gone, three minutes after anything else had failed.
+       *
+       * `evict()` now also clears `key` before it awaits, so there is no window
+       * in which a closing page can be matched at all.
+       */
       const free = this.slots.filter((s) => !s.busy).sort((a, b) => a.lastUsed - b.lastUsed)[0];
-      if (free) { await this.evict(free); free.busy = true; return free; }
+      if (free) { free.busy = true; await this.evict(free); return free; }
       await new Promise<void>((r) => this.waiters.push(r));
     }
   }
@@ -1029,10 +1048,13 @@ class BrowserPool {
 
   /** Drop the page but keep the browser: relaunching chromium is the expensive half. */
   private async evict(slot: Slot) {
-    if (slot.page) { stats.evictions++; await slot.page.close().catch(() => {}); }
+    // Identity first, THEN the await: a slot whose key still matches while its
+    // page is closing is a slot somebody else can be handed. See `lease()`.
+    const page = slot.page;
     slot.page = null;
     slot.key = '';
     slot.build = null;
+    if (page) { stats.evictions++; await page.close().catch(() => {}); }
   }
 
   /**

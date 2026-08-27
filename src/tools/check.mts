@@ -595,12 +595,29 @@ if (opts.serial) {
    * once did. The budget is enforced daemon-side either way; this is about not
    * spawning node processes that will only wait.
    */
+  /**
+   * The suite takes the budget MINUS ONE, and minus anything already leased.
+   *
+   * `BROWSER_BUDGET = 4` is a property of the machine, not of this tool, and
+   * the suite is not the only thing on the machine: the reset-drift check, a
+   * post-commit prewarm and any other agent's single shot all want a slot too.
+   * A suite that claims all four leaves zero headroom, and every in-suite
+   * failure this evening happened at exactly that point — a screenshot past its
+   * timeout, a CDP handshake past its, a boot at 32 s against 6.6 s solo. Each
+   * of those got its own fix; this is the one that stops manufacturing the
+   * conditions for the next one.
+   *
+   * The cost is small and the arithmetic says so: the browser gates are ~380
+   * slot-seconds, so three slots against four is ~127 s of floor against ~95 s,
+   * and the suite is bounded by `drawcheck` either way. A suite that has to be
+   * re-run is infinitely slower than one that is thirty seconds longer.
+   */
   const held = health ? health.leases.length : 0;
-  const browsers = Math.max(1, Number(process.env.HARNESS_BROWSER_BUDGET || 4) - held);
+  const budget = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
+  const browsers = Math.max(1, budget - 1 - held);
   const cpus = Math.max(2, Math.min(4, os.cpus().length - 2));
-  if (held) {
-    console.log(`  (${held} page lease(s) live — running ${browsers} browser gate(s) at a time)\n`);
-  }
+  console.log(`  (${browsers} browser gate(s) at a time, of a machine budget of ${budget}`
+    + `${held ? `, ${held} already leased` : ''})\n`);
   await Promise.all([
     pool(rest.filter((g) => g.kind === 'cpu' && !g.perf), cpus),
     pool(rest.filter((g) => g.kind === 'browser' && !g.perf), browsers),
