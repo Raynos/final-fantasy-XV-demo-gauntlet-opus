@@ -475,6 +475,24 @@ export class Director {
    */
   play() {
     this.scenario = 'live';
+    /**
+     * A posed shot is no longer in force, and several systems test for that by
+     * reading `game.currentShot` directly rather than by asking the Director.
+     *
+     * `RegaliaSystem._input` is the one that bites: its first line is
+     * `if (!inp || inp.enabled === false || game.currentShot) return`, so
+     * **once any shot has been applied, the car's entire input path is dead
+     * for the life of the page** — no Drive prompt, no F, no camera, no radio,
+     * no handing the wheel to Ignis. `probes/regaliadrive.mts` found it at
+     * 3.4 m from the driver's door with the prompt reading null.
+     *
+     * It never showed in a real session, because a real session never applies
+     * a shot. It shows in every path that goes posed -> live: the `?debug` dev
+     * suite, a cutscene handing back to play, and every probe in
+     * `src/tools/probes/`. `play()` is *the* go-live entry point and it was
+     * leaving the flag that says "a capture owns this frame" standing.
+     */
+    this.game.currentShot = null;
     if (this.vfx) this.vfx.unpin();
     if (this.enemies) { this.enemies.clear(); this.enemies.frozen = false; }
     if (this.combat) this.combat.scenarioLock = false;
