@@ -210,6 +210,16 @@ const GATES: Gate[] = [
   // half the pool for everyone else.
   {
     name: 'drawcheck', kind: 'browser', cost: 200,
+    /**
+     * `--no-reuse` under `--no-cache`, because otherwise the flag lies.
+     *
+     * `drawcheck` memoises a whole corpus per tree sha (`drawmanifest/`), which
+     * is a second cache the suite's own `--no-cache` knew nothing about. A
+     * `check --no-cache` therefore re-derived seventeen gates and served the
+     * eighteenth from a stored manifest -- in **0.3 s**, against ~250 s of real
+     * work -- and reported the run as cold. Anyone re-checking a red drawcheck
+     * the documented way was reading the answer it had already given.
+     */
     args: [path.join(HERE, 'drawcheck.mts'), '--par', '2'],
     expect: 'no new shot over BRIEF\'s 800, no recorded shot worse',
   },
@@ -500,8 +510,11 @@ async function runGate(g: Gate): Promise<Result> {
     }
     env = { ...process.env, PORT: String(auxPort) };
   }
+  // A gate with a cache of its own has to be told, or `--no-cache` is a lie.
+  // `drawcheck` is the only one today; the flag is harmless on the others.
+  const gate = opts.cache ? g : { ...g, args: g.args ? [...g.args, '--no-reuse'] : g.args };
   const started = Date.now();
-  const r = await run(g, {
+  const r = await run(gate, {
     ...env,
     // One frame in ten on the gates that never look. Ten is the largest ratio
     // `probe.mts --turbo` measured byte-identical on `longplay`; the gates'
