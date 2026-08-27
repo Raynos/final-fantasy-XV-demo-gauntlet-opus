@@ -82,6 +82,10 @@ export const CAST = {
       },
       skin: srgb(0xb58c70),
       iris: 0x2b5f96,
+      // One fingerless glove, left hand only, per
+      // `docs/reference/plates/party-three-field-02.jpg`. His right hand is
+      // bare in that frame and the asymmetry is deliberate on the real model.
+      gloves: { color: srgb(0x1c1a1c), rough: 0.46, sides: ['L'], fingerless: 0.44 },
       headWidth: 0.97,
       jaw: -0.25, cheek: 0.35, nose: -0.1, brow: 0.15,
       eyeOpen: 0.95,
@@ -197,6 +201,9 @@ export const CAST = {
       },
       skin: srgb(0xa37653),
       iris: 0x7a5326,
+      // The wrap on his left hand. It reaches barely past the knuckle in the
+      // plate, so `fingerless` is short: it is a hand wrap, not a glove.
+      gloves: { color: srgb(0x232022), rough: 0.58, sides: ['L'], fingerless: 0.26 },
       headWidth: 1.04,
       // jaw was 1.35 and it made his head 192 mm across a 237 mm skull —
       // widest at the mandible, which no human is (`headprop.mts`).
@@ -389,6 +396,10 @@ export const CAST = {
       },
       skin: srgb(0xc19e7d),
       iris: 0x4d8ec0,
+      // Both hands, and the highest-contrast pair in the party: black leather
+      // to the knuckle with bare fingers past it. In the plate they are the
+      // only thing on him that reads at 30 px besides the grey boot bands.
+      gloves: { color: srgb(0x17161a), rough: 0.50, fingerless: 0.40 },
       headWidth: 0.98,
       jaw: -0.35, cheek: 0.25, nose: -0.25, brow: -0.15,
       eyeOpen: 1.02,

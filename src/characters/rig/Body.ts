@@ -169,7 +169,11 @@ const _hc = new THREE.Color();
  */
 function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   const { index: I, P, dims } = rig;
-  const gl = look.gloves;
+  const glSpec = look.gloves;
+  // A glove is per-hand. FFXV's four wear one, one, two and two of them, and
+  // symmetry here is one of the things that makes a party read as one body
+  // reskinned — see `docs/reference/plates/party-three-field-02.jpg`.
+  const gl = glSpec && (!glSpec.sides || glSpec.sides.includes(side)) ? glSpec : null;
   const s = dims.s;
   const sg = side === 'L' ? 1 : -1;
   const R = (v: number) => v * s;
@@ -198,23 +202,45 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   // dorsal skin is a shade darker and warmer (it is the sunlit side of a hand);
   // palmar is paler, pinker and markedly drier
   const dorsalC = skin.clone().multiplyScalar(0.945);
-  const palmarC = skin.clone().multiplyScalar(1.05).offsetHSL(-0.010, 0.05, 0);
+  const palmarC = skin.clone().multiplyScalar(1.02).offsetHSL(-0.010, 0.04, 0);
   const gloveC = gl ? new THREE.Color(gl.color) : null;
   const gloveRough = gl ? (gl.rough ?? 0.72) : 0;
 
   /** dorsalness in 0..1 from the sweep angle. */
   const dorsalness = (th: number) => 0.5 + 0.5 * Math.cos(th);
-  /** Skin (or glove) colour at a sweep sample, darkened by `shade`. */
-  const tone = (th: number, shade: number) => {
-    if (gloveC) return _hc.copy(gloveC).multiplyScalar(shade);
-    return _hc.copy(palmarC).lerp(dorsalC, dorsalness(th)).multiplyScalar(shade);
+  /**
+   * Skin (or glove) colour at a sweep sample, darkened by `shade`. `cov` is
+   * glove coverage, so a fingerless cut crosses from leather to skin over the
+   * hem rather than switching on one ring of vertices.
+   */
+  const tone = (th: number, shade: number, cov = 1) => {
+    const skinC = _hc.copy(palmarC).lerp(dorsalC, dorsalness(th));
+    if (gloveC && cov > 0) skinC.lerp(gloveC, cov);
+    return skinC.multiplyScalar(shade);
   };
   /** Roughness / metalness / translucency at a sweep sample. */
-  const finish = (th: number, thick: number) => {
-    if (gl) return [gloveRough, 0, 0];
+  const finish = (th: number, thick: number, cov = 1) => {
     const d = dorsalness(th);
     // palm skin is dry and matte, the back of the hand is oilier
-    return [0.66 - 0.16 * d, 0, thick * (0.35 + 0.65 * (1 - d))];
+    const skinR = 0.66 - 0.16 * d;
+    // Thickness drives a red fresnel lift in `Materials.skin`, and the arm this
+    // hand joins is authored at **zero** of it. At the 0.20-0.55 it used to
+    // carry, the hand glowed a flat waxy pink against a matt forearm and the
+    // step landed exactly on the wrist — which is most of why a 33 px hand read
+    // as a prosthetic. A hand *is* translucent, but only at the finger edges,
+    // and only enough to survive the seam.
+    const t3 = thick * (0.35 + 0.65 * (1 - d));
+    if (!gl || cov <= 0) return [skinR, 0, t3];
+    return [skinR + (gloveRough - skinR) * cov, 0, t3 * (1 - cov)];
+  };
+  /**
+   * Glove coverage at a sweep sample, 0..1. Everything on the palm is covered;
+   * a fingerless cut releases each finger past `fingerless` of its own sweep.
+   */
+  const covered = (t: number) => {
+    if (!gl) return 0;
+    if (gl.fingerless === undefined) return 1;
+    return 1 - smooth((t - gl.fingerless) / 0.07);
   };
 
   /**
@@ -307,7 +333,7 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
       // wrist crease is the darkest line on the whole hand
       * (1 - 0.13 * tendonGroove(th, t))
       * (1 - 0.13 * bump(t, 0.055, 0.075))),
-    matAt: (th: number, t: number) => finish(th, 0.20 + 0.35 * bump(t, 0.86, 0.4)),
+    matAt: (th: number, t: number) => finish(th, 0.06 + 0.14 * bump(t, 0.86, 0.4)),
   });
 
   // ---- four fingers ------------------------------------------------------
@@ -338,10 +364,10 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   const F = [
     // across, along and depth of the metacarpal head, shaft radius, the three
     // phalanx lengths, the three joint flexions, and the splay at the knuckle
-    { a: -0.0245, l: 0.0700, d: 0.0034, r: 0.0086, len: [0.0360, 0.0230, 0.0180], flex: [0.30, 0.62, 0.22], splay: 0.030 },
-    { a: -0.0080, l: 0.0752, d: 0.0048, r: 0.0088, len: [0.0400, 0.0260, 0.0200], flex: [0.33, 0.68, 0.24], splay: 0.000 },
-    { a: 0.0085, l: 0.0704, d: 0.0040, r: 0.0082, len: [0.0370, 0.0240, 0.0190], flex: [0.37, 0.74, 0.27], splay: -0.020 },
-    { a: 0.0245, l: 0.0600, d: 0.0012, r: 0.0070, len: [0.0280, 0.0180, 0.0150], flex: [0.41, 0.80, 0.30], splay: -0.045 },
+    { a: -0.0245, l: 0.0700, d: 0.0034, r: 0.0086, len: [0.0360, 0.0230, 0.0180], flex: [0.15, 0.36, 0.16], splay: 0.030 },
+    { a: -0.0080, l: 0.0752, d: 0.0048, r: 0.0088, len: [0.0400, 0.0260, 0.0200], flex: [0.17, 0.40, 0.18], splay: 0.000 },
+    { a: 0.0085, l: 0.0704, d: 0.0040, r: 0.0082, len: [0.0370, 0.0240, 0.0190], flex: [0.20, 0.44, 0.20], splay: -0.020 },
+    { a: 0.0245, l: 0.0600, d: 0.0012, r: 0.0070, len: [0.0280, 0.0180, 0.0150], flex: [0.23, 0.48, 0.22], splay: -0.045 },
   ];
   const IF = I[`fingers${side}`], IH = I[`hand${side}`], IT = I[`fingerTip${side}`];
   const wF: SkinWeights[] = [
@@ -378,7 +404,9 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
       // a flat pad on the palmar side and a slightly flattened nail bed dorsally
       shape: (th, t) => 1
         - 0.10 * abump(th, Math.PI, 0.75) * (0.4 + 0.6 * t)
-        - 0.06 * abump(th, 0, 0.6) * bump(t, 0.88, 0.24),
+        - 0.06 * abump(th, 0, 0.6) * bump(t, 0.88, 0.24)
+        // the rolled hem of a fingerless glove, where it lets the finger go
+        + (gl && gl.fingerless !== undefined ? 0.13 * bump(t, gl.fingerless, 0.10) : 0),
       colorAt: (th: number, t: number) => tone(th,
         // creases at the two interphalangeal joints, on the palmar half only.
         // The sweep has seven nodes, so the PIP is at u=2/6 and the DIP at 4/6:
@@ -386,11 +414,14 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
         // as a dent rather than as a joint.
         (1 - 0.22 * (bump(t, 0.3333, 0.075) + bump(t, 0.6667, 0.065)) * (0.25 + 0.75 * abump(th, Math.PI, 1.5)))
         // and the nail: a pale, cool plate on the dorsal side of the last third
-        * (gl ? 1 : 1 + 0.12 * abump(th, 0, 0.62) * bump(t, 0.87, 0.14))),
+        * (1 + (1 - covered(t)) * 0.12 * abump(th, 0, 0.62) * bump(t, 0.87, 0.14))
+        // the hem itself is the worn, lifted edge of the leather
+        * (1 + (gl && gl.fingerless !== undefined ? 0.22 * bump(t, gl.fingerless - 0.02, 0.05) : 0)),
+        covered(t)),
       matAt: (th: number, t: number) => {
-        if (gl) return [gloveRough, 0, 0];
-        const nail = abump(th, 0, 0.58) * bump(t, 0.87, 0.14);
-        const q = finish(th, 0.85);
+        const cov = covered(t);
+        const nail = (1 - cov) * abump(th, 0, 0.58) * bump(t, 0.87, 0.14);
+        const q = finish(th, 0.34, cov);
         // a nail is the one genuinely glossy patch on a hand
         return [q[0] * (1 - 0.62 * nail), 0, q[2] * (1 - nail)];
       },
@@ -417,15 +448,17 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
     uvScale: [0.32, 0.30], capEnd: true, capHeight: 1.0,
     shape: (th, t) => 1
       - 0.11 * abump(th, Math.PI, 0.8) * (0.3 + 0.7 * t)
-      + 0.07 * abump(th, 0, 0.9) * bump(t, 0.42, 0.24),
+      + 0.07 * abump(th, 0, 0.9) * bump(t, 0.42, 0.24)
+      + (gl && gl.fingerless !== undefined ? 0.13 * bump(t, gl.fingerless + 0.10, 0.10) : 0),
     colorAt: (th: number, t: number) => tone(th,
       // five nodes, so the interphalangeal joint is at u=3/4
       (1 - 0.18 * bump(t, 0.75, 0.10) * (0.3 + 0.7 * abump(th, Math.PI, 1.5)))
-      * (gl ? 1 : 1 + 0.11 * abump(th, 0, 0.62) * bump(t, 0.91, 0.12))),
+      * (1 + (1 - covered(t)) * 0.11 * abump(th, 0, 0.62) * bump(t, 0.91, 0.12)),
+      covered(t)),
     matAt: (th: number, t: number) => {
-      if (gl) return [gloveRough, 0, 0];
-      const nail = abump(th, 0, 0.58) * bump(t, 0.91, 0.12);
-      const q = finish(th, 0.75);
+      const cov = covered(t);
+      const nail = (1 - cov) * abump(th, 0, 0.58) * bump(t, 0.91, 0.12);
+      const q = finish(th, 0.30, cov);
       return [q[0] * (1 - 0.62 * nail), 0, q[2] * (1 - nail)];
     },
   });

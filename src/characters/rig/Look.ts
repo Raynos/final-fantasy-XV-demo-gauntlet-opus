@@ -212,6 +212,22 @@ export interface ScarSpec {
 export interface GloveSpec {
   color: number | THREE.Color;
   rough?: number;
+  /**
+   * Which hands wear it. FFXV's party is not symmetric and this is not a
+   * detail: Noctis wears one glove, Gladiolus one wrap, Prompto two and Ignis
+   * two — see `docs/reference/plates/party-three-field-02.jpg`. Default both.
+   */
+  sides?: string[];
+  /**
+   * Fingerless cut, as the fraction of each finger the glove reaches before
+   * bare skin takes over. 0.42 lands just past the proximal knuckle, which is
+   * where Prompto's and Noctis's cut sits in the plate. Omit for a full glove.
+   *
+   * It is a tone and material switch along the sweep, not a second mesh: a
+   * glove that is its own geometry costs a draw call per hand and buys nothing
+   * a 1 mm hem ridge does not already say.
+   */
+  fingerless?: number;
 }
 
 /**
