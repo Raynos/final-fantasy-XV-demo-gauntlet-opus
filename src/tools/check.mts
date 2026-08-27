@@ -119,7 +119,10 @@ interface Gate {
    * (93/93, 31/31, 27 pass), which is a sharper check than any frame diff, and
    * `HARNESS_TURBO=0` turns it off to confirm a verdict does not depend on it.
    *
-   * `creaturecheck` is deliberately absent: it screenshots.
+   * `creaturecheck` is deliberately absent, but NOT because it screenshots --
+   * `grep -n screenshot src/tools/creaturecheck.mts` finds only a doc comment.
+   * It drives `enemies.update(1/60, g)` directly and never submits a frame at
+   * all, so there is nothing for turbo to ablate.
    */
   pixelBlind?: boolean;
 }
@@ -162,7 +165,9 @@ const GATES: Gate[] = [
     name: 'hydrocheck', script: 'hydrocheck.mts', kind: 'cpu', cost: 13.6,
     expect: 'percentile medians, and lift over the shuffled null',
   },
-  { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '27 pass, 0 fail', kind: 'browser', cost: 45 },
+  // 26 pass + 1 WIRED under turbo: the weapon-swap probe stands itself down
+  // rather than passing on frames it knows were never submitted. See its comment.
+  { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '26 pass, 1 wired, 0 fail', kind: 'browser', cost: 45 },
   { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
   { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
@@ -173,7 +178,11 @@ const GATES: Gate[] = [
   // `proudOf` over the final instance matrices, across the whole POI corpus
   // (every site force-built in one boot) and every live rock/debris instance.
   // A ratchet: the counts may not go up. See `project/float-baseline.json`.
-  { name: 'floatcheck', pixelBlind: true, script: 'floatcheck.mts', expect: 'nothing new floats or is buried', kind: 'browser', cost: 10.5 },
+  // NOT pixelBlind: `floatcheck` contains zero `g.frame(` calls and one
+  // `settle(30)`, and the ledger says so -- 10.3 s before turbo, 9.2 / 9.1 s
+  // after, of which 7.7 s is the lease. The flag bought under a third of a
+  // second and asserted a turbo validation this gate's coverage cannot support.
+  { name: 'floatcheck', script: 'floatcheck.mts', expect: 'nothing new floats or is buried', kind: 'browser', cost: 10.5 },
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.

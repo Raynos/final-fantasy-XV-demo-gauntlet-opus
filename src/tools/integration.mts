@@ -233,6 +233,24 @@ const results = await page.evaluate(async () => {
   });
 
   probe('combat', 'weapon swap is free', () => {
+    /**
+     * THIS PROBE CANNOT RUN UNDER TURBO, and saying so is the whole point.
+     *
+     * It exists to catch a synchronous shader link inside `renderer.render`:
+     * five `setWeapon` calls, each followed by one stepped frame, against a
+     * 250 ms budget. `HARNESS_TURBO` makes the daemon submit one frame in N,
+     * so four or five of those five frames skip submission entirely -- the
+     * exact call the budget is measuring. The probe would then pass at ~0 ms
+     * whatever the swap costs, which is a FALSE PASS on the one assertion here
+     * that is about rendering rather than about state.
+     *
+     * `WIRED` rather than `PASS`: it does not fail the gate (nothing is broken)
+     * but it does not claim to have proven anything either, and the summary
+     * line counts it as wired-but-unproven where somebody can see it.
+     * `HARNESS_TURBO=0 node src/tools/integration.mts` measures it for real.
+     */
+    const turbo = Number((window as unknown as { __TURBO?: number }).__TURBO) || 0;
+    if (turbo > 1) return W(`turbo 1-in-${turbo}: submission ablated, swap cost not measurable`);
     const c = g.get('Combat')!;
     const t0 = performance.now();
     for (const k of ['greatsword', 'polearm', 'daggers', 'firearm', 'sword'] as const) { c.setWeapon(k); step(1); }

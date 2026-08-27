@@ -80,7 +80,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 7;
+export const PROTOCOL = 8;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -266,24 +266,21 @@ export interface ShotsRequest extends PageOpts {
    * was 251 s of a 273 s `pnpm run check`, which made the gate suite one gate
    * wearing a suite's clothes.
    *
-   * Two costs come off. The screenshot goes entirely (encode plus a base64 CDP
-   * round trip per shot). And the **settle stops being drawn**: a pose is
-   * `applyShot / settle(60) / applyShot / settle(8)`, so 68 stepped frames, and
-   * `probes/turbocost.mts` measured a stepped frame at 11.66 ms of which
-   * **11.0 ms is draw submission**. The last eight frames are still submitted
-   * for real, because `renderer.info` is populated BY submission and a frame
-   * that is not drawn counts nothing.
+   * ONE cost comes off, and only one: the screenshot, which is an encode plus a
+   * base64 CDP round trip plus a cache write and a file copy, per shot. That is
+   * provably count-neutral -- `renderer.info` is read inside the `evaluate`,
+   * several statements before `page.screenshot` is called, so a picture nobody
+   * takes cannot change a number already read.
    *
-   * MEASURED ACROSS THE WHOLE CORPUS, not argued: `probes/posecost.mts` ran all
-   * 142 shots A/B/A and reports **5.71x (122.6 s -> 21.5 s) with zero hard
-   * mismatches**. Ten shots disagreed — and all ten are shots whose own two
-   * FULL arms disagree with each other, `setpiece_deadeye` by 65 calls against
-   * drawcheck's tolerance of 8. So the cheap path is exactly as deterministic
-   * as the expensive one, which is the only claim that matters here.
+   * **The pose itself is unchanged and every settle frame is still drawn.** An
+   * earlier version ablated submission across the settle as well, for 5.7x, and
+   * it moved 14 of 142 draw counts by up to 20 against a tolerance of 8. The
+   * full account is on the `g.settle(s)` call in `routeShots`; the short
+   * version is that TAA, LOD and streaming all key off submitted frames, and an
+   * undrawn settle reaches a different steady state.
    *
-   * NOT FOR PIXELS. TAA accumulates over the settle, so a frame posed this way
-   * is not the frame `shoot` produces, and these results are never cached as
-   * frames. Anything that will be looked at, diffed or judged must use the
+   * NOT FOR PIXELS ANYWAY. There is no image, so nothing here can enter the
+   * frame cache; anything that will be looked at, diffed or judged uses the
    * normal path.
    */
   countsOnly?: boolean;
@@ -1842,22 +1839,39 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
       [n, s, hideList, rawFrame, counts]: [string, number, string[], boolean, boolean],
     ) => {
       const g = window.GAME;
+      void counts;             // the pose is identical either way; see below
       g.applyShot(n);
-      if (counts) {
-        // The settle exists to let the world reach its posed steady state, and
-        // that is a SIMULATION property: companions arriving at formation
-        // slots, streaming resolving, the day cycle landing. None of it needs
-        // the frames to be submitted. Ablated here rather than in the game so
-        // `Game.frame` keeps one meaning for everybody else.
-        const real = g.post.render;
-        g.post.render = () => {};
-        try { g.settle(s); } finally { g.post.render = real; }
-      } else {
-        g.settle(s);
-      }
+      /**
+       * THE SETTLE IS ALWAYS DRAWN, and it was not always so.
+       *
+       * An earlier version of `countsOnly` also ablated `post.render` across
+       * the settle, on the theory that reaching the posed steady state is a
+       * simulation property and does not need the frames submitted. It is
+       * **5.7x faster and it is wrong**, and the way it was validated is the
+       * more useful half of the lesson.
+       *
+       * `probes/posecost.mts` A/B/A'd all 142 shots and reported "zero hard
+       * mismatches" -- because its `inSpread` rule excused any shot whose two
+       * FULL arms disagreed with each other, which is precisely the population
+       * a systematic offset hides in. A straight `--capture` against
+       * `countsOnly` diff on ONE sha, which is the experiment that should have
+       * been run first, says:
+       *
+       *     14 of 142 shots differ    prompto_closeup  498 -> 518  (+20)
+       *     deltas up to +20 / -14    ignis_closeup    499 -> 517  (+18)
+       *     tolerance is 8            poi_reststop     780 -> 795  (+15)
+       *
+       * `poi_reststop` is the highest shot carrying no debt entry, so that
+       * lands it **five draws** from a false red against `BRIEF.md`'s flat 800.
+       * TAA history, LOD and streaming all key off frames that were submitted;
+       * an undrawn settle reaches a different steady state.
+       *
+       * What `countsOnly` still buys is the screenshot, and that IS free:
+       * `renderer.info` is read here, several statements before
+       * `page.screenshot` runs. Skipping the picture cannot move a count.
+       */
+      g.settle(s);
       g.applyShot(n);          // re-anchor follow shots after settling
-      // ALWAYS DRAWN: `renderer.info` is populated by submission, so the frames
-      // the reading is taken from have to be real ones.
       g.settle(8);
       // Ablate AFTER settling: hiding a mesh must not change what the sim did,
       // only what the frame contains. Anything else and the two sides of the
