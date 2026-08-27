@@ -1370,11 +1370,27 @@ export class CombatSystem {
       if (this._framedTarget) { rig.setLockOn(null); this._framedTarget = null; }
       return;
     }
-    // The lock target when the player has set one; otherwise whatever is
-    // closest and in front, which is what the fight is *about* right now.
-    let t: Enemy | null = this.lockTarget;
-    if (!t || t.dead) t = this.autoTarget(38);
-    if (!t) t = this._nearestThreat(42);
+    // **Only frame a fight you are in.** `CameraRig` backs the arm off by
+    // `0.22 x` the distance to the lock target so both silhouettes fit, which
+    // is right for a Titan and ruinous for a sabertusk: fed a target twenty
+    // metres out it pushed the arm from 5.6 m to 10 m, put a boulder between
+    // the lens and the fight, and yo-yoed every time the nearest threat
+    // changed. Measured as a frame of pure motion blur with Noctis not in it.
+    // Inside FRAME_NEAR the same term is worth under three metres, which is
+    // the shoulder room it was written for.
+    const near = (e: Enemy | null, r: number) => {
+      if (!e || e.dead || !this.player) return false;
+      const dx = e.root.position.x - this.player.position.x;
+      const dz = e.root.position.z - this.player.position.z;
+      return dx * dx + dz * dz < r * r;
+    };
+    // Hysteresis, and the player's own lock first. Without the hold the framed
+    // target flips between two animals circling at the same radius, and every
+    // flip is a camera move.
+    let t: Enemy | null = near(this.lockTarget, FRAME_HOLD) ? this.lockTarget : null;
+    if (!t && near(this._framedTarget, FRAME_HOLD)) t = this._framedTarget;
+    if (!t) t = this.autoTarget(FRAME_NEAR);
+    if (!t) t = this._nearestThreat(FRAME_NEAR);
     if (t !== this._framedTarget) {
       rig.setLockOn(t ? t.root : null);
       this._framedTarget = t;
@@ -1810,6 +1826,13 @@ const PERCH_REGEN = 52;
 const PERCH_SECONDS = 3.2;
 
 /** Motion value of one phantom arm coming down during the Armiger. */
+/**
+ * Metres: how close a threat has to be before the combat camera frames it, and
+ * how far it may drift before the camera lets it go. @see _frameCombat
+ */
+const FRAME_NEAR = 16;
+const FRAME_HOLD = 22;
+
 const ARMIGER_MOTION = 1.2;
 /** Motion value of an uncrafted elemental burst. */
 const SPELL_MOTION = 2.2;
