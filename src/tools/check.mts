@@ -10,22 +10,52 @@
  *   node src/tools/check.mts              # everything except the perf gates
  *   node src/tools/check.mts --perf       # include perf.mts and gameplay.mts
  *   node src/tools/check.mts --only integration,uxcheck
+ *   node src/tools/check.mts --no-cache   # re-derive verdicts this tree already has
+ *   node src/tools/check.mts --serial     # one at a time, the old behaviour
+ *   node src/tools/check.mts --set-baseline   # re-record the suite's own time
  *
  * `--perf` is opt-out by default on purpose: **a perf number taken while agents
  * are running is meaningless.** Six or more headless Chromiums saturate the
  * machine. Pass it only on a quiet tree.
+ *
+ * ## Three things make this fast, and each closes a specific hole
+ *
+ * **A cache keyed on the tree sha** (`gatecache.mts`). Eighteen gates are a
+ * pure function of the tree they read, and this ran all of them every time —
+ * so the second `check` on an unchanged tree cost thirteen minutes to re-derive
+ * a known fact. Only a PASS on a clean tree is stored; see that file for why.
+ *
+ * **Two pools instead of one queue.** The old loop was one `await` per child,
+ * strictly serially, while four browser slots sat idle. The browser gates are
+ * ~6 minutes of mostly *waiting* and the CPU gates are ~40 seconds of mostly
+ * *computing*; run each set in its own pool, longest-first, and the suite is
+ * bounded by its longest single gate rather than by their sum. The suite goes
+ * on the daemon's **sweep** lane (`HARNESS_LANE`), so an agent waiting on one
+ * shot still overtakes it.
+ *
+ * **A ratchet on its own wall time** (`project/check-baseline.json`). The suite
+ * grew 9 -> 13 minutes with everyone watching gates pass, because nothing
+ * metered the meter. A cold, quiet, uncached run now compares itself against
+ * its recorded time and FAILS on a regression past tolerance. A new gate joins
+ * the roster by paying its row.
  *
  * `PORT` is honoured and forwarded; the capture daemon takes `PORT+1`.
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { lookup, store, prune } from './gatecache.mts';
+import { appendJob } from './ledger.mts';
+import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(HERE, '..', '..');
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(HERE, '..', '..', 'node_modules/.bin/vite');
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 
 /**
  * One gate: either a `.mts` under this directory or an explicit command.
@@ -45,6 +75,23 @@ interface Gate {
   /** Only run under `--perf`, and only on a quiet tree. */
   perf?: boolean;
   /**
+   * Which pool it belongs to.
+   *
+   * `browser` means it takes a daemon page or a frame — its cost is mostly
+   * waiting on one of four browser slots, so four of them overlap almost for
+   * free. `cpu` means bare Node building terrain or trees in process, where
+   * overlapping past a handful only makes each one slower.
+   */
+  kind: 'cpu' | 'browser';
+  /**
+   * Measured quiet-machine seconds, from `project/TIMINGS.md`.
+   *
+   * Used only to order the pools longest-first, which is what makes a pool of
+   * four finish in `max(longest, sum/4)` rather than in `sum`. Being wrong
+   * costs a little scheduling, never a wrong verdict.
+   */
+  cost: number;
+  /**
    * In the **push gate** (`pnpm run check:gate`).
    *
    * The roster lives here and nowhere else, which is the whole point. The
@@ -58,16 +105,16 @@ interface Gate {
   gate?: boolean;
 }
 
-/** Ordered cheapest-first, so a broken tree fails fast. */
+/** Ordered cheapest-first; the pools re-sort by `cost`, this order is for reading. */
 const GATES: Gate[] = [
-  { name: 'build', cmd: VITE, args: ['build'], expect: 'builds' },
-  { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
-  { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
+  { name: 'build', cmd: VITE, args: ['build'], expect: 'builds', kind: 'cpu', cost: 0.8 },
+  { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`', kind: 'cpu', cost: 0.2 },
+  { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable', kind: 'cpu', cost: 0.2 },
   // Bare Node, ~3 s: it grows the trees and the bestiary in process and
   // compares outlines. A ratchet like `anycheck` -- it fails on a NEW pair of
   // meshes sharing one silhouette, not on the debt recorded in
   // `project/silhouette-baseline.json`.
-  { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes' },
+  { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes', kind: 'cpu', cost: 5.6 },
   // The same bench over the *generated* rock families, which need a different
   // ratchet: a tor's name is its seed index, so any edit to `torPlan` renumbers
   // every subject and a pair-named baseline cries wolf on the commits it exists
@@ -78,53 +125,73 @@ const GATES: Gate[] = [
     name: 'silrocks',
     args: [path.join(HERE, 'silhouette.mts'), '--set', 'rocks', '--seeds', '24', '--reseeds', '5'],
     expect: 'no rock family below its recorded distinct/variety floor',
+    kind: 'cpu', cost: 14.1,
   },
   // Winding, orientation and attribute asserts over every generator bare Node
   // can build. Five controls with known answers run first and the tool exits
   // VOID rather than PASS if any comes back wrong.
-  { name: 'geocheck', script: 'geocheck.mts', expect: '0 non-finite, 0 bad indices, no new edge-parity imbalance' },
+  {
+    name: 'geocheck', script: 'geocheck.mts', kind: 'cpu', cost: 1.1,
+    expect: '0 non-finite, 0 bad indices, no new edge-parity imbalance',
+  },
   // Bare Node too, but it builds the field, so ~20 s. Two claims in
   // `Terrain.erosionAt`'s contract -- every channel is a percentile, and the
   // hot cells form a network rather than a haze -- each against its own
   // control, including the checkerboard that says whether the instrument is
   // saturated.
-  { name: 'hydrocheck', script: 'hydrocheck.mts', expect: 'percentile medians, and lift over the shuffled null' },
-  { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail' },
-  { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93' },
-  { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
-  { name: 'combatloop', gate: true, script: 'combatloop.mts', expect: '31/31' },
-  { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures' },
+  {
+    name: 'hydrocheck', script: 'hydrocheck.mts', kind: 'cpu', cost: 13.6,
+    expect: 'percentile medians, and lift over the shuffled null',
+  },
+  { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail', kind: 'browser', cost: 45 },
+  { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
+  { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
+  { name: 'combatloop', gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
+  { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures', kind: 'cpu', cost: 7.6 },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
-  { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes' },
+  { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
   // `proudOf` over the final instance matrices, across the whole POI corpus
   // (every site force-built in one boot) and every live rock/debris instance.
   // A ratchet: the counts may not go up. See `project/float-baseline.json`.
-  { name: 'floatcheck', script: 'floatcheck.mts', expect: 'nothing new floats or is buried' },
+  { name: 'floatcheck', script: 'floatcheck.mts', expect: 'nothing new floats or is buried', kind: 'browser', cost: 10.5 },
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.
-  { name: 'horizoncheck', script: 'horizoncheck.mts', expect: 'MCC >= 0.85, or <= 1% disagreement, vs the ray march' },
+  {
+    name: 'horizoncheck', script: 'horizoncheck.mts', kind: 'cpu', cost: 0.3,
+    expect: 'MCC >= 0.85, or <= 1% disagreement, vs the ray march',
+  },
   // These two do NOT spawn a server; they assume one is already up. Everything
   // else starts its own, and `strictPort` means a pre-started vite on the same
   // port would break those -- so they get a dedicated one, scanned for below.
-  { name: 'heightcheck', script: 'heightcheck.mts', expect: '0.000 m GPU vs CPU', needsServer: true },
-  { name: 'driftcheck', script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true },
+  { name: 'heightcheck', script: 'heightcheck.mts', expect: '0.000 m GPU vs CPU', needsServer: true, kind: 'browser', cost: 9.3 },
+  { name: 'driftcheck', script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true, kind: 'browser', cost: 37.8 },
   // BRIEF rule 3's draw-call budget, over the whole corpus. A ratchet: the
   // eleven shots that were already over are recorded in
   // `project/draw-baseline.json` and may only go down; everything else obeys
   // the flat 800. Frames come from the cache on a build anyone has already
-  // shot, which is why it sits here and not with the perf gates.
-  { name: 'drawcheck', script: 'drawcheck.mts', expect: 'no new shot over BRIEF\'s 800, no recorded shot worse' },
-  { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true },
-  { name: 'gameplay', script: 'gameplay.mts', expect: '60 fps under real input', perf: true },
+  // shot, which is why it sits here and not with the perf gates. It is the
+  // suite's longest single gate, so the pool starts it first.
+  {
+    name: 'drawcheck', script: 'drawcheck.mts', kind: 'browser', cost: 146,
+    expect: 'no new shot over BRIEF\'s 800, no recorded shot worse',
+  },
+  { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true, kind: 'browser', cost: 780 },
+  { name: 'gameplay', script: 'gameplay.mts', expect: '60 fps under real input', perf: true, kind: 'browser', cost: 360 },
 ];
 
 function parse(argv: string[]) {
-  const o: { perf: boolean, only: string[] | null, gate: boolean } = { perf: false, only: null, gate: false };
+  const o = {
+    perf: false, only: null as string[] | null, gate: false,
+    cache: true, serial: false, setBaseline: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--perf') o.perf = true;
     else if (argv[i] === '--gate') o.gate = true;
+    else if (argv[i] === '--no-cache') o.cache = false;
+    else if (argv[i] === '--serial') o.serial = true;
+    else if (argv[i] === '--set-baseline') o.setBaseline = true;
     else if (argv[i] === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
   }
   return o;
@@ -148,7 +215,7 @@ function parse(argv: string[]) {
 function serve(port: number): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
     const p = spawn(VITE, ['--port', String(port), '--strictPort'], {
-      cwd: path.join(HERE, '..', '..'), env: { ...process.env, PORT: String(port) },
+      cwd: ROOT, env: { ...process.env, PORT: String(port) },
     });
     let out = '', settled = false;
     const fail = (why: string) => { if (!settled) { settled = true; reject(new Error(`${why}\n${out.slice(-400)}`)); } };
@@ -188,20 +255,22 @@ function verdict(code: number | null): string {
   return code === VOID ? 'VOID' : 'FAIL';
 }
 
-function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<{ gate: Gate, code: number | null, ms: number, tail: string }> {
+interface Result { gate: Gate; code: number | null; ms: number; tail: string; cached: boolean }
+
+function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<Result> {
   return new Promise((resolve) => {
     const cmd = gate.cmd || process.execPath;
     const args = gate.args || (gate.script ? [path.join(HERE, gate.script)] : []);
     const t0 = Date.now();
     let out = '';
-    const p = spawn(cmd, args, { env: env || process.env, cwd: path.join(HERE, '..', '..') });
+    const p = spawn(cmd, args, { env: env || process.env, cwd: ROOT });
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
     p.on('close', (code) => resolve({
-      gate, code, ms: Date.now() - t0,
+      gate, code, ms: Date.now() - t0, cached: false,
       tail: out.trim().split('\n').filter(Boolean).slice(-2).join(' | ').slice(0, 110),
     }));
-    p.on('error', (e) => resolve({ gate, code: 127, ms: Date.now() - t0, tail: String(e.message) }));
+    p.on('error', (e) => resolve({ gate, code: 127, ms: Date.now() - t0, tail: String(e.message), cached: false }));
   });
 }
 
@@ -248,40 +317,194 @@ function portOpen(port: number): Promise<boolean> {
   });
 }
 
+// ------------------------------------------------------------- what this run is
+
+/**
+ * The tree every verdict in this run is about, or null when there isn't one.
+ *
+ * Null on a dirty tree, deliberately: half these gates read the working tree in
+ * process and half capture `--build HEAD`, and one key can only honestly cover
+ * both when they are the same thing.
+ */
+const treeSha = workingTreeDirty() ? null : shaOf(resolveBuild('HEAD'));
+/**
+ * Was the machine quiet? Provenance for the cache and the ratchet, not a gate.
+ *
+ * Load average over the physical cores, sampled once at the start. It is a
+ * blunt instrument and it is the honest one available without asking every
+ * other agent what it is doing; `TIMINGS.md` records the same gates running a
+ * third faster on a quiet box, so a suite time without this stamp is not a
+ * number anyone can compare.
+ */
+const quiet = os.loadavg()[0] < os.cpus().length / 3;
+
 const auxPort = await freePort(basePort + 50);
-let aux: ChildProcess | null = null;
+/**
+ * Held in a box, not a `let`.
+ *
+ * `ensureAux()` is the only writer and it is a function, so TypeScript's
+ * control-flow analysis narrows the bare `let` to `null` at every later use and
+ * `aux.kill()` fails to compile. A one-field holder is the honest way to say
+ * "this is written from somewhere else".
+ */
+const aux: { p: ChildProcess | null } = { p: null };
 /** Why the aux server failed, if it did. Reported, never swallowed. */
 let auxError: string | null = null;
 
-const results = [];
-for (const g of todo) {
-  process.stdout.write(`  ${g.name.padEnd(14)}`);
+async function ensureAux(): Promise<void> {
+  // Do NOT swallow this. The comment that used to sit here said the gate would
+  // report it; the gate cannot -- it does not start a server, so all it can do
+  // is fail to connect and die with a Node stack, which reads in this table as
+  // a terrain regression. Two separate lanes went and investigated heightcheck
+  // before noticing it passes standalone.
+  if (aux.p || auxError) return;
+  try { aux.p = await serve(auxPort); } catch (e) { auxError = String((e as Error).message || e); }
+}
+
+const t0 = Date.now();
+const results: Result[] = [];
+const width = Math.max(...todo.map((g) => g.name.length)) + 2;
+
+function report(r: Result): void {
+  const mark = r.cached ? 'cached' : `${(r.ms / 1000).toFixed(1)}s`;
+  process.stdout.write(`  ${r.gate.name.padEnd(width)}${verdict(r.code)}  ${mark.padStart(7)}  ${r.tail}\n`);
+}
+
+/**
+ * Run one gate: cache, then aux server, then the child — and record all three.
+ *
+ * The ledger line is what makes the suite's own cost visible next to every
+ * other harness job, which is the whole of "nothing metered the meter".
+ */
+async function runGate(g: Gate): Promise<Result> {
+  if (opts.cache) {
+    const hit = lookup(g.name, treeSha);
+    // A measurement is not an assertion: a perf verdict taken on a busy box
+    // says nothing about a quiet one, so it never replays as a pass.
+    if (hit && !(g.perf && !hit.quiet)) {
+      const r: Result = { gate: g, code: 0, ms: hit.ms, tail: hit.tail, cached: true };
+      results.push(r);
+      report(r);
+      return r;
+    }
+  }
   let env = process.env;
   if (g.needsServer) {
-    // Do NOT swallow this. The comment that used to sit here said the gate
-    // would report it; the gate cannot -- it does not start a server, so all it
-    // can do is fail to connect and die with a Node stack, which reads in this
-    // table as a terrain regression. Two separate lanes went and investigated
-    // heightcheck tonight before noticing it passes standalone.
-    if (!aux && !auxError) {
-      try { aux = await serve(auxPort); } catch (e) { auxError = String((e as Error).message || e); }
-    }
+    await ensureAux();
     if (auxError) {
-      results.push({ gate: g, code: 1, ms: 0, tail: `aux server on ${auxPort} never came up: ${auxError}` });
-      process.stdout.write(`FAIL  0.000s  aux server on ${auxPort} never came up: ${auxError}\n`);
-      continue;
+      const r: Result = {
+        gate: g, code: 1, ms: 0, cached: false,
+        tail: `aux server on ${auxPort} never came up: ${auxError}`,
+      };
+      results.push(r);
+      report(r);
+      return r;
     }
     env = { ...process.env, PORT: String(auxPort) };
   }
-  const r = await run(g, env);
+  const started = Date.now();
+  const r = await run(g, {
+    ...env,
+    // The suite is throughput work by definition: an agent waiting on one shot
+    // must overtake it. `HARNESS_LANE` reaches nine tools' hand-rolled parsers
+    // without touching any of them.
+    HARNESS_LANE: 'sweep',
+    HARNESS_AGENT: `check:${g.name}`,
+  });
   results.push(r);
-    process.stdout.write(`${verdict(r.code)}  ${String(r.ms / 1000).slice(0, 5)}s  ${r.tail}\n`);
+  report(r);
+  store({
+    gate: g.name, sha: treeSha ?? '', code: r.code ?? 1, ms: r.ms, tail: r.tail,
+    at: new Date().toISOString(), quiet, loadavg: Number(os.loadavg()[0].toFixed(2)),
+  });
+  appendJob({
+    t: new Date().toISOString(),
+    kind: `gate:${g.name}`,
+    agent: 'check',
+    lane: 'sweep',
+    build: treeSha ? `sha:${treeSha.slice(0, 12)}` : 'dirty',
+    queuedMs: 0,
+    ranMs: Date.now() - started,
+    verdict: r.code === 0 ? 'ok' : 'error',
+    note: verdict(r.code),
+  });
+  return r;
 }
-if (aux) aux.kill();
 
+/** Run `gates` at most `limit` at a time, longest-first. */
+async function pool(gates: Gate[], limit: number): Promise<void> {
+  const queue = [...gates].sort((a, b) => b.cost - a.cost);
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, queue.length)) }, async () => {
+    for (;;) {
+      const g = queue.shift();
+      if (!g) return;
+      await runGate(g);
+    }
+  });
+  await Promise.all(workers);
+}
+
+// ------------------------------------------------------------------- the run
+
+console.log(`  ${treeSha ? `tree ${treeSha.slice(0, 12)}` : 'DIRTY tree — nothing cached, nothing recorded'}`
+  + `  ·  ${quiet ? 'quiet' : `busy (load ${os.loadavg()[0].toFixed(1)})`}`
+  + `  ·  ${opts.serial ? 'serial' : 'parallel'}\n`);
+
+/**
+ * `build` first and alone: it is 0.8 s and it is the fail-fast.
+ *
+ * A broken build makes every other gate fail in its own confusing way — a
+ * `waitForFunction` timeout, a Node stack in the middle of a table — so paying
+ * one second to turn eighteen mystery failures into one honest one is the
+ * cheapest trade in this file.
+ */
+const buildGate = todo.find((g) => g.name === 'build');
+if (buildGate) {
+  const r = await runGate(buildGate);
+  if (r.code !== 0) {
+    console.log('\n  build failed — the rest of the suite would only fail in more confusing ways.');
+    console.log(`  failing: build (expected ${buildGate.expect})`);
+    process.exit(1);
+  }
+}
+
+const rest = todo.filter((g) => g.name !== 'build');
+if (opts.serial) {
+  for (const g of rest) await runGate(g);
+} else {
+  /**
+   * Two pools, run at once, because the two kinds of gate contend for different
+   * things.
+   *
+   * The browser pool matches `BROWSER_BUDGET`: the daemon queues past it
+   * anyway, and spawning more node processes than there are slots only buys
+   * memory. The CPU pool is deliberately small — these gates build terrain
+   * fields and tree meshes in process, and past a handful they simply make each
+   * other slower.
+   *
+   * The perf gates take the daemon's exclusive lease, which drains every worker
+   * and closes every leased page. They cannot overlap with anything, including
+   * each other, so they run last and alone.
+   */
+  const browsers = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
+  const cpus = Math.max(2, Math.min(4, os.cpus().length - 2));
+  await Promise.all([
+    pool(rest.filter((g) => g.kind === 'cpu' && !g.perf), cpus),
+    pool(rest.filter((g) => g.kind === 'browser' && !g.perf), browsers),
+  ]);
+  for (const g of rest.filter((g) => g.perf)) await runGate(g);
+}
+
+if (aux.p) aux.p.kill();
+prune();
+
+const wallSec = (Date.now() - t0) / 1000;
 const failed = results.filter((r) => r.code !== 0 && r.code !== VOID);
 const voided = results.filter((r) => r.code === VOID);
-console.log(`\n${results.length - failed.length - voided.length}/${results.length} gates passed`);
+const cached = results.filter((r) => r.cached);
+
+console.log(`\n${results.length - failed.length - voided.length}/${results.length} gates passed`
+  + ` in ${wallSec.toFixed(1)}s${cached.length ? ` (${cached.length} from cache)` : ''}`);
 if (voided.length) {
   console.log(`VOID (measured nothing, not a regression): ${voided.map((v) => v.gate.name).join(', ')}`);
   console.log('  the ruler refused to certify -- re-run on a quiet tree; do not read these as numbers.');
@@ -289,4 +512,60 @@ if (voided.length) {
 if (failed.length) {
   console.log(`failing: ${failed.map((f) => `${f.gate.name} (expected ${f.gate.expect})`).join(', ')}`);
 }
+
+// --------------------------------------------- the meta-gate: the suite's own time
+
+/**
+ * The suite grew 9 -> 13 minutes while everyone watched gates pass.
+ *
+ * Nothing metered the meter, so the only signal was a human noticing that
+ * `check` "feels slow" — which is exactly the signal that failed for four
+ * weeks. A budget in prose regressed; a budget the suite enforces cannot.
+ *
+ * It grades only a run that can be compared: the full roster, nothing served
+ * from cache, on a quiet machine. Anything else records nothing and says so,
+ * because a ratchet that fires on a contended box is a ratchet people learn to
+ * ignore — the same failure mode `drawcheck`'s tolerance exists to avoid.
+ */
+interface SuiteBaseline { note: string; wallSec: number; tolerance: number; gates: Record<string, number>; at: string; cores: number }
+const BASELINE = path.join(ROOT, 'project', 'check-baseline.json');
+const gradeable = !opts.only && !opts.gate && !cached.length && quiet && !failed.length && !voided.length;
+
+if (opts.setBaseline) {
+  if (!gradeable) {
+    console.log('\n  --set-baseline needs a clean, quiet, fully-uncached run of the whole roster.');
+    process.exit(1);
+  }
+  const next: SuiteBaseline = {
+    note: 'What the whole suite costs on a quiet machine, cold. `check` fails itself when it '
+      + 'regresses past `tolerance`. A new gate joins the roster by paying its row here.',
+    wallSec: Number(wallSec.toFixed(1)),
+    tolerance: 0.3,
+    gates: Object.fromEntries(results.map((r) => [r.gate.name, Number((r.ms / 1000).toFixed(1))])),
+    at: new Date().toISOString(),
+    cores: os.cpus().length,
+  };
+  writeFileSync(BASELINE, `${JSON.stringify(next, null, 2)}\n`);
+  console.log(`\n  recorded ${next.wallSec}s as the suite's own budget -> project/check-baseline.json`);
+} else if (existsSync(BASELINE)) {
+  const base = JSON.parse(readFileSync(BASELINE, 'utf8')) as SuiteBaseline;
+  const ceiling = base.wallSec * (1 + base.tolerance);
+  if (!gradeable) {
+    console.log(`\n  suite budget ${base.wallSec}s (not graded: `
+      + `${cached.length ? 'served from cache' : !quiet ? 'busy machine' : opts.only || opts.gate ? 'partial roster' : 'a gate is red'})`);
+  } else if (wallSec > ceiling) {
+    console.log(`\n  SUITE BUDGET BLOWN: ${wallSec.toFixed(1)}s against ${base.wallSec}s `
+      + `+${Math.round(base.tolerance * 100)}% = ${ceiling.toFixed(1)}s.`);
+    for (const r of [...results].sort((a, b) => b.ms - a.ms).slice(0, 4)) {
+      const was = base.gates[r.gate.name];
+      console.log(`    ${r.gate.name.padEnd(width)}${(r.ms / 1000).toFixed(1)}s`
+        + `${was === undefined ? '  (new gate — pay its row with --set-baseline)' : ` was ${was}s`}`);
+    }
+    console.log('    Make it faster, or re-record with --set-baseline and say why in the commit.');
+    process.exit(1);
+  } else {
+    console.log(`\n  suite budget ${wallSec.toFixed(1)}s / ${base.wallSec}s +${Math.round(base.tolerance * 100)}%`);
+  }
+}
+
 if (failed.length || voided.length) process.exit(1);

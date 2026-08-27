@@ -123,7 +123,11 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
   const ref = has('dirty') ? 'dirty' : val('build', 'HEAD');
   return {
     build: resolveBuild(ref),
-    lane: (val('lane', defaults.lane ?? 'fix') === 'sweep' ? 'sweep' : 'fix'),
+    // `HARNESS_LANE` before the flag, the same way `HARNESS_AGENT` works: it is
+    // how `check.mts` puts the whole gate suite on the sweep lane without
+    // touching nine tools' hand-rolled argument parsers. A suite is throughput
+    // work by definition and must never starve an agent waiting on one shot.
+    lane: ((process.env.HARNESS_LANE || val('lane', defaults.lane ?? 'fix')) === 'sweep' ? 'sweep' : 'fix'),
     agent: process.env.HARNESS_AGENT || val('agent', path.basename(process.argv[1] || 'anon', '.mts')),
     deadlineMs: Number(val('deadline', String(defaults.deadlineMs ?? 0))),
     cold: has('cold'),
