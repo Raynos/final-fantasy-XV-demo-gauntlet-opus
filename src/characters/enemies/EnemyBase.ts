@@ -247,6 +247,12 @@ export interface SpeciesDef {
   _groundCal?: GroundCal;
 }
 
+/**
+ * Seconds a flanking pack member waits between opportunist attacks, before the
+ * per-member stagger that keeps them from landing together. @see _tickStrafe
+ */
+const HARRY_COOLDOWN = 4.5;
+
 /** Per-pose lift curves over `GROUND_CAL_T`, keyed `pose` or `pose:attackId`. */
 export type GroundCal = Record<string, Float64Array>;
 
@@ -630,6 +636,8 @@ export class Enemy {
   /** True while head-down reloading — the window the player is meant to use. */
   reloading!: boolean;
   _roleTimer!: number;
+  /** Seconds before this flanker may harry again. @see _tickStrafe */
+  _harryCooldown!: number;
   _senseTimer!: number;
   _strafeDir!: number;
   _swung!: boolean;
@@ -699,6 +707,7 @@ export class Enemy {
     this.pack = null;
     this._senseTimer = (this.id % 7) * 0.037;
     this._roleTimer = 0;
+    this._harryCooldown = 0;
     this._lostTimer = 0;
     this._strafeDir = (this.id % 2) ? 1 : -1;
     this._wanderTimer = 0;
@@ -793,6 +802,7 @@ export class Enemy {
     this.awareness = 0;
     this._rouse = 0;
     this._hadTarget = false;
+    this._harryCooldown = 0;
     this.target = null;
     this.pack = null;
     this.patrol = null;
@@ -1264,6 +1274,36 @@ export class Enemy {
     return null;
   }
 
+  /**
+   * The least-committed attack that reaches `dist` — the snap, not the leap.
+   * A harry from outside the player's view has to be survivable on reaction.
+   */
+  _harryAttack(dist: number): EnemyAttack | null {
+    let best: EnemyAttack | null = null;
+    for (const a of this.attacks) {
+      if (a.phase != null && a.phase > this.phaseIndex) continue;
+      if (a.lunge) continue;
+      if (dist > (a.range || this.attackRange) * this.scale) continue;
+      if (a.minRange && dist < a.minRange * this.scale) continue;
+      if (!best || (a.mult ?? 1) < (best.mult ?? 1)) best = a;
+    }
+    return best;
+  }
+
+  /**
+   * Is this creature behind `t`? Companions carry no heading, so a threat that
+   * cannot say which way it is facing is never counted as having a back.
+   */
+  _isBehind(t: Threat | null): boolean {
+    const p = threatPos(t);
+    const h = t && typeof (t as { heading?: number }).heading === 'number'
+      ? (t as { heading: number }).heading : null;
+    if (!p || h == null) return false;
+    const dx = this.root.position.x - p.x, dz = this.root.position.z - p.z;
+    const d = Math.hypot(dx, dz) || 1e-4;
+    return ((dx / d) * Math.sin(h) + (dz / d) * Math.cos(h)) < -0.15;
+  }
+
   /** Longest range any currently usable attack reaches. */
   get reach() {
     if (!this.attacks) return this.attackRange * this.scale;
@@ -1383,12 +1423,15 @@ export class Enemy {
     }
 
     // Arm the rouse on the edge where this creature acquires a target from a
-    // standing start. It has to be an edge tested around `_sense`, because a
-    // packmate's `Pack.alert` writes `target` and `state` directly and never
-    // comes through here — so watching for the state change would miss every
-    // member of the pack except the one that actually saw you.
-    const wasCalm = !this._hadTarget
-      && (this.state === 'idle' || this.state === 'patrol' || this.state === 'alert' || this.state === 'sleep');
+    // standing start. The edge is `_hadTarget` **and nothing else**: a
+    // packmate's `Pack.alert` writes `target` *and* `state = 'chase'` directly,
+    // from inside another enemy's `_sense`, so by the time this one's update
+    // comes round it is already in `chase` with no target recorded. Gating the
+    // edge on "was in a calm state" therefore armed the beat on exactly one
+    // member of the pack — the one that actually saw you — and let the other
+    // six charge straight past it. Measured: `notice -> engaged` stayed at
+    // 0.30 s with the beat supposedly in.
+    const wasCalm = !this._hadTarget;
 
     this._sense(dt, ctx);
 
@@ -1689,6 +1732,40 @@ export class Enemy {
       }
       this.setState('chase');
       return;
+    }
+
+    // A flanker takes the shot it is given.
+    //
+    // The engage token exists so a pack does not all pile in at once, and it
+    // does that job — but it also meant a flanker *never attacked, ever*. In a
+    // seven-strong sabertusk den two animals fought and five orbited, and the
+    // measured pressure was 0.37 attacks per second across the whole den
+    // (`probes/fightshape.mts`). That is not a pack; it is a queue with an
+    // audience, and it is a large part of why a field encounter here has no
+    // rhythm.
+    //
+    // A pack does not queue: the ones you are not looking at bite you. So a
+    // flanker that is already in range, has been circling long enough to have
+    // committed to a bearing, and is **behind its target**, opens its cheapest
+    // attack. Three terms, and each is load-bearing:
+    //
+    // - *behind* is what keeps this from becoming a free extra attacker. Turn
+    //   to face it and the harry stops, which is the read the player is being
+    //   asked to make and the reason the ring rotates.
+    // - *cheapest* — `_harryAttack` takes the shortest, least-committed thing
+    //   in the repertoire, never the lunge. Being opened on by a full pounce
+    //   from behind is not pressure, it is a coin flip.
+    // - *the long cooldown* is on the harry, not on the attack, so the token
+    //   holder's cadence is untouched and the flankers cannot out-damage it.
+    if (this._harryCooldown > 0) this._harryCooldown -= dt;
+    else if (this._atkCooldown <= 0 && !this.reloading
+      && this.stateTime > 0.8 && dist <= this.reach && this._isBehind(target)) {
+      const a = this._harryAttack(dist);
+      if (a) {
+        this._harryCooldown = HARRY_COOLDOWN + (this.id % 5) * 0.3;
+        this._beginAttack(a);
+        return;
+      }
     }
     if (dist > want * 2.6 + 4) { this.setState('chase'); return; }
 
