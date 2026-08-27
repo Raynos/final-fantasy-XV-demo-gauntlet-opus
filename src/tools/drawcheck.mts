@@ -80,7 +80,7 @@
  * It is the shape `floatcheck`, `silhouette` and `anycheck` already use here,
  * for the same reason.
  */
-import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -183,10 +183,31 @@ function writeProfile(rows: { name: string, calls: number }[]): void {
  * is slack for that drift and NOT a licence to spend it: `--set-baseline`
  * exists to lower these numbers, never to raise them.
  *
- * A second, smaller source is the boot itself: a fresh render of `town_night`
- * minutes after the one that set the ledger read **823 against 818**, on a
- * build that differed from it only by other lanes' commits. The two causes are
- * not separated and eight covers both.
+ * A second source was the boot itself, and it is **no longer unexplained**. A
+ * freshly booted page drew more than a reused one because `VehicleBody` and
+ * `Player` damp their attitude and gait exponentially — asymptotically, so they
+ * are still moving at the 68th frame of the first pose on a page and at rest by
+ * the second — and `VelocityPass` drew a proxy for each still-moving mesh.
+ * Both now implement `converge()`. `town_forecourt` went 806/786/786/786 to a
+ * flat 786; `poi_reststop` and `hero_closeup` from 5 to 0.
+ * See `probes/thesixty.mts`, which is the instrument that names it.
+ *
+ * **The live set-piece scenarios are the deliberate exception.**
+ * `Director._setPieceScenario` turns the encounter loop back ON, because the
+ * whole subject of those shots is a fight in progress; its own comment says the
+ * capture is "of whatever the fight genuinely does N fixed steps in". So
+ * `setpiece_deadeye` really does have 16 enemies on the first pose of a page
+ * and 4 on later ones, and reads 579 then 514, 514, 514. That is not noise and
+ * it is not a bug to fix here — making it deterministic would contradict the
+ * scenario's purpose and re-baseline every combat shot, which `Director.init`
+ * explicitly warns against.
+ *
+ * **It costs this gate nothing**, and that is worth stating rather than
+ * assuming: the ratchet grades only shots that are *over budget*, and the live
+ * set-pieces sit 220 calls under it with no debt entry. They enter the corpus
+ * only through the rotating sixth, where they are compared against the 800
+ * budget and clear it in both states. A shot that is never graded cannot be
+ * graded noisily.
  */
 const TOLERANCE = 8;
 
@@ -528,6 +549,21 @@ async function main(): Promise<void> {
       budget,
       over: Object.fromEntries(over.map((r) => [r.name, r.calls])),
     };
+    /**
+     * **An empty ledger is deleted, not written empty.** The note above has
+     * said so since the file was created, and leaving a `{"over": {}}` behind
+     * would be a debt file that reads as debt while asserting none — the exact
+     * shape of stale document this repo keeps having to trim. The read path
+     * already treats a missing file as "the flat budget applies to everything"
+     * and says so out loud, so deleting it is the state the gate is designed
+     * for rather than a case it merely tolerates.
+     */
+    if (!over.length) {
+      await rm(BASELINE, { force: true });
+      console.log(`\nno shot is over ${budget}: removed ${path.relative(ROOT, BASELINE)}`
+        + ' — the flat rule now applies to every shot, with no recorded debt.');
+      process.exit(0);
+    }
     await writeFile(BASELINE, `${JSON.stringify(b, null, 1)}\n`);
     console.log(`\nwrote ${path.relative(ROOT, BASELINE)}: ${over.length} shot(s) over ${budget}`);
     process.exit(0);
