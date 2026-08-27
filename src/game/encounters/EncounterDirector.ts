@@ -945,7 +945,7 @@ export class EncounterDirector {
     if (this.party) for (const m of this.party.members) if (m.taunting > 0) m.taunting -= 0.5;
 
     this._wild = wildTerritoriesNear(pp.x, pp.z, 400, pressure, this._eco,
-      this.game.seed ?? 1337);
+      this.game.seed ?? 1337, (this.rpg && this.rpg.noctis && this.rpg.noctis.level) || 0);
 
     // Authored first, so a named place wins the creature budget over the
     // anonymous country around it when both are in range.

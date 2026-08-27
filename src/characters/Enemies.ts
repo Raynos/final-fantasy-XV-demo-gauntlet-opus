@@ -65,6 +65,37 @@ export interface SpawnPlacement {
   owner?: string;
 }
 
+/**
+ * How much bigger a creature is one level up.
+ *
+ * **`Enemy.level` was decoration.** It was carried on the instance, printed on
+ * the nameplate, written by every spawn table and read by the EXP formula —
+ * and *nothing scaled a creature by it*. A `level: 7` sabertusk and a level-45
+ * one were byte-identical: same HP, same damage, same fight. So the danger
+ * gradient that `SpawnTables` spends 140 lines authoring, and the promise in
+ * `WildTerritories` that "a coeurl in Leide is a level 22 coeurl and the same
+ * coeurl in Cleigne is a level 45 coeurl", were both cosmetic.
+ *
+ * The curve is **fitted to the bestiary's own table** rather than invented:
+ * across the shipped species from Sabertusk (lv 6, 780 hp, 60 damage) to Red
+ * Giant (lv 50, 22 000 hp, 520 damage) it comes out at ×1.085 per level for HP
+ * and ×1.058 for damage.
+ *
+ * **The factor is exactly 1 at the species' own listed level**, which is what
+ * makes this safe to land: every posed capture, every `creaturecheck` pose and
+ * every `combatloop` assertion spawns at the listed level or overrides HP
+ * outright, so none of them moves. Only a spawn that asks for a *different*
+ * level — which is every wild den and every territory — feels it.
+ */
+const LEVEL_HP = 1.085;
+const LEVEL_DMG = 1.058;
+
+/** The HP and damage multipliers for `level` against a species' own. */
+export function levelScale(baseLevel: number, level: number) {
+  const d = level - baseLevel;
+  return { hp: Math.pow(LEVEL_HP, d), damage: Math.pow(LEVEL_DMG, d) };
+}
+
 export class Enemies {
   /** species geometry, keyed on `SpeciesDef.protoKey ?? key`. */
   prototypes!: Map<string, EnemyPrototype>;
@@ -170,6 +201,29 @@ export class Enemies {
       e.calibrateGround();
       if (o.hp) { e.maxHp = o.hp; e.hp = o.hp; }
       if (o.damage) e.damage = o.damage;
+    }
+
+    /**
+     * Make the level mean something — **after** the recycled/fresh branches,
+     * because they are where the two writers that used to defeat this live.
+     *
+     * The fresh path assigns `maxHp`/`damage` from `o.hp`/`o.damage`, and
+     * `reset()` on the recycled path does the same; a scale applied inside
+     * either branch was overwritten by the other. Applying it here, once, on
+     * the value both branches have finished writing, is the only place it
+     * holds for both.
+     *
+     * Multiplicative on whatever is there, so a caller that has already
+     * decided an absolute HP — a boss, a hunt mark, `EncounterDirector`'s
+     * daemon-pressure scaling — keeps its intent and gets the level on top of
+     * it rather than instead of it.
+     */
+    const wantLevel = o.level ?? type.stats.level;
+    if (wantLevel !== type.stats.level) {
+      const k = levelScale(type.stats.level, wantLevel);
+      e.maxHp = Math.max(1, Math.round(e.maxHp * k.hp));
+      e.hp = e.maxHp;
+      e.damage = Math.max(1, Math.round(e.damage * k.damage));
     }
 
     const terrain = this.game.get('Terrain');

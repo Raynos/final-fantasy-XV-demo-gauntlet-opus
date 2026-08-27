@@ -169,6 +169,46 @@ const IMPERIAL: SpawnLine[] = [
   { key: 'sniper', count: [0, 1] },
 ];
 
+/**
+ * How hard the anonymous country is pulled toward the party's own level.
+ *
+ * **The authored eighteen are NOT pulled.** A hunt that says the mark is level
+ * 45 means level 45, the map says so, and a player who walks into it early
+ * should lose. The country *between* the named places is a different promise:
+ * it is the fight you have while getting there, and a fight that cannot hurt
+ * you is scenery.
+ *
+ * The demo makes this sharp. `Game.init` boots the party at **level 27** so the
+ * capture corpus shows real progression — a walked Ascension path, a stocked
+ * bag, AP to spend — while Longwythe, the zone that party is standing in, is
+ * authored `levels: [1, 8]`. `fightshape.mts` measured what that costs: a den
+ * dies in 5.8 s having taken **0.8% of Noctis' maximum HP**, three attacks
+ * across three animals, and the identical shape every time.
+ *
+ * So a wild den is placed between its zone's own floor and the party, and
+ * never below the floor: Longwythe at party 27 comes out around level 20 — a
+ * real fight at 3.2x the HP and 2.2x the damage of the listed species — while
+ * Ravatogh's `[48, 60]` band clamps at 48 and stays lethal, because pulling
+ * *down* to the party would delete the danger gradient this table exists to
+ * express.
+ */
+const LEVEL_LIFT = 0.7;
+
+/**
+ * A wild den's level: the zone's band, lifted toward the party.
+ * @param levels the zone's `[min, max]`
+ * @param u the cell's own draw, 0..1
+ * @param party Noctis' level; 0 disables the lift entirely
+ */
+function denLevel(levels: number[], u: number, party: number) {
+  const base = Math.max(1, Math.round(levels[0] + u * (levels[1] - levels[0])));
+  if (!party) return base;
+  const mid = (levels[0] + levels[1]) * 0.5;
+  const lifted = Math.round(base + (party - mid) * LEVEL_LIFT);
+  const ceiling = Math.max(levels[1], party + 5);
+  return Math.max(levels[0], Math.min(ceiling, Math.max(1, lifted)));
+}
+
 /** Weighted pick from a roster. */
 function pick(roster: RosterLine[], u: number): RosterLine {
   let total = 0;
@@ -218,10 +258,12 @@ function siteOk(eco: Ecology | null, x: number, z: number) {
  * @param pressure the day/night state, so a cell's roster matches the clock
  * @param eco terrain sampler for the site rejections; null skips them
  * @param seed world seed, so two saves are not the same world
+ * @param partyLevel Noctis' level, so the anonymous country is a fight. See
+ *   {@link LEVEL_LIFT}.
  */
 export function wildTerritoriesNear(
   px: number, pz: number, radius: number,
-  pressure: Pressure, eco: Ecology | null, seed = 1337,
+  pressure: Pressure, eco: Ecology | null, seed = 1337, partyLevel = 0,
 ): Territory[] {
   const out: Territory[] = [];
   // `spawn` is the canonical "daemons are out" flag — the same one
@@ -254,7 +296,7 @@ export function wildTerritoriesNear(
       const line = pick(roster, u);
 
       const lu = cellHash(cx, cz, seed ^ 0x7e83);
-      const level = Math.max(1, Math.round(levels[0] + lu * (levels[1] - levels[0])));
+      const level = denLevel(levels, lu, partyLevel);
       const nu = cellHash(cx, cz, seed ^ 0x9c47);
       const pu = cellHash(cx, cz, seed ^ 0xa1d5);
 
