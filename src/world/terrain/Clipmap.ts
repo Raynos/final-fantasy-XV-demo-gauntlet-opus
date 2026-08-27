@@ -10,11 +10,12 @@ import * as THREE from 'three';
  * band of a fine level morph exactly onto the coarse level's edge and stay
  * crack-free.
  */
-/** One level of the clipmap: four quadrant meshes and where it last snapped. */
+/** One level of the clipmap: its one joined mesh, and where it last snapped. */
 export interface ClipmapRing {
   /** Cell size at this level, metres. */
   cell: number;
   level: number;
+  /** One entry — the level's four quadrants, joined. See {@link joinQuadrants}. */
   meshes: THREE.Mesh[];
   /** Snap grid, so a level only ever moves in whole cells. */
   snap: number;
@@ -60,21 +61,30 @@ export class Clipmap {
       const cell = cell0 * Math.pow(2, L);
       const mats = makeMaterial(cell, L);
       const ring: ClipmapRing = { cell, level: L, meshes: [], snap: cell * 2, x: NaN, z: NaN };
+      // The four quadrants of a level are built separately because the index
+      // winding has to mirror, and then joined into ONE mesh: they share a
+      // material, a `renderOrder`, a depth material and — because a level snaps
+      // as a unit — a position, so nothing distinguishes them at submission
+      // time except the draw call each one costs. See {@link joinQuadrants}.
+      const quads: THREE.BufferGeometry[] = [];
       for (let qz = 0; qz < 2; qz++) {
         for (let qx = 0; qx < 2; qx++) {
           const geo = this._quadrant(L, cell, qx ? 1 : -1, qz ? 1 : -1);
-          if (!geo) continue;
-          this.triangles += geo.index!.count / 3;
-          const mesh = new THREE.Mesh(geo, mats.surface);
-          mesh.name = `terrain-L${L}-${qx}${qz}`;
-          mesh.matrixAutoUpdate = false;
-          mesh.receiveShadow = true;
-          mesh.castShadow = this.castShadow && L <= 1;
-          if (mats.depth) mesh.customDepthMaterial = mats.depth;
-          mesh.renderOrder = -10 + (levels - L);
-          ring.meshes.push(mesh);
-          this.group.add(mesh);
+          if (geo) quads.push(geo);
         }
+      }
+      const geo = joinQuadrants(quads);
+      if (geo) {
+        this.triangles += geo.index!.count / 3;
+        const mesh = new THREE.Mesh(geo, mats.surface);
+        mesh.name = `terrain-L${L}`;
+        mesh.matrixAutoUpdate = false;
+        mesh.receiveShadow = true;
+        mesh.castShadow = this.castShadow && L <= 1;
+        if (mats.depth) mesh.customDepthMaterial = mats.depth;
+        mesh.renderOrder = -10 + (levels - L);
+        ring.meshes.push(mesh);
+        this.group.add(mesh);
       }
       this.rings.push(ring);
     }
@@ -151,4 +161,63 @@ export class Clipmap {
   dispose() {
     for (const ring of this.rings) for (const m of ring.meshes) m.geometry.dispose();
   }
+}
+
+/**
+ * The four quadrants of one level, concatenated into a single geometry.
+ *
+ * **Why.** A clipmap level is four meshes for one reason only — the quadrant
+ * mirroring has to flip the triangle winding, so the index buffers differ — and
+ * for no reason that survives to submission time: all four share the level's
+ * material, its optional depth material, its `renderOrder`, and its position,
+ * because a level snaps to its own grid as a unit. Four meshes therefore cost
+ * four draw calls in *every* pass that walks the scene, and this scene has
+ * three: colour, up to three shadow cascades on the two casting levels, and the
+ * velocity pass. Measured with a `renderBufferDirect` wrapper on
+ * `town_forecourt`'s peak frame, seven levels cost **80 draws** — 28 colour, 24
+ * shadow, 28 velocity — and after this join they cost **20**.
+ *
+ * **And why not simply let the frustum cull them.** It cannot. Every quadrant's
+ * bounding sphere is centred half its own extent from the camera with a radius
+ * slightly larger than that distance (the level's height range is ±420 m), so
+ * the sphere contains the camera and no quadrant is ever culled — the probe
+ * above counts all 28 in every frame of every shot measured, including the ones
+ * behind the camera. Splitting a level buys granularity that the bounds cannot
+ * express, so it buys nothing.
+ *
+ * Positions are already in the level's local frame — the quadrants differ only
+ * in the sign they scale `i` and `j` by — so no matrix is applied here.
+ */
+function joinQuadrants(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+  if (!parts.length) return null;
+  if (parts.length === 1) return parts[0];
+  let verts = 0, indices = 0;
+  for (const p of parts) { verts += p.getAttribute('position').count; indices += p.index!.count; }
+  const pos = new Float32Array(verts * 3);
+  const clip = new Float32Array(verts * 2);
+  // Uint16 while it fits, exactly as `_quadrant` chooses: four levels of 97x97
+  // is 37 636 vertices, so at the shipped `n = 48` it always does — but `n` is
+  // an option, and a silently truncated index is a terrain full of holes.
+  const idx = verts > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
+  let vo = 0, io = 0;
+  const box = new THREE.Box3();
+  for (const p of parts) {
+    const pp = p.getAttribute('position') as THREE.BufferAttribute;
+    const pc = p.getAttribute('aClip') as THREE.BufferAttribute;
+    pos.set(pp.array as Float32Array, vo * 3);
+    clip.set(pc.array as Float32Array, vo * 2);
+    const pi = p.index!.array;
+    for (let i = 0; i < pi.length; i++) idx[io + i] = pi[i] + vo;
+    if (p.boundingBox) box.union(p.boundingBox);
+    vo += pp.count;
+    io += pi.length;
+    p.dispose();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aClip', new THREE.BufferAttribute(clip, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.boundingBox = box;
+  g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+  return g;
 }
