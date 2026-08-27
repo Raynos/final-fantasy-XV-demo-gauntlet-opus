@@ -111,10 +111,19 @@ const bearingOff = (p) => {
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
 };
-/** Point the camera so that W walks at `p`. `yaw` is the ORBIT angle. */
-const faceToward = (p) => {
+/**
+ * Point the camera so that W walks at `p`. `yaw` is the ORBIT angle.
+ *
+ * `snap` writes `yaw` as well, which is a *cut* — fine for setting up a leg,
+ * wrong during a fight. Writing only `yawTarget` is what a mouse does, and it
+ * lets `CameraRig`'s own damping and combat framing show in the frames instead
+ * of being overwritten every step. Without this every mid-fight capture came
+ * back as a smear.
+ */
+const faceToward = (p, snap = false) => {
   const yaw = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
-  rig.yaw = yaw; rig.yawTarget = yaw;
+  rig.yawTarget = yaw;
+  if (snap) rig.yaw = yaw;
 };
 
 /** Sprint on the given heading until something hostile is inside 100 m. */
@@ -150,7 +159,7 @@ for (let round = 0; round < 3; round++) {
   // Walk, do not sprint: this is the beat where a player reads the pack and
   // decides. Sample what the enemies are doing on the way in.
   const approach = [];
-  faceToward(found.e.position);
+  faceToward(found.e.position, true);
   inp.keys.add('KeyW');
   const shotAt = [70, 45, 28];
   let noticedAt = null, noticedDist = 0, spottedT = null;
