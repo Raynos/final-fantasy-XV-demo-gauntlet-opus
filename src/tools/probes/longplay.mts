@@ -109,22 +109,60 @@ const wall0 = performance.now();
 const wallMin = () => (performance.now() - wall0) / 60000;
 const forage = props && props.foraging;
 let detours = 0, minSpot = Infinity, chasing = false, forageOffered = 0;
+// **A player who cannot reach the berry gives up and walks somewhere else.**
+// Without this the probe does not measure a session at all. Measured, before
+// it existed: at game minute 2.8 the route reached (-405, 53, -254), a slope
+// too steep to climb, and the probe held W into it for the remaining 27
+// minutes — `grounded` true, position pinned to the metre, the nearest
+// un-taken spot frozen 52.9 m away and never approached again. It reported
+// 3.38 km travelled against 478 m of net displacement, because grinding
+// against a hill accumulates distance, and it reported "the world stops
+// producing things to pick up" about a world that was producing 23 live spots
+// the whole time. Twenty-seven of the thirty minutes were the character
+// standing still, so every other check was reading an idle page.
+const abandoned = new Set();
+let targetKey = null, targetBestD = Infinity, targetSinceF = 0;
+let givenUp = 0, unstuckTurns = 0;
+const wasAt = player.position.clone();
 for (let f = 0; f < FRAMES; f++) {
   // A slow continuous turn, so the route is a wide arc rather than a line and
   // the camera keeps meeting new country.
   if (f % 900 === 0 && !chasing) { yaw += 0.9; if (rig) { rig.yaw = yaw; rig.yawTarget = yaw; } }
+  // The general case of the same thing: walked into something and stopped.
+  // Combat is excluded because standing still while fighting is correct.
+  if (f % 600 === 0 && f) {
+    const moved = Math.hypot(player.position.x - wasAt.x, player.position.z - wasAt.z);
+    if (moved < 8 && !(enc && enc.state === 'combat')) {
+      if (targetKey != null) { abandoned.add(targetKey); givenUp++; targetKey = null; }
+      yaw += 2.2; unstuckTurns++;
+      if (rig) { rig.yaw = yaw; rig.yawTarget = yaw; }
+      chasing = false;
+    }
+    wasAt.copy(player.position);
+  }
   // **Walk toward the glint.** A player who sees a forage spot at forty metres
   // goes and gets it; a probe on a fixed arc passes within 3.2 m of one about
   // never, and the first run of this reported "0 taken" over 1.46 km against a
   // layer that was working perfectly. Measuring a straight line and calling it
   // a session is the mistake.
   if (forage && f % 10 === 0) {
-    const s0 = forage.live[0];
+    // `live` is rebuilt every frame, sorted nearest-first and already excludes
+    // `taken` — so the only reason to skip an entry is that this session has
+    // tried and failed to walk to it.
+    const s0 = forage.live.find((s) => !abandoned.has(s.key));
     chasing = false;
     if (s0) {
       const d = Math.hypot(s0.x - player.position.x, s0.z - player.position.z);
       minSpot = Math.min(minSpot, d);
-      if (d < 140 && rig) {
+      // Give up on a spot that is not getting closer. 900 frames is 15 s of
+      // walking at it, which is generous for a 140 m leash at ~7 m/s.
+      if (s0.key !== targetKey) { targetKey = s0.key; targetBestD = d; targetSinceF = f; }
+      else if (d < targetBestD - 1) { targetBestD = d; targetSinceF = f; }
+      else if (f - targetSinceF > 900) {
+        abandoned.add(s0.key); givenUp++; targetKey = null;
+        yaw += 2.2; if (rig) { rig.yaw = yaw; rig.yawTarget = yaw; }
+      }
+      if (d < 140 && rig && s0.key === targetKey) {
         chasing = true;
         // **Negated.** `CameraRig.yaw` is the orbit angle of the camera
         // AROUND the player, so the direction the player walks under W is
@@ -193,6 +231,7 @@ out.push(`  travelled ${(travelled / 1000).toFixed(2)} km`);
 out.push(`  encounters started ${events['encounter:start'] || 0}, `
   + `victories ${events['encounter:victory'] || 0}, kills ${events['encounter:kill'] || 0}`);
 out.push(`  forage taken ${forages} (${detours} detours toward a glint), distinct prompts ${seenPrompts.size}`);
+out.push(`  gave up on ${givenUp} unreachable spot(s), turned away from being stuck ${unstuckTurns} time(s)`);
 out.push(`  JS heap per minute, MB: ${heap.join(' ')}`);
 out.push(`  closest a forage spot ever got: ${minSpot === Infinity ? '-' : minSpot.toFixed(1) + ' m'}; `
   + `prompt offered on ${forageOffered} frames`);
