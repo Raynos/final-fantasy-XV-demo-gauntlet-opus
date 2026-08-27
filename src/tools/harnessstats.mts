@@ -69,12 +69,14 @@ interface Row {
   errors: number;
   /** A gate ran correctly and said no. Not a fault, and it must not read as one. */
   fails: number;
+  /** Per-unit run times where the job declared a count -- seconds per shot. */
+  perUnit: number[];
   deadlines: number; worstQueue: number; queues: number[];
 }
 const rows = new Map<string, Row>();
 for (const j of jobs) {
   const k = keyOf(j);
-  const r = rows.get(k) ?? { key: k, n: 0, queuedMs: 0, ranMs: 0, errors: 0, fails: 0, deadlines: 0, worstQueue: 0, queues: [] };
+  const r = rows.get(k) ?? { key: k, n: 0, queuedMs: 0, ranMs: 0, errors: 0, fails: 0, deadlines: 0, worstQueue: 0, queues: [], perUnit: [] };
   r.n++;
   r.queuedMs += j.queuedMs;
   r.ranMs += j.ranMs;
@@ -83,6 +85,10 @@ for (const j of jobs) {
   if (j.verdict === 'error') r.errors++;
   if (j.verdict === 'fail' || j.verdict === 'void' || j.verdict === 'busy') r.fails++;
   if (j.verdict === 'deadline') r.deadlines++;
+  // Only where the job said how much work it covered. A `shots` row is one
+  // `shoot` or a 16-shot corpus chunk, and the bare duration cannot tell them
+  // apart -- which is exactly how "median shoot" came out at 22.6 s.
+  if (j.units && j.units > 0 && j.verdict === 'ok') r.perUnit.push(j.ranMs / j.units);
   rows.set(k, r);
 }
 
@@ -106,6 +112,8 @@ if (has('--json')) {
       queuedSec: Math.round(r.queuedMs / 1000), ranSec: Math.round(r.ranMs / 1000),
       p50QueueMs: pct(r.queues, 50), p90QueueMs: pct(r.queues, 90), worstQueueMs: r.worstQueue,
       errors: r.errors, fails: r.fails, deadlines: r.deadlines,
+      p50PerUnitMs: r.perUnit.length ? pct(r.perUnit, 50) : null,
+      p90PerUnitMs: r.perUnit.length ? pct(r.perUnit, 90) : null, units: r.perUnit.length,
     })),
   }, null, 2));
   process.exit(0);
@@ -132,7 +140,8 @@ console.log(`  ${by.padEnd(16)}${'n'.padStart(6)}${'wait'.padStart(9)}${'run'.pa
   + `${'p50q'.padStart(8)}${'p90q'.padStart(8)}${'worstq'.padStart(9)}   notes`);
 for (const r of [...rows.values()].sort((a, b) => (b.queuedMs + b.ranMs) - (a.queuedMs + a.ranMs)).slice(0, 24)) {
   const notes = [r.errors ? `${r.errors} err` : '', r.fails ? `${r.fails} red` : '',
-    r.deadlines ? `${r.deadlines} 429` : ''].filter(Boolean).join(', ');
+    r.deadlines ? `${r.deadlines} 429` : '',
+    r.perUnit.length ? `${mins(pct(r.perUnit, 50))}/shot` : ''].filter(Boolean).join(', ');
   console.log(`  ${r.key.slice(0, 15).padEnd(16)}${String(r.n).padStart(6)}`
     + `${mins(r.queuedMs).padStart(9)}${mins(r.ranMs).padStart(9)}`
     + `${mins(pct(r.queues, 50)).padStart(8)}${mins(pct(r.queues, 90)).padStart(8)}`

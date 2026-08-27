@@ -81,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 12;
+export const PROTOCOL = 13;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -1249,6 +1249,17 @@ interface Job<T = unknown> {
   /** The agent with the most work ahead of this job, so a slow call can name it. */
   aheadWho: string;
   build: string;
+  /**
+   * How many things this job did — shots posed, for `/shots`.
+   *
+   * Without it the ledger cannot tell a one-shot `shoot` from a 16-shot
+   * `drawcheck` chunk, and both are `kind: 'shots'`. That is not hypothetical:
+   * benchmaxx's "median shoot <= 8 s" read 22.6 s and looked like the one
+   * failing number in the plan, when 370 of 378 `shots` rows were corpus chunks
+   * and a real `shoot` was 8.0 s. A duration is only comparable against the
+   * count of work it covers.
+   */
+  units?: number;
 }
 
 /** What a job cost, handed back so the route can stamp it on the response. */
@@ -1331,6 +1342,7 @@ function recordJob(job: Job, startedAt: number, endedAt: number, verdict: JobRec
     reuses: pool.reuses,
     rssMb: pool.lastRssMb || undefined,
     power: powerTag(),
+    units: job.units,
     note,
   });
 }
@@ -1386,7 +1398,7 @@ class Scheduler {
 
   submit<T>(
     lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>,
-    build = '',
+    build = '', units?: number,
   ): Promise<{ value: T, timing: JobTiming }> {
     return new Promise<{ value: T, timing: JobTiming }>((resolve, reject) => {
       const aheadAt = this.ahead();
@@ -1397,6 +1409,7 @@ class Scheduler {
         ahead: Object.values(aheadAt).reduce((a, b) => a + b, 0),
         aheadWho: Object.entries(aheadAt).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '',
         build,
+        units,
       };
       /**
        * The deadline fires from a TIMER, not from the dispatch check.
@@ -2710,8 +2723,8 @@ async function serve() {
        * simply expensive. That is what makes `/health` polling pointless rather
        * than merely discouraged.
        */
-      const queued = async <T extends object>(kind: string, fn: () => Promise<T>): Promise<T> => {
-        const { value, timing } = await sched.submit(lane, agent, kind, deadline, fn, buildLabel);
+      const queued = async <T extends object>(kind: string, fn: () => Promise<T>, units?: number): Promise<T> => {
+        const { value, timing } = await sched.submit(lane, agent, kind, deadline, fn, buildLabel, units);
         return {
           ...value,
           queuedMs: timing.queuedMs,
@@ -2730,7 +2743,7 @@ async function serve() {
             return send(400, { error: '/shots needs { shots: string[], out: string }' });
           }
           {
-            const out = await queued('shots', () => routeShots(body));
+            const out = await queued('shots', () => routeShots(body), body.shots.length);
             scheduleDriftCheck(body.build ?? (DIRTY_PREFIX + ROOT));
             return send(200, out);
           }

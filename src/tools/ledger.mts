@@ -79,7 +79,17 @@ export interface JobRecord {
   reuses?: number;
   /** Resident set of the browser this job ran on, MB. See `/health`. */
   rssMb?: number;
-  /** Anything the route wants attributed: shot count, gate verdict, error head. */
+  /**
+   * How many items the job covered — shots posed, for `/shots`.
+   *
+   * A duration means nothing without the count of work it covers, and this
+   * ledger has one `kind: 'shots'` for both a single `shoot` and a 16-shot
+   * `drawcheck` chunk. Reporting the median over that mixed population is how
+   * "median shoot" came out at 22.6 s against a target of 8 when a real `shoot`
+   * was 8.0 s and a warm one is 1 s.
+   */
+  units?: number;
+  /** Anything the route wants attributed: gate verdict, error head. */
   note?: string;
   /**
    * The machine's power state when this was recorded: `ac`, `battery`, `low`.
