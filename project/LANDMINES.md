@@ -1233,3 +1233,38 @@ exactly this reason, and `drawcheck` VOIDs rather than passing when it cannot
 read the budget out of `BRIEF.md`. The ledger simply had not been given the same
 vocabulary. When you add a verdict field, enumerate the *kinds* of not-ok before
 you write the first row; retrofitting leaves a history you cannot re-read.
+
+## `converge()` does not replace the boot prime, and the difference is 13/255
+
+`Vegetation.init` primes grass, scrub and trees around the ORIGIN so the first
+rendered frame is dressed — `prime.bushes` 450 ms, `prime.grass` 119 ms,
+`prime.trees` 43 ms, **about 610 ms of a 6.5 s boot**, and the suite takes 188
+cold boots per cycle.
+
+Under `?shoot` that looks like pure waste. A posed page boots, `applyShot` moves
+the camera elsewhere, and `Game.settle` calls `converge()` on its first frame,
+which streams all three to completion *at the shot camera*. Everything primed at
+the origin is discarded before a frame is photographed. Skipping it under shoot
+mode takes Vegetation from 1216 ms to 688 ms and the cold boot from 6.54 s to
+6.15 s.
+
+**It also changes the picture, and not subtly.** Five shots, PNG, against their
+own measured per-shot floors:
+
+    vista_dawn       0.459/255      under floor
+    zone_lestallum   0.250/255      under floor
+    poi_reststop     0.087/255      under floor
+    town_wide        0.509/255      under floor
+    hero_full       13.359/255      floor 2.25, 31.7% of pixels over 8/255
+
+`hero_full` is the shot at the origin — the one place the prime and the converge
+target the same tiles — and it is the one that broke. So `converge()` is not
+equivalent to `update()` run 60 times at the same point: the streamers spend a
+per-update wall-clock budget and what ends up resident differs, which is the
+same order-dependence `converge()`'s own comment describes. Converging to
+"finished" is not the same state as sixty budgeted updates.
+
+**Reverted.** Recorded because it is the most attractive-looking boot saving in
+the profile: 610 ms, obviously redundant on the reasoning, and wrong. If it is
+retried, `hero_full` is the shot that catches it, and it must be a PNG diff
+against the per-shot floor — the four shots that pass tell you nothing.
