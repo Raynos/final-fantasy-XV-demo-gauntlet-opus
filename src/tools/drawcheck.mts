@@ -6,6 +6,8 @@
  *   node src/tools/drawcheck.mts town_wide poi_reststop
  *   node src/tools/drawcheck.mts --worst 30 --json tmp/draws.json
  *   node src/tools/drawcheck.mts --manifest tmp/shots/corpus/manifest.json
+ *   node src/tools/drawcheck.mts --strict          # BRIEF flat, no ratchet
+ *   node src/tools/drawcheck.mts --set-baseline    # re-record the debt (LOWER only)
  *
  * **Why a gate.** `BRIEF.md` rule 3 sets a draw-call budget and every capture
  * already carries its own count — `shoot.mts` prints it and writes it into
@@ -55,6 +57,25 @@
  *   - **Cost.** Draw calls are a submission-side proxy for frame time and a
  *     good one on this machine (~8.7 us each, per the perf lane), but `perf.mts`
  *     measures the thing itself.
+ *
+ * ## Two verdicts, and why the gate is the second one
+ *
+ * **BRIEF** is the flat rule: no shot over the budget, and `--strict` reports
+ * only that. It is the number that matters and it is the one printed first.
+ *
+ * **The ratchet** is what `check.mts` runs, and it exists because eleven shots
+ * were already over on the day this was written. A gate that is red from its
+ * first run is a gate people learn to skip -- RESCUE B5 records `combatloop`
+ * sliding 30/30 to 21/30 unnoticed for weeks for exactly that reason -- so the
+ * shots that are over are written into `project/draw-baseline.json` with the
+ * count they are over at, and the rule becomes: **anything not in that file
+ * must be under budget, and anything in it may only go down.** The ledger is
+ * an inventory of debt, not a target; an entry that clears the budget is
+ * reported as an improvement and should be deleted with `--set-baseline`, and
+ * when the file is empty it should be deleted with it.
+ *
+ * It is the shape `floatcheck`, `silhouette` and `anycheck` already use here,
+ * for the same reason.
  */
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -79,12 +100,41 @@ interface Opts {
   manifest: string | null;
   out: string;
   chunk: number;
+  strict: boolean;
+  setBaseline: boolean;
   names: string[];
 }
 
+/**
+ * The recorded over-budget set. Debt, not a target — see the header.
+ *
+ * `over` maps a shot to the count it is allowed to draw. Absent from the file
+ * means the flat budget applies.
+ */
+interface Baseline { note: string; budget: number; over: Record<string, number> }
+
+const BASELINE = path.join(ROOT, 'project', 'draw-baseline.json');
+
+/**
+ * How far a recorded shot may drift before the ratchet calls it a regression.
+ *
+ * Measured, not guessed: two full-corpus runs at two different builds a few
+ * hours apart, with six lanes committing in between, agreed **exactly** on
+ * 114 of 142 shots, and the largest increase on any shot nobody had touched
+ * was **+6** (`hero_profile`, the head lane). So the count is essentially
+ * deterministic and an exact ratchet would nearly work — but the eleven
+ * recorded shots are town frames whose single biggest contributor is
+ * `src/characters/npc/`, which another lane owns, and a gate that goes red in
+ * somebody else's commit for six draw calls is a gate that gets skipped. This
+ * is slack for that drift and NOT a licence to spend it: `--set-baseline`
+ * exists to lower these numbers, never to raise them.
+ */
+const TOLERANCE = 8;
+
 function parseArgs(argv: string[]): Opts {
   const o: Opts = {
-    worst: 20, json: null, manifest: null, out: 'tmp/shots/drawcheck', chunk: 16, names: [],
+    worst: 20, json: null, manifest: null, out: 'tmp/shots/drawcheck', chunk: 16,
+    strict: false, setBaseline: false, names: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -93,6 +143,8 @@ function parseArgs(argv: string[]): Opts {
     else if (a === '--manifest') o.manifest = argv[++i];
     else if (a === '--out') o.out = argv[++i];
     else if (a === '--chunk') o.chunk = Number(argv[++i]);
+    else if (a === '--strict') o.strict = true;
+    else if (a === '--set-baseline') o.setBaseline = true;
     // `--w`/`--h` belong to the capture and are read back out of `harnessArgs`.
     else if (a === '--w' || a === '--h') i++;
     else if (isHarnessFlag(a) === 'value') i++;
@@ -216,12 +268,79 @@ async function main(): Promise<void> {
     console.log(`\nwrote ${opts.json}`);
   }
 
+  /* ------------------------------------------------------------ the ratchet */
+
+  if (opts.setBaseline) {
+    const b: Baseline = {
+      note: 'Shots that are OVER BRIEF rule 3\'s draw-call budget, and the count each is '
+        + 'over at. DEBT, not a target: the flat budget applies to every shot NOT listed '
+        + 'here, and a listed shot may only go DOWN. Re-run with --set-baseline only to '
+        + 'LOWER these; an entry that has cleared the budget should be deleted, and when '
+        + 'this file is empty it should be deleted with it, so `drawcheck` becomes the '
+        + 'flat rule it is trying to be. `--strict` ignores this file entirely and is '
+        + 'what says where the game really stands.',
+      budget,
+      over: Object.fromEntries(over.map((r) => [r.name, r.calls])),
+    };
+    await writeFile(BASELINE, `${JSON.stringify(b, null, 1)}\n`);
+    console.log(`\nwrote ${path.relative(ROOT, BASELINE)}: ${over.length} shot(s) over ${budget}`);
+    process.exit(0);
+  }
+
+  const briefLine = over.length
+    ? `BRIEF: ${over.length}/${results.length} shots over ${budget}, worst +${rows[0].calls - budget}`
+    : `BRIEF: every one of ${results.length} shots is under ${budget}`;
+
+  let base: Baseline | null = null;
+  if (!opts.strict) {
+    try { base = JSON.parse(await readFile(BASELINE, 'utf8')) as Baseline; } catch { base = null; }
+  }
+
   if (over.length) {
-    console.log(`\ndrawcheck: FAIL — ${over.length}/${results.length} shots over ${budget}:`);
-    for (const r of over) console.log(`  ${pad(r.name, 24)} ${rpad(r.calls, 5)}  (+${r.calls - budget})`);
+    console.log(`\nover budget — ${over.length}/${results.length} shots:`);
+    for (const r of over) {
+      const ceil = base?.over[r.name];
+      const note = ceil === undefined ? 'NOT in the ledger'
+        : r.calls > ceil ? `WORSE than the recorded ${ceil}`
+          : r.calls < ceil ? `better than the recorded ${ceil}`
+            : `at the recorded ${ceil}`;
+      console.log(`  ${pad(r.name, 24)} ${rpad(r.calls, 5)}  (+${r.calls - budget})  ${note}`);
+    }
+  }
+  console.log(`\n${briefLine}`);
+
+  if (opts.strict || !base) {
+    if (!opts.strict) console.log(`no ${path.relative(ROOT, BASELINE)} — the flat budget applies to everything.`);
+    console.log(`\ndrawcheck: ${over.length ? 'FAIL' : 'PASS'}`);
+    process.exit(over.length ? 1 : 0);
+  }
+
+  // Anything not in the ledger obeys the flat budget; anything in it may only
+  // go down. A shot that has cleared the budget is an improvement to record,
+  // never a failure.
+  const unlisted = over.filter((r) => base.over[r.name] === undefined);
+  const worse = over.filter((r) => r.calls > (base.over[r.name] ?? Infinity) + TOLERANCE);
+  const cleared = Object.keys(base.over).filter((n) => {
+    const r = results.find((x) => x.name === n);
+    return r && r.calls <= budget;
+  });
+  const lowered = over.filter((r) => (base.over[r.name] ?? -1) > r.calls);
+
+  console.log(`\nratchet, against ${path.relative(ROOT, BASELINE)}: `
+    + `${Object.keys(base.over).length} shot(s) of recorded debt, ${TOLERANCE} calls of slack each`);
+  if (cleared.length) console.log(`  cleared the budget outright: ${cleared.join(', ')} — drop them with --set-baseline`);
+  if (lowered.length) console.log(`  improved: ${lowered.map((r) => `${r.name} ${base.over[r.name]} -> ${r.calls}`).join(', ')} — lower with --set-baseline`);
+
+  const fails = [...unlisted, ...worse];
+  if (fails.length) {
+    console.log(`\ndrawcheck: FAIL — ${fails.length} shot(s) the ratchet does not allow:`);
+    for (const r of fails) {
+      const ceil = base.over[r.name];
+      console.log(`  ${pad(r.name, 24)} ${rpad(r.calls, 5)}  ${ceil === undefined ? `over the ${budget} budget and not recorded debt` : `more than ${TOLERANCE} above its recorded ${ceil}`}`);
+    }
     process.exit(1);
   }
-  console.log(`\ndrawcheck: PASS — every one of ${results.length} shots draws at most ${rows[0].calls}, under ${budget}.`);
+  console.log(`\ndrawcheck: PASS — nothing new is over ${budget} and no recorded shot got worse.`);
 }
 
 await main();

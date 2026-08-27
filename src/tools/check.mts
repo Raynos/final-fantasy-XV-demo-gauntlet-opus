@@ -110,6 +110,12 @@ const GATES: Gate[] = [
   // port would break those -- so they get a dedicated one, scanned for below.
   { name: 'heightcheck', script: 'heightcheck.mts', expect: '0.000 m GPU vs CPU', needsServer: true },
   { name: 'driftcheck', script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true },
+  // BRIEF rule 3's draw-call budget, over the whole corpus. A ratchet: the
+  // eleven shots that were already over are recorded in
+  // `project/draw-baseline.json` and may only go down; everything else obeys
+  // the flat 800. Frames come from the cache on a build anyone has already
+  // shot, which is why it sits here and not with the perf gates.
+  { name: 'drawcheck', script: 'drawcheck.mts', expect: 'no new shot over BRIEF\'s 800, no recorded shot worse' },
   { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true },
   { name: 'gameplay', script: 'gameplay.mts', expect: '60 fps under real input', perf: true },
 ];
