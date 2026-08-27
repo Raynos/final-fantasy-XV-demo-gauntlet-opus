@@ -62,6 +62,23 @@ The frames say the rest: at the frame the encounter starts, the pack is a
 thirty-pixel smudge twenty-two metres out and the camera is framing a country
 walk.
 
+## What the fixes moved
+
+Same three dens, same policy, `combatloop` **31/31** after.
+
+| | before | after |
+|---|---|---|
+| `notice -> engaged` | 0.20 / 0.30 s | **1.10 s**, both dens |
+| enemy-frames spent `patrol` **during a fight** | 18% | **0%** |
+| Noctis pays | 0.0% / 0.7% of max HP | 0.5% / **1.7%** |
+| enemy attacks opened | 0.37 / 0.65 per s | 0.43 / 0.45 per s |
+
+The approach beat is real and repeatable: the pack turns at 22 m, holds while
+the player closes to 19 m with the encounter still in `field`, and *then* comes.
+The pressure numbers barely move, and the reason is in the next section — the
+fights are over in four to seven seconds, so there is no room for a rhythm to
+happen in whatever the AI does.
+
 ## Fixed, in this lane
 
 1. **The rouse beat** (`Enemy._rouse`, `EnemyBase.ts`). A creature that
@@ -86,6 +103,13 @@ walk.
    routing the camera through that call would move `combat_stagger` and its
    neighbours. It cannot fire under a capture: an authored shot holds `rig.shot`,
    and a posed page never reaches `EncounterDirector.state === 'combat'`.
+   - **Something already inside its own `reach` does not hold the beat.** The
+     rouse is the *approach*; a creature you have walked on top of bites. That
+     is also what keeps it clear of `combatloop`'s `engage()`, which puts a
+     sabertusk six metres out and asserts the combat HUD is up one second later.
+   - A **posed** enemy returns from `update()` at `frozenPose` before the
+     `_hadTarget` bookkeeping, so that field is written in the frozen branch
+     too, or a pinned creature reads as permanently not-yet-engaged.
 3. **Flankers harry** (`EnemyBase._tryHarry`). The engage token gated *every*
    attack, so in a seven-strong den two animals fought and five orbited. A
    flanker in range and **behind** its target now opens its cheapest attack on
@@ -146,19 +170,32 @@ mitigation.
   gil and drops; the party simply stands up with weapons still drawn and the
   field HUD returns.
 - **`CameraRig`'s combat framing is now live and under-tuned.** With `setLockOn`
-  fed, `combatFraming = 0.6` biases yaw and pitch, but `restDistance` *grows*
-  with target distance and `wantPitch = 0.16 + toTarget.y * 0.03` barely tilts
-  down for a metre-tall beast, so a sabertusk at eight metres is still about
-  sixty pixels. FFXV's combat camera comes in and down. Tune it with this probe.
+  fed, `combatFraming = 0.6` biases yaw and pitch, but `wantPitch = 0.16 +
+  toTarget.y * 0.03` barely tilts down for a metre-tall beast, so a sabertusk at
+  eight metres is still about sixty pixels. FFXV's combat camera comes in and
+  down. `restDistance = targetDistance + flat * 0.22` is why `_frameCombat` will
+  only frame a threat inside 16 m — beyond that the term pushes the arm from
+  5.6 m to 10 m and makes the framing worse than none.
+- **The arm whips when the fight is next to a boulder.** Every `stagger` frame
+  of every run — `tmp/shots/ws2{b,c,d,e}/f-stagger.jpg` — is a smear with Noctis
+  not in it and a boulder filling the near corner, and it is unchanged by both
+  camera changes above, so it is `_armDistance`'s sphere sweep rather than the
+  framing. It is the single ugliest thing a fight here does.
 
 ## Open in this lane
 
 - **The warp-strike shard burst reads as flat blue confetti at close range** —
   `tmp/shots/r1/f-victory.jpg`. Large opaque mid-blue lozenges, no emissive
   gradient, occluding the whole fight. `src/combat/VFX.ts` / `CrystalShards.ts`.
-- **Warp-strike into a stagger is a ×10 overkill nuke** — measured 6787 damage
-  on a 640 hp animal. Every kill in every fight had the same shape: stagger,
-  `Q`, dead.
+- **Warp-strike is a one-shot, and into a stagger it is a ×9 overkill nuke.**
+  `combatloop`'s own row reads *"warp-strike (Q) costs MP and lands — 780
+  damage"* against a sabertusk whose max HP is 780. Into a stagger it measured
+  **3951-6994**, and it was **57-74% of all damage dealt in the fight**. Every
+  kill in every fight had the same shape: companions chip, something staggers,
+  `Q`, dead. The stack is `weaponMotion x 2.9` (`CombatSystem:1746`) x1.6
+  (`Stats.computeDamage`'s `isWarpStrike`) x2.0 (`staggerMult`) x back-attack
+  x crit. **Do not tune it before the level bands above move** — the right value
+  depends on an enemy HP figure that is currently wrong by about 4x.
 - **Noctis does 14% of the damage in his own fight.** `PartyAI.ROLES` motion
   values are the knob (Gladio 1.7 at a 1.7 s cadence), but this is a balance
   change that should not be made until the level bands above move, or it will
