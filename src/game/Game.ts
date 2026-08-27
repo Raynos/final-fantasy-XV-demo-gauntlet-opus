@@ -372,6 +372,16 @@ export class Game {
     if (this.rnd.quality !== b.quality) this.rnd.setQuality(b.quality);
   }
 
+  /**
+   * Ask every system to build what it would otherwise build lazily.
+   *
+   * Idempotent and cheap after the first call, so the daemon can call it on
+   * every `/shots` request without checking whether it already has.
+   */
+  warmup() {
+    for (const s of this.systems) if (s.warmup) s.warmup();
+  }
+
   reset() {
     this.stop();
     // `instant`, or the leave animates over frames nobody is going to step.

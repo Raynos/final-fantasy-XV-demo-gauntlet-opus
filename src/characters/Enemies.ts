@@ -284,6 +284,20 @@ export class Enemies {
     return e;
   }
 
+  /**
+   * Build every species' prototype up front. See `System.warmup`.
+   *
+   * Deliberately swallows a species that fails to build: a bestiary entry with
+   * a broken generator is `geocheck`'s problem and `silhouette`'s, and warmup
+   * refusing to finish would take out every capture rather than the one shot
+   * that species appears in.
+   */
+  warmup() {
+    for (const k of speciesKeys()) {
+      try { this.prototype(k); } catch { /* see the comment */ }
+    }
+  }
+
   /** Remove everything (scenario switches). */
   clear() {
     for (const e of this.list.slice()) this.despawn(e);

@@ -81,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 10;
+export const PROTOCOL = 11;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -1740,6 +1740,26 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
   const slot = await pool.lease(pageKey(buildId, w, h, queryOf(opts), opts.prod), w, h, cold);
   try {
     const page = await preparePage(slot, build, opts);
+    /**
+     * Build everything the game would otherwise build lazily, before anything
+     * on this page is measured.
+     *
+     * `Enemies.prototype()` constructs a species' geometry on first spawn and
+     * caches it forever. That is right for a player and ruinous for a gate:
+     * whether a prototype exists becomes a function of what ran before, so the
+     * same shot draws a different number of calls depending on run history.
+     * `drawcheck` disagrees with itself on 25 of 142 shots, and **nine of them
+     * differ by exactly +15 with setpiece_deadeye at -60, which is 4x15** -- a
+     * shared constant across unrelated shots is a thing being present or
+     * absent, not noise.
+     *
+     * Idempotent and cheap after the first call, so it runs per request rather
+     * than being tracked per slot; an already-warm page pays a map lookup per
+     * species. Failures are swallowed: an old build served from the store has
+     * no `warmup` on its GAME, and that must degrade to the previous behaviour
+     * rather than fail every capture of it.
+     */
+    await page.evaluate(() => { window.GAME.warmup?.(); }).catch(() => {});
     const out = await fn(page, slot, build);
     lastUsed = Date.now();
     return out;

@@ -28,6 +28,27 @@ export interface System {
    */
   converge?(): void;
   /**
+   * Build now whatever this system would otherwise build lazily.
+   *
+   * `converge()` finishes streaming at the *current camera*; this is the
+   * once-per-page sibling for construction that has nothing to do with where
+   * the camera is and everything to do with what has happened before.
+   *
+   * **Why it exists.** `Enemies.prototype()` builds a species' geometry on
+   * first spawn and caches it forever, which is right for a player — a
+   * 20-species bestiary should not cost 20 prototypes at boot — and ruinous for
+   * a measurement, because whether a prototype exists is then a function of run
+   * history. `drawcheck` disagrees with itself on 25 of 142 shots, and nine of
+   * those differ by *exactly* +15 calls with `setpiece_deadeye` at -60, which is
+   * 4x15: a shared constant across unrelated shots is a thing being present or
+   * absent, not noise.
+   *
+   * Called by the daemon's `/shots` path once per page, never from a player's
+   * boot -- the player wants the lazy path and the harness wants determinism,
+   * and there is no reason those must be the same choice.
+   */
+  warmup?(): void;
+  /**
    * Return to the state a fresh boot leaves this system in.
    *
    * Called from `Game.reset()`, which is what lets the capture daemon reuse a
