@@ -989,3 +989,63 @@ is a headless chromium with high `%cpu` between runs; the cure is
 excludes none of them, and its ceiling is **zero**. Five `as any` in a throwaway
 Node-side probe took `pnpm run check` from 17/17 to 16/17 with `tsc` perfectly
 happy.
+
+## Bumping `PROTOCOL` restarts the daemon, which closes every leased page
+
+`ensureDaemon()` compares the client's `PROTOCOL` against the running daemon's
+and **stops it** on a mismatch — correctly, because a client talking to an old
+daemon debugs code that is not running. But a restart is `pool.closeAll()`, and
+every long probe holding a lease dies with `Target page, context or browser has
+been closed`, which reads at the call site as the game crashing.
+
+So editing `daemon.mts` and bumping `PROTOCOL` while somebody's thirty-minute
+`longplay` is running kills it on the *next tool invocation by anyone* —
+including your own `--health`.
+
+**It cost a whole `check` run in the commit that documented it.** The bump landed
+and the next `pnpm run check` started nine browser clients at once; the first one
+to call `ensureDaemon()` stopped the old daemon, and its eight siblings came back
+`drawcheck VOID`, `reachcheck FAIL`, and `uxcheck`/`integration` FAIL with
+*"Target page, context or browser has been closed"*. Four gates, none of them
+broken, and a table that reads like a game regression — which is precisely the
+failure mode `LANDMINES.md` exists for.
+
+`check.mts` now calls `ensureDaemon()` **once, before it spawns anything**, so
+the restart is serial and invisible. That closes the suite's exposure and not
+yours: **add the field, bump the protocol, and land the restart when
+`node src/tools/daemon.mts --wait quiet --for 900` says the machine is idle.**
+`/health` lists live leases and their remaining TTL, which is the thing to look
+at before restarting anything.
+
+## A gate can disagree with itself between invocation paths
+
+`floatcheck`, `integration` and `driftcheck` have each been seen red inside
+`pnpm run check` and green standalone, or the reverse. The causes are not
+diagnosed and they are not the same cause:
+
+- **`check` spawns with a modified environment.** It now sets `HARNESS_LANE` and
+  `HARNESS_AGENT`, and it sets `PORT` for the two gates that need its aux server;
+  standalone, those gates get whatever the shell has.
+- **`check` runs gates concurrently.** Four browser gates share four slots, so a
+  gate that assumes a warm page or a quiet box sees neither.
+- **`check` caches PASSes by tree sha**, so a standalone red on a tree whose gate
+  cache says green means one of the two runs is wrong — and the cache never
+  stores a FAIL, precisely so the red one is the one that gets re-derived.
+
+Until it is diagnosed: **a red standalone gate is not evidence on its own.**
+Re-run it inside `pnpm run check --no-cache --serial --only <gate>` before
+believing it, and say which path produced the number when you quote it.
+
+## `ps` RSS over a chromium tree double-counts, and is still the number to watch
+
+`/health`'s `rssMb` sums the resident set of every process descended from a
+chromium launched against the shared profile — browser, GPU process and every
+renderer. Shared framework pages are counted once *per process*, so the total
+overstates unique memory, by a lot when four contexts are live.
+
+It is still the right instrument, because it is the only one that has ever
+existed here: `project/TODO.md` says "1.4 GB", `project/STATUS.md` says
+"~1.94 GB", and neither is attached to a measurement anybody can repeat. Use it
+as a **trendline on one machine** — is this build worse than the last one — and
+never as an absolute. First readings, for the record: **2 449 MB with one page
+live, 16 465 MB across four.**

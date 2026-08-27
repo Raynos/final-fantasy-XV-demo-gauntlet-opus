@@ -7,8 +7,10 @@ port. Nobody launches a browser.
 ```
 node src/tools/shoot.mts hero_full --out tmp/shots/x --jpeg    # autostarts the daemon
 node src/tools/daemon.mts --health                             # what it is doing
+node src/tools/daemon.mts --wait quiet --for 600               # block until it is; never poll
 node src/tools/identity.mts                                    # which daemon, which port
 node src/tools/cleanup.mts                                     # what is orphaned (its own are safe)
+node src/tools/harnessstats.mts --since 24h                    # where the wall-clock went
 ```
 
 ## Why it is shaped this way
@@ -17,7 +19,7 @@ Measured on this machine, in `project/journal/2026-08-23-harness-bench.md`:
 
 | fact | number |
 |---|---|
-| boot to `GAME.ready` | **9.2 s** |
+| boot to `GAME.ready`, one browser | **6.6–9 s** (see below) |
 | render one shot on a warm page | **2.3 s** |
 | four concurrent browsers, against one | **1.5×** throughput |
 | at four browsers: CPU / RAM | **2.2 of 18 cores**, **10 of 137 GB** |
@@ -34,6 +36,16 @@ over**, which is what a warm, shared, content-addressed daemon is.
 The last row is the one people trip on: two captures of the same shot are *never*
 byte-identical, because TAA history, the exposure integrator and the shader cache
 do not start from the same place twice. Every threshold here traces to it.
+
+**The boot number is a range because it is a range, and a constant here rots.**
+This file said a flat 9.2 s for weeks after phase 3 had taken it to 6.6, and the
+plan that noticed reasoned from the stale figure. The live one is
+`bootMs` in `daemon.mts --health` — the last boot this daemon actually paid —
+and it is legitimately three different numbers: **~6.6 s** alone with every cache
+warm, **~9 s** with the painted-face cache missing (`--health` says
+`paintedFaces: false`; the cure is `pnpm run build:full`), and **up to ~32 s**
+when four boots race each other, which is what `drawcheck --par 4` does on
+purpose. Quote which one you mean.
 
 ## Build identity
 
@@ -114,6 +126,50 @@ And two specials:
   owning one machine: RESCUE §B6 threw away a session of perf numbers taken under
   six concurrent chromiums, and under per-worktree daemons that was unfixable.
 
+## The ledger, and never polling again
+
+The daemon writes **one JSONL line per job** to
+`~/.cache/ffxv-harness/<keyhash>/jobs.jsonl` (`ledger.mts`): tool, agent, lane,
+build, how long it queued, how long it ran, the verdict, who was ahead, the pool's
+boots/reuses and the chromium RSS. It rotates at 10 MB and is free to delete.
+An autostarted daemon's stdout goes to `daemon.log` beside it — it used to go to
+`stdio: 'ignore'`, so every queue decision the daemon logged was written to
+nowhere.
+
+That is what makes the rest possible:
+
+- **Every response carries `queuedMs` / `ranMs` / `queueAhead`**, and `call()`
+  prints one exit line when the answer is worth a line:
+  `[harness] queued 12.3 s · ran 41.0 s (2 ahead: perf)`. A slow call now names
+  its own reason **in the transcript**, which is what makes polling `/health`
+  pointless rather than merely discouraged.
+- **`harnessstats.mts`** reads it back — wait vs run by tool, agent, lane or day,
+  p50/p90 queue, and the calls over a threshold named individually. The weekly
+  audit went from two hours of transcript archaeology to one command.
+- **`daemon.mts --wait quiet|exclusive-free|idle --for <s>`** blocks until the
+  condition holds and prints *why* it is still waiting if it gives up. The poll
+  is inside the daemon, against local state, costing one `setTimeout` instead of
+  an HTTP round trip and a turn of context. `.claude/hooks/guard-poll.sh` blocks
+  the loops this replaces.
+- **`/health` carries cumulative totals** since the daemon started — jobs, queue
+  seconds by lane, exclusive holds and held time, evictions, prewarms — plus live
+  leases with their remaining TTL, chromium RSS, and `paintedFaces`.
+
+## Prewarming, and the gate cache
+
+Two caches beyond the frame cache, both keyed on the tree sha and both free to
+delete:
+
+- **`post-commit` fires `/prewarm <sha>`.** "You commit to see your work" means
+  the first capture after every commit pays a cold boot — a 38.9 s average
+  `shoot` against 2.3 s warm. The daemon boots one page on the sweep lane,
+  refusing when the page is already warm, the build is dirty, the quiet lane is
+  held, or a newer commit is racing it.
+- **`gatecache.mts` stores a gate's PASS** against the tree sha, so a second
+  `pnpm run check` on an unchanged clean tree is under a second instead of
+  minutes. Only a PASS, only on a clean tree, and never a perf verdict taken on a
+  busy box. That file explains each of the three.
+
 ## Lanes, deadlines and being busy
 
 `--lane fix` (default) is one agent wanting one shot now. `--lane sweep` is a
@@ -144,6 +200,18 @@ do not look the same to an agent reading an exit code.
   `texbake` pins itself to the dirty build for exactly this reason.
 - **`--hide` and `--raw` frames are never cached.** An ablation is only meaningful
   against its own control taken moments earlier.
+- **A stepped frame is 95% draw submission, and probes need not pay it.**
+  Measured A/B/A on one page (`probes/turbocost.mts`): 11.0 ms of an 11.66 ms
+  frame, against 0.16 ms of drift; the simulation is 0.58 ms. `probe.mts --turbo
+  <N>` submits one frame in N and leaves the sim untouched, which is what takes a
+  thirty-game-minute `longplay` from ~21 wall-minutes to ~1. Validate any turbo
+  run against a non-turbo one — this game is deterministic, so a differing
+  distance or encounter count means the ablation changed the measurement.
+- **The exclusive lease no longer closes a leased page.** `pool.closeAll()` was
+  the top documented probe killer here (five dead `longplay` runs, warnings in
+  three documents); `/exclusive` now queues behind live leases, bounded by their
+  own TTLs, and refuses as `busy` — naming the probe and its remaining
+  seconds — rather than destroying somebody's half-hour.
 - **A play page is thrown away, not pooled.** Minutes of real input move combat
   state, quest flags, the day cycle and the broadphase, and `stop()` puts none of
   it back.
@@ -159,7 +227,7 @@ do not look the same to an agent reading an exit code.
 | leased page | `gameplay` `combatloop` `integration` `uxcheck` `driftcheck` `reachcheck` `mapview` |
 | blank browser | `sheet` `corpus` `compare` `imagestats` `reliefstat` `shrink` |
 | owns a browser, under the quiet lane | `bench` `bootprof` — they *measure* browsers |
-| no browser at all | `imgdiff` `crop` `bake` `orphans` `agentstats` `anycheck` `cleanup` `identity` |
+| no browser at all | `imgdiff` `crop` `bake` `orphans` `agentstats` `harnessstats` `anycheck` `cleanup` `identity` `gitlock` |
 
 `grep -ln 'chromium.launch(' src/tools/*.mts` returns **`chromium.mts`** and
 nothing else. Keep it that way.

@@ -48,6 +48,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { ensureDaemon } from './daemon.mts';
 import { lookup, store, prune } from './gatecache.mts';
 import { appendJob } from './ledger.mts';
 import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
@@ -469,6 +470,29 @@ if (buildGate) {
 }
 
 const rest = todo.filter((g) => g.name !== 'build');
+
+/**
+ * Settle the daemon BEFORE the pools start, never during them.
+ *
+ * `ensureDaemon()` stops a daemon whose `PROTOCOL` differs from the client's —
+ * correctly, since a client talking to an old one debugs code that is not
+ * running. But stopping it is `pool.closeAll()`, and under two pools the FIRST
+ * gate to notice takes down every sibling that is already mid-`page.evaluate`.
+ *
+ * Measured, on the run that landed this: a protocol bump turned an 18/18 suite
+ * into `drawcheck VOID`, `reachcheck FAIL`, and `uxcheck` / `integration` FAIL
+ * with `Target page, context or browser has been closed`. Four gates, none of
+ * them broken, and a table that reads like a game regression.
+ *
+ * One call here, before anything is spawned, makes the restart serial and
+ * invisible. It is also the honest place for it: the suite is the only thing in
+ * this repo that starts nine browser clients at once.
+ */
+if (rest.some((g) => g.kind === 'browser')) {
+  const started = await ensureDaemon().catch(() => false);
+  if (started) console.log('  (started the capture daemon)\n');
+}
+
 if (opts.serial) {
   for (const g of rest) await runGate(g);
 } else {

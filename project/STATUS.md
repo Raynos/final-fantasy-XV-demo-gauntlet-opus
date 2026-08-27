@@ -32,48 +32,23 @@ a 660 m teleport `streaming-traverse` performs on purpose and no player pays
 for; the other two are 1% of one segment, down from 90-104 ms. Grounds in
 `journal/2026-08-27-perf-certified.md`.
 
-## The world was barren, and this is what it actually was
+## The world was barren, and four systems were never read by any code
 
-The human played the build and said so. Four separate causes, each measured:
+Both found by *playing*, not by reading, and both invisible to every gate
+because nothing was broken. The measurements are in
+`journal/2026-08-27-perf-certified.md` and the archived phase-4 plan's §5; the
+shape, so nobody re-derives it:
 
-| | before | after |
-|---|---|---|
-| anything alive within 120 m of a walk | 32% of samples | **63%** |
-| worst gap between events | 325 m | **75 m** |
-| an E prompt available over 3 km | **0%** | a spot every 66-190 m |
-| non-grass scenery past 400 m | 8.6-12.9/ha | a mass ring to 2.6 km |
-
-- **The world ended at 440 m.** `probes/barrencensus.mts` counts instances by
-  distance: 90-290 per hectare inside 400 m, then a cliff. Scrub got a far mass
-  ring, built as a copy of `Trees`' canopy ring.
-- **18 hand-placed territories on a 67 km² map** — 0.08% of it had an encounter
-  in it. `WildTerritories` generates dens from the cell hash. Density is a
-  **swept-corridor** number, not a per-area one; the first tuning reasoned
+- **The world ended at 440 m** (instance density fell off a cliff past 400 m),
+  **18 hand-placed territories covered 0.08% of a 67 km² map**, **nothing in the
+  open world could be picked up** while the boot objective said to collect it,
+  and a **4-30 m hole in the terrain's cover octaves** left every hillside at
+  150-400 m one flat hue. Anything alive within 120 m of a walk went 32% -> 63%
+  of samples; the worst gap between events 325 m -> 75 m.
+- **`Territory.passive`, `Enemy.level`, `CameraRig.setLockOn` and
+  `game.currentShot`** were each authored, documented and dead. Density is a
+  **swept-corridor** number, not a per-area one — the first tuning reasoned
   per-area and measured as *no change at all*.
-- **Nothing in the open world could be picked up**, while the HUD's own boot
-  objective read "Collect Rusted Bits from the wastes". `Foraging` scatters them
-  by the ground they lie on, in two draw calls.
-- **A 4-30 m hole in the terrain's cover octaves.** 0.74/1.9 m are gone by 300 m
-  and 52/165 m do not resolve below 800 m, so every hillside at 150-400 m — the
-  bottom third of every establishing shot — was one flat hue.
-
-## Four things were authored, documented, and never read by any code
-
-Found by playing, not by reading, and invisible to every gate because nothing
-was *broken*:
-
-- **`Territory.passive`** — "a grazing herd: it is scenery until something
-  provokes it", since the spawn tables were written. Every dualhorn charged on
-  sight.
-- **`Enemy.level`** — carried, printed, written by every table, read by the EXP
-  formula, scaling nothing. A level-7 and a level-45 sabertusk were identical.
-- **`CameraRig.setLockOn`** — a full combat-framing block nothing called.
-- **`game.currentShot`** — never cleared on going live, which killed the
-  Regalia's entire input path for the life of any page that had posed a shot.
-
-Also: the party could not catch up after a fight (cap 8.29 m/s against a 7.4 m/s
-sprint — enough to hold a slot, never to close a gap), and warp-strike did
-**62-77% of all damage in every fight**.
 
 ## The instruments are the durable half
 
@@ -89,26 +64,53 @@ the per-frame EDGE set, not the held one; `CameraRig.yaw` is the camera's orbit
 angle, so W walks `-(sin, cos)`; EXP is **banked**, not applied; grazing beasts
 key on `ax/az`.
 
-## The harness, and three ways it kills a long run
+## The harness measures itself now, and it got much faster
 
-- **Vite HMR was a fault injector.** The `dirty:` build serves the shared tree,
-  so any lane's save navigated every open page and killed whatever was
-  mid-`page.evaluate`. It read as a crash. `hmr: false` now — **and only that**:
-  the first fix also ignored the watcher, which left a long-lived server on its
-  startup module graph forever, so edits measured as *exactly zero*.
-- **`pnpm dev` is gone.** Nobody starts a server; `daemon.mts` owns every one.
-- A long probe needs **`--ttl <minutes>`** or the lease closes its page at
-  fifteen; **do not commit while one runs** (trees are pruned at ten and it will
-  drop the one being served); and **do not run `perf`/`gameplay` beside one** —
-  the quiet lane calls `pool.closeAll()`, which closes leased contexts too.
+`docs/plans/2026-08-24-opus-benchmaxx-harness.md` is implemented A-F;
+`project/handoff/benchmaxx.md` has the per-phase evidence. What changed, in
+numbers:
 
-## Draw calls: 1013 -> 801, and one shot in 142 is over
+| | before | after |
+|---|---|---|
+| `pnpm run check`, cold, quiet | ~780 s serial | **~150 s**, two pools |
+| `pnpm run check`, tree already graded | ~780 s | **0.68 s** |
+| `drawcheck` (the old critical path) | 269 s | **120 s**, then 0.18 s memoised |
+| pre-commit | 1.59 s | **1.04 s**, three jobs at once |
+| 30-game-minute `longplay` | ~22 wall-min | **~3**, `--turbo 10`, telemetry identical |
+| "why was that slow?" | 2 h of transcript archaeology | `harnessstats.mts`, one command |
+
+**The daemon writes a ledger** (`~/.cache/ffxv-harness/<key>/jobs.jsonl`) and
+every response carries `queuedMs`/`ranMs`, so a slow call names its own reason in
+the transcript. `daemon.mts --wait quiet|exclusive-free|idle` replaces polling
+and a hook now blocks the loops. `gitlock.mts` gives git's index lock the queue
+it never had. `post-commit` prewarms the sha you just made.
+
+**A stepped frame is 95% draw submission** — 11.0 ms of 11.66, against a 0.16 ms
+A/B/A drift, with the simulation at 0.58 ms (`probes/turbocost.mts`). That, not
+the sim, was always what a long probe paid for.
+
+Still true, and still the way to kill a long run: a long probe needs
+**`--ttl <minutes>`** or the lease closes its page at fifteen, and **committing
+during one** can drop the tree it is served from (trees are pruned at ten).
+**`perf`/`gameplay` no longer kill it** — `/exclusive` queues behind a live lease
+now, bounded by its TTL. Vite HMR is still off and `pnpm dev` still gone: the
+`dirty:` build serves the shared tree, so any lane's save navigated every open
+page and killed whatever was mid-`page.evaluate`, which read as a crash.
+
+**A page costs 2 449 MB of chromium RSS, and four cost 16 465 MB** — `ps` over
+the process tree, so shared pages are counted per process; it is a trendline on
+one machine, not an absolute. `TODO.md` says 1.4 GB and this file used to say
+1.94; neither was attached to a repeatable measurement, and now one is, on every
+ledger line.
+
+## Draw calls: 1013 -> 786, and nothing is over budget
 
 `drawcheck` gates it, parses the budget out of `BRIEF.md` rather than copying
 it, and ratchets `project/draw-baseline.json` so a recorded shot can only fall.
-`town_forecourt` reads 801-821 across runs — a spread wider than the ratchet's
-tolerance — against 800. Everything else is at or under; corpus median 587.
-What clears it is named in the backlog's WS-6.
+`town_forecourt`, the last entry in that ledger, now reads **786 against 800** —
+it has cleared the budget outright, but its spread across runs is wider than the
+ratchet's tolerance, so confirm across two runs before deleting the entry.
+Corpus median 567, worst 786.
 
 **A held pose does not draw a constant number of calls**: `poi_reststop` goes
 707 / 855 / 707 / 1005 as three shadow cascades refresh on a rotating schedule.
@@ -124,9 +126,11 @@ shards; the silhouettes are fine and it is entirely shading. Then **clouds**
 "cotton-wool sprites" diagnosis was wrong and is corrected in place), then **no
 sky fill in shadow**, then **no foreground occluder in any establishing shot**.
 
-`Layers.ts`'s splat still reads as one texture. **A page costs ~1.94 GB of RSS.**
-`RpgSystem.enemyScaling` is documented as reading the party's level and does not.
-There is terrain where holding forward yields zero progress with no slide-off.
+`Layers.ts`'s splat still reads as one texture. `RpgSystem.enemyScaling` is
+documented as reading the party's level and does not. There is terrain where
+holding forward yields zero progress with no slide-off. Cold boot is ~6.6 s with
+every cache warm and the game-side diet is `after-phase3`'s WS-2 (shader
+programs, 1.83 s) and WS-3 (geometry bake, ~950 ms), not the harness lane's.
 
 ## Next
 

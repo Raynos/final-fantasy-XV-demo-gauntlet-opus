@@ -1,10 +1,45 @@
 # Benchmaxx v2: primitives, ledgers and ratchets — not a list of fixes
 
-Status: PROPOSED (2026-08-24, opus; rewritten 2026-08-27, fable, after none of
-v1's ten fixes were staffed and a 7-day audit showed the waiting had morphed
-rather than died). Evidence: `project/audits/2026-08-27-wallclock-7day.md`
-(new), `project/audits/2026-08-24-toolcall-wallclock.md`, `project/TIMINGS.md`.
-Implementation remains **a fresh lane's job**; this session only writes the plan.
+Status: IN-PROGRESS (2026-08-24, opus; rewritten 2026-08-27, fable; **A-F
+implemented 2026-08-27, opus** — see `project/handoff/benchmaxx.md`). Evidence:
+`project/audits/2026-08-27-wallclock-7day.md`,
+`project/audits/2026-08-24-toolcall-wallclock.md`, `project/TIMINGS.md`.
+
+**Why it is not DONE.** Every phase has shipped and each is verified against a
+number in this session. But this plan's own definition of done is deliberately
+*weekly* — self-inflicted wait per week, fix-lane p50, median `shoot` over a
+real week, zero probe deaths — and one session cannot close a week. What it can
+do, and did, is make every one of those readable in one command. Re-check with
+`harnessstats.mts` after seven days of ledger and mark it DONE or reopen the
+phase that failed.
+
+### What landed, per phase
+
+| phase | shipped | the number |
+|---|---|---|
+| A ledger | `ledger.mts`, `queuedMs`/`ranMs` on every response, `daemon.log`, `/health` totals, `harnessstats.mts` | a week of audit is now one command |
+| B waiting | `--wait quiet\|exclusive-free\|idle`, `gitlock.mts`, `expect ~Ns` from history, then `guard-poll.sh` | `--wait quiet` returned in 9.8 s where an `until` loop cost turns |
+| C the suite | `gatecache.mts` (tree sha, PASS only), two pools, sweep lane, a ratchet on its own time | **18/18 in 270 s** against ~780 s; **0.68 s** same-sha |
+| C drawcheck | `--par 4`, per-sha corpus memo | **270 -> 120 s**; **0.18 s** memoised |
+| D measurement | `probes/turbocost.mts` | **draw submission is 95% of a stepped frame** — 11.0 of 11.66 ms, drift 0.16 |
+| D turbo | `probe.mts --turbo <N>` | 6 game-min: **4.5 -> 0.4 wall-min**, but see the caveat |
+| D exclusive | `/exclusive` queues behind live leases, refuses as `busy` | the top documented probe killer is closed |
+| E prewarm | `post-commit` -> `/prewarm <sha>`, `paintedFaces` in `/health`, RSS in the ledger | first RSS reading: **2 449 MB one page, 16 465 MB four** |
+| F policy | `CLAUDE.md` (150 turns, `gitlock`, never poll), `HANDOFF.md` §4, three `LANDMINES.md` entries | — |
+
+### The one result that did not go the plan's way
+
+Phase D says "validate by determinism … any drift reverts". `TIMINGS.md` records
+`longplay` minute 6 as **2.14 km, 4 encounters, 19 forage**, and a non-turbo run
+reproduced that exactly. `--turbo 60` returned **2.13 km, 3 encounters, 18
+forage**, separating from minute 4 onward. So turbo is an 11x speed-up that is
+**not telemetry-neutral**, and Phase D's DoD (a 30-game-minute session inside 12
+wall-minutes with byte-identical telemetry) is met on time and failed on
+identity. `project/handoff/benchmaxx.md` carries the likely mechanism —
+`Terrain.drawnHeightAt` reads the *rasterised clipmap*, which an unsubmitted
+frame does not refresh — and the next step.
+
+The original plan follows, unchanged.
 
 Decisions already taken by the human (carried from v1, do not re-litigate):
 - Poll-loop ban is a **hard-block hook with a last-resort escape hatch**.

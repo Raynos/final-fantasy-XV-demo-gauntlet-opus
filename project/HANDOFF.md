@@ -118,6 +118,10 @@ page), `crop.mts` (crop and magnify a capture).
 
 **Housekeeping**
 
+`harnessstats.mts` reads the daemon's job ledger — wait vs run by tool, agent,
+lane or day, and the calls over a threshold named individually. It is how you
+answer "was that slow because it queued or because it is expensive", which is the
+question that decides whether to fix scheduling or fix the tool.
 `cleanup.mts` reports orphaned vite/chromium and `--kill` acts, grading
 confidence so a live agent's server is never killed. `shrink.mts` recompresses
 the shot archive to JPEG in place, holding recent directories lossless for
@@ -125,8 +129,10 @@ the shot archive to JPEG in place, holding recent directories lossless for
 costs — turns, context, p50/p90 model wait, screenshot MB, last tool — which is
 how you tell *expensive* apart from *stuck*.
 
-**`.githooks/pre-commit`** runs `vite build`, both typechecks, and the doc line
-budgets. Enable with `git config core.hooksPath .githooks`. A syntax error in a
+**`.githooks/pre-commit`** runs `vite build` and both typechecks *concurrently*
+(~0.7 s), plus the doc line budgets; **`post-commit`** asks the daemon to prewarm
+the sha you just committed, so the first `--build HEAD` capture after it is warm
+rather than a cold boot. Enable both with `git config core.hooksPath .githooks`. A syntax error in a
 module the dev server already parsed still boots in dev, fails the build, and
 hangs the harness on `waitForFunction` for 120 s with no useful error; a broken
 cross-system contract shows up nowhere else at all, because vite strips the types
@@ -158,6 +164,32 @@ evaluated as a *function body*, so a top-level `return` is correct and they are
 not modules.
 
 ## 4. Running agents
+
+**Caps, and where they bind.** A worker lane ends at **~3 hours or ~150 turns**,
+whichever comes first: it finishes what it is mid-way through, brings
+`project/handoff/<topic>.md` up to date, and stops. A coordinator dispatching one
+must put the cap and "respawn from the handoff" *in the prompt*, because the lane
+cannot read this file's intent, only its own. The reason is measured, not
+aesthetic: per-turn context is flat at ~250 k tokens and has never improved
+across three audits, so a lane's cost is linear in turns and its *value* is not —
+past ~150 turns it is re-reading its own history. Total burn only ever fell when
+turn count fell.
+
+**Never poll; wait.** `.claude/hooks/guard-poll.sh` hard-blocks sleep loops,
+minute-long sleeps, busy-waits and `pgrep … sleep` babysitters, because they were
+about a third of all tool wall-clock in the 7-day audit. Each has a replacement
+and the rejection text names them: `run_in_background` (you are re-invoked —
+2.1 % adoption is the single biggest lever here), `daemon.mts --wait
+quiet|exclusive-free|idle --for <s>`, and `gitlock.mts <git args>` for the index
+lock. **A blocking ten-minute `TaskOutput` is a poll loop wearing a tool
+costume** — 34 of them cost one coordinator 234 minutes in one day. End the turn;
+the completion re-invokes you. `CC_ALLOW_POLL=1` escapes and is logged.
+
+**Look at frames in disposable context.** A capture-and-look loop belongs in a
+subagent or behind `crop.mts`: screenshots are ~95 % of what a transcript
+carries, and the looking is what makes them worth carrying — once. **One `shoot`
+call takes every name you want** (`shoot.mts a b c`), not one call per shot;
+`sheet.mts` and the daemon's frame cache exist so a second reader pays nothing.
 
 - **One `PORT` per worktree**, and the capture daemon takes `PORT+1`. Aiming
   `framecam.mts` at the daemon port hangs for the full 300 s timeout.
