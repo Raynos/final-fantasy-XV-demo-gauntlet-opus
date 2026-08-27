@@ -158,7 +158,12 @@ export class Landmarks {
     this._telegraph(B);
     this._fences(B);
 
-    B.build(this.root, { cast: true, receive: true, name: 'landmark' });
+    // ONE merged caster for every landmark in the world, instead of one per
+    // material. `PartBuilder` splits this batch by material and by nothing else
+    // -- rock, wood, pale, glyph, steel, canvas -- and each of those meshes
+    // spans the whole map, so each was submitted into all three cascades every
+    // refresh. The union casts the identical silhouette. See `shadowProxy`.
+    B.build(this.root, { cast: true, receive: true, name: 'landmark', mergeShadow: true });
     this.scene.add(this.root);
   }
 

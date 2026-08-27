@@ -42,7 +42,19 @@ export class PartBuilder {
     return this.add(mat, geo, m);
   }
 
-  build(parent: THREE.Object3D, { cast = true, receive = true, name = 'part' }: {cast?:boolean, receive?:boolean, name?:string} = {}): THREE.Object3D {
+  /**
+   * Emit one merged mesh per material into `parent`.
+   *
+   * `mergeShadow` adds one more: a position-only {@link shadowProxy} standing in
+   * for every opaque mesh this call produced, which then stop casting for
+   * themselves. Use it wherever a structure is split by material rather than by
+   * object — see the note on {@link shadowProxy} for when it pays.
+   */
+  build(parent: THREE.Object3D, { cast = true, receive = true, name = 'part', mergeShadow = false }: {cast?:boolean, receive?:boolean, name?:string, mergeShadow?:boolean} = {}): THREE.Object3D {
+    // Only what THIS call made: `parent` may already hold another builder's
+    // output — `RoadFurniture` runs two builders into one group — and a proxy
+    // that swallowed those would take their shadows with it.
+    const made: THREE.Mesh[] = [];
     for (const [mat, list] of this.byMat) {
       // If the material reads vertex colours -- or if any piece in this batch
       // carries them -- then every piece must have them. `mergeGeometries`
@@ -73,6 +85,7 @@ export class PartBuilder {
           m.castShadow = cast; m.receiveShadow = receive;
           m.name = `${name}_unmerged`;
           parent.add(m);
+          made.push(m);
         }
         continue;
       }
@@ -82,10 +95,101 @@ export class PartBuilder {
       mesh.receiveShadow = receive;
       mesh.name = `${name}_${mat.name || mat.uuid.slice(0, 4)}`;
       parent.add(mesh);
+      made.push(mesh);
     }
     this.byMat.clear();
+    if (cast && mergeShadow) {
+      const proxy = shadowProxy(made, `${name}_shadow`);
+      if (proxy) {
+        proxy.visible = true;
+        for (const m of made) if (!alphaCut(m.material)) m.castShadow = false;
+        parent.add(proxy);
+      }
+    }
     return parent;
   }
+}
+
+/** Does this material's silhouette live in its alpha channel? */
+export function alphaCut(m: THREE.Material | THREE.Material[]): boolean {
+  const one = Array.isArray(m) ? m[0] : m;
+  return !!one && ((one as THREE.MeshStandardMaterial).alphaTest > 0 || one.transparent === true);
+}
+
+/**
+ * One merged, colour-less caster standing in for a whole compound.
+ *
+ * **Why this is a merge and not a cull.** A shadow map writes depth, and reads a
+ * material only to find an alpha cutout. A structure built through
+ * {@link PartBuilder} is split into meshes because it has that many *materials*,
+ * not that many objects — so its pieces cast exactly the silhouette their union
+ * casts, at one draw per cascade instead of one each. With three cascades that
+ * is a 3:1 return on every material a compound carries, and the win scales with
+ * how BIG the compound is, not how many there are: one merged town saved sixty
+ * draws, while three small haven kits gave three colour draws back for what they
+ * saved.
+ *
+ * **The exception** is an alpha-tested or transparent surface — a chain-link
+ * run, a foliage card — whose shadow *is* the holes in its map. Those keep
+ * casting as themselves; {@link alphaCut} is what filters them out.
+ *
+ * **And why the proxy is visible when it casts.** three.js skips an object whose
+ * `visible` is false, whose material's `visible` is false, or that fails
+ * `object.layers.test(camera.layers)` against the VIEW camera, in the shadow
+ * pass exactly as in the colour pass (`WebGLShadowMap.renderObject` tests all
+ * three) — so there is no such thing as a caster the main camera cannot see. It
+ * therefore costs ONE colour-pass draw, with `colorWrite` and `depthWrite` off
+ * so it changes no pixel and no depth, against the dozens it removes. A caller
+ * that range-gates its compound should hide it outright out of shadow range,
+ * where that one draw would do nothing at all.
+ *
+ * `userData.noVelocity` is set for the same reason `colorWrite` is off:
+ * `VelocityPass` would otherwise give the proxy a motion-vector proxy of its
+ * own, writing velocity into pixels its own sources have already written.
+ *
+ * This is the canonical copy. `src/world/town/Hammerhead.ts` still carries its
+ * own — that file belongs to another lane.
+ */
+export function shadowProxy(meshes: THREE.Object3D[], name: string): THREE.Mesh | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const m of meshes) {
+    const mesh = m as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry || !mesh.material || alphaCut(mesh.material)) continue;
+    const src = mesh.geometry;
+    const pos = src.getAttribute('position');
+    if (!pos) continue;
+    // Position only: a depth pass binds no normal, no UV and no vertex colour,
+    // so carrying them through the merge would triple a buffer whose only
+    // reader is `gl_Position`.
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', pos.clone());
+    // `mergeGeometries` returns **null**, silently, when one member of a batch
+    // is indexed and another is not — and a null merge here deletes a whole
+    // compound's shadow. So the index is synthesised rather than left absent.
+    const idx = src.getIndex();
+    if (idx) g.setIndex(idx.clone());
+    else {
+      const seq = new Uint32Array(pos.count);
+      for (let i = 0; i < pos.count; i++) seq[i] = i;
+      g.setIndex(new THREE.BufferAttribute(seq, 1));
+    }
+    // The sources share the parent's frame and the proxy joins that same
+    // parent, so no matrix is applied here on purpose.
+    parts.push(g);
+  }
+  if (!parts.length) return null;
+  const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+  if (!merged) return null;
+  merged.computeBoundingSphere();
+  const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  mat.name = `${name}_mat`;
+  const mesh = new THREE.Mesh(merged, mat);
+  mesh.name = name;
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  mesh.visible = false;
+  mesh.userData.noVelocity = true;
+  return mesh;
 }
 
 /** Attributes a merged prop geometry is allowed to carry, and the only ones. */
