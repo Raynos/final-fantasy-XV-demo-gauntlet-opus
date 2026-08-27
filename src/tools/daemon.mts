@@ -2,9 +2,11 @@
 /**
  * ONE capture daemon per repository, for every agent on the machine.
  *
- *   node src/tools/daemon.mts            # run in the foreground (clients autostart it)
- *   node src/tools/daemon.mts --stop     # stop it, its builds and its browsers
+ *   node src/tools/daemon.mts             # run in the foreground (clients autostart it)
+ *   node src/tools/daemon.mts --stop      # stop it, its builds and its browsers
  *   node src/tools/daemon.mts --health
+ *   node src/tools/daemon.mts --wait quiet --for 600   # block until it is; never poll
+ *   node src/tools/daemon.mts --prewarm HEAD           # boot one page of a sha, detached
  *
  * Why this exists: booting the game is the dominant cost of every capture.
  * Measured on this machine (`project/journal/2026-08-23-harness-bench.md`) boot
@@ -47,15 +49,17 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync, symlinkSync, readFileSync, writeFileSync, copyFileSync, utimesSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync, symlinkSync, readFileSync, writeFileSync, copyFileSync, utimesSync, openSync, closeSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { launchPersistent } from './chromium.mts';
+import { launchPersistent, profileDir } from './chromium.mts';
 import {
   ROOT, repoKey, keyHash, derivedPort, repoCacheDir, readRegistry, writeRegistry, clearRegistry,
   resolveBuild, isDirty, shaOf, shortBuild, DIRTY_PREFIX,
 } from './identity.mts';
 import type { BuildId, Registry } from './identity.mts';
+import { appendJob, ledgerPath, daemonLogPath } from './ledger.mts';
+import type { JobRecord } from './ledger.mts';
 
 /**
  * Bumped whenever a route, a request shape or a response shape changes.
@@ -68,7 +72,7 @@ import type { BuildId, Registry } from './identity.mts';
  * being blamed was not the code that ran. Harness work is self-hosting; this is
  * the one place it bites.
  */
-export const PROTOCOL = 3;
+export const PROTOCOL = 4;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -273,7 +277,7 @@ export interface ShotResult {
  * client can tell a warm capture from a cold one, and a shared frame from its
  * own, without a second call.
  */
-interface Counters {
+export interface Counters {
   errors: string[];
   boots: number;
   reuses: number;
@@ -281,6 +285,19 @@ interface Counters {
   build: string;
   /** True when the frames are of somebody's live working tree. Never quote them. */
   dirty: boolean;
+  /**
+   * How long this request sat in the queue, and how long it then ran.
+   *
+   * Stamped by the scheduler on the way out, so **every client can print one
+   * exit line naming its own reason for being slow**. Before this the queue was
+   * invisible — a blocked HTTP call printed nothing — which is why the 7-day
+   * audit found 104 minutes of `/health` polling and 173 minutes of `until`
+   * loops: agents were reconstructing, badly, a fact the daemon already had.
+   */
+  queuedMs?: number;
+  ranMs?: number;
+  /** Who was ahead at enqueue, rendered: `2 ahead: perf@agent-ab`. Empty when nobody was. */
+  queueAhead?: string;
 }
 
 export interface ShotsResponse extends Counters { results: ShotResult[]; bootMs: number }
@@ -341,6 +358,37 @@ export interface HealthResponse {
   /** Agents queued behind the lease, in arrival order. */
   exclusiveQueue: string[];
   resetDrift: Record<string, string>;
+  /**
+   * Cumulative totals since this daemon started, and where the ledger is.
+   *
+   * "How much of today was queue wait, and whose?" used to need transcript
+   * archaeology. It is now one GET.
+   */
+  totals: {
+    jobs: number;
+    queuedSec: number;
+    ranSec: number;
+    errors: number;
+    deadlines: number;
+    laneQueuedSec: Record<Lane, number>;
+    laneJobs: Record<Lane, number>;
+    exclusiveHolds: number;
+    exclusiveWaitSec: number;
+    exclusiveHeldSec: number;
+    evictions: number;
+    prewarms: number;
+  };
+  ledger: string;
+  /** Resident set of every chromium the daemon owns, MB. */
+  rssMb: number;
+  /**
+   * True when `src/public/baked/faces/` is present.
+   *
+   * `pnpm run build` *deletes* the painted-face cache without replacing it —
+   * recording it needs a browser — and cold boot then regresses ~2.5 s with no
+   * gate noticing. That warning lived only in prose, in two documents.
+   */
+  paintedFaces: boolean;
 }
 
 /**
@@ -379,6 +427,32 @@ function isEvalRequest(b: Record<string, unknown>): b is Record<string, unknown>
  * instead -- which is the honest thing to bound, since a daemon that has gone
  * quiet for 45 minutes really is wedged.
  */
+/**
+ * Print what a call waited for, when the answer is worth a line.
+ *
+ * **A slow tool must name its own reason in the transcript.** The 7-day audit
+ * measured 104 minutes of `/health` polling and 173 minutes of `until` loops in
+ * 3.5 days, all of it agents reconstructing — badly — a fact the daemon already
+ * had and never said. `[harness] queued 12.3 s · ran 41.0 s (2 ahead: perf)` is
+ * that fact, delivered at the only moment it is actionable.
+ *
+ * It lives in `call()` rather than in `harness.mts`'s `shots()` because a dozen
+ * tools reach for `call('/shots', …)` directly; the transport is the only place
+ * every one of them passes through.
+ *
+ * Quiet below the threshold, and quiet entirely under `--json`: a 400 ms cache
+ * hit that announces its own timing is noise, and a `[harness]` line in front
+ * of a document somebody pipes to `jq` is a bug.
+ */
+export function reportTiming(c: { queuedMs?: number, ranMs?: number, queueAhead?: string }): void {
+  const queued = c.queuedMs ?? 0;
+  const ran = c.ranMs ?? 0;
+  if (queued < 500 && ran < 5_000) return;
+  if (process.argv.includes('--json')) return;
+  const s = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+  console.log(`[harness] queued ${s(queued)} · ran ${s(ran)}${c.queueAhead ? ` (${c.queueAhead})` : ''}`);
+}
+
 export function call<T = unknown>(route: string, body?: unknown, { timeout = 45 * 60_000 }: { timeout?: number } = {}): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
@@ -405,6 +479,7 @@ export function call<T = unknown>(route: string, body?: unknown, { timeout = 45 
           return reject(err);
         }
         if (res.statusCode !== 200) return reject(new Error(j.error || `daemon ${res.statusCode}`));
+        reportTiming(j as { queuedMs?: number, ranMs?: number, queueAhead?: string });
         return resolve(j);
       });
     });
@@ -448,10 +523,24 @@ export async function ensureDaemon(): Promise<boolean> {
     try { await call('/stop', {}); } catch { /* already going */ }
     for (let i = 0; i < 100 && await portOpen(port); i++) await sleep(100);
   }
+  /**
+   * Autostart WITH ITS TELEMETRY KEPT.
+   *
+   * This used to be `stdio: 'ignore'`, so every queue decision, every lease
+   * hand-off and every boot failure the daemon printed went to a closed pipe —
+   * `daemon.mts:452` in the 7-day audit, and the reason "why was that call
+   * slow?" needed transcript archaeology. The log is append-only, truncated at
+   * 5 MB, and lives beside the ledger where deleting it costs nothing.
+   */
+  const logFile = daemonLogPath();
+  mkdirSync(path.dirname(logFile), { recursive: true });
+  try { if (statSync(logFile).size > 5 * 1024 * 1024) writeFileSync(logFile, ''); } catch { /* no log yet */ }
+  const fd = openSync(logFile, 'a');
   const child = spawn(process.execPath, [path.join(ROOT, 'src/tools/daemon.mts')], {
-    cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env },
+    cwd: ROOT, detached: true, stdio: ['ignore', fd, fd], env: { ...process.env },
   });
   child.unref();
+  closeSync(fd);
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     await sleep(200);
@@ -801,6 +890,16 @@ class BrowserPool {
   boots = 0;
   reuses = 0;
   bootMs = 0;
+  /**
+   * Resident set of every chromium this daemon owns, MB, sampled not guessed.
+   *
+   * `project/TODO.md` says "it uses 1.4 GB of RAM" and `STATUS.md` says a page
+   * costs ~1.94 GB — two numbers, one of them a memory of a measurement. A
+   * complaint without a trendline cannot be closed, so the daemon takes the
+   * number itself, after every boot, and writes it on every ledger line.
+   */
+  lastRssMb = 0;
+  private lastRssAt = 0;
   private waiters: (() => void)[] = [];
 
   get pages(): number { return this.slots.filter((s) => s.page).length; }
@@ -870,10 +969,46 @@ class BrowserPool {
 
   /** Drop the page but keep the browser: relaunching chromium is the expensive half. */
   private async evict(slot: Slot) {
-    if (slot.page) { await slot.page.close().catch(() => {}); }
+    if (slot.page) { stats.evictions++; await slot.page.close().catch(() => {}); }
     slot.page = null;
     slot.key = '';
     slot.build = null;
+  }
+
+  /**
+   * Sample the chromium RSS, at most once a minute.
+   *
+   * One `ps` over the whole process table, summing every process descended from
+   * a chromium launched against our profile directory — the browser process,
+   * the GPU process and every renderer. Rate-limited because `ps -ax` on a busy
+   * box is not free and nobody needs this at capture granularity.
+   */
+  sampleRss(force = false): number {
+    if (!force && Date.now() - this.lastRssAt < 60_000) return this.lastRssMb;
+    this.lastRssAt = Date.now();
+    try {
+      const out = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], { encoding: 'utf8', maxBuffer: 8 << 20 });
+      const rows = out.split('\n').map((l) => {
+        const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l);
+        return m ? { pid: Number(m[1]), ppid: Number(m[2]), rss: Number(m[3]), cmd: m[4] } : null;
+      }).filter((r): r is { pid: number, ppid: number, rss: number, cmd: string } => !!r);
+      const marker = profileDir();
+      const roots = new Set(rows.filter((r) => r.cmd.includes(marker)).map((r) => r.pid));
+      // Renderers do not carry the profile flag, so walk down from the roots.
+      const kids = new Map<number, number[]>();
+      for (const r of rows) kids.set(r.ppid, [...(kids.get(r.ppid) ?? []), r.pid]);
+      const seen = new Set<number>();
+      const stack = [...roots];
+      while (stack.length) {
+        const pid = stack.pop()!;
+        if (seen.has(pid)) continue;
+        seen.add(pid);
+        for (const k of kids.get(pid) ?? []) stack.push(k);
+      }
+      const kb = rows.filter((r) => seen.has(r.pid)).reduce((a, r) => a + r.rss, 0);
+      this.lastRssMb = Math.round(kb / 1024);
+    } catch { /* ps is not worth failing a capture for */ }
+    return this.lastRssMb;
   }
 
   /** A wedged page must never be pooled; recycle the whole context. */
@@ -910,6 +1045,79 @@ interface Job<T = unknown> {
   reject: (e: unknown) => void;
   /** Fires the `429` while the client still cares; cleared once the job runs. */
   timer?: NodeJS.Timeout;
+  /** Ledger fields, captured at enqueue because that is when they are true. */
+  holder: string | null;
+  ahead: number;
+  /** The agent with the most work ahead of this job, so a slow call can name it. */
+  aheadWho: string;
+  build: string;
+}
+
+/** What a job cost, handed back so the route can stamp it on the response. */
+export interface JobTiming {
+  queuedMs: number; ranMs: number; ahead: number; aheadWho: string; holder: string | null;
+}
+
+/** `2 ahead: agent-ab` / `behind the quiet lane (perf)` / '' when nothing was in the way. */
+function renderAhead(t: JobTiming): string {
+  if (t.holder) return `behind the quiet lane (${t.holder})`;
+  if (!t.ahead) return '';
+  return `${t.ahead} ahead${t.aheadWho ? `: ${t.aheadWho}` : ''}`;
+}
+
+/**
+ * Cumulative daemon totals since start, for `/health` and the weekly audit.
+ *
+ * The ledger holds the per-job detail; this is the running sum, so a client can
+ * ask "how much queue has this daemon handed out today" without reading 10 MB.
+ */
+const stats = {
+  jobs: 0,
+  queuedMs: 0,
+  ranMs: 0,
+  errors: 0,
+  deadlines: 0,
+  /** Queue-milliseconds by lane — the number that decides whether a lane is starving. */
+  laneQueuedMs: { fix: 0, sweep: 0 } as Record<Lane, number>,
+  laneJobs: { fix: 0, sweep: 0 } as Record<Lane, number>,
+  exclusiveHolds: 0,
+  exclusiveWaitMs: 0,
+  exclusiveHeldMs: 0,
+  /** Pages dropped to make room for a different identity — the cost of a small budget. */
+  evictions: 0,
+  prewarms: 0,
+};
+
+const errHead = (e: unknown): string =>
+  (e instanceof Error ? e.message : String(e)).split('\n')[0].slice(0, 120);
+
+/** Append one finished job to the ledger and fold it into `stats`. */
+function recordJob(job: Job, startedAt: number, endedAt: number, verdict: JobRecord['verdict'], note?: string): void {
+  const queuedMs = Math.max(0, startedAt - job.enqueuedAt);
+  const ranMs = Math.max(0, endedAt - startedAt);
+  stats.jobs++;
+  stats.queuedMs += queuedMs;
+  stats.ranMs += ranMs;
+  stats.laneQueuedMs[job.lane] += queuedMs;
+  stats.laneJobs[job.lane]++;
+  if (verdict === 'error') stats.errors++;
+  if (verdict === 'deadline') stats.deadlines++;
+  appendJob({
+    t: new Date(endedAt).toISOString(),
+    kind: job.kind,
+    agent: job.agent,
+    lane: job.lane,
+    build: job.build,
+    queuedMs,
+    ranMs,
+    verdict,
+    holder: job.holder,
+    ahead: job.ahead,
+    boots: pool.boots,
+    reuses: pool.reuses,
+    rssMb: pool.lastRssMb || undefined,
+    note,
+  });
 }
 
 /**
@@ -961,11 +1169,19 @@ class Scheduler {
     }
   }
 
-  submit<T>(lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+  submit<T>(
+    lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>,
+    build = '',
+  ): Promise<{ value: T, timing: JobTiming }> {
+    return new Promise<{ value: T, timing: JobTiming }>((resolve, reject) => {
+      const aheadAt = this.ahead();
       const job: Job = {
         lane, agent, kind, enqueuedAt: Date.now(), deadlineMs, run,
         resolve: resolve as (v: unknown) => void, reject,
+        holder: this.exclusive,
+        ahead: Object.values(aheadAt).reduce((a, b) => a + b, 0),
+        aheadWho: Object.entries(aheadAt).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '',
+        build,
       };
       /**
        * The deadline fires from a TIMER, not from the dispatch check.
@@ -987,6 +1203,7 @@ class Scheduler {
           const i = q.indexOf(job);
           if (i < 0) return;                       // already running; let it finish
           q.splice(i, 1);
+          recordJob(job, Date.now(), Date.now(), 'deadline');
           job.reject(busyError(this, Date.now() - job.enqueuedAt));
         }, deadlineMs);
         job.timer.unref?.();
@@ -1054,7 +1271,18 @@ class Scheduler {
       if (job.timer) clearTimeout(job.timer);
       this.busyWorkers++;
       this.running.set(job.agent, (this.running.get(job.agent) ?? 0) + 1);
-      void job.run().then(job.resolve, job.reject).finally(() => {
+      const startedAt = Date.now();
+      const timing = (): JobTiming => ({
+        queuedMs: startedAt - job.enqueuedAt,
+        ranMs: Date.now() - startedAt,
+        ahead: job.ahead,
+        aheadWho: job.aheadWho,
+        holder: job.holder,
+      });
+      void job.run().then(
+        (value) => { recordJob(job, startedAt, Date.now(), 'ok'); job.resolve({ value, timing: timing() }); },
+        (e) => { recordJob(job, startedAt, Date.now(), 'error', errHead(e)); job.reject(e); },
+      ).finally(() => {
         this.busyWorkers--;
         const n = (this.running.get(job.agent) ?? 1) - 1;
         if (n > 0) this.running.set(job.agent, n); else this.running.delete(job.agent);
@@ -1077,6 +1305,7 @@ class Scheduler {
    */
   async takeExclusive(holder: string, pid: number, waitMs = 0): Promise<void> {
     this.reapExclusive();
+    const askedAt = Date.now();
     if (this.exclusive) {
       const heldFor = Math.round((Date.now() - this.exclusiveSince) / 1000);
       const who = `${this.exclusive} (pid ${this.exclusivePid}, held ${heldFor} s)`;
@@ -1109,12 +1338,45 @@ class Scheduler {
     this.exclusivePid = pid;
     this.exclusiveSince = Date.now();
     if (this.busyWorkers) await new Promise<void>((r) => this.exclusiveWaiters.push(r));
+    stats.exclusiveHolds++;
+    stats.exclusiveWaitMs += Date.now() - askedAt;
+    appendJob({
+      t: new Date().toISOString(),
+      kind: 'exclusive',
+      agent: holder,
+      lane: 'fix',
+      build: '',
+      queuedMs: Date.now() - askedAt,
+      ranMs: 0,
+      verdict: 'ok',
+      note: 'granted',
+    });
+    this.grantedAt = Date.now();
   }
+
+  /** When the current holder actually got the machine, for the held-time total. */
+  private grantedAt = 0;
 
   /** How many agents are queued behind the lease, for `--health`. */
   leaseWaiting(): string[] { return this.leaseQueue.map((e) => e.holder); }
 
   releaseExclusive() {
+    if (this.grantedAt) {
+      const heldMs = Date.now() - this.grantedAt;
+      stats.exclusiveHeldMs += heldMs;
+      appendJob({
+        t: new Date().toISOString(),
+        kind: 'exclusive',
+        agent: this.exclusive ?? 'anon',
+        lane: 'fix',
+        build: '',
+        queuedMs: 0,
+        ranMs: heldMs,
+        verdict: 'ok',
+        note: 'released',
+      });
+      this.grantedAt = 0;
+    }
     this.exclusive = null;
     this.exclusivePid = 0;
     this.exclusiveSince = 0;
@@ -1224,6 +1486,9 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
   await page.evaluate(() => { document.getElementById('boot')?.remove(); });
   pool.bootMs = Date.now() - t0;
   pool.boots++;
+  // Per-page RSS, at boot, forced past the rate limit: this is the one moment
+  // the number means "what a page costs" rather than "what the pool is holding".
+  pool.sampleRss(true);
   slot.page = page;
   slot.key = key;
   slot.build = build.id;
@@ -1625,8 +1890,8 @@ function scheduleDriftCheck(build: BuildId) {
   driftChecked.add(build);
   resetDrift[shortBuild(build)] = 'checking';
   void sched.submit('sweep', 'daemon', 'drift', 0, () => checkResetDrift(build))
-    .then((v) => {
-      if (!v.startsWith('within')) console.log(`[daemon] reset drift on ${shortBuild(build)}: ${v}`);
+    .then(({ value }) => {
+      if (!value.startsWith('within')) console.log(`[daemon] reset drift on ${shortBuild(build)}: ${value}`);
     })
     .catch(() => { /* recorded in resetDrift */ });
 }
@@ -1668,6 +1933,103 @@ async function checkResetDrift(build: BuildId, shot = 'party_walk'): Promise<str
   }
 }
 
+// ----------------------------------------------------- waiting, as a primitive
+
+export interface WaitResponse { ok: boolean; what: string; waitedMs: number; why: string }
+
+/**
+ * Block until a condition holds, and say what it was waiting on.
+ *
+ * **This is the affordance the poll ban needs to exist first.** The 7-day audit
+ * found agents writing `until grep -q "gates passed" …; do sleep 20` and
+ * `for i in $(seq 1 60); do … sleep 10`, and polling `/health` 280 times in a
+ * week — not out of laziness, but because *nothing in this repo could be waited
+ * on*. A ban with no replacement moves the pattern to the next syntax; one
+ * blocking call with a printed reason retires it.
+ *
+ * The poll is INSIDE the daemon, where it costs one `setTimeout` against local
+ * state rather than an HTTP round trip, a Bash spawn and a turn of context.
+ */
+function waitFor(what: string, forMs: number): Promise<WaitResponse> {
+  const started = Date.now();
+  const conditions: Record<string, () => string> = {
+    // Nothing queued, nothing running, no lease out, no quiet lane held.
+    quiet: () => {
+      if (sched.exclusive) return `quiet lane held by ${sched.exclusive}`;
+      if (sched.busy) return `${sched.busy} job(s) running`;
+      if (sched.depth()) return `${sched.depth()} job(s) queued`;
+      if (leases.size) return `${leases.size} page lease(s) out`;
+      return '';
+    },
+    'exclusive-free': () => (sched.exclusive ? `held by ${sched.exclusive}` : ''),
+    // The queue has drained; long leases may still be out. This is what a tool
+    // that wants a slot soon should wait on, not `quiet`.
+    idle: () => {
+      if (sched.busy) return `${sched.busy} job(s) running`;
+      if (sched.depth()) return `${sched.depth()} job(s) queued`;
+      return '';
+    },
+  };
+  const test = conditions[what];
+  if (!test) {
+    return Promise.resolve({
+      ok: false, what, waitedMs: 0,
+      why: `unknown condition; try ${Object.keys(conditions).join(', ')}`,
+    });
+  }
+  return new Promise<WaitResponse>((resolve) => {
+    const tick = () => {
+      const why = test();
+      if (!why) return resolve({ ok: true, what, waitedMs: Date.now() - started, why: '' });
+      if (Date.now() - started >= forMs) return resolve({ ok: false, what, waitedMs: Date.now() - started, why });
+      setTimeout(tick, 250).unref?.();
+    };
+    tick();
+  });
+}
+
+// -------------------------------------------------------------------- prewarm
+
+/** The sha this daemon is currently prewarming, so two commits do not race. */
+let prewarming: BuildId | null = null;
+
+export interface PrewarmResponse { started: boolean; build: string; reason: string }
+
+/**
+ * Boot one page of a freshly committed tree, in the background, on the sweep lane.
+ *
+ * `CLAUDE.md` says "you commit to see your work" — captures default to
+ * `--build HEAD` — so the first shot after every commit pays a cold boot. The
+ * 7-day audit prices that at a **38.9 s average `shoot`** against the 2.3 s a
+ * warm page costs. The commit is the moment the sha becomes knowable and the
+ * moment nobody is waiting, so it is the right moment to spend a slot.
+ *
+ * Fire-and-forget by construction: the caller (a post-commit hook) gets the
+ * decision, never the boot. Newest sha wins — a second commit supersedes the
+ * first rather than queueing two boots — and a `fix` lease evicts the page the
+ * instant it wants the slot, because it goes through the same pool as everyone.
+ */
+function prewarm(build: BuildId): PrewarmResponse {
+  const label = shortBuild(build);
+  if (isDirty(build)) return { started: false, build: label, reason: 'dirty builds are never cached' };
+  if (sched.exclusive) return { started: false, build: label, reason: `quiet lane held by ${sched.exclusive}` };
+  if (prewarming === build) return { started: false, build: label, reason: 'already prewarming' };
+  const key = pageKey(build, 1600, 900, queryOf({}));
+  if (pool.slots.some((s) => s.page && s.key === key)) {
+    return { started: false, build: label, reason: 'already warm' };
+  }
+  prewarming = build;
+  stats.prewarms++;
+  void sched.submit('sweep', 'prewarm', 'prewarm', 0, async () => {
+    try {
+      await withPage({ build, w: 1600, h: 900 }, async () => { /* the boot IS the work */ });
+    } finally {
+      if (prewarming === build) prewarming = null;
+    }
+  }, label).catch((e) => { console.log(`[daemon] prewarm ${label} failed: ${errHead(e)}`); });
+  return { started: true, build: label, reason: 'booting one page on the sweep lane' };
+}
+
 /**
  * `/health` must never touch a page.
  *
@@ -1707,6 +2069,23 @@ function health(): HealthResponse {
     exclusive: sched.exclusive,
     exclusiveQueue: sched.leaseWaiting(),
     resetDrift,
+    totals: {
+      jobs: stats.jobs,
+      queuedSec: Math.round(stats.queuedMs / 1000),
+      ranSec: Math.round(stats.ranMs / 1000),
+      errors: stats.errors,
+      deadlines: stats.deadlines,
+      laneQueuedSec: { fix: Math.round(stats.laneQueuedMs.fix / 1000), sweep: Math.round(stats.laneQueuedMs.sweep / 1000) },
+      laneJobs: { ...stats.laneJobs },
+      exclusiveHolds: stats.exclusiveHolds,
+      exclusiveWaitSec: Math.round(stats.exclusiveWaitMs / 1000),
+      exclusiveHeldSec: Math.round(stats.exclusiveHeldMs / 1000),
+      evictions: stats.evictions,
+      prewarms: stats.prewarms,
+    },
+    ledger: ledgerPath(),
+    rssMb: pool.lastRssMb,
+    paintedFaces: existsSync(path.join(ROOT, 'src/public/baked/texc.bin.gz')),
   };
 }
 
@@ -1726,7 +2105,24 @@ async function serve() {
       const lane = (body.lane === 'sweep' ? 'sweep' : 'fix') as Lane;
       const agent = typeof body.agent === 'string' ? body.agent : 'anon';
       const deadline = typeof body.deadlineMs === 'number' ? body.deadlineMs : 0;
-      const queued = <T,>(kind: string, fn: () => Promise<T>) => sched.submit(lane, agent, kind, deadline, fn);
+      const buildLabel = shortBuild(typeof body.build === 'string' ? body.build : DIRTY_PREFIX + ROOT);
+      /**
+       * Run a job and stamp what it waited for onto its own response.
+       *
+       * The stamp is the whole of Phase A's client half: a call that took 53 s
+       * now says, in the transcript, whether it was queued behind somebody or
+       * simply expensive. That is what makes `/health` polling pointless rather
+       * than merely discouraged.
+       */
+      const queued = async <T extends object>(kind: string, fn: () => Promise<T>): Promise<T> => {
+        const { value, timing } = await sched.submit(lane, agent, kind, deadline, fn, buildLabel);
+        return {
+          ...value,
+          queuedMs: timing.queuedMs,
+          ranMs: timing.ranMs,
+          queueAhead: renderAhead(timing),
+        };
+      };
       try {
         if (url === '/health') return send(200, health());
         if (url === '/version') {
@@ -1777,6 +2173,16 @@ async function serve() {
           return send(200, { ok: true, holder: agent });
         }
         if (url === '/exclusive-release') { sched.releaseExclusive(); return send(200, { ok: true }); }
+        if (url === '/wait') {
+          const what = String(body.what ?? 'quiet');
+          const forMs = Math.min(Number(body.forMs) || 15 * 60_000, 60 * 60_000);
+          return send(200, await waitFor(what, forMs));
+        }
+        if (url === '/prewarm') {
+          // Fire-and-forget: the caller is a post-commit hook and must not wait
+          // for a boot. It gets the decision, not the result.
+          return send(200, prewarm(typeof body.build === 'string' ? body.build : resolveBuild('HEAD')));
+        }
         if (url === '/drift') {
           const build = typeof body.build === 'string' ? body.build : resolveBuild('HEAD');
           return send(200, { verdict: await checkResetDrift(build) });
@@ -1814,6 +2220,7 @@ async function serve() {
     sched.reapExclusive();
     reapLeases();
     store.reapIdle();
+    if (pool.slots.length) pool.sampleRss();
     const idle = Date.now() - lastUsed;
     if (idle > DAEMON_IDLE_MS) { console.log('[daemon] idle, exiting'); void stop(); }
     else if (idle > BROWSER_IDLE_MS && pool.slots.length && pool.idle) {
@@ -1830,8 +2237,37 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     try { await call('/stop', {}); console.log('stopped'); }
     catch { console.log('not running'); }
   } else if (argv.includes('--health')) {
-    try { console.log(JSON.stringify(await call<HealthResponse>('/health'), null, 2)); }
-    catch (e) { console.log('not running:', e instanceof Error ? e.message : String(e)); process.exit(1); }
+    try {
+      const h = await call<HealthResponse>('/health');
+      console.log(JSON.stringify(h, null, 2));
+      if (!h.paintedFaces) {
+        console.log('\n[daemon] WARNING: src/public/baked/texc.bin.gz is missing — the painted-face');
+        console.log('         cache is cold and every boot pays ~2.5 s to redraw it. `pnpm run build`');
+        console.log('         deletes it without replacing it; run `pnpm run build:full`.');
+      }
+    } catch (e) { console.log('not running:', e instanceof Error ? e.message : String(e)); process.exit(1); }
+  } else if (argv.includes('--wait')) {
+    /**
+     * Block until the machine is in the state you need, then say so.
+     *
+     * The replacement for `until node src/tools/daemon.mts --health | grep …;
+     * do sleep 20`. One call, one line of output, no turn burned per poll —
+     * and the daemon can answer instantly because it is the thing being asked
+     * about.
+     */
+    const what = argv[argv.indexOf('--wait') + 1] ?? 'quiet';
+    const i = argv.indexOf('--for');
+    const forMs = (i >= 0 ? Number(argv[i + 1]) || 900 : 900) * 1000;
+    await ensureDaemon();
+    const r = await call<WaitResponse>('/wait', { what, forMs }, { timeout: forMs + 60_000 });
+    const secs = (r.waitedMs / 1000).toFixed(1);
+    if (r.ok) console.log(`[daemon] ${what} after ${secs} s`);
+    else { console.log(`[daemon] gave up after ${secs} s — ${r.why}`); process.exit(1); }
+  } else if (argv.includes('--prewarm')) {
+    const i = argv.indexOf('--prewarm');
+    const ref = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : 'HEAD';
+    const r = await call<PrewarmResponse>('/prewarm', { build: resolveBuild(ref) }).catch(() => null);
+    if (r) console.log(`[daemon] prewarm ${r.build}: ${r.reason}`);
   } else {
     await serve();
   }

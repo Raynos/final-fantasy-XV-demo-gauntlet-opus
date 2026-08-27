@@ -35,7 +35,7 @@ import type { Browser, Page } from 'playwright';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  call, ensureDaemon, DAEMON_PORT, PROTOCOL,
+  call, ensureDaemon, DAEMON_PORT,
 } from './daemon.mts';
 import type {
   EvalResponse, LeaseRequest, LeaseResponse, Lane, PageOpts, ShotsRequest, ShotsResponse,
@@ -43,7 +43,7 @@ import type {
 import { ROOT, resolveBuild, shortBuild, workingTreeDirty, isDirty } from './identity.mts';
 import type { BuildId } from './identity.mts';
 
-export { call, ensureDaemon, PROTOCOL };
+export { call, ensureDaemon, PROTOCOL, reportTiming } from './daemon.mts';
 export const daemonPort = (): number => DAEMON_PORT;
 export type { Lane, PageOpts, ShotResult, ShotsResponse } from './daemon.mts';
 
