@@ -6,6 +6,7 @@ import { buildHair } from './Hair.ts';
 import { buildOutfit } from './Outfit.ts';
 import { Animator } from './Anim.ts';
 import { skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, lensMaterial, contactShadowMaterial } from './Materials.ts';
+import { skinnedShadowProxy } from '../npc/NpcShadow.ts';
 import { Rng } from '../../util/Rng.ts';
 import type { Rig, Side } from './Skeleton.ts';
 import type { CharacterDef, Look } from './Look.ts';
@@ -82,6 +83,11 @@ export class Character {
   meshes!: THREE.Mesh[];
   name!: string;
   outfit!: THREE.SkinnedMesh;
+  /**
+   * The single merged caster standing in for body + head + outfit, or null if
+   * the merge could not be made. See where it is built.
+   */
+  shadowProxy!: THREE.SkinnedMesh | null;
   rig!: Rig;
   root!: THREE.Group;
   seedRnd!: Rng;
@@ -156,6 +162,35 @@ export class Character {
     this.head = this._skinned(head.geometry, this.faceMat, 'head');
     this.hair = this._skinned(hairGeo, S.hair, 'hair');
     this.outfit = this._skinned(outfitGeo, S.garment, 'outfit');
+
+    /**
+     * ONE merged caster for the three opaque meshes, not one each.
+     *
+     * The town NPCs got this first and the four party rigs did not, which is
+     * the whole of the corpus' remaining draw-call debt. A shadow map writes
+     * depth and reads a material only to find an alpha cutout, so body, head
+     * and outfit cast exactly the silhouette their union casts — they are
+     * three meshes because they are three *materials*, not three objects.
+     * Four members x three opaque meshes x three cascades is **48 shadow
+     * draws**; at the NPCs' rate it is 24, and `town_forecourt` — the one shot
+     * in 142 still over BRIEF's 800 — lands under it.
+     *
+     * **The hair keeps casting as itself**, for the reason
+     * {@link skinnedShadowProxy} spells out: `S.hair` is alpha-cut, so the
+     * hair's shadow *is* the holes in it, and merged position-only it would
+     * come back as solid quads across the forehead and shoulders.
+     *
+     * If the merge returns null — one member indexed and another not, which
+     * `mergeGeometries` reports by returning null and nothing else — every
+     * mesh keeps casting and this is exactly the old behaviour.
+     */
+    const opaque = [this.body, this.head, this.outfit];
+    this.shadowProxy = skinnedShadowProxy(
+      opaque, this.rig.skeleton, this.body.bindMatrix, `${this.name}_shadow`);
+    if (this.shadowProxy) {
+      this.root.add(this.shadowProxy);
+      for (const m of opaque) m.castShadow = false;
+    }
 
     // Each eye rides its **own** pivot, at its own globe centre, under the head
     // bone — see `buildEyes` for the 9.9 mm orbit the single shared pivot was
