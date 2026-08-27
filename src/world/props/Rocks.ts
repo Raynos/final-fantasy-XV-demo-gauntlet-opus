@@ -1527,7 +1527,7 @@ function kindOf(key: StoneKind): RockKindDef {
 /** An instanced mesh that definitely carries a per-instance colour buffer. */
 type TintedMesh = THREE.InstancedMesh & { instanceColor: THREE.InstancedBufferAttribute };
 
-/** One kind's two instanced tiers, and how many slots each has written. */
+/** One kind's instanced mesh, its two range budgets, and what it wrote. */
 interface RockGroup {
   kind: RockKindDef;
   key: StoneKind;
@@ -1535,11 +1535,33 @@ interface RockGroup {
   nearRange: number;
   farRange: number;
   outRange: number;
+  /**
+   * The one mesh both tiers write into.
+   *
+   * **There used to be two**, `rock_<kind>` and `rock_<kind>_far`, and the
+   * reason was a detail-1 blank for the far tier. That blank is gone — see
+   * {@link Rocks.build} — and once both tiers share a geometry AND a material,
+   * two meshes are two of everything for nothing: two colour draws, and two
+   * submissions into every cascade that refreshes. On `town_forecourt`'s peak
+   * frame the stone field cost 45 draws, 33 of them shadow, across eleven
+   * meshes that were five kinds.
+   *
+   * `hasFar` keeps the far tier's *budget*, which is what actually differed:
+   * near and far have separate caps so a dense foreground cannot spend the
+   * whole allowance and leave the middle distance bare.
+   */
+  mesh: TintedMesh;
+  /**
+   * The same object as {@link mesh}, under the name the merge replaced.
+   * `src/tools/probes/rockquilt.mts` reads `groups[0].near.material` and that
+   * file belongs to another lane.
+   */
   near: TintedMesh;
-  far: TintedMesh | null;
+  hasFar: boolean;
   nearMax: number;
   farMax: number;
-  /** Slots written this frame, near and far. */
+  /** Slots written this frame: total, and the near/far budgets they came from. */
+  w: number;
   nw: number;
   fw: number;
 }
@@ -2189,20 +2211,19 @@ export class Rocks {
       const ex = hullExtents(geo);
       this.hy.set(k.key, ex[1]);
       this.ext.set(k.key, ex);
+      // ONE mesh for both tiers. They share the geometry (see the note above)
+      // and the material, so the only thing a second mesh bought was a second
+      // draw call in the colour pass and a second one in every cascade.
+      const farMax = farCap ? Math.max(8, Math.round(farCap * q)) : 0;
+      const mesh = this._mesh(geo, mat, nearMax + farMax, `rock_${k.key}`);
       const g: RockGroup = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
         farRange: BIG.has(k.key) ? 430 : 0,
         outRange: BIG.has(k.key) ? 1150 : 0,
-        near: this._mesh(geo, mat, nearMax, `rock_${k.key}`),
-        far: null,
-        nearMax, farMax: 0, nw: 0, fw: 0,
+        mesh, near: mesh, hasFar: farCap > 0,
+        nearMax, farMax, w: 0, nw: 0, fw: 0,
       };
-      if (farCap) {
-        g.farMax = Math.max(8, Math.round(farCap * q));
-        g.far = this._mesh(geo, mat, g.farMax, `rock_${k.key}_far`);
-        g.far.castShadow = true;
-      }
       this.groups.push(g);
     }
     this.byKey = new Map(this.groups.map((g) => [g.key, g]));
@@ -2259,7 +2280,7 @@ export class Rocks {
     if (!moved && !a && !b) return;
     this._last.copy(camPos);
 
-    for (const g of this.groups) { g.nw = 0; g.fw = 0; }
+    for (const g of this.groups) { g.w = 0; g.nw = 0; g.fw = 0; }
     this.guard.aspect = 0; this.guard.sink = 0; this.guard.worstAspect = 0; this.guard.drawn = 0;
     const cx = camPos.x, cz = camPos.z;
 
@@ -2270,14 +2291,16 @@ export class Rocks {
         if (!g) continue;
         const dx = it.x - cx, dz = it.z - cz;
         const d2 = dx * dx + dz * dz;
-        let mesh: TintedMesh | null = null, slot = 0;
+        // The two tiers keep their separate BUDGETS -- a dense foreground must
+        // not spend the far tier's allowance -- and write into one mesh.
         if (d2 < g.nearRange * g.nearRange && g.nw < g.nearMax) {
-          mesh = g.near; slot = g.nw++;
-        } else if (g.far) {
+          g.nw++;
+        } else if (g.hasFar) {
           const lim = it.far ? g.outRange : g.farRange;
           if (d2 > lim * lim || g.fw >= g.farMax) continue;
-          mesh = g.far; slot = g.fw++;
+          g.fw++;
         } else continue;
+        const mesh = g.mesh, slot = g.w++;
         _e.set(it.pitch, it.yaw, it.roll);
         _q.setFromEuler(_e);
         // --- plan 3.5: the two guarantees, on the FINISHED, PLACED hull -----
@@ -2315,16 +2338,10 @@ export class Rocks {
     for (const arr of this.outcrops.live.values()) emit(arr);
 
     for (const g of this.groups) {
-      g.near.count = g.nw;
-      g.near.visible = g.nw > 0;
-      g.near.instanceMatrix.needsUpdate = true;
-      g.near.instanceColor.needsUpdate = true;
-      if (g.far) {
-        g.far.count = g.fw;
-        g.far.visible = g.fw > 0;
-        g.far.instanceMatrix.needsUpdate = true;
-        g.far.instanceColor.needsUpdate = true;
-      }
+      g.mesh.count = g.w;
+      g.mesh.visible = g.w > 0;
+      g.mesh.instanceMatrix.needsUpdate = true;
+      g.mesh.instanceColor.needsUpdate = true;
     }
   }
 }
