@@ -1141,3 +1141,39 @@ The experiment that settles it is embarrassingly simpler: run the two paths on
 
 **When an optimisation is validated by a statistic rather than by a diff, ask
 what the statistic forgives.** Reverted; the settle is drawn again.
+
+## A shared constant across unrelated subjects is a thing, not noise
+
+`drawcheck` disagreed with itself on 25 of 142 shots and I spent five hypotheses
+treating that as variance — frame parity, chunk sizing, boots, accumulated
+state, reset drift. Four were falsified and the fifth only half explained it.
+
+What actually broke it open was reading the deltas instead of their spread:
+
+    storm, town_diner, vista_dawn, vista_dusk, vista_night,
+    zone_callaegh, zone_cape_caem, zone_lestallum      all exactly +15
+    setpiece_deadeye                                          -60 = 4 x 15
+
+Nine unrelated shots do not land on the same constant by chance. **A quantum
+means presence or absence, and presence or absence means a discrete thing you
+can go and find.** It was `Enemies.prototype()`, which builds a species'
+geometry on first spawn and caches it forever, so a draw count was a function of
+run history. `System.warmup()` builds them all up front and moves
+`setpiece_deadeye` 574 → 514 — the -60, exactly.
+
+Before modelling disagreement as noise, **histogram it**. If the deltas cluster
+on a value, stop doing statistics and go find the object.
+
+## Check whether a field is stored or computed before believing it leaked
+
+`src/tools/resetcheck.mts` reported `weather.windStrength` surviving a reset and
+I called it the cross-shot accumulator behind `drawcheck`'s noise. It is not.
+`_gust` **is** zeroed — `resetClock()` calls `snap()`, which does it — and
+`windStrength` is recomputed from `_gust` on every update, so it reads stale for
+exactly as long as it takes one frame to run, and clears itself.
+
+`menus.open` is the same shape and *was* real: derived from the open amount `a`,
+which nothing reset, so it read true forever after. The lesson is not "derived
+fields are false positives" — it is that a digest must read **the field that
+holds the state**, or it will report the shadow and miss the object. Both were
+found by the same tool on the same run, one true and one false.

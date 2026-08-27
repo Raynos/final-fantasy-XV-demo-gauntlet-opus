@@ -1,6 +1,6 @@
 # What every gate is for, and what it costs
 
-Status: PROPOSED (2026-08-27, opus)
+Status: IN-PROGRESS (2026-08-27, opus) — items 1 and 2 are DONE and verified
 
 Eighteen gates, ~309 s of wall on a cold run. This asks of each one: what does
 it assert, what regression does it exist to catch, has it ever caught one, and
@@ -122,13 +122,21 @@ quiet, which is correct and should not be relaxed.
 
 ## What this audit changes
 
-1. **Key each gate on what it reads.** Landed. 70% of commits now hit cache.
-2. **Tier `drawcheck`.** Landed. 4.7×.
-3. **Fix the game's 7.46 s boot.** Not started; now the largest single lever,
-   and it is also the human's own first TODO item.
-4. **Fix drawcheck's instrument, or widen its tolerance to the truth.** A gate
-   whose tolerance is an eighth of its own noise cannot detect the regression it
-   exists for, and cannot certify an optimisation as neutral either.
+1. **Key each gate on what it reads.** DONE (`61a0c0b`). Verified across five
+   arms: cold 77.7 s, warm 74.6 s, docs-only commit **8.2 s**, harness-only
+   commit **8.5 s**, and a game edit correctly re-derives everything at 76.9 s.
+2. **Tier `drawcheck`.** DONE (`27a4af2`). 142 shots → 37, 153.8 s → 32.4 s.
+3. **Attack the 7.46 s boot.** IN PROGRESS — see
+   `project/handoff/reset-and-reuse.md`. The route is not "make boot faster" but
+   "make a booted page reusable": `resetcheck.mts` took the leak count from 29
+   fields to 12, and `creatures`/`dungeon` are clean. The remaining 12 are
+   structural (GPU resources, scene objects, the enemy roster) and overlap the
+   1.4 GB in `project/TODO.md`.
+4. **Fix drawcheck's instrument.** HALF DONE. `warmup()` removed the -60:
+   lazy bestiary construction made a draw count a function of run history. On a
+   warmed page, three consecutive passes over twelve shots are byte-identical,
+   which proves the residual +15 is **boot-to-boot rather than accumulated**.
+   That is one narrow question left instead of five.
 
 **No gate should be deleted.** The suite's problem was never that it asserts
 too much; it is that it re-asserted the same things on commits that could not
