@@ -1379,6 +1379,29 @@ void tf_shade() {
   float cv1 = tf_snoise(P.xz * 1.35 + 113.0);   // ~0.74 m: the tuft
   float cv2 = tf_snoise(P.xz * 0.52 - 61.0);    // ~1.9 m: the clump of tufts
   float cv3 = tf_snoise(P.xz * 0.058 + 7.0);    // ~17 m: how much, not what shape
+  /**
+   * The two octaves that are still there at a kilometre.
+   *
+   * Everything above fades on its own screen footprint, which is right for a
+   * tuft and leaves nothing behind: past ~300 m tuft settles to 0.5 and the
+   * whole dry-cover term collapses to a flat multiply, so a hillside at 800 m
+   * is one wash of dirt with a constant tint over it. That is precisely the
+   * frame the human called barren, and the vegetation instances cannot reach
+   * it — Bushes' far mass ring reads at ground level and is nearly edge-on
+   * to a camera 80-140 m up, which is what every establishing shot is.
+   *
+   * Real dry country is patterned at a scale the tuft field cannot express:
+   * cover follows the drainage, the aspect and the soil, in belts and blooms
+   * tens to hundreds of metres across. At 1 km one pixel spans 1 m, so a 52 m
+   * bloom is fifty pixels and a 165 m belt is a hundred and sixty — both of
+   * them still there when the 1.9 m clump has been averaged away.
+   *
+   * These deliberately do NOT get a tf_lodW: their whole job is to survive
+   * the distance the others fade at, and at 52 m the Nyquist limit is 26 m per
+   * pixel, i.e. four kilometres away. Nothing in this world is that far.
+   */
+  float cvM1 = tf_snoise(P.xz * 0.0192 - 37.0);   // ~52 m: the bloom
+  float cvM2 = tf_snoise(P.xz * 0.0061 + 91.0);   // ~165 m: the belt
   // Dry cover grows on the slopes grass abandons, and not on a live sand pan,
   // a bare rock face or the road. The distance ramp hands over from the grass
   // ring (far: 155) the way the sward hands over from the blades.
@@ -1396,8 +1419,40 @@ void tf_shade() {
   float tuft = clamp(0.5
     + 0.60 * cv1 * tf_lodW(0.74, tfPx)
     + 0.42 * cv2 * tf_lodW(1.9, tfPx), 0.0, 1.0);
+  /**
+   * How much cover this patch of ground carries, 0..1, at the macro scale.
+   *
+   * Two octaves summed and pushed through a smoothstep so the field is mostly
+   * *committed* — thick cover or bare pan, with the transition happening over
+   * tens of metres rather than everywhere at once. A blend that hovers around
+   * a half at every point is exactly the flat wash this replaces.
+   */
+  float macroField = smoothstep(0.28, 0.78, clamp(0.5
+    + 0.62 * cvM1 + 0.44 * cvM2, 0.0, 1.0));
+  /**
+   * ...and only where the ground had stopped saying anything.
+   *
+   * The first cut of this applied the macro field at every distance and it was
+   * a regression at the near end: zone_longwythe's foreground plain lost the
+   * scrub speckle that the tuft octaves were already drawing correctly, and
+   * the massif behind it picked up 50-160 m blotches that read as staining
+   * rather than as cover. Both are the same mistake — adding a term where
+   * there was no gap.
+   *
+   * The gap is specifically past ~250 m, where tf_lodW has faded 0.74 m and
+   * 1.9 m to nothing and tuft has settled to a constant 0.5. So the macro
+   * field ramps in exactly across that handover and is worth nothing before
+   * it, which is the same discipline every other term in this shader uses.
+   */
+  float macroAt = smoothstep(240.0, 460.0, vTDist);
+  float macroCover = mix(1.0, macroField, macroAt);
   float dryCover = smoothstep(0.22, 0.72, tuft * 0.55 + 0.45)
-                 * clamp(0.62 + 0.62 * cv3, 0.10, 1.0) * dryAmt;
+                 * clamp(0.62 + 0.62 * cv3, 0.10, 1.0) * dryAmt
+                 // Thin ground keeps most of its cover: the macro field
+                 // decides where the thickets are, not whether the far ground
+                 // has anything on it at all. A deeper cut here is what turned
+                 // a mottle into a stain.
+                 * (0.66 + 0.34 * macroCover);
   // Built and applied in uniform control flow: tf_bump takes a screen-space
   // derivative, and a dFd* inside a divergent branch is undefined. This shader
   // has been bitten by that once already.
@@ -1414,7 +1469,17 @@ void tf_shade() {
   float dryGust = clamp(tf_gust(P.xz) - 1.0, -0.8, 0.8);
   vec3 dryShade = vec3(0.644, 0.752, 0.708);
   vec3 dryTip = vec3(1.17, 1.12, 0.86) * (1.0 - 0.07 * dryGust);
-  col *= mix(vec3(1.0), mix(dryShade, dryTip, smoothstep(0.30, 0.86, tuft)), dryCover);
+  // The macro field shifts the HUE as well as the amount. A thicket is not
+  // just more of the same straw: it is woodier and greener than the pan it
+  // stands on, and at a kilometre that hue difference is the only part of it
+  // that survives — the tuft axis has been averaged into a constant by then,
+  // so without this the far ground varies in brightness and never in colour,
+  // which is what reads as a texture rather than as vegetation.
+  vec3 dryThicket = vec3(0.72, 0.83, 0.63);
+  // Hue carries this, not brightness. Amount changes value and value at a
+  // kilometre reads as dirt; a woodier green against straw reads as plants.
+  vec3 shade = mix(dryShade, dryThicket, macroField * macroAt * 0.85);
+  col *= mix(vec3(1.0), mix(shade, dryTip, smoothstep(0.30, 0.86, tuft)), dryCover);
   rgh = mix(rgh, min(1.0, rgh * 1.14 + 0.06), dryCover);
   ao *= mix(1.0, 0.78, dryCover * (1.0 - tuft));
 

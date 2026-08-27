@@ -142,6 +142,13 @@ const PARTY_SEED = 9182;
  *
  * Exposes `members`: [{ name, root, character, ... }].
  */
+/** Reused by the recall test in {@link Party.update}; never allocates. */
+const _camDir = new THREE.Vector3();
+const _toMember = new THREE.Vector3();
+
+/** The player's current ground speed, or 0. */
+function playerSpeedOf(p: { speed?: number }) { return p.speed || 0; }
+
 export class Party {
   _gaze!: THREE.Vector3;
   collision!: CollisionWorld | null;
@@ -350,6 +357,21 @@ export class Party {
     }
   }
 
+  /**
+   * Ground height for a recalled companion, preferring real collision.
+   *
+   * The same order `Enemies.spawn` uses and for the same reason: a member
+   * recalled onto Hammerhead's graded pad or a bridge deck would otherwise be
+   * placed inside it.
+   */
+  _groundY(game: Game, x: number, z: number, fallbackY: number) {
+    const col = game.get('Collision');
+    const g = col && col.ready ? col.groundAt(x, z, fallbackY + 3, 1.2, 6) : null;
+    if (g) return g.y;
+    const terrain = game.get('Terrain');
+    return terrain ? terrain.heightAt(x, z) : fallbackY;
+  }
+
   update(dt: number, game: Game) {
     const player = this.player || game.get('Player');
     if (!player) return;
@@ -371,6 +393,43 @@ export class Party {
       const steer = m._steer.set(tx - m.root.position.x, 0, tz - m.root.position.z);
       let dist = steer.length();
 
+      // Recall: past a hundred metres, running is not going to fix it.
+      //
+      // The chase cap below closes an ordinary gap. It cannot close the one a
+      // player makes by sprinting away from a fight for half a minute, and a
+      // companion who is four hundred metres back is not "following" in any
+      // sense the player can see — they are gone, and the party is a party of
+      // one. Every open-world game with a retinue does this; FFXV does it
+      // constantly and invisibly.
+      //
+      // Invisibly is the whole trick, so this is gated on **not being looked
+      // at**: outside a 55 degree cone off the camera's forward axis, or far
+      // enough away that the reappearance is sub-pixel anyway. A companion who
+      // pops into existence in front of you is worse than one who is missing.
+      if (dist > 100 && !inCombat && !m.downed) {
+        const cam = game.camera;
+        let seen = false;
+        if (cam && dist < 260) {
+          _camDir.set(0, 0, -1).applyQuaternion(cam.quaternion).setY(0);
+          if (_camDir.lengthSq() > 1e-6) {
+            _camDir.normalize();
+            _toMember.set(m.root.position.x - pp.x, 0, m.root.position.z - pp.z);
+            if (_toMember.lengthSq() > 1e-6) {
+              _toMember.normalize();
+              seen = _camDir.dot(_toMember) > 0.57;      // ~55 degrees
+            }
+          }
+        }
+        if (!seen) {
+          m.root.position.set(tx, m.root.position.y, tz);
+          if (m.body) m.body.move(m.root.position, 0, 0, 1 / 60);
+          m.root.position.y = this._groundY(game, tx, tz, m.root.position.y);
+          m.speed = playerSpeedOf(player);
+          steer.set(tx - m.root.position.x, 0, tz - m.root.position.z);
+          dist = steer.length();
+        }
+      }
+
       // separation from Noctis and from each other
       const push = new THREE.Vector3();
       const addPush = (ox2: number, oz2: number, minD: number, weight: number) => {
@@ -388,9 +447,29 @@ export class Party {
       // arrival: ease off inside the slot radius so they settle instead of jitter
       const arrive = THREE.MathUtils.smoothstep(dist, 0.35, 1.6);
       const playerSpeed = player.speed || 0;
+      /**
+       * How much faster than a sprint a companion left behind may run.
+       *
+       * The cap used to be a flat `runSpeed * 1.12`, which is 8.29 m/s against
+       * the player's 7.4 — enough to hold a slot and **not enough to ever
+       * close a gap**. That never showed while the world was empty, because
+       * nothing separated them from Noctis. With a den every few hundred
+       * metres it shows immediately: a companion peels off to fight, leashes,
+       * and then trails at 0.9 m/s of closing speed behind a player who is
+       * still sprinting. `probes/liveworld.mts` photographed the result —
+       * Noctis alone on a ridge, the other three somewhere over the horizon,
+       * two of them on reduced HP.
+       *
+       * So the cap opens with distance instead: parity in the slot, and up to
+       * 2.2x by fifty metres, which closes fifty metres of sprint in about
+       * nine seconds. It is a *cap*, not a speed — `wanted` is still driven by
+       * what the player is doing, so nobody sprints to catch up with someone
+       * standing still.
+       */
+      const chase = 1.12 + 1.08 * THREE.MathUtils.smoothstep(dist, 6, 50);
       const wanted = Math.min(
         (playerSpeed + (dist > 2.4 ? 1.9 : 0.5)) * m.speedMul,
-        player.runSpeed * 1.12
+        player.runSpeed * chase
       ) * arrive;
 
       const dir = dist > 1e-4 ? steer.multiplyScalar(1 / dist) : new THREE.Vector3();

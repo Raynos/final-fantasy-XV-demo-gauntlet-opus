@@ -139,6 +139,33 @@ function shardGeometry() {
   return g;
 }
 
+/**
+ * A soft round glow, synthesised — no binary assets anywhere in this project.
+ *
+ * `pow(1 - r, 2.6)` with a small hot core: bright in the middle, gone by the
+ * edge of the quad, so the sprite has no silhouette of its own at any size.
+ */
+function haloTexture() {
+  const N = 64;
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const dx = (x + 0.5) / N * 2 - 1, dy = (y + 0.5) / N * 2 - 1;
+      const r = Math.min(1, Math.hypot(dx, dy));
+      const a = Math.pow(1 - r, 2.6) * 0.82 + Math.pow(1 - r, 14) * 0.18;
+      const i = (y * N + x) * 4;
+      data[i] = 255; data[i + 1] = 255; data[i + 2] = 255;
+      data[i + 3] = Math.round(Math.max(0, Math.min(1, a)) * 255);
+    }
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  t.needsUpdate = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  return t;
+}
+
 export class Foraging {
   eco!: Ecology;
   game!: Game;
@@ -186,8 +213,15 @@ export class Foraging {
     // The halo is what carries the spot at distance. Additive and unlit, so
     // it survives the grade at the far end of a daylight frame; depth-write
     // off so two spots behind each other do not punch holes in one another.
+    //
+    // **It needs a radial falloff and the first version did not have one.** A
+    // `MeshBasicMaterial` on a `PlaneGeometry` is a flat quad of constant
+    // colour: at six hundred metres, where the whole sprite is four pixels
+    // across, that is a hard pale-blue *square* sitting on a hillside, and
+    // `zone_three_valleys` had two of them in it. The gradient below is what
+    // makes it a glow.
     const haloMat = new THREE.MeshBasicMaterial({
-      color: 0x7fc4ff, transparent: true, opacity: 0.5,
+      map: haloTexture(), color: 0x7fc4ff, transparent: true, opacity: 0.62,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     });
     this.halo = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.5, 1.5), haloMat, CAP);
@@ -279,8 +313,14 @@ export class Foraging {
       _m.compose(_p, _q, _s);
       _m.toArray(sm, i * 16);
 
-      // the halo faces the camera and breathes on the same phase
-      const grow = 1.0 + 0.16 * Math.sin(ph * 0.8);
+      // The halo faces the camera and breathes on the same phase — and it
+      // shrinks to nothing past the distance at which a spot stops being
+      // somewhere you would choose to walk. Beyond ~220 m it is a speck the
+      // player cannot act on, and a field of specks on a distant hillside
+      // reads as fireflies rather than as loot.
+      const d = Math.hypot(s.x - pp.x, s.z - pp.z);
+      const fade = 1 - THREE.MathUtils.smoothstep(d, 170, 230);
+      const grow = (1.0 + 0.16 * Math.sin(ph * 0.8)) * fade;
       _s.setScalar(grow);
       _m.compose(_p, camQ, _s);
       _m.toArray(hm, i * 16);
