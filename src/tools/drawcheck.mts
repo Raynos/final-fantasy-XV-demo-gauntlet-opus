@@ -128,6 +128,11 @@ const BASELINE = path.join(ROOT, 'project', 'draw-baseline.json');
  * somebody else's commit for six draw calls is a gate that gets skipped. This
  * is slack for that drift and NOT a licence to spend it: `--set-baseline`
  * exists to lower these numbers, never to raise them.
+ *
+ * A second, smaller source is the boot itself: a fresh render of `town_night`
+ * minutes after the one that set the ledger read **823 against 818**, on a
+ * build that differed from it only by other lanes' commits. The two causes are
+ * not separated and eight covers both.
  */
 const TOLERANCE = 8;
 
