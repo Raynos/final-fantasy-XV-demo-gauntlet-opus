@@ -148,6 +148,64 @@ export function gameHash(): string {
   return gameHashMemo;
 }
 
+/**
+ * Every tool file a gate's verdict can depend on, followed transitively.
+ *
+ * **This was a real stale PASS, not a hypothetical one.** The first version
+ * hashed only `<gate>.mts` plus `harness.mts`/`daemon.mts`. `reachcheck`'s
+ * actual instrument lives in `src/tools/_reach/instrument.mts`; rewriting it
+ * (46.3 s -> 35.2 s, a change to the code that produces the verdict) moved no
+ * key, and the very next `check` reported **18/18 in 0.2 s, all from cache** —
+ * a verdict about code that no longer existed.
+ *
+ * So follow the imports. A static scan is enough and is exact for this tree:
+ * every tool import here is a relative specifier ending in `.mts`, resolved
+ * against `src/tools/`, and there are no dynamic imports of tool code. A
+ * specifier that escapes `src/tools/` is ignored — game source is already
+ * covered wholesale by `gameHash()`.
+ *
+ * Cheap: a dozen files per gate, read once per run, memoised per root set.
+ */
+const IMPORT_RE = /from\s+['"](\.[^'"]+\.mts)['"]/g;
+/**
+ * …and the ones that are READ rather than imported.
+ *
+ * `reachcheck` does `readFile(path.join(ROOT, 'src/tools/_reach/instrument.mts'))`
+ * and injects the source into the page — the instrument never appears in an
+ * import statement, so an import-only scan misses the file that produces the
+ * verdict. That is exactly how the stale PASS above happened, and probes and
+ * injected drivers are a standing pattern in this harness rather than a
+ * one-off, so the key has to follow a path literal as well as a specifier.
+ */
+const READ_RE = /['"]src\/tools\/([^'"]+\.mts)['"]/g;
+const closureMemo = new Map<string, string[]>();
+function toolClosure(roots: string[]): string[] {
+  const memoKey = roots.join('|');
+  const hit = closureMemo.get(memoKey);
+  if (hit) return hit;
+  const seen = new Set<string>();
+  const stack = [...roots];
+  while (stack.length) {
+    const rel = stack.pop() as string;
+    // Normalise so `./a.mts` and `a.mts` are one entry, and keep it inside tools.
+    const norm = path.normalize(rel);
+    if (norm.startsWith('..') || seen.has(norm)) continue;
+    seen.add(norm);
+    let src: string;
+    try { src = readFileSync(path.join(ROOT, 'src', 'tools', norm), 'utf8'); } catch { continue; }
+    IMPORT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = IMPORT_RE.exec(src))) {
+      stack.push(path.join(path.dirname(norm), m[1]));
+    }
+    READ_RE.lastIndex = 0;
+    while ((m = READ_RE.exec(src))) stack.push(m[1]);
+  }
+  const out = [...seen].sort();
+  closureMemo.set(memoKey, out);
+  return out;
+}
+
 /** The cache key for one gate: the game, its own tool, and its argv. */
 export function inputsKey(gate: { name: string, kind?: string, script?: string, args?: string[] }): string | null {
   if (process.env.HARNESS_GATECACHE === 'off') return null;
@@ -156,11 +214,11 @@ export function inputsKey(gate: { name: string, kind?: string, script?: string, 
     h.update(gameHash());
     h.update(gate.name);
     h.update(JSON.stringify(gate.args ?? []));
-    const tools = [gate.script ?? `${gate.name}.mts`];
+    const roots = [gate.script ?? `${gate.name}.mts`];
     // A browser gate's verdict depends on how the daemon poses and drives the
     // page; a bare-Node gate's cannot.
-    if (gate.kind === 'browser') tools.push('harness.mts', 'daemon.mts');
-    for (const t of tools.sort()) {
+    if (gate.kind === 'browser') roots.push('harness.mts', 'daemon.mts');
+    for (const t of toolClosure(roots)) {
       try { h.update(t); h.update(readFileSync(path.join(ROOT, 'src', 'tools', t))); } catch { /* not a script gate */ }
     }
     return h.digest('hex').slice(0, 16);

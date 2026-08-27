@@ -1177,3 +1177,30 @@ which nothing reset, so it read true forever after. The lesson is not "derived
 fields are false positives" — it is that a digest must read **the field that
 holds the state**, or it will report the shadow and miss the object. Both were
 found by the same tool on the same run, one true and one false.
+
+## A content-addressed cache is only as honest as its dependency list
+
+The gate cache keys each gate on the bytes it reads, which is what took a docs
+commit from 309 s to 8.2 s. The first version hashed the gate's own `.mts`, plus
+`harness.mts` and `daemon.mts` for browser gates. It missed a file.
+
+`reachcheck`'s instrument is `src/tools/_reach/instrument.mts`, and reachcheck
+does not import it — it **reads it and injects the source into the page**:
+
+    const src = await readFile(path.join(ROOT, 'src/tools/_reach/instrument.mts'), 'utf8');
+
+So rewriting that instrument — a 46.3 s → 35.2 s change to the code that
+produces the verdict — moved no key, and the next `check` reported **18/18 in
+0.2 s, all from cache**: a verdict about code that no longer existed. The
+speedup was real and the confirmation was worthless.
+
+The key now follows a gate's transitive tool closure through **both** relative
+`import` specifiers and `'src/tools/…​.mts'` path literals, because reading a
+file and injecting it is a standing pattern in this harness (probes, drivers,
+`_reach`, `_probe`), not a one-off.
+
+**The general shape: a cache keyed on "what it reads" is a claim about what it
+reads, and an unlisted dependency is not a slow cache, it is a wrong answer
+delivered instantly.** When you narrow a cache key, write the test that edits
+each dependency and asserts the key moved — `scratchpad/keytest` does this in
+eight arms and caught this one.
