@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { PartBuilder, texelBox, type Vec3 } from '../props/PartBuilder.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { applyWear, WearField } from '../props/Wear.ts';
 import type { EcoSite } from '../props/EcoSites.ts';
 import type { Ecology } from '../veg/Ecology.ts';
@@ -328,11 +329,24 @@ export class Hammerhead {
 
     // Signage and glazing never cast: they are flat planes whose shadows read
     // as artefacts, and every caster costs a draw in each of three cascades.
-    this._casters = this.shell.children.filter((m) => {
-      const flat = /_sign_|_glass/.test(m.name);
-      if (flat) m.castShadow = false;
-      return !flat;
-    });
+    //
+    // Everything else casts through ONE merged proxy rather than as itself.
+    // The shell is already merged per material, and a material is exactly what
+    // a depth pass does not care about — so twenty-five casters were
+    // twenty-five draws per cascade to produce a silhouette that one mesh
+    // produces identically. Measured on `town_forecourt`: 88 draws of
+    // `hammerhead` became 30. Alpha-tested materials are the one exception
+    // (see {@link shadowProxy}) and stay their own casters.
+    const flat = (m: THREE.Object3D) => /_sign_|_glass/.test(m.name);
+    for (const m of this.shell.children) m.castShadow = false;
+    const proxy = shadowProxy(this.shell.children.filter((m) => !flat(m)), 'hh_shadow');
+    this._casters = [];
+    if (proxy) { this.shell.add(proxy); this._casters.push(proxy); }
+    // An alpha-tested caster cannot go in the proxy — its shadow is the holes
+    // in it — so a chain-link fence keeps its own three cascade draws.
+    for (const m of this.shell.children) {
+      if (!flat(m) && isMesh(m) && alphaCut(m.material)) this._casters.push(m);
+    }
 
     // The clutter pass is a hundred sub-metre objects. None of them casts —
     // between the buildings, the vehicles and the people there is already more
@@ -1260,6 +1274,67 @@ function uvScale(g: THREE.BufferGeometry, su: number, sv: number) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
   uv.needsUpdate = true;
   return authored(g);
+}
+
+/** Does this material's silhouette live in its alpha channel? */
+function alphaCut(m: THREE.Material | THREE.Material[]): boolean {
+  const one = Array.isArray(m) ? m[0] : m;
+  return !!one && ((one as THREE.MeshStandardMaterial).alphaTest > 0 || one.transparent === true);
+}
+
+/**
+ * One merged, colour-less caster standing in for a group of merged meshes.
+ *
+ * **Why this is a merge and not a cull.** A shadow map writes depth. It reads
+ * a material only to find an alpha cutout, and nothing here has one. So a
+ * building split into twenty-five meshes *because its surfaces are twenty-five
+ * materials* casts exactly the same silhouette as the union of those meshes in
+ * one — at one draw per cascade instead of twenty-five. Nothing leaves the
+ * frame and no shadow changes shape; the same triangles are rasterised into
+ * the same depth buffer under one draw call. Measured on `town_forecourt`,
+ * `hammerhead` went from 88 draws to 30.
+ *
+ * **The one thing that cannot be folded in** is an alpha-tested surface — the
+ * chain-link fence, foliage cards — whose shadow *is* the holes in its map.
+ * Those keep casting as themselves; the caller filters them out.
+ *
+ * **And why the proxy is visible.** three.js skips an object with
+ * `visible === false`, a `material.visible === false` or a layer the view
+ * camera does not draw in the shadow pass as well as the colour pass
+ * (`WebGLShadowMap.renderObject` tests all three), so a caster the main camera
+ * cannot see cannot exist. The proxy therefore costs **one** colour-pass draw,
+ * with `colorWrite` off and `depthWrite` off so it changes no pixel and no
+ * depth — a rasterisation the depth test rejects almost entirely. One draw
+ * against the sixty it removes.
+ */
+function shadowProxy(meshes: THREE.Object3D[], name: string): THREE.Mesh | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const m of meshes) {
+    if (!isMesh(m) || alphaCut(m.material)) continue;
+    // Position only: a depth pass reads nothing else, and carrying normals,
+    // UVs and the bake tone through the merge would triple the buffer for
+    // attributes no depth shader binds.
+    const g = new THREE.BufferGeometry();
+    const pos = m.geometry.getAttribute('position');
+    if (!pos) continue;
+    g.setAttribute('position', pos.clone());
+    const idx = m.geometry.getIndex();
+    if (idx) g.setIndex(idx.clone());
+    // The shell's pieces are baked in world space and the proxy shares their
+    // parent, so no matrix is applied here on purpose.
+    parts.push(g);
+  }
+  if (!parts.length) return null;
+  const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+  if (!merged) return null;
+  merged.computeBoundingSphere();
+  const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  mat.name = `${name}_mat`;
+  const mesh = new THREE.Mesh(merged, mat);
+  mesh.name = name;
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  return mesh;
 }
 
 function countTris(group: THREE.Group) {
