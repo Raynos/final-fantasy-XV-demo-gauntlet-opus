@@ -55,8 +55,9 @@ for (const SHOT of SHOTS) {
       const depth = !!(material && (material.isMeshDepthMaterial || material.isMeshDistanceMaterial));
       const pass = depth ? 'shadow' : (camera === g.camera ? 'colour' : 'other');
       const k = `${owner(object)}`;
-      if (/^props:|^town:/.test(k)) {
-        const dk = `${k} :: ${object.name || object.type} ${depth ? '[shadow]' : ''}`;
+      if (true) {
+        const mm = Array.isArray(material) ? material[0] : material;
+        const dk = `${k} :: ${object.name || object.type} <${(mm && (mm.name || mm.type)) || '?'}> ${depth ? '[shadow]' : pass === 'other' ? '[othercam]' : ''}`;
         tally.__detail[dk] = (tally.__detail[dk] || 0) + 1;
       }
       const e = tally[k] || (tally[k] = { total: 0, colour: 0, shadow: 0, other: 0 });
@@ -80,7 +81,7 @@ for (const SHOT of SHOTS) {
     perFrame: frames.map((f) => f.__total.total),
     peak: peak.__total,
     rows,
-    detail: Object.entries(peak.__detail).sort((a, b) => b[1] - a[1]).slice(0, 70)
+    detail: Object.entries(peak.__detail).sort((a, b) => b[1] - a[1]).slice(0, 200)
       .map(([k, v]) => `${String(v).padStart(4)}  ${k}`),
   };
 }
