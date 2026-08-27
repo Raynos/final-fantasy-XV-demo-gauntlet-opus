@@ -74,11 +74,23 @@ export default defineConfig({
    *
    * `pnpm dev` is gone from `package.json` for the same reason. Nobody starts a
    * server here — a hook blocks it, and `daemon.mts` owns every one.
+   *
+   * **`hmr: false` ONLY. The watcher stays on, and the first version of this
+   * turned it off as well — which was a silent, much worse bug.** The two do
+   * different jobs: the watcher is what invalidates vite's module graph when a
+   * file changes, and HMR is what *pushes* the result at the page. Ignoring
+   * every watched path left a long-lived `dirty:` server serving the module
+   * graph it built at startup **forever**, so an edit made after it started
+   * measured as exactly zero — through a page reload, through `--cold`, through
+   * anything. A change that appears to do nothing is the one failure mode this
+   * repo has proved it will misdiagnose: `BRIEF.md`'s own warning about
+   * capturing `HEAD` with uncommitted work says the symptom reads as *my change
+   * did nothing* rather than *I photographed the wrong tree*. Found by the
+   * draw-call lane within an hour of the watcher going off.
    */
   server: {
     port: 5173, strictPort: true, host: '127.0.0.1',
     hmr: false,
-    watch: { ignored: ['**/*'] },
   },
   preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
   // outDir sits outside `root`, so emptyOutDir must be explicit.
