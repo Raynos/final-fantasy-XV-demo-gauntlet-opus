@@ -272,9 +272,26 @@ async function main() {
         };
       }, [name, o.frames, o.warmup, o.breakdown] as [string, number, number, boolean]);
 
-      // Separable against ITS OWN floor, on the same quarter-of-the-frame rule
-      // the run-level check uses.
-      const separable = shotFloor.iqrMs < 0.25 * r.thru;
+      /**
+       * Does this shot have a verdict? **Against the target, not against its
+       * own frame.**
+       *
+       * The first version of this asked `floor < 0.25 * thru`, which is the
+       * rule `ruler.mts` uses for comparing two runs — and it is the wrong
+       * question here. This tool asks one thing of a shot: is it above 60 fps.
+       * A shot at 4.3 ms with a 1.2 ms floor answers that overwhelmingly, and
+       * the quarter-of-the-frame rule voided it for being *fast*: the faster
+       * the frame, the larger a fixed floor looks beside it. A full corpus at
+       * mean 212 fps came back with 37 shots "unmeasurable", every one of them
+       * 4-5 ms, and the run failed at 74% against a 75% threshold.
+       *
+       * The honest test is the one `ruler.moved()` already states: a shot is
+       * certified when its distance from the target is larger than its own
+       * noise. That is exactly the claim being made — *this shot is (not) at
+       * 60 fps* — and it is why the `~~` flag beside it has always been a
+       * comparison against the target rather than against the frame.
+       */
+      const separable = Math.abs(r.thru - 1000 / o.target) > shotFloor.iqrMs;
       rows.push({ name, ...r, floorMs: shotFloor.iqrMs, separable });
       // `<<` is below target; `~~` is a shot whose own block spread rivals its
       // distance from the target, so its verdict is not resolvable today; `??`
@@ -340,9 +357,16 @@ async function main() {
    * The run-level floor is still measured and still printed, because it is the
    * thing that answers "was this machine quiet" — but it no longer decides
    * whether individual shots may be quoted. A run is thrown away when fewer
-   * than three quarters of its shots could resolve their own frame, which is a
-   * statement about the session rather than about whichever shot happened to
-   * be first on the command line.
+   * than three quarters of its shots could separate their own distance from
+   * the target from their own noise, which is a statement about the session
+   * rather than about whichever shot happened to be first on the command line.
+   *
+   * **`validity.floorOk` is deliberately not in this.** It divides the
+   * run-level floor by `shots[0]`'s frame, and on a fast corpus that ratio
+   * says nothing useful: a 1.2 ms floor against a 4.5 ms frame is 27% and
+   * "void", while the same shot is 12 ms clear of a 16.7 ms target. The bias
+   * check stays, because a pairing that failed to cancel its own drift is a
+   * broken measurement at any speed.
    */
   const separableShare = rows.length ? certified.length / rows.length : 0;
   const runValid = separableShare >= 0.75 && validity.biasOk;
@@ -356,7 +380,8 @@ async function main() {
     + `(run median ${medianFrame.toFixed(1)} ms)`,
   );
   console.log(
-    `per-shot floors: ${certified.length}/${rows.length} shots resolve their own frame`
+    `per-shot floors: ${certified.length}/${rows.length} shots clear the ${o.target} fps `
+    + `target by more than their own noise`
     + (unmeasured.length
       ? `; ${unmeasured.length} marked ?? and NOT certified: `
         + unmeasured.slice(0, 6).map((r) => r.name).join(', ')
@@ -407,11 +432,16 @@ async function main() {
   // Void beats both PASS and FAIL. A run this instrument cannot stand behind
   // must not be quoted in either direction — that is the whole point.
   if (!runValid) {
-    console.error(`\n${validity.warning}`);
+    // `validity.warning` is the run-level floor's story and is printed only
+    // when the bias check is what failed — quoting its "contended machine"
+    // wording at a corpus that simply ran fast is how a good run gets thrown
+    // away with a misleading reason attached.
+    if (!validity.biasOk) console.error(`\n${validity.warning}`);
     if (load.busy) console.error(`The contention verdict above already said so: ${load.verdict}`);
     console.error(
-      `VOID: only ${certified.length} of ${rows.length} shots could resolve their own frame `
-      + `against their own noise floor (${(separableShare * 100).toFixed(0)}%, needs 75%).`);
+      `\nVOID: only ${certified.length} of ${rows.length} shots could separate their distance `
+      + `from the ${o.target} fps target from their own noise floor `
+      + `(${(separableShare * 100).toFixed(0)}%, needs 75%).`);
     process.exit(3);
   }
   if (worst.fps < o.target) {
