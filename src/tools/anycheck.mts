@@ -2,14 +2,27 @@
 /**
  * Count `any` in the ported source, and fail if it goes up.
  *
- *   node src/tools/anycheck.mts            # report + enforce the ratchet
- *   node src/tools/anycheck.mts --set      # write the current count as the new ceiling
+ *   node src/tools/anycheck.mts            # report + enforce
  *   node src/tools/anycheck.mts --by-file  # worst files first
  *
  * The port left `any` behind wherever a mechanical pass could not infer a type.
- * That is honest but it is not the goal: the goal is a strictly typed codebase,
- * so this gate makes the number a one-way street. `--set` after a reduction
- * lowers the ceiling; nothing raises it but an edit to `ANY_BUDGET.json`.
+ * That is honest but it is not the goal, so this used to be a *ratchet*: a
+ * `CEILING` in `ANY_BUDGET.json` that `--set` could lower and nothing could
+ * raise.
+ *
+ * **The ratchet reached zero, which is terminal**, and the file it kept its
+ * number in is gone with it. A ceiling of nought cannot be lowered, `--set`
+ * could only ever write the number that is already there, and `CLAUDE.md`'s own
+ * rule is that the repo root holds `README.md`, `CLAUDE.md`, `BRIEF.md` and
+ * build config — nothing else. A two-line JSON file holding a constant is not
+ * build config.
+ *
+ * It also removes a way this gate could pass while checking nothing. The
+ * ceiling was read as `let ceiling = Infinity; try { ...JSON.parse(read())... }
+ * catch {}`, so a missing, empty or malformed budget file did not fail the
+ * gate — it made it **unbounded**, and it went on printing a cheerful PASS. A
+ * ratchet whose absence is silently permissive is the one shape a ratchet must
+ * not have.
  *
  * Counted as `any`: a type annotation (`: any`), a type argument (`<any>`,
  * `Array<any>`), an array type (`any[]`), an assertion (`as any`), and a
@@ -17,12 +30,20 @@
  * string, which is why this reads the source with the comments stripped rather
  * than grepping it raw.
  */
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const BUDGET = path.join(ROOT, 'ANY_BUDGET.json');
+
+/**
+ * The ceiling, and it is zero.
+ *
+ * A constant rather than a file for the reasons in the header. If a port ever
+ * legitimately needs to raise it, raise it **here**, in a diff a reviewer sees
+ * next to the code, rather than in a data file that can go missing.
+ */
+const CEILING = 0;
 
 /**
  * Characters after which a `/` opens a **regex literal** rather than a division.
@@ -111,19 +132,9 @@ if (args.includes('--by-file')) {
   console.log('');
 }
 
-if (args.includes('--set')) {
-  await writeFile(BUDGET, `${JSON.stringify({ ceiling: total }, null, 2)}\n`);
-  console.log(`anycheck: ceiling set to ${total}`);
-  process.exit(0);
-}
-
-let ceiling = Infinity;
-try { ceiling = JSON.parse(await readFile(BUDGET, 'utf8')).ceiling; } catch { /* no budget yet */ }
-
-console.log(`anycheck: ${total} \`any\` across ${counts.length} files (ceiling ${ceiling})`);
-if (total > ceiling) {
-  console.log(`\nFAIL: ${total - ceiling} more than the ceiling. The goal is zero; the number only goes down.`);
-  console.log('      Run with --by-file to see where, or --set if you are deliberately raising it.');
+console.log(`anycheck: ${total} \`any\` across ${counts.length} files (ceiling ${CEILING})`);
+if (total > CEILING) {
+  console.log(`\nFAIL: ${total - CEILING} more than the ceiling. The goal is zero; the number only goes down.`);
+  console.log('      Run with --by-file to see where.');
   process.exit(1);
 }
-if (total < ceiling) console.log(`  ${ceiling - total} below the ceiling — run --set to lock it in.`);

@@ -93,7 +93,7 @@ Everything is `.mts` and runs under Node's type stripping. Shot names are
 | `roadcheck.mts` | Every drivable POI reachable; grades and corner radii legal. |
 | `heightcheck.mts` | The shared height field agrees GPU vs CPU. |
 | `creaturecheck.mts` | Creatures are grounded and posed. |
-| `anycheck.mts` | Counts `any` and **fails if it goes up**. `--by-file` for the worst; `--set` lowers the ceiling in `ANY_BUDGET.json`. |
+| `anycheck.mts` | Counts `any` and **fails if there is one**. The ceiling is 0, a constant in the tool; `--by-file` for the worst. |
 
 **Measurement**
 

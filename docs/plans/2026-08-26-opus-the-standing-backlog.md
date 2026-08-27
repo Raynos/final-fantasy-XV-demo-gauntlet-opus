@@ -558,6 +558,75 @@ buy a point while that frame exists. WS-9's `--hide` fix before any cost
 ablation in WS-3/5/6. WS-2c before WS-2d. Everything else is parallel and
 collides nowhere; the directory map is in each section.
 
+## WS-11 — What phase 4's four lanes left, 2026-08-27
+
+Phase 4 closed DONE with four lanes running under it. Their handoffs graduated
+to `project/archive/handoff/` the same day and their open work is here, which is
+the rule this file exists to enforce. Directories: `src/combat/**`,
+`src/characters/**`, `src/ui/**`, `src/world/props/**`.
+
+**Combat — the fight has shape now; these are what is still ugly in it.**
+
+- **The arm whips when the fight is beside a boulder.** Every `stagger` frame of
+  every run in four capture sets is a smear with Noctis not in it and a boulder
+  filling the near corner, unchanged by both camera commits — so it is
+  `CameraRig._armDistance`'s sphere sweep, not the framing. **The single ugliest
+  thing a fight here does.**
+- **`CameraRig`'s combat framing is live and under-tuned.** `wantPitch = 0.16 +
+  toTarget.y * 0.03` barely tilts down for a metre-tall beast, so a sabertusk at
+  eight metres is ~60 px; FFXV's combat camera comes in *and* down. And
+  `restDistance = targetDistance + flat * 0.22` is why `_frameCombat` only
+  frames a threat inside 16 m — beyond that the term pushes the arm 5.6 → 10 m
+  and makes framing worse than none.
+- **Nothing marks the end of a fight.** `encounter:victory` carries kills, EXP,
+  gil and drops; the party just stands up with weapons drawn. And the
+  **`STAGGER!` banner outlives the stagger** — still on screen at the victory
+  frame four seconds after the last kill, in white letterspaced type with no
+  plate over a bright sky. So are the damage numbers.
+- **The warp-strike shard burst reads as flat blue confetti at close range** —
+  large opaque mid-blue lozenges, no emissive gradient, occluding the fight.
+  `src/combat/VFX.ts` / `CrystalShards.ts`.
+- **Noctis does 14% of the damage in his own fight.** `PartyAI.ROLES` motion
+  values are the knob. The lane's warning that this should not be tuned before
+  the level bands moved has been **discharged** — levels scale HP and damage
+  now and wild dens track the party — so this is live work rather than a trap.
+
+**Characters — WS-7's own list, in its order.**
+
+1. **Ignis is untouched and still one black column**, the only character whose
+   read did not move: no hem line, no lapel thickness, no collar break.
+2. **The sleeve cut** — real work on `piece('sleeve')`, not a data change. Three
+   attempts at it as a *surface* are a recorded measured negative; the plate has
+   a cut.
+3. **Noctis's skull print is vertex-coloured on a 42×76 shirt sweep** and smears
+   at 0.95 m. `printWindow`/`printSteps`/`printSeg` exist for exactly this.
+4. **A hole at Noctis's collar** — a triangular void between jacket collar and
+   shoulder with skin through it.
+5. **`_probe/hands.mts`'s `_palm*` framings are inside the geometry.** Nothing
+   has ever looked at a palm.
+6. **Hair colour** — slate blue `0x252834` against a near-black-with-warm
+   reference. One number, and the cheapest win left on the head.
+
+**Draw calls — one shot, and it is 24 away.**
+
+- `town_forecourt` is the only shot of 142 over BRIEF's 800. What clears it is
+  named in WS-6: the party rigs' **velocity-pass proxies** (one per mesh per
+  mover, and the same merge that fixed their shadows fixes these), and a
+  **reflection pass spending ~40 draws on a shot with no visible water**.
+- **`shadowProxy` is duplicated three ways** — `Hammerhead.ts`, `PoiKits.ts` and
+  `npc/NpcShadow.ts`. The static pair belongs on `props/PartBuilder.ts`, where
+  WS-6 has now put it; the skinned one is a sibling, not the same function.
+- **Do not read a single-shot draw delta under ~20 as real.** On the identical
+  sha, `town_forecourt` read 821 twice and 801 half an hour later — wider than
+  `drawcheck`'s `TOLERANCE` of 8. The ledger records the 821 deliberately.
+- **The next NPC block** is the 28 colour draws the eye globes and contact-shadow
+  blobs spend. The two globes cannot merge as they stand: independent gaze
+  pivots.
+
+**And one game defect nobody owns yet:** there is terrain where holding forward
+yields **zero progress indefinitely with no slide-off**. Not a dead end for a
+player who steers — `longplay` now steers — but a traversal row.
+
 ## Definition of done
 
 - [ ] Every workstream either lands its items or closes them with a measured

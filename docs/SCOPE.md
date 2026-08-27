@@ -497,11 +497,11 @@ machine never runs — not in play, and not in the capture harness either:
 ## 13. Performance & engineering
 
 ### The gate suite
-- [x] **`pnpm run check` runs 12 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `reachcheck` · `horizoncheck` · `heightcheck` · `driftcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)* Verified 12/12 green on 2026-08-23.
+- [x] **`pnpm run check` runs 18 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `silhouette` · `silrocks` · `geocheck` · `hydrocheck` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `reachcheck` · `floatcheck` · `horizoncheck` · `heightcheck` · `driftcheck` · `drawcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)* Verified **18/18** green on 2026-08-27, and both perf gates certify. Per-gate wall times are in `project/TIMINGS.md`.
 - [x] **A gate can report VOID** — measured nothing — distinctly from failed. This is the honesty mechanism behind every perf number below.
 - [x] `integration.mts` asserts features are **reachable in play**, not merely present
 - [x] `orphans.mts` — static reachability from `main.ts`; **283/283 modules**
-- [x] `anycheck.mts` — counts `any` and fails if it rises, ratcheted against `ANY_BUDGET.json`
+- [x] `anycheck.mts` — counts `any` and fails if it rises, at a ceiling of 0, a constant in the tool
 - [x] `seatcheck.mts` proves `drawnHeightAt` is the renderer's own arithmetic (0.000 m residual) — **written but not a `check.mts` gate**, unlike `horizoncheck`
 
 ### Instruments
@@ -542,7 +542,7 @@ and the plan it ran from, `project/archive/plans/2026-08-22-opus-phase2-typescri
 Every file under `src/` is TypeScript, both typechecks are clean under `strict`,
 **all gates green** (9 at the time, 12 now), and the pixel diff against the pre-port build is inside
 each shot's own run-to-run noise. Follow-on **zero `any`: reached**, ratcheted by
-`src/tools/anycheck.mts` against `ANY_BUDGET.json`.
+`src/tools/anycheck.mts`, ceiling 0.
 
 - `tsconfig.json` — ES2022 · `module: ESNext` · `moduleResolution: bundler` ·
   `strict` · `noImplicitOverride` · `noUnusedLocals` · `isolatedModules` ·
