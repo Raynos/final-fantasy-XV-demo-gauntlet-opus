@@ -517,8 +517,43 @@ export async function ensureDaemon(): Promise<boolean> {
   const reg = readRegistry(KEY);
   const port = reg?.port ?? DAEMON_PORT;
   if (await portOpen(port)) {
+    /**
+     * ASK PATIENTLY, AND NEVER GUESS "OLD" FROM SILENCE.
+     *
+     * This used to be one `/version` call with a 5 s timeout, and a timeout was
+     * taken to mean "a daemon that predates /version" — i.e. old — which is a
+     * `/stop`, which is `pool.closeAll()`, which closes every browser on the
+     * machine for every agent.
+     *
+     * Every daemon has spoken `/version` for a long time now, so silence no
+     * longer means "old". It means **busy**: the daemon serves `/version` from
+     * the same event loop that materialises trees (`git archive` and a
+     * recursive `rmSync` over 115 MB directories are both synchronous), and a
+     * 5 s stall under load is ordinary. `check.mts` then starts nine clients at
+     * once, so the chance that at least one of them mistimes its probe is high
+     * — and one is enough.
+     *
+     * Measured: three separate `check` runs came back with `drawcheck VOID` and
+     * gates FAIL on `Target page, context or browser has been closed`, with no
+     * stack anywhere, because the daemon had been asked politely to stop by its
+     * own client. The daemon log showed it restarting and nothing else.
+     *
+     * So: retry with a growing deadline, restart ONLY on a definite mismatch,
+     * and on persistent silence warn loudly and carry on. A wedged daemon is
+     * rare and shows other symptoms; a false "old daemon" verdict is common and
+     * catastrophic.
+     */
     let v: VersionResponse | null = null;
-    try { v = await call<VersionResponse>('/version', undefined, { timeout: 5_000 }); } catch { /* pre-/version daemon */ }
+    for (let attempt = 0; attempt < 3 && !v; attempt++) {
+      try { v = await call<VersionResponse>('/version', undefined, { timeout: 5_000 * (attempt + 1) }); }
+      catch { await sleep(250); }
+    }
+    if (!v) {
+      console.log(`[daemon] the daemon on port ${port} did not answer /version in 30 s. It is busy, `
+        + 'not old — carrying on rather than restarting it, because a restart closes every browser '
+        + 'on the machine. If it really is wedged: node src/tools/daemon.mts --stop');
+      return false;
+    }
     if (v && v.repoKey !== KEY) {
       throw new Error(
         `the daemon on port ${port} serves a different repository:\n`
@@ -2032,6 +2067,23 @@ const driftChecked = new Set<string>();
  */
 function scheduleDriftCheck(build: BuildId) {
   if (driftChecked.has(build)) return;
+  /**
+   * NOT WHILE THE MACHINE IS BUSY.
+   *
+   * This is background verification that costs three captures, and it was
+   * scheduled off the *first* `/shots` for a build — which on a shared box is
+   * exactly the moment somebody's suite starts. `pnpm run check` opens with
+   * nine browser clients contending for four slots, and adding three more
+   * captures to that took the drift check itself past a 30 s screenshot
+   * timeout while gates around it lost their browsers.
+   *
+   * The check is not urgent: it answers "does `reset()` really put the page
+   * back", once per build, and nothing waits on the answer. Deferring it to a
+   * quiet moment costs nothing and removes three captures from the worst
+   * possible instant. It stays unmarked until it actually runs, so the next
+   * `/shots` on a quieter machine schedules it.
+   */
+  if (sched.busy || sched.depth() || leases.size) return;
   driftChecked.add(build);
   resetDrift[shortBuild(build)] = 'checking';
   void sched.submit('sweep', 'daemon', 'drift', 0, () => checkResetDrift(build))
