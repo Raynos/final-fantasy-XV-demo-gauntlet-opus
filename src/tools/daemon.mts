@@ -72,7 +72,7 @@ import type { JobRecord } from './ledger.mts';
  * being blamed was not the code that ran. Harness work is self-hosting; this is
  * the one place it bites.
  */
-export const PROTOCOL = 4;
+export const PROTOCOL = 5;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -357,6 +357,13 @@ export interface HealthResponse {
   exclusive: string | null;
   /** Agents queued behind the lease, in arrival order. */
   exclusiveQueue: string[];
+  /**
+   * Leased pages that are live right now, and how much TTL each has left.
+   *
+   * An exclusive request queues behind these rather than closing them, so this
+   * is the honest answer to "why can perf not start yet".
+   */
+  leases: { holder: string, secLeft: number }[];
   resetDrift: Record<string, string>;
   /**
    * Cumulative totals since this daemon started, and where the ledger is.
@@ -1744,7 +1751,24 @@ async function routeEval(body: EvalRequest): Promise<EvalResponse> {
  * and the tool keeps full Playwright control of the page. That division is the
  * only reason those eight tools can stop launching their own browsers.
  */
-const leases = new Map<string, { slot: Slot, build: Build | null, timer: NodeJS.Timeout, pid: number }>();
+interface LeaseEntry {
+  slot: Slot;
+  build: Build | null;
+  timer: NodeJS.Timeout;
+  pid: number;
+  /** The agent holding it, so a refusal can NAME the probe it is protecting. */
+  holder: string;
+  /** When the TTL fires. The bound on how long an exclusive request will wait. */
+  expiresAt: number;
+}
+const leases = new Map<string, LeaseEntry>();
+
+/** Live leases, newest TTL last, for the exclusive route and `/health`. */
+const liveLeases = (): { holder: string, secLeft: number }[] =>
+  [...leases.values()].map((l) => ({
+    holder: l.holder,
+    secLeft: Math.max(0, Math.round((l.expiresAt - Date.now()) / 1000)),
+  }));
 
 /**
  * Give back leases whose holder is gone.
@@ -1782,7 +1806,12 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
         slot.viewport = { w, h };
       }
       const id = newLeaseId();
-      leases.set(id, { slot, build: null, timer: setTimeout(() => { void releaseLease(id); }, ttlMs), pid: Number(body.pid) || 0 });
+      leases.set(id, {
+        slot, build: null, pid: Number(body.pid) || 0,
+        timer: setTimeout(() => { void releaseLease(id); }, ttlMs),
+        holder: typeof body.agent === 'string' ? body.agent : 'anon',
+        expiresAt: Date.now() + ttlMs,
+      });
       return {
         id,
         cdp: `http://127.0.0.1:${slot.cdpPort}`,
@@ -1810,7 +1839,11 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
     await preparePage(slot, build, body);
     const id = newLeaseId();
     const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
-    leases.set(id, { slot, build, timer, pid: Number(body.pid) || 0 });
+    leases.set(id, {
+      slot, build, timer, pid: Number(body.pid) || 0,
+      holder: typeof body.agent === 'string' ? body.agent : 'anon',
+      expiresAt: Date.now() + ttlMs,
+    });
     return {
       id,
       cdp: `http://127.0.0.1:${slot.cdpPort}`,
@@ -1822,6 +1855,58 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
     await pool.recycle(slot);
     throw e;
   }
+}
+
+/**
+ * Wait for every leased page to be given back, before quiescing the machine.
+ *
+ * **`pool.closeAll()` is the top documented probe killer in this repo.** Five
+ * longplay runs died to it, `project/STATUS.md` warns about it in prose, and
+ * `src/tools/README.md` and `CLAUDE.md` each carry a copy of the same warning —
+ * three documents describing a hazard instead of one function preventing it. A
+ * perf run that arrives 26 minutes into a 30-minute session destroys the
+ * session and gets a *worse* measurement than if it had waited, because it now
+ * has to be re-run alongside the re-run probe.
+ *
+ * So an exclusive request **queues behind a live lease by default**, bounded by
+ * that lease's own TTL — which is exactly the promise the lease already made.
+ * If it cannot get the machine inside that bound it refuses, naming the probe
+ * and its remaining seconds, and refuses as `busy` so the caller exits 4 rather
+ * than 1: a machine somebody else is legitimately using is not a broken build.
+ *
+ * `--wait-lease 0` restores fail-fast for a script that would rather report.
+ */
+async function drainLeases(agent: string, waitMs: number): Promise<void> {
+  let live = liveLeases();
+  if (!live.length) return;
+  const describe = () => live.map((l) => `${l.holder} (${l.secLeft} s of TTL left)`).join(', ');
+  const bound = waitMs > 0
+    ? Math.min(waitMs, Math.max(...live.map((l) => l.secLeft)) * 1000 + 5_000)
+    : 0;
+  if (bound <= 0) {
+    throw busyLeaseError(`${live.length} page lease(s) are live: ${describe()}`);
+  }
+  console.log(`[daemon] ${agent} wants the quiet lane; waiting up to ${Math.round(bound / 1000)} s `
+    + `for ${describe()}`);
+  const deadline = Date.now() + bound;
+  while (leases.size && Date.now() < deadline) {
+    await sleep(500);
+    reapLeases();
+    live = liveLeases();
+  }
+  if (!leases.size) return;
+  throw busyLeaseError(`${live.length} page lease(s) outlived their TTL bound: ${describe()}`);
+}
+
+function busyLeaseError(detail: string): Error & { busy: true, detail: unknown } {
+  const e = new Error(
+    `the quiet lane cannot be granted without closing somebody's leased page — ${detail}. `
+    + 'Closing it would kill their probe mid-run, which is the top documented probe killer here. '
+    + 'Wait with `node src/tools/daemon.mts --wait quiet --for <s>`, raise --wait-lease, or re-run later.',
+  ) as Error & { busy: true, detail: unknown };
+  e.busy = true;
+  e.detail = { busy: true, leases: liveLeases() };
+  return e;
 }
 
 const newLeaseId = () => createHash('sha1').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 10);
@@ -2068,6 +2153,7 @@ function health(): HealthResponse {
     idleSec: Math.round((Date.now() - lastUsed) / 1000),
     exclusive: sched.exclusive,
     exclusiveQueue: sched.leaseWaiting(),
+    leases: liveLeases(),
     resetDrift,
     totals: {
       jobs: stats.jobs,
@@ -2168,7 +2254,15 @@ async function serve() {
           return send(200, { ok: true });
         }
         if (url === '/exclusive') {
-          await sched.takeExclusive(agent, Number(body.pid) || 0, Number(body.waitMs) || 0);
+          const waitMs = Number(body.waitMs) || 0;
+          await sched.takeExclusive(agent, Number(body.pid) || 0, waitMs);
+          try {
+            await drainLeases(agent, waitMs);
+          } catch (e) {
+            // Give the machine back rather than holding a gate we cannot pass.
+            sched.releaseExclusive();
+            throw e;
+          }
           await pool.closeAll();
           return send(200, { ok: true, holder: agent });
         }

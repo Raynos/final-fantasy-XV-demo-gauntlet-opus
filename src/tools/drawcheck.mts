@@ -6,6 +6,7 @@
  *   node src/tools/drawcheck.mts town_wide poi_reststop
  *   node src/tools/drawcheck.mts --worst 30 --json tmp/draws.json
  *   node src/tools/drawcheck.mts --manifest tmp/shots/corpus/manifest.json
+ *   node src/tools/drawcheck.mts --no-reuse --par 1     # re-capture, one slot
  *   node src/tools/drawcheck.mts --strict          # BRIEF flat, no ratchet
  *   node src/tools/drawcheck.mts --set-baseline    # re-record the debt (LOWER only)
  *
@@ -78,11 +79,13 @@
  * for the same reason.
  */
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { harnessArgs, announceBuild, shots, isHarnessFlag } from './harness.mts';
 import { pageOpts } from './harness.mts';
 import type { ShotResult } from './harness.mts';
+import { repoCacheDir, isDirty, shaOf } from './identity.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -100,6 +103,23 @@ interface Opts {
   manifest: string | null;
   out: string;
   chunk: number;
+  /**
+   * How many chunks are in flight at once.
+   *
+   * This gate is the whole suite's critical path -- 269 s of a 270 s parallel
+   * `check`, with every other gate finishing inside its shadow -- and it spent
+   * all of it talking to ONE browser slot out of four. Four concurrent chunks
+   * do not make it four times faster (the single Metal GPU binds; the bench
+   * measures four browsers at 1.5x the throughput of one) but 1.5x off the
+   * critical path is 1.5x off the suite.
+   *
+   * It does not change what is measured. Chunks were already dispatched as
+   * separate `/shots` jobs that the scheduler could land on any free slot, so
+   * "a contiguous run of poses on one page" was never a property this had.
+   */
+  par: number;
+  /** Reuse a manifest this machine already captured for this exact tree. */
+  reuse: boolean;
   strict: boolean;
   setBaseline: boolean;
   names: string[];
@@ -139,7 +159,7 @@ const TOLERANCE = 8;
 function parseArgs(argv: string[]): Opts {
   const o: Opts = {
     worst: 20, json: null, manifest: null, out: 'tmp/shots/drawcheck', chunk: 16,
-    strict: false, setBaseline: false, names: [],
+    par: 4, reuse: true, strict: false, setBaseline: false, names: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -148,6 +168,8 @@ function parseArgs(argv: string[]): Opts {
     else if (a === '--manifest') o.manifest = argv[++i];
     else if (a === '--out') o.out = argv[++i];
     else if (a === '--chunk') o.chunk = Number(argv[++i]);
+    else if (a === '--par') o.par = Math.max(1, Number(argv[++i]));
+    else if (a === '--no-reuse') o.reuse = false;
     else if (a === '--strict') o.strict = true;
     else if (a === '--set-baseline') o.setBaseline = true;
     // `--w`/`--h` belong to the capture and are read back out of `harnessArgs`.
@@ -196,7 +218,29 @@ async function main(): Promise<void> {
 
   let results: ShotResult[];
   let source: string;
-  if (opts.manifest) {
+  /**
+   * A corpus this machine already measured for this exact tree.
+   *
+   * The frames are content-addressed and shared, but the *measurement* was not:
+   * every `drawcheck` re-issued 142 requests to rediscover 142 numbers that do
+   * not change while the sha does not change. `check`'s gate cache covers the
+   * suite path; this covers the other three -- a lane running the gate directly,
+   * a second agent verifying the same commit, and `--manifest` pointed at a
+   * corpus somebody else paid for.
+   *
+   * Keyed on the tree sha, so invalidation is free by construction, and never
+   * written for a dirty build.
+   */
+  const sha = shaOf(harnessArgs(process.argv.slice(2)).build);
+  const memo = sha ? path.join(repoCacheDir(), 'drawmanifest', `${sha}.json`) : null;
+  const fullCorpus = !opts.names.length;
+
+  if (!opts.manifest && opts.reuse && memo && fullCorpus && existsSync(memo)) {
+    const m = JSON.parse(await readFile(memo, 'utf8')) as Manifest;
+    results = m.results;
+    source = `${results.length} shots memoised for this tree (--no-reuse to re-capture)`;
+    console.log(`[drawcheck] ${source}`);
+  } else if (opts.manifest) {
     // Reading a manifest someone else captured is the cheap path: `corpus.mts`
     // has already paid for the frames and they carry their own counts.
     const m = JSON.parse(await readFile(opts.manifest, 'utf8')) as Manifest;
@@ -214,39 +258,63 @@ async function main(): Promise<void> {
     // In chunks, because one request for 140 shots outlives undici's 300 s
     // header deadline and fails at the client with every frame rendered --
     // the same reason `corpus.mts` talks to the daemon over raw `node:http`.
-    results = [];
+    const batches: string[][] = [];
+    for (let i = 0; i < names.length; i += opts.chunk) batches.push(names.slice(i, i + opts.chunk));
+    const byBatch: ShotResult[][] = batches.map(() => []);
     const errors: string[] = [];
-    for (let i = 0; i < names.length; i += opts.chunk) {
-      const batch = names.slice(i, i + opts.chunk);
-      try {
-        // JPEG: nothing here looks at the pixels, and a 1600x900 PNG corpus is
-        // gigabytes of cache for counts that live in the sidecar either way.
-        const r = await shots(batch, { ...pageOpts(ha), out: outDir, jpeg: 70 });
-        results.push(...r.results);
-        errors.push(...r.errors);
-      } catch (e) {
-        // VOID, not FAIL. A corpus takes minutes, and in that window the trunk
-        // moves under it: this run died once with a bare Node stack because
-        // the daemon pruned the sha tree it was serving while six lanes were
-        // committing. `LANDMINES.md` already records two gate failures that
-        // were the harness rather than the code, and a red row in `check`'s
-        // table is how they cost two lanes an investigation each. So a capture
-        // that never happened says so, in those words, and does not pretend to
-        // be a measurement.
-        console.log(`\n\nVOID: the capture failed on batch ${1 + i / opts.chunk} `
-          + `(${batch[0]}..${batch[batch.length - 1]}) after ${results.length} shots.`);
-        console.log(`  ${String((e as Error).message || e).split('\n')[0]}`);
-        console.log('  This is the harness, not the game. Check `daemon.mts --health` and');
-        console.log('  `cleanup.mts`, then re-run; frames already taken are in the cache.');
-        process.exit(VOID);
+    let done = 0;
+    let next = 0;
+    /**
+     * `opts.par` workers pulling from one list of chunks.
+     *
+     * Results are written back BY INDEX rather than pushed, so the report is in
+     * declaration order however the chunks finish -- the tables below sort, but
+     * the JSON dump and the progress counter should not depend on scheduling.
+     */
+    const capture = async (): Promise<void> => {
+      for (;;) {
+        const i = next++;
+        if (i >= batches.length) return;
+        const batch = batches[i];
+        try {
+          // JPEG: nothing here looks at the pixels, and a 1600x900 PNG corpus
+          // is gigabytes of cache for counts that live in the sidecar anyway.
+          const r = await shots(batch, { ...pageOpts(ha), out: outDir, jpeg: 70 });
+          byBatch[i] = r.results;
+          errors.push(...r.errors);
+          done += r.results.length;
+          process.stdout.write(`  captured ${rpad(done, 3)}/${names.length}\r`);
+        } catch (e) {
+          // VOID, not FAIL. A corpus takes minutes, and in that window the
+          // trunk moves under it: this run died once with a bare Node stack
+          // because the daemon pruned the sha tree it was serving while six
+          // lanes were committing. `LANDMINES.md` already records two gate
+          // failures that were the harness rather than the code, and a red row
+          // in `check`'s table is how they cost two lanes an investigation
+          // each. So a capture that never happened says so, in those words,
+          // and does not pretend to be a measurement.
+          console.log(`\n\nVOID: the capture failed on batch ${i + 1} `
+            + `(${batch[0]}..${batch[batch.length - 1]}) after ${done} shots.`);
+          console.log(`  ${String((e as Error).message || e).split('\n')[0]}`);
+          console.log('  This is the harness, not the game. Check `daemon.mts --health` and');
+          console.log('  `cleanup.mts`, then re-run; frames already taken are in the cache.');
+          process.exit(VOID);
+        }
       }
-      process.stdout.write(`  captured ${rpad(results.length, 3)}/${names.length}\r`);
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(opts.par, batches.length) }, capture));
     process.stdout.write('\n');
+    results = byBatch.flat();
     source = `${results.length} shots captured to ${path.relative(ROOT, outDir)}`;
     if (errors.length) {
       console.log(`\n${errors.length} page error(s):`);
       for (const e of errors.slice(0, 10)) console.log(`  ${e}`);
+    }
+    // Memoise only a COMPLETE capture of an IMMUTABLE tree. A partial corpus
+    // replayed as a whole one would report a pass over shots nobody measured.
+    if (memo && fullCorpus && !isDirty(ha.build) && results.length === names.length && !errors.length) {
+      await mkdir(path.dirname(memo), { recursive: true });
+      await writeFile(memo, `${JSON.stringify({ results })}\n`);
     }
   }
 

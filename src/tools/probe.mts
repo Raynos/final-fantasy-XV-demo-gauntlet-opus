@@ -4,6 +4,8 @@
  * the file's body in the page.
  *
  *   node src/tools/probe.mts probes/foo.mts --shot tmp/shots/foo.jpg
+ *   node src/tools/probe.mts probes/longplay.mts --ttl 40 --turbo    # 1 frame in 10
+ *   node src/tools/probe.mts probes/longplay.mts --set __PLAY_MINUTES=6
  *
  * `--shot` grabs the canvas **after the probe body returns and without applying
  * a shot**, which is the one thing `framecam.mts` cannot do: it runs its shots
@@ -39,9 +41,66 @@ const shotPath = shotIx >= 0 ? argv[shotIx + 1] : null;
  */
 const ttlIx = argv.indexOf('--ttl');
 const ttlMin = ttlIx >= 0 ? Number(argv[ttlIx + 1]) : 0;
-const probeFile = argv.find((a, i) => !a.startsWith('--')
-  && argv[i - 1] !== '--shot' && argv[i - 1] !== '--ttl');
-if (!probeFile) throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg] [--ttl <minutes>]');
+/**
+ * `--turbo <N>` -- step the simulation but submit only one frame in N.
+ *
+ * **Measured, not assumed** (`src/tools/probes/turbocost.mts`, an A/B/A on one
+ * page): draw submission is **11.0 ms of an 11.66 ms frame -- 95% of it** --
+ * against an A/B/A drift of 0.16 ms. The simulation itself costs 0.58 ms. So a
+ * thirty-game-minute `longplay` spends about twenty of its twenty-one
+ * wall-minutes drawing frames into a `?shoot=1` page that never presents them
+ * and that nobody screenshots.
+ *
+ * That is also the answer to the discrepancy Phase D opened with: `gameplay`
+ * priced the sim at 4.3-7.8 ms/frame and predicted 0.26-0.47 wall-min per
+ * game-min against an observed floor of 0.7. The missing half was never the sim.
+ *
+ * ONE IN N, NOT NONE, AND **N MATTERS**. Rendering occasionally keeps everything
+ * that depends on the render side alive -- TAA history, the exposure integrator,
+ * streaming and LOD decisions taken against a real frustum -- so a turbo run
+ * stays a run of the same game rather than of a headless subset of it.
+ *
+ * VALIDATED BY DETERMINISM, which this game uniquely can be. `TIMINGS.md`
+ * records `longplay` minute 6 as `2.14 km, 4 encounters, 19 forage` at every
+ * viewport and in both dev and prod. Six-game-minute runs, same page contract:
+ *
+ *     plain      0.75 wall-min/game-min    2.14 km, 4 enc, 19 forage, 13 kills
+ *     --turbo 2  0.37                      2.14 km, 4 enc, 19 forage, 13 kills
+ *     --turbo 10 0.10                      2.14 km, 4 enc, 19 forage, 13 kills
+ *     --turbo 60 0.06                      2.13 km, 3 enc, 18 forage, 10 kills
+ *
+ * So **10 is the default, because 10 is the largest ratio measured identical**,
+ * and it is already 7.5x: a thirty-game-minute session costs about three wall
+ * minutes instead of twenty-two. Sixty is a soak-and-shape setting whose
+ * telemetry must not be quoted. The suspected mechanism for the drift is
+ * `Terrain.drawnHeightAt` reading the *rasterised clipmap* (`seatcheck.mts`
+ * proves it is the renderer's own arithmetic), which an unsubmitted frame does
+ * not refresh -- so the route moves, and the route is what encounters and forage
+ * key off. **Re-validate against a plain run before quoting any new N.**
+ */
+const turboIx = argv.indexOf('--turbo');
+const turboN = turboIx >= 0 ? Math.max(1, Number(argv[turboIx + 1]) || 10) : 0;
+/**
+ * `--set KEY=VALUE` -- put a value on `window` before the probe body runs.
+ *
+ * Probes here read their knobs off `window` (`__PLAY_MINUTES`, `__TURBO_FRAMES`)
+ * and nothing could ever set one, so every knob was edited into the file and
+ * edited back out again. Numbers arrive as numbers; everything else as a string.
+ */
+const sets: [string, string][] = [];
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] !== '--set') continue;
+  const kv = argv[++i] ?? '';
+  const eq = kv.indexOf('=');
+  if (eq < 0) throw new Error(`--set wants KEY=VALUE, got ${JSON.stringify(kv)}`);
+  sets.push([kv.slice(0, eq), kv.slice(eq + 1)]);
+}
+const VALUE_FLAGS = new Set(['--shot', '--ttl', '--turbo', '--set']);
+const probeFile = argv.find((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
+if (!probeFile) {
+  throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg] [--ttl <minutes>] '
+    + '[--turbo <N>] [--set KEY=VALUE]');
+}
 const src = await readFile(probeFile, 'utf8');
 const ha = harnessArgs(process.argv.slice(2), {});
 announceBuild(ha);
@@ -73,6 +132,32 @@ try {
     console.log(`[shot] ${file}`);
     return true;
   });
+
+  for (const [k, v] of sets) {
+    await page.evaluate(([key, rawValue]: [string, string]) => {
+      const w = window as unknown as Record<string, unknown>;
+      w[key] = rawValue !== '' && Number.isFinite(Number(rawValue)) ? Number(rawValue) : rawValue;
+    }, [k, v] as [string, string]);
+    console.log(`[probe] window.${k} = ${v}`);
+  }
+  if (turboN > 1) {
+    // Patched HERE rather than in each probe, so every long-running probe gets
+    // it from one flag and no probe file has to know it exists.
+    await page.evaluate((n: number) => {
+      const g = (window as unknown as { GAME: { post: { render: () => void } } }).GAME;
+      const real = g.post.render.bind(g.post);
+      let i = 0;
+      g.post.render = () => { if ((i++ % n) === 0) real(); };
+      (window as unknown as Record<string, unknown>).__TURBO = n;
+    }, turboN);
+    console.log(`[probe] turbo: submitting 1 frame in ${turboN}. Draw submission is ~95% of a`);
+    console.log('[probe] stepped frame (probes/turbocost.mts), so this is most of the wall clock.');
+    if (turboN > 10) {
+      console.log(`[probe] WARNING: ${turboN} is past the largest ratio measured IDENTICAL to a plain`);
+      console.log('[probe] run (10). At 60 the telemetry moves — 2.13 km / 3 encounters against');
+      console.log('[probe] 2.14 / 4. Treat this run as soak and shape, and do not quote its numbers.');
+    }
+  }
 
   const out = await page.evaluate(`(async () => { ${src} })()`);
   console.log(typeof out === 'string' ? out : JSON.stringify(out, null, 2));
