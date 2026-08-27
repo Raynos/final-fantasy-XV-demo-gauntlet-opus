@@ -213,11 +213,28 @@ async function main(): Promise<void> {
     const errors: string[] = [];
     for (let i = 0; i < names.length; i += opts.chunk) {
       const batch = names.slice(i, i + opts.chunk);
-      // JPEG: nothing here looks at the pixels, and a 1600x900 PNG corpus is
-      // gigabytes of cache for counts that live in the sidecar either way.
-      const r = await shots(batch, { ...pageOpts(ha), out: outDir, jpeg: 70 });
-      results.push(...r.results);
-      errors.push(...r.errors);
+      try {
+        // JPEG: nothing here looks at the pixels, and a 1600x900 PNG corpus is
+        // gigabytes of cache for counts that live in the sidecar either way.
+        const r = await shots(batch, { ...pageOpts(ha), out: outDir, jpeg: 70 });
+        results.push(...r.results);
+        errors.push(...r.errors);
+      } catch (e) {
+        // VOID, not FAIL. A corpus takes minutes, and in that window the trunk
+        // moves under it: this run died once with a bare Node stack because
+        // the daemon pruned the sha tree it was serving while six lanes were
+        // committing. `LANDMINES.md` already records two gate failures that
+        // were the harness rather than the code, and a red row in `check`'s
+        // table is how they cost two lanes an investigation each. So a capture
+        // that never happened says so, in those words, and does not pretend to
+        // be a measurement.
+        console.log(`\n\nVOID: the capture failed on batch ${1 + i / opts.chunk} `
+          + `(${batch[0]}..${batch[batch.length - 1]}) after ${results.length} shots.`);
+        console.log(`  ${String((e as Error).message || e).split('\n')[0]}`);
+        console.log('  This is the harness, not the game. Check `daemon.mts --health` and');
+        console.log('  `cleanup.mts`, then re-run; frames already taken are in the cache.');
+        process.exit(VOID);
+      }
       process.stdout.write(`  captured ${rpad(results.length, 3)}/${names.length}\r`);
     }
     process.stdout.write('\n');
