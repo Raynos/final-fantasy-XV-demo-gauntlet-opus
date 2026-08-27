@@ -342,6 +342,20 @@ export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   const ctx = browser.contexts()[0];
   const page = ctx.pages().find((p) => p.url().startsWith('http')) ?? ctx.pages()[0];
   if (!page) throw new Error('the leased browser has no page');
+  /**
+   * Every action on a leased page gets 120 s, not Playwright's 30 s.
+   *
+   * Set once here rather than in each of the twelve tools that screenshot,
+   * click or wait, because the reason is a property of the machine and not of
+   * any tool: four chromiums share one Metal GPU, so an action that takes 2 s
+   * alone can take most of a minute under a full suite. A `screenshot` that was
+   * merely slow was surfacing as three broken gates.
+   *
+   * It is a ceiling on patience, not on correctness — a genuinely wedged page
+   * still fails, four minutes later instead of thirty seconds later, and the
+   * lease TTL is the real backstop.
+   */
+  page.setDefaultTimeout(120_000);
   let released = false;
   const leased: Leased = {
     page,

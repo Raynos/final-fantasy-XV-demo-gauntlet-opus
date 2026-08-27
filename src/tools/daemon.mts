@@ -1550,6 +1550,9 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
   page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') slot.errors.push(m.text()); });
 
   const t0 = Date.now();
+  // Same reason as the leased page in `harness.mts`: under a full suite this
+  // machine's per-action costs are minutes, not the 30 s Playwright assumes.
+  page.setDefaultTimeout(180_000);
   await page.goto(build.url(query), { waitUntil: 'domcontentloaded', timeout: 300_000 });
   await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300_000 });
   // `ready` is set one warm frame before `main.ts` adds `#boot.done`, and that
@@ -1790,7 +1793,29 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
           }
           const { hidden: _hidden, ...counts } = meta;
           const sidecar: Sidecar = { ...counts, ms: Date.now() - t0 };
-          const shot = await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' });
+          /**
+           * A GENEROUS TIMEOUT, for the same reason `goto` has 300 s.
+           *
+           * Playwright's default action timeout is 30 s, which is generous for
+           * an idle browser and not generous at all for one of four chromiums
+           * on a saturated Metal GPU. When it fires, `routeShots` throws,
+           * `withPage`'s catch calls `pool.recycle(slot)` — correctly, a page
+           * that threw may be wedged — and the browser closes underneath
+           * whatever else was using it. The ledger caught the whole chain in
+           * one second:
+           *
+           *   shots  check:drawcheck  page.screenshot: Timeout 30000ms exceeded
+           *   lease  check:combatloop browserContext.newPage: Protocol error
+           *                           (Target.createTarget): Not supported
+           *
+           * — a screenshot that was merely slow, reported as three broken
+           * gates. The capture is not failing; the machine is busy, which is
+           * the normal condition here and not an error.
+           */
+          const shot = await page.screenshot({
+            ...(jpeg ? { type: 'jpeg' as const, quality: jpeg } : { type: 'png' as const }),
+            timeout: 180_000,
+          });
           if (cacheable) {
             const cacheFile = path.join(framesDir(buildId), `${key}.${ext}`);
             await writeFile(cacheFile, shot);
