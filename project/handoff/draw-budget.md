@@ -3,6 +3,9 @@
 **Status: 1 of 142 shots over, `town_forecourt` at 821 (+21). The change that
 closes it is in `src/characters/`, which this lane does not own.**
 Commits `8a89c1c`, `e334e94`, `5efd74c`, `ba17eb4`, `37c793e`.
+**`pnpm run check` 18/18 PASS** on the finished tree; `floatcheck`'s `instBuried`
+improved 861 -> 801, which is the check that the stone-field merge places the
+same instances.
 Owns `src/world/props/**`, `src/world/terrain/Clipmap.ts`,
 `project/draw-baseline.json`.
 
@@ -111,8 +114,12 @@ the one shot that is over.
   (`git add` even into a private index is blocked by `.githooks`.)
 - **`drawcheck`'s number is the expensive phase of the cascade cycle**, and the
   probe's peak-of-eight agrees with it to within a few draws — but both drift
-  ±10 run to run with what has streamed in. Do not read a single-shot delta
-  under about 10 as real.
+  run to run with what has streamed in, and by **more than the ratchet's
+  `TOLERANCE` of 8**. On the identical sha `0a42dcb`, `town_forecourt` read
+  **821** in two back-to-back full-corpus runs and **801** inside `pnpm run
+  check` half an hour later. The ledger records the **821**, deliberately: an
+  801 entry would make the gate red on a reading the game already gives. Do not
+  read a single-shot delta under about 20 as real.
 - **`RockGroup.near` is now an alias for `RockGroup.mesh`**, kept only because
   `src/tools/probes/rockquilt.mts` reads `groups[0].near.material`.
 
