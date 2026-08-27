@@ -29,7 +29,7 @@
  * `--tol-cpu`.
  */
 import type * as THREE from 'three';
-import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, isHarnessFlag } from './harness.mts';
 
 
 
@@ -41,7 +41,29 @@ function parseArgs(argv: string[]) {
     // the roughest ground inside 100 m that chord sags a measured ~0.37 m below
     // `heightAt()`. 0.45 leaves headroom over the tessellation floor without
     // admitting a real offset.
-    home: 'hero_full', span: 200, res: 160, tol: 0.05, tolCpu: 0.45,
+    /**
+     * **The probe rect has to CROSS a ring boundary, or the morph band is not
+     * in it and this tool is not testing what its header says it tests.**
+     *
+     * `Clipmap` is built `levels: 7, n: 48, cell0: 1.5`, and a level reaches
+     * `2n` cells from the centre — so level 0 extends +/-144 m and its morph
+     * band is the outer few cells of that. The old default of 200 m is
+     * +/-100 m: entirely inside level 0, where `aClip.x` is 0 for every vertex,
+     * so `TERRAIN_VERT_BEGIN`'s whole morph branch was dead code under the
+     * probe.
+     *
+     * That was measured, not reasoned: injecting `tfH += aClip.x * 5.0` into
+     * the real vertex chunk — a FIVE METRE error in the morph band — moved not
+     * one number this tool prints. The control arm, an unconditional
+     * `tfH += 3.0`, moved `gpu vs heightAt` to `mean 3.000 worst 3.369` and
+     * failed, so the instrument and the live build were both fine. The probe
+     * simply never sampled a morphing vertex.
+     *
+     * 340 m clears +/-144 m with 26 m of margin on each side, which is more
+     * than one level-0 morph band. `res` rises with it to keep the texel
+     * roughly at the finest cell: 340/192 = 1.77 m against a 1.5 m cell.
+     */
+    home: 'hero_full', span: 340, res: 192, tol: 0.05, tolCpu: 0.45,
     settle: 60, tourSettle: 40, tour: null as string[] | null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -52,7 +74,13 @@ function parseArgs(argv: string[]) {
     else if (a === '--tol') o.tol = Number(argv[++i]);
     else if (a === '--tol-cpu') o.tolCpu = Number(argv[++i]);
     else if (a === '--settle') o.settle = Number(argv[++i]);
+    else if (a === '--tour-settle') o.tourSettle = Number(argv[++i]);
     else if (a === '--tour') o.tour = argv[++i].split(',');
+    // `--build`, `--dirty`, `--q`, `--w`/`--h` belong to `harnessArgs`, which
+    // parses the same argv a few lines below. Without this the tool could not
+    // be pointed at the working tree at all -- `--dirty` threw -- so every
+    // experiment on its own constants had to go through a commit first.
+    else if (isHarnessFlag(a)) { if (isHarnessFlag(a) === 'value') i++; }
     else throw new Error(`unknown flag ${a}`);
   }
   return o;
@@ -258,6 +286,27 @@ const out = await page.evaluate(async (cfg) => {
   // ---- compare ------------------------------------------------------------
   let n = 0, sum = 0, worst = 0, worstAt = null;
   let cpuSum = 0, cpuWorst = 0, cpuWorstAt = null, cpuN = 0;
+  /**
+   * **The two arms have different scopes, because they measure different things.**
+   *
+   * SURFACE DRIFT is boot-versus-after-travel at the same world texel. It is
+   * cell-independent — whatever the tessellation does, it must do the same
+   * thing both times — so it runs over the WHOLE rect, morph band included.
+   * That is the regression this tool exists for and it is now actually covered.
+   *
+   * `gpu vs heightAt` compares a triangle mesh to a continuous field, so its
+   * floor is the chord sag, and chord sag scales with the square of the cell.
+   * Inside the level-0 ring the cell is 1.5 m and the sag is a measured
+   * ~0.37 m, which is what `tolCpu` 0.45 was fitted to. In the morph band the
+   * surface is blending toward the 3 m lattice and the sag is roughly four
+   * times that: widening the rect to cross the boundary took the worst from
+   * 0.369 m to 0.956 m on a CLEAN tree.
+   *
+   * Raising `tolCpu` to swallow that would weaken the check everywhere to
+   * accommodate a place where it does not apply. So this arm keeps the radius
+   * its tolerance was measured at, and the drift arm gets the full rect.
+   */
+  const CPU_RADIUS = 100;
   const cpuAbs = [];
   const hist: Record<string, number> = {};
   for (let i = 0; i < R * R; i++) {
@@ -267,6 +316,7 @@ const out = await page.evaluate(async (cfg) => {
     if (Math.abs(d) > Math.abs(worst)) { worst = d; worstAt = [after.wx[i], after.wz[i]]; }
     const b = Math.round(d * 10) / 10;
     hist[b] = (hist[b] || 0) + 1;
+    if (Math.abs(after.wx[i] - rect.cx) > CPU_RADIUS || Math.abs(after.wz[i] - rect.cz) > CPU_RADIUS) continue;
     const cpu = t.heightAt(after.wx[i], after.wz[i]);
     const dc = after.y[i] - cpu;
     cpuN++; cpuSum += dc; cpuAbs.push(Math.abs(dc));
@@ -279,6 +329,7 @@ const out = await page.evaluate(async (cfg) => {
   let cpu0Sum = 0, cpu0Worst = 0, cpu0N = 0;
   for (let i = 0; i < R * R; i++) {
     if (Number.isNaN(before.y[i])) continue;
+    if (Math.abs(before.wx[i] - rect.cx) > CPU_RADIUS || Math.abs(before.wz[i] - rect.cz) > CPU_RADIUS) continue;
     const dc = before.y[i] - t.heightAt(before.wx[i], before.wz[i]);
     cpu0N++; cpu0Sum += dc;
     if (Math.abs(dc) > Math.abs(cpu0Worst)) cpu0Worst = dc;
