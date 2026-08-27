@@ -2,14 +2,6 @@
  "note": "Shots that are OVER BRIEF rule 3's draw-call budget, and the count each is over at. DEBT, not a target: the flat budget applies to every shot NOT listed here, and a listed shot may only go DOWN. Re-run with --set-baseline only to LOWER these; an entry that has cleared the budget should be deleted, and when this file is empty it should be deleted with it, so `drawcheck` becomes the flat rule it is trying to be. `--strict` ignores this file entirely and is what says where the game really stands.",
  "budget": 800,
  "over": {
-  "town_forecourt": 902,
-  "poi_reststop": 881,
-  "town_shops": 868,
-  "cine_hammerhead": 845,
-  "town_npcs": 841,
-  "town_caravan": 841,
-  "town_garage": 838,
-  "town_regalia_bay": 822,
-  "town_night": 818
+  "town_forecourt": 821
  }
 }
