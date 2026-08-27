@@ -7,6 +7,7 @@
  *   node src/tools/drawcheck.mts --worst 30 --json tmp/draws.json
  *   node src/tools/drawcheck.mts --manifest tmp/shots/corpus/manifest.json
  *   node src/tools/drawcheck.mts --no-reuse --par 1     # re-capture, one slot
+ *   node src/tools/drawcheck.mts --capture              # write the frames too (slow)
  *   node src/tools/drawcheck.mts --strict          # BRIEF flat, no ratchet
  *   node src/tools/drawcheck.mts --set-baseline    # re-record the debt (LOWER only)
  *
@@ -120,6 +121,8 @@ interface Opts {
   par: number;
   /** Reuse a manifest this machine already captured for this exact tree. */
   reuse: boolean;
+  /** Take the real frames too, at the old cost. Off by default; see the capture call. */
+  capture: boolean;
   strict: boolean;
   setBaseline: boolean;
   names: string[];
@@ -159,7 +162,7 @@ const TOLERANCE = 8;
 function parseArgs(argv: string[]): Opts {
   const o: Opts = {
     worst: 20, json: null, manifest: null, out: 'tmp/shots/drawcheck', chunk: 16,
-    par: 4, reuse: true, strict: false, setBaseline: false, names: [],
+    par: 4, reuse: true, capture: false, strict: false, setBaseline: false, names: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -170,6 +173,7 @@ function parseArgs(argv: string[]): Opts {
     else if (a === '--chunk') o.chunk = Number(argv[++i]);
     else if (a === '--par') o.par = Math.max(1, Number(argv[++i]));
     else if (a === '--no-reuse') o.reuse = false;
+    else if (a === '--capture') o.capture = true;
     else if (a === '--strict') o.strict = true;
     else if (a === '--set-baseline') o.setBaseline = true;
     // `--w`/`--h` belong to the capture and are read back out of `harnessArgs`.
@@ -279,7 +283,25 @@ async function main(): Promise<void> {
         try {
           // JPEG: nothing here looks at the pixels, and a 1600x900 PNG corpus
           // is gigabytes of cache for counts that live in the sidecar anyway.
-          const r = await shots(batch, { ...pageOpts(ha), out: outDir, jpeg: 70 });
+          /**
+           * COUNTS, NOT PICTURES. This gate reads `renderer.info.render.calls`
+           * and has never looked at a pixel, but it was paying for the whole
+           * capture path -- 251 s of a 273 s `pnpm run check`, which made the
+           * suite one gate wearing a suite's clothes.
+           *
+           * `countsOnly` drops the screenshot entirely and stops submitting the
+           * sixty settle frames. `probes/posecost.mts` validated it A/B/A across
+           * **all 142 shots**: 5.71x (122.6 s -> 21.5 s) with zero hard
+           * mismatches. Ten shots disagreed and all ten are shots whose own two
+           * full arms disagree with each other.
+           *
+           * `--capture` restores the old path for when the frames themselves are
+           * wanted -- the results are not cacheable as frames, because a pose
+           * without its settle drawn is not the picture `shoot` produces.
+           */
+          const r = await shots(batch, {
+            ...pageOpts(ha), out: outDir, jpeg: 70, countsOnly: !opts.capture,
+          });
           byBatch[i] = r.results;
           errors.push(...r.errors);
           done += r.results.length;
@@ -305,7 +327,9 @@ async function main(): Promise<void> {
     await Promise.all(Array.from({ length: Math.min(opts.par, batches.length) }, capture));
     process.stdout.write('\n');
     results = byBatch.flat();
-    source = `${results.length} shots captured to ${path.relative(ROOT, outDir)}`;
+    source = opts.capture
+      ? `${results.length} shots captured to ${path.relative(ROOT, outDir)}`
+      : `${results.length} shots posed for counts only — no frames written (--capture for those)`;
     if (errors.length) {
       console.log(`\n${errors.length} page error(s):`);
       for (const e of errors.slice(0, 10)) console.log(`  ${e}`);

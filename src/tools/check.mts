@@ -105,6 +105,23 @@ interface Gate {
    * broken build, and they run before a push.
    */
   gate?: boolean;
+  /**
+   * This gate never takes a screenshot, so it may run in TURBO.
+   *
+   * `grep -c screenshot` over the play gates returns **zero** for `integration`,
+   * `uxcheck`, `combatloop`, `reachcheck`, `floatcheck` and `driftcheck`: they
+   * drive real input and then assert on game STATE. Every frame they submit is
+   * composited and thrown away, and `probes/turbocost.mts` prices submission at
+   * **95% of a stepped frame** (11.0 of 11.66 ms; the simulation is 0.58 ms).
+   *
+   * `HARNESS_TURBO` makes the daemon submit one frame in N on their leased page.
+   * The validation is each gate's OWN assertion — these report exact counts
+   * (93/93, 31/31, 27 pass), which is a sharper check than any frame diff, and
+   * `HARNESS_TURBO=0` turns it off to confirm a verdict does not depend on it.
+   *
+   * `creaturecheck` is deliberately absent: it screenshots.
+   */
+  pixelBlind?: boolean;
 }
 
 /** Ordered cheapest-first; the pools re-sort by `cost`, this order is for reading. */
@@ -145,18 +162,18 @@ const GATES: Gate[] = [
     name: 'hydrocheck', script: 'hydrocheck.mts', kind: 'cpu', cost: 13.6,
     expect: 'percentile medians, and lift over the shuffled null',
   },
-  { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail', kind: 'browser', cost: 45 },
-  { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
+  { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '27 pass, 0 fail', kind: 'browser', cost: 45 },
+  { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
-  { name: 'combatloop', gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
+  { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
   { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures', kind: 'cpu', cost: 7.6 },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
-  { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
+  { name: 'reachcheck', pixelBlind: true, script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
   // `proudOf` over the final instance matrices, across the whole POI corpus
   // (every site force-built in one boot) and every live rock/debris instance.
   // A ratchet: the counts may not go up. See `project/float-baseline.json`.
-  { name: 'floatcheck', script: 'floatcheck.mts', expect: 'nothing new floats or is buried', kind: 'browser', cost: 10.5 },
+  { name: 'floatcheck', pixelBlind: true, script: 'floatcheck.mts', expect: 'nothing new floats or is buried', kind: 'browser', cost: 10.5 },
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.
@@ -168,7 +185,7 @@ const GATES: Gate[] = [
   // else starts its own, and `strictPort` means a pre-started vite on the same
   // port would break those -- so they get a dedicated one, scanned for below.
   { name: 'heightcheck', script: 'heightcheck.mts', expect: '0.000 m GPU vs CPU', needsServer: true, kind: 'browser', cost: 9.3 },
-  { name: 'driftcheck', script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true, kind: 'browser', cost: 37.8 },
+  { name: 'driftcheck', pixelBlind: true, script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true, kind: 'browser', cost: 37.8 },
   // BRIEF rule 3's draw-call budget, over the whole corpus. A ratchet: the
   // eleven shots that were already over are recorded in
   // `project/draw-baseline.json` and may only go down; everything else obeys
@@ -477,6 +494,10 @@ async function runGate(g: Gate): Promise<Result> {
   const started = Date.now();
   const r = await run(g, {
     ...env,
+    // One frame in ten on the gates that never look. Ten is the largest ratio
+    // `probe.mts --turbo` measured byte-identical on `longplay`; the gates'
+    // own exact counts are the check that it holds for them too.
+    ...(g.pixelBlind ? { HARNESS_TURBO: '10' } : {}),
     // The suite is throughput work by definition: an agent waiting on one shot
     // must overtake it. `HARNESS_LANE` reaches nine tools' hand-rolled parsers
     // without touching any of them.

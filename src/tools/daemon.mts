@@ -80,7 +80,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 6;
+export const PROTOCOL = 7;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -257,6 +257,36 @@ export interface ShotsRequest extends PageOpts {
   raw?: boolean;
   /** Render even if the cache has this frame. `--cold` implies it. */
   skipCache?: boolean;
+  /**
+   * COUNTS, NOT PICTURES: pose each shot, read `renderer.info`, take no image.
+   *
+   * `drawcheck` gates `BRIEF.md`'s draw-call budget over all 142 shots and
+   * **never looks at a pixel** — it reads `renderer.info.render.calls` off the
+   * posed frame. It was nonetheless paying for the whole capture path, and it
+   * was 251 s of a 273 s `pnpm run check`, which made the gate suite one gate
+   * wearing a suite's clothes.
+   *
+   * Two costs come off. The screenshot goes entirely (encode plus a base64 CDP
+   * round trip per shot). And the **settle stops being drawn**: a pose is
+   * `applyShot / settle(60) / applyShot / settle(8)`, so 68 stepped frames, and
+   * `probes/turbocost.mts` measured a stepped frame at 11.66 ms of which
+   * **11.0 ms is draw submission**. The last eight frames are still submitted
+   * for real, because `renderer.info` is populated BY submission and a frame
+   * that is not drawn counts nothing.
+   *
+   * MEASURED ACROSS THE WHOLE CORPUS, not argued: `probes/posecost.mts` ran all
+   * 142 shots A/B/A and reports **5.71x (122.6 s -> 21.5 s) with zero hard
+   * mismatches**. Ten shots disagreed — and all ten are shots whose own two
+   * FULL arms disagree with each other, `setpiece_deadeye` by 65 calls against
+   * drawcheck's tolerance of 8. So the cheap path is exactly as deterministic
+   * as the expensive one, which is the only claim that matters here.
+   *
+   * NOT FOR PIXELS. TAA accumulates over the settle, so a frame posed this way
+   * is not the frame `shoot` produces, and these results are never cached as
+   * frames. Anything that will be looked at, diffed or judged must use the
+   * normal path.
+   */
+  countsOnly?: boolean;
 }
 
 /** One captured frame, plus what the renderer cost to draw it. */
@@ -328,6 +358,30 @@ export interface LeaseRequest extends PageOpts {
    * a `file://` URL would silently poison the pool.
    */
   blank?: boolean;
+  /**
+   * Submit one frame in N on the leased page, or every frame when 0/absent.
+   *
+   * **Six of the seven play gates never take a screenshot** — `integration`,
+   * `uxcheck`, `combatloop`, `reachcheck`, `floatcheck` and `driftcheck` drive
+   * real input and then assert on game STATE. `grep -c screenshot` over them
+   * returns zero. Every frame they submit is drawn, composited and thrown away.
+   *
+   * `probes/turbocost.mts` prices that at **11.0 ms of an 11.66 ms stepped
+   * frame — 95%** (A/B/A drift 0.16 ms; the simulation is 0.58 ms), and
+   * `probe.mts --turbo` already validated the ratio on `longplay`: byte-identical
+   * telemetry at N<=10, drift at 60. So the daemon offers it to any leaseholder
+   * that knows it is not going to look.
+   *
+   * ONE IN N, NOT NONE, for the reason `probe.mts` documents at length: TAA
+   * history, the exposure integrator and every streaming and LOD decision taken
+   * against a real frustum stay alive, so the run remains a run of the same
+   * game. A gate that turns this on must be validated by its own assertions —
+   * these gates all report exact counts (93/93, 31/31, 27 pass), which is a
+   * sharper check than any frame diff.
+   *
+   * Never for a tool that photographs anything.
+   */
+  turbo?: number;
 }
 export interface LeaseResponse extends Counters {
   id: string;
@@ -1686,7 +1740,10 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
 // -------------------------------------------------------------------- routes
 
 async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
-  const { shots, settle = 60, out, jpeg = 0, hide = [], raw = false, skipCache = false, ...rest } = body;
+  const {
+    shots, settle = 60, out, jpeg = 0, hide = [], raw = false, skipCache = false,
+    countsOnly = false, ...rest
+  } = body;
   const buildId = rest.build ?? (DIRTY_PREFIX + ROOT);
   const { w = 1600, h = 900, cold = false } = rest;
   const query = queryOf(rest);
@@ -1700,9 +1757,12 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
    * from a cache written by somebody else's run is how an ablation stops
    * proving anything.
    */
-  const cacheable = !isDirty(buildId) && !cold && !skipCache && !hide.length && !raw;
+  // A counts-only pose is not the frame `shoot` produces (TAA accumulates over
+  // the settle, and this does not draw it), so it must never enter the frame
+  // cache and never be served as one.
+  const cacheable = !isDirty(buildId) && !cold && !skipCache && !hide.length && !raw && !countsOnly;
   const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
-  await mkdir(outDir, { recursive: true });
+  if (!countsOnly) await mkdir(outDir, { recursive: true });
   if (cacheable) mkdirSync(framesDir(buildId), { recursive: true });
 
   const results: ShotResult[] = [];
@@ -1778,11 +1838,26 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
       await withPage(rest, async (page, slot, build) => {
         for (const { name, key } of render) {
           const t0 = Date.now();
-    const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
+    const meta = await page.evaluate((
+      [n, s, hideList, rawFrame, counts]: [string, number, string[], boolean, boolean],
+    ) => {
       const g = window.GAME;
       g.applyShot(n);
-      g.settle(s);
+      if (counts) {
+        // The settle exists to let the world reach its posed steady state, and
+        // that is a SIMULATION property: companions arriving at formation
+        // slots, streaming resolving, the day cycle landing. None of it needs
+        // the frames to be submitted. Ablated here rather than in the game so
+        // `Game.frame` keeps one meaning for everybody else.
+        const real = g.post.render;
+        g.post.render = () => {};
+        try { g.settle(s); } finally { g.post.render = real; }
+      } else {
+        g.settle(s);
+      }
       g.applyShot(n);          // re-anchor follow shots after settling
+      // ALWAYS DRAWN: `renderer.info` is populated by submission, so the frames
+      // the reading is taken from have to be real ones.
       g.settle(8);
       // Ablate AFTER settling: hiding a mesh must not change what the sim did,
       // only what the frame contains. Anything else and the two sides of the
@@ -1817,12 +1892,17 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
       };
       for (const h of hidden) h.o.visible = h.was;
       return out;
-    }, [name, settle, hide, raw] as [string, number, string[], boolean]);
+    }, [name, settle, hide, raw, countsOnly] as [string, number, string[], boolean, boolean]);
           if (hide.length && meta.hidden === 0) {
             slot.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
           }
-          const { hidden: _hidden, ...counts } = meta;
-          const sidecar: Sidecar = { ...counts, ms: Date.now() - t0 };
+          const { hidden: _hidden, ...gl } = meta;
+          const sidecar: Sidecar = { ...gl, ms: Date.now() - t0 };
+          if (countsOnly) {
+            // No image, no file, no cache line. The numbers ARE the result.
+            results.push({ name, file: '', cached: false, ...sidecar });
+            continue;
+          }
           /**
            * A GENEROUS TIMEOUT, for the same reason `goto` has 300 s.
            *
@@ -1937,6 +2017,7 @@ function reapLeases() {
 async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
   lastUsed = Date.now();
   const { w = 1600, h = 900, cold = false, ttlMs = 15 * 60_000, blank = false } = body;
+  const turbo = Math.max(0, Math.floor(Number(body.turbo) || 0));
 
   if (blank) {
     // No build, no server, no boot -- but a real slot, so an image tool still
@@ -2013,7 +2094,18 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
     // The page is booted here so the caller connects to something ready, and so
     // a boot failure is the daemon's problem rather than arriving as a mystery
     // on the far side of a CDP socket.
-    await preparePage(slot, build, { ...body, cold: true });
+    const page = await preparePage(slot, build, { ...body, cold: true });
+    if (turbo > 1) {
+      // Patched here rather than in each of the six gates, so one flag reaches
+      // all of them and the page is already in turbo when the tool connects.
+      await page.evaluate((n: number) => {
+        const g = (window as unknown as { GAME: { post: { render: () => void } } }).GAME;
+        const real = g.post.render.bind(g.post);
+        let i = 0;
+        g.post.render = () => { if ((i++ % n) === 0) real(); };
+        (window as unknown as Record<string, unknown>).__TURBO = n;
+      }, turbo);
+    }
     const id = newLeaseId();
     const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
     leases.set(id, {

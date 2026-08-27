@@ -313,7 +313,15 @@ export interface Leased {
  */
 export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   await ensureDaemon();
-  const r = await call<LeaseResponse>('/lease', { ...opts, pid: process.pid });
+  /**
+   * `HARNESS_TURBO` applies to any lease that has not asked for something else.
+   *
+   * The env var rather than a flag, and injected here rather than in each tool,
+   * for the reason `HARNESS_LANE` is: `check.mts` needs to set it for a roster
+   * of six gates that each have their own argument parser. It is set ONLY for
+   * gates that take no screenshot — see `check.mts`'s `pixelBlind`.
+   */
+  const r = await call<LeaseResponse>('/lease', { turbo: turboRatio(), ...opts, pid: process.pid });
   /**
    * Connect PATIENTLY, and retry once.
    *
@@ -396,6 +404,22 @@ export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   process.once('uncaughtException', bail);
   process.once('unhandledRejection', bail);
   return leased;
+}
+
+/**
+ * The turbo ratio a gate should ask for, from `HARNESS_TURBO` or a default.
+ *
+ * Read from the environment rather than a flag because `check.mts` sets it for
+ * a whole roster of gates that each have their own hand-rolled parser — the
+ * same reason `HARNESS_LANE` and `HARNESS_AGENT` are environment variables.
+ * `HARNESS_TURBO=0` turns it off for one run, which is how you check that a
+ * gate's verdict does not depend on it.
+ */
+export function turboRatio(fallback = 0): number {
+  const v = process.env.HARNESS_TURBO;
+  if (v === undefined) return fallback;
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 1 ? n : 0;
 }
 
 /** Lease, run, and always give it back — including when `fn` throws. */
