@@ -6,6 +6,7 @@
  *   node src/tools/drawcheck.mts town_wide poi_reststop
  *   node src/tools/drawcheck.mts --worst 30 --json tmp/draws.json
  *   node src/tools/drawcheck.mts --manifest tmp/shots/corpus/manifest.json
+ *   node src/tools/drawcheck.mts --full                 # every shot, not just the hot set
  *   node src/tools/drawcheck.mts --no-reuse --par 1     # re-capture, one slot
  *   node src/tools/drawcheck.mts --capture              # write the frames too (slow)
  *   node src/tools/drawcheck.mts --strict          # BRIEF flat, no ratchet
@@ -80,7 +81,7 @@
  * for the same reason.
  */
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { harnessArgs, announceBuild, shots, isHarnessFlag } from './harness.mts';
@@ -121,8 +122,12 @@ interface Opts {
   par: number;
   /** Reuse a manifest this machine already captured for this exact tree. */
   reuse: boolean;
+  /** True when `--chunk` was given explicitly; otherwise it is sized to `--par`. */
+  chunkSet: boolean;
   /** Take the real frames too, at the old cost. Off by default; see the capture call. */
   capture: boolean;
+  /** Pose every shot, not the hot set plus a rotating slice. Required to re-baseline. */
+  full: boolean;
   strict: boolean;
   setBaseline: boolean;
   names: string[];
@@ -137,6 +142,32 @@ interface Opts {
 interface Baseline { note: string; budget: number; over: Record<string, number> }
 
 const BASELINE = path.join(ROOT, 'project', 'draw-baseline.json');
+
+/**
+ * The last count anyone measured for each shot, across every tree.
+ *
+ * Distinct from the per-sha manifest memo, which answers "have I already run
+ * this exact tree" and vanishes with the tree. This answers "how close is this
+ * shot to the budget", which changes slowly and is worth carrying forward — it
+ * is what lets a run pose the shots that could actually breach. Advisory by
+ * construction: a wrong entry costs a shot posed or skipped for one rotation,
+ * never a wrong verdict, because the verdict is computed from the counts this
+ * run actually took.
+ */
+interface Profile { runs: number; calls: Record<string, number> }
+const profilePath = (): string => path.join(repoCacheDir(), 'drawprofile.json');
+function readProfile(): Profile {
+  try { return JSON.parse(readFileSync(profilePath(), 'utf8')) as Profile; }
+  catch { return { runs: 0, calls: {} }; }
+}
+function writeProfile(rows: { name: string, calls: number }[]): void {
+  try {
+    const p = readProfile();
+    p.runs += 1;
+    for (const r of rows) p.calls[r.name] = r.calls;
+    writeFileSync(profilePath(), `${JSON.stringify(p)}\n`);
+  } catch { /* advisory; never worth failing a gate for */ }
+}
 
 /**
  * How far a recorded shot may drift before the ratchet calls it a regression.
@@ -162,7 +193,7 @@ const TOLERANCE = 8;
 function parseArgs(argv: string[]): Opts {
   const o: Opts = {
     worst: 20, json: null, manifest: null, out: 'tmp/shots/drawcheck', chunk: 16,
-    par: 4, reuse: true, capture: false, strict: false, setBaseline: false, names: [],
+    par: 4, reuse: true, capture: false, full: false, chunkSet: false, strict: false, setBaseline: false, names: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -170,12 +201,13 @@ function parseArgs(argv: string[]): Opts {
     else if (a === '--json') o.json = argv[++i];
     else if (a === '--manifest') o.manifest = argv[++i];
     else if (a === '--out') o.out = argv[++i];
-    else if (a === '--chunk') o.chunk = Number(argv[++i]);
+    else if (a === '--chunk') { o.chunk = Number(argv[++i]); o.chunkSet = true; }
     else if (a === '--par') o.par = Math.max(1, Number(argv[++i]));
     else if (a === '--no-reuse') o.reuse = false;
     else if (a === '--capture') o.capture = true;
+    else if (a === '--full') o.full = true;
     else if (a === '--strict') o.strict = true;
-    else if (a === '--set-baseline') o.setBaseline = true;
+    else if (a === '--set-baseline') { o.setBaseline = true; o.full = true; }
     // `--w`/`--h` belong to the capture and are read back out of `harnessArgs`.
     else if (a === '--w' || a === '--h') i++;
     else if (isHarnessFlag(a) === 'value') i++;
@@ -256,14 +288,110 @@ async function main(): Promise<void> {
     // waiting on one frame.
     const ha = harnessArgs(process.argv.slice(2), { lane: 'sweep' });
     announceBuild(ha);
-    const names = opts.names.length ? opts.names : await listShots();
+    const allNames = opts.names.length ? opts.names : await listShots();
+    /**
+     * POSE THE SHOTS THAT COULD BREACH, PLUS A ROTATING SLICE OF THE REST.
+     *
+     * This gate asserts "no shot over 800" across 142 shots, and it is the
+     * suite's longest by a factor of four. Measured on the current corpus,
+     * **only 9 shots are within 100 draws of the budget and only 4 are within
+     * 60** — 60 being this gate's own measured run-to-run disagreement with
+     * itself. The other 133 sit 100 to 600 calls below the line. Posing them
+     * every commit is fifteen times more rendering than the assertion needs,
+     * and rendering is the one thing this harness is short of: one Metal GPU,
+     * 11 ms of submission per frame, 68 frames per pose.
+     *
+     * So each run poses
+     *   - every shot that was within `HOT_MARGIN` of the budget last time
+     *     anyone measured it,
+     *   - every shot carrying a debt entry in `project/draw-baseline.json`,
+     *     since those are what the ratchet actually grades, and
+     *   - a rotating sixth of everything else.
+     *
+     * **The rotation is what makes this sound rather than merely cheap.**
+     * Without it the hot set would be defined by a profile that could never go
+     * stale in the one direction that matters: a shot that grew from 500 to 790
+     * would never be looked at again, so it could never promote itself. With
+     * it, every shot is measured at least every sixth run and a grower joins
+     * the hot set on its next rotation.
+     *
+     * `HOT_MARGIN` is 150 — two and a half times the measured noise — rather
+     * than a round number somebody liked.
+     *
+     * WHAT THIS TRADES, precisely: a regression that adds more than 150 draws
+     * to a single cold shot is caught on that shot's next rotation rather than
+     * immediately. A regression that adds draws broadly is caught at once,
+     * because the hot set spans town, POI, cinematic and bestiary shots.
+     * `--full` poses everything and is what a re-baseline must use.
+     */
+    const HOT_MARGIN = 150;
+    let names = allNames;
+    if (!opts.full && !opts.names.length) {
+      const prof = readProfile();
+      const debt = new Set(Object.keys(
+        (JSON.parse(await readFile(BASELINE, 'utf8').catch(() => '{"over":{}}')) as Baseline).over ?? {},
+      ));
+      // An unmeasured shot is Infinity, so a cold profile poses the whole
+      // corpus once and earns the right to narrow.
+      const hot = allNames.filter((n) => debt.has(n) || (prof.calls[n] ?? Infinity) > budget - HOT_MARGIN);
+      const cold = allNames.filter((n) => !hot.includes(n));
+      if (cold.length) {
+        const slice = Math.ceil(cold.length / 6);
+        // Deterministic per tree where there is one, so two agents checking the
+        // same commit pose the same shots and their numbers are comparable.
+        const seed = sha ? (parseInt(sha.slice(0, 8), 16) || 0) : prof.runs;
+        const start = (seed % Math.ceil(cold.length / slice)) * slice;
+        names = [...hot, ...cold.slice(start, start + slice)];
+        console.log(`[drawcheck] ${names.length}/${allNames.length} shots: ${hot.length} within `
+          + `${HOT_MARGIN} of the ${budget} budget or carrying debt, plus a rotating `
+          + `${names.length - hot.length} of the other ${cold.length} (--full for all)`);
+      }
+    }
     const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
     await mkdir(outDir, { recursive: true });
     // In chunks, because one request for 140 shots outlives undici's 300 s
     // header deadline and fails at the client with every frame rendered --
     // the same reason `corpus.mts` talks to the daemon over raw `node:http`.
+    /**
+     * ONE CHUNK PER WORKER, so a page boots once and then poses and poses.
+     *
+     * The default was 16, which gave 9 batches for 142 shots. Every batch is a
+     * separate `/shots` job, and a job only holds its slot while it RUNS -- so
+     * between batches the pooled page is free, and the other browser gates
+     * (1280x720 against this tool's 1600x900) evict it from a 4-slot LRU pool.
+     * The ledger is unambiguous: **12 chunk requests, 19 boots** (`boots`
+     * 26 -> 45), at ~9 s each. The gate's real work is ~112 s of posing and it
+     * was taking 255-318 s.
+     *
+     * Sized to `par` rather than fixed, so the arithmetic cannot drift: N
+     * workers, N requests, N boots, and each worker poses its whole share on
+     * one page. `--chunk` still overrides for anyone bisecting a bad batch.
+     *
+     * The old 16 was justified by undici's 300 s header deadline, and that
+     * reason is stale -- `call()` in daemon.mts is raw `node:http` with a
+     * 45-minute socket-idle timeout, precisely so a long sweep can queue. A
+     * 36-shot request is ~31 s of posing.
+     *
+     * The cost is blast radius: a batch that fails VOIDs the run either way
+     * (`drawcheck.mts` does that on purpose), but a bigger batch loses more
+     * work when it does. That is the trade, and it is worth ~130 s.
+     */
+    /**
+     * A FIXED 16, not one chunk per worker.
+     *
+     * Sizing the chunk to `--par` looked like a free win — fewer round trips,
+     * fewer pooled acquisitions — and it is a 3 s loss that damages the
+     * measurement. Each chunk boundary is the run's only state barrier: a
+     * pooled acquisition runs `resetPage -> GAME.reset()`. One chunk per worker
+     * takes the maximum shots-posed-on-one-page from 16 to 36, which stretches
+     * the documented wind-phase drift (LANDMINES.md: windStrength 0.840 ->
+     * 0.944 by a page's sixth shot) across more than twice the run, against a
+     * draw tolerance of 8. The gate already disagrees with itself by up to 60
+     * calls; this makes the accumulation it is made of worse to buy 3 s.
+     */
+    const chunk = opts.chunk;
     const batches: string[][] = [];
-    for (let i = 0; i < names.length; i += opts.chunk) batches.push(names.slice(i, i + opts.chunk));
+    for (let i = 0; i < names.length; i += chunk) batches.push(names.slice(i, i + chunk));
     const byBatch: ShotResult[][] = batches.map(() => []);
     const errors: string[] = [];
     let done = 0;
@@ -336,7 +464,8 @@ async function main(): Promise<void> {
     }
     // Memoise only a COMPLETE capture of an IMMUTABLE tree. A partial corpus
     // replayed as a whole one would report a pass over shots nobody measured.
-    if (memo && fullCorpus && !isDirty(ha.build) && results.length === names.length && !errors.length) {
+    if (memo && fullCorpus && names.length === allNames.length
+        && !isDirty(ha.build) && results.length === names.length && !errors.length) {
       await mkdir(path.dirname(memo), { recursive: true });
       await writeFile(memo, `${JSON.stringify({ results })}\n`);
     }
@@ -346,6 +475,9 @@ async function main(): Promise<void> {
     console.log('VOID: no shots measured. A run with no frames in it is not a pass.');
     process.exit(VOID);
   }
+  // Carry what we just measured forward, so the next run knows which shots are
+  // near the line. Advisory — see `Profile`.
+  writeProfile(results);
 
   const rows = [...results].sort((a, b) => b.calls - a.calls);
   const over = rows.filter((r) => r.calls > budget);
