@@ -170,9 +170,14 @@ export const CAST = {
         { type: 'pants', color: 0x2d2b2b, rough: 0.88, padHip: 0.016, padAnkle: 0.010, u1: 0.95, knee: 0.03, wrinkle: 0.024 },
         { type: 'jacket', color: 0x2c2a29, rough: 0.40, u0: 0.36, u1: 0.965, pad: 0.019, gap: 0.58, flare: 0.05, waist: 0.070, thickness: 0.011, collarH: 0.098, collarR: 0.062, collarFlare: 1.16, seamRib: 0.019, wrinkle: 0.036, pockets: true, pocketTh: 0.70, pocketT: 0.50, epaulettes: true, epauletteTh: 1.26, studColor: 0x8a8d94 },
         { type: 'skirt', color: 0x2c2a29, rough: 0.40, top: 1.04, bottom: 0.775, rTop: 0.166, rBot: 0.176, gap: 0.60, backLong: 0.16, spring: 0.9, wave: 0.04, depth: 0.86 },
-        { type: 'sleeve', color: 0x2c2a29, rough: 0.40, u0: 0.03, u1: 0.89, pad: 0.015, cuff: 0.05, cuffBand: true, cuffColor: 0x252220 },
+        // Short sleeve, ending on the bicep. In `party-three-field-02.jpg` his
+        // forearms are bare from mid-bicep down, and that pair of skin verticals
+        // either side of a black torso is most of what makes him read as a
+        // figure rather than a silhouette at party range. Ours ran to the wrist
+        // and he was a single black column from collar to boot.
+        { type: 'sleeve', color: 0x2c2a29, rough: 0.40, u0: 0.03, u1: 0.34, pad: 0.015, cuff: 0.05, cuffBand: true, cuffColor: 0x252220 },
         { type: 'belt', color: 0x322e2c, rough: 0.32, metal: 0.1, u: 0.365, pad: 0.020, buckleBox: true, buckleColor: 0x9aa0a8 },
-        { type: 'boots', color: 0x2b2827, rough: 0.34, shaft: 0.74, strap: true, height: 0.038 },
+        { type: 'boots', color: 0x2b2827, rough: 0.34, shaft: 0.74, strap: true, height: 0.038, bandColor: 0x494551, band: 0.15, weltColor: 0x3a3740 },
       ],
     },
   },
@@ -281,15 +286,19 @@ export const CAST = {
         ],
       },
       outfit: [
-        { type: 'pants', color: 0x3d3a2b, rough: 0.90, padHip: 0.020, padAnkle: 0.016, u1: 0.94, cargo: 0.06, wrinkle: 0.022, knee: 0.035 },
+        // Black, not olive. The plate has him in plain black trousers over
+        // glossy black shoes; the olive read as combat fatigues and put the
+        // only warm mass in the party on the character whose whole silhouette
+        // is meant to be a black shirt over a bare chest.
+        { type: 'pants', color: 0x26242b, rough: 0.90, padHip: 0.020, padAnkle: 0.016, u1: 0.94, cargo: 0.06, wrinkle: 0.022, knee: 0.035 },
         // a real jacket: heavy hems, a fold-down collar standing off the neck,
         // and enough thickness at the open edge to read as leather rather than
         // as two straps drawn on a bare chest
-        { type: 'jacket', color: 0x312d2d, rough: 0.62, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
+        { type: 'jacket', color: 0x312d2d, rough: 0.62, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.60, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
         { type: 'sleeve', color: 0x312d2d, rough: 0.62, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
         { type: 'belt', color: 0x3d3322, rough: 0.36, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
         { type: 'pouch', color: 0x3d3322, rough: 0.42, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
-        { type: 'boots', color: 0x352d20, rough: 0.38, shaft: 0.70, strap: true, width: 0.052, height: 0.040 },
+        { type: 'boots', color: 0x22212a, rough: 0.30, shaft: 0.86, strap: true, width: 0.052, height: 0.040, weltColor: 0x35333e },
         { type: 'band', color: 0x3d3322, rough: 0.46, sides: ['L'], u: 0.90, pad: 0.012, ridge: 0.05 },
       ],
     },
@@ -367,7 +376,7 @@ export const CAST = {
         { type: 'skirt', color: 0x25242c, rough: 0.62, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
         { type: 'sleeve', color: 0x25242c, rough: 0.62, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x33313d },
         { type: 'belt', color: 0x2e2c38, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
-        { type: 'boots', color: 0x2b2827, rough: 0.32, shaft: 0.78, height: 0.036 },
+        { type: 'boots', color: 0x2b2827, rough: 0.26, shaft: 0.82, height: 0.036, weltColor: 0x3c3945 },
         // Ignis without visible frames is just a man with a shiny patch on his
         // face; the rim geometry is the whole silhouette read
         { type: 'glasses', color: 0x1a1c22, rough: 0.22, metal: 0.65 },
@@ -459,12 +468,18 @@ export const CAST = {
         { type: 'shirt', color: 0x8d897e, rough: 0.94, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016 },
         { type: 'pants', color: 0x302d2d, rough: 0.90, padHip: 0.016, padAnkle: 0.011, u1: 0.95, wrinkle: 0.026, knee: 0.03 },
         { type: 'jacket', color: 0x2f2c2b, rough: 0.52, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16, zip: true, zipAt: 0.28, pockets: true, pocketTh: 0.86, pocketT: 0.48, studColor: 0x94989f },
-        { type: 'sleeve', color: 0x2f2c2b, rough: 0.52, u0: 0.03, u1: 0.38, pad: 0.017, cuff: 0.04, cuffBand: true, cuffColor: 0x272423 },
+        // A vest, so the armhole stops at the deltoid. He is the only one of
+        // the four whose arms are bare their whole length in the plate.
+        { type: 'sleeve', color: 0x2f2c2b, rough: 0.52, u0: 0.03, u1: 0.20, pad: 0.017, cuff: 0.04, cuffBand: true, cuffColor: 0x272423 },
         { type: 'belt', color: 0x353130, rough: 0.34, u: 0.36, pad: 0.020, buckleBox: true, buckleColor: 0xa8adb4 },
         { type: 'band', color: 0x373332, rough: 0.62, sides: ['L', 'R'], u: 0.90, pad: 0.010, ridge: 0.04 },
         { type: 'strap', color: 0x6a5a3c, rough: 0.88, side: 'L', width: 0.013, to: [-0.048, 1.150, 0.118] },
         { type: 'camera', color: 0x24252b, rough: 0.38, metal: 0.25, at: [-0.048, 1.135, 0.128] },
-        { type: 'boots', color: 0x302c2b, rough: 0.36, shaft: 0.80, height: 0.034 },
+        // The broad pale grey cuff. In `party-three-field-02.jpg` it is the
+        // single brightest per-character marker in the whole party at that
+        // range — brighter than any face — and nothing else on him carries a
+        // value that high below the collar.
+        { type: 'boots', color: 0x272428, rough: 0.34, shaft: 0.80, height: 0.034, bandColor: 0x8e8c86, band: 0.26, weltColor: 0x3a3740 },
       ],
     },
   },

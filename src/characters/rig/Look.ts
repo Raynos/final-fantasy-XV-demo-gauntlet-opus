@@ -352,6 +352,21 @@ export interface OutfitPiece {
   shaft?: number;
   strap?: boolean;
   strapColor?: number;
+  /**
+   * Colour of the band at the top of the shaft.
+   *
+   * `docs/reference/plates/party-three-field-02.jpg` puts a hard horizontal
+   * terminator on every character's lower leg, and it is the loudest thing
+   * about any of them at that range: Prompto's is a broad pale grey cuff, the
+   * other three a glossier black against a matt trouser. Ours had the shaft,
+   * the trouser and the foot all at one near-black value and one roughness, so
+   * the leg was a single stovepipe into the ground.
+   */
+  bandColor?: number;
+  /** height of that band as a fraction of the shaft. */
+  band?: number;
+  /** the welt: a proud rand around the sole, one value off the upper. */
+  weltColor?: number;
 
   // ---- jacket hardware -------------------------------------------------
   // Panels alone read as a shell. See `hardware()` in `rig/Outfit.ts`: at a

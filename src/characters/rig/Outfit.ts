@@ -8,6 +8,8 @@ import type { Look, OutfitPiece } from './Look.ts';
 import { Noise } from '../../util/Noise.ts';
 
 const _cloth = new Noise(9137);
+/** scratch for the boot shaft's band blend */
+const _bootC = new THREE.Color();
 
 /** Gaussian ridge centred on `c`, half-width `w`. */
 const ridge = (x: number, c: number, w: number) => Math.exp(-((x - c) / w) * ((x - c) / w));
@@ -638,12 +640,18 @@ piece('pants', (B, ctx, o) => {
     const body = under(legShape(ctx.rig.profile.muscle), u0, u1, 0.94);
     const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.5, Math.PI * 1.5], yoke: 0.06, hemAt: 0.10 });
     sweepTube(B, {
-      nodes, steps: o.steps ?? 18, seg: o.seg ?? 22,
+      nodes, steps: o.steps ?? 26, seg: o.seg ?? 22,
       shape: (th, t) => body(th, t)
         + (o.wrinkle ?? 0.020) * Math.sin(th * 5 + t * 20) * smooth(t * 1.6)
-        // the stack of creases behind the knee and above the ankle
-        + (o.wrinkle ?? 0.020) * 1.2 * Math.sin(t * 46.0) * bump(t, 0.56, 0.16)
-        + (o.wrinkle ?? 0.020) * 0.9 * Math.sin(t * 38.0 + 1.0) * bump(t, 0.86, 0.12)
+        // The stack of creases behind the knee and above the ankle. The
+        // frequencies were 46 and 38 rad over `steps: 18` — and because each
+        // pack is windowed into about 0.3 of the parameter, that is six rings
+        // carrying 2.3 cycles, i.e. right at Nyquist. It did not blur, it
+        // aliased, and `tmp/shots/ws7-p1/noctis_boot.png` shows the result as
+        // four hard horizontal stair-steps across the calf. 26 steps and 30/24
+        // rad puts both packs at four samples a cycle.
+        + (o.wrinkle ?? 0.020) * 1.2 * Math.sin(t * 30.0) * bump(t, 0.56, 0.16)
+        + (o.wrinkle ?? 0.020) * 0.9 * Math.sin(t * 24.0 + 1.0) * bump(t, 0.86, 0.12)
         + (o.knee ?? 0.03) * bump(t, 0.5, 0.12)
         + (o.cargo ?? 0) * (abump(th, Math.PI * 0.5, 0.8) + abump(th, -Math.PI * 0.5, 0.8)) * bump(t, 0.34, 0.10)
         + (o.boot ?? 0) * bump(t, 0.92, 0.14)
@@ -689,23 +697,55 @@ piece('boots', (B, ctx, o) => {
         - 0.06 * abump(th, Math.PI, 1.0) * bump(t, 0.55, 0.3),
       uvScale: [1, 1.4],
     });
+    // The welt, then the sole. A boot has three values stacked in 40 mm — a
+    // matt upper, a proud rand a shade lighter, and a near-black sole — and
+    // that stack is what stops a foot reading as a wedge cut off the trouser.
+    // In `party-three-field-02.jpg` it is legible on all four characters at a
+    // range where nothing else below the knee is.
+    B.color(o.weltColor ?? o.color ?? 0x2a2b33).mat(0.42, 0);
+    sweepTube(B, {
+      nodes: [
+        { p: [an.x, an.y - 0.055 * s, an.z - 0.064 * s], rx: w * 0.86, rz: 0.010 * s, w: fw },
+        { p: [an.x, an.y - 0.058 * s, an.z - 0.010 * s], rx: w * 1.05, rz: 0.010 * s, w: fw },
+        { p: [an.x, an.y - 0.058 * s, an.z + 0.060 * s], rx: w * 1.09, rz: 0.010 * s, w: tw },
+        { p: [an.x, an.y - 0.053 * s, an.z + 0.126 * s], rx: w * 0.71, rz: 0.009 * s, w: tw },
+      ],
+      steps: 8, seg: 12, ref: [0, 1, 0], uvScale: [1, 0.6],
+    });
     // sole slab
     B.color(o.soleColor ?? 0x14151a).mat(0.9, 0);
     sweepTube(B, {
       nodes: [
-        { p: [an.x, an.y - 0.062 * s, an.z - 0.062 * s], rx: w * 0.80, rz: 0.014 * s, w: fw },
-        { p: [an.x, an.y - 0.066 * s, an.z - 0.010 * s], rx: w * 0.98, rz: 0.014 * s, w: fw },
-        { p: [an.x, an.y - 0.066 * s, an.z + 0.060 * s], rx: w * 1.02, rz: 0.014 * s, w: tw },
-        { p: [an.x, an.y - 0.060 * s, an.z + 0.124 * s], rx: w * 0.66, rz: 0.012 * s, w: tw },
+        { p: [an.x, an.y - 0.068 * s, an.z - 0.062 * s], rx: w * 0.80, rz: 0.013 * s, w: fw },
+        { p: [an.x, an.y - 0.072 * s, an.z - 0.010 * s], rx: w * 0.98, rz: 0.013 * s, w: fw },
+        { p: [an.x, an.y - 0.072 * s, an.z + 0.060 * s], rx: w * 1.02, rz: 0.013 * s, w: tw },
+        { p: [an.x, an.y - 0.066 * s, an.z + 0.124 * s], rx: w * 0.66, rz: 0.012 * s, w: tw },
       ],
       steps: 8, seg: 12, ref: [0, 1, 0], uvScale: [1, 0.6],
     });
     B.color(o.color ?? 0x1b1c22).mat(o.rough ?? 0.6, 0);
-    // shaft
-    const shaft = drape(ctx.leg(side), 0.99, (o.shaft ?? 0.72), 5, (o.pad ?? 0.016));
+    // The shaft, and the band that terminates it. `t` runs ankle (0) to top (1).
+    const shaft = drape(ctx.leg(side), 0.99, (o.shaft ?? 0.72), 7, (o.pad ?? 0.016));
+    const bandC = o.bandColor === undefined ? null : new THREE.Color().setHex(o.bandColor, THREE.SRGBColorSpace);
+    const upperC = new THREE.Color().setHex(o.color ?? 0x1b1c22, THREE.SRGBColorSpace);
+    const bandH = o.band ?? 0.16;
+    /** band coverage at a sweep sample, 0..1 — a hard top edge, a soft bottom. */
+    const inBand = (t: number) => smooth((t - (1 - bandH)) / 0.06);
     sweepTube(B, {
-      nodes: shaft, steps: 8, seg: 16,
-      shape: (th, t) => 1 + (o.cuff ?? 0.05) * bump(t, 0.95, 0.12) + 0.02 * Math.sin(th * 7 + t * 9),
+      nodes: shaft, steps: 12, seg: 16,
+      shape: (th, t) => 1
+        + (o.cuff ?? 0.05) * bump(t, 0.95, 0.12)
+        + 0.02 * Math.sin(th * 7 + t * 9)
+        // the roll where the band is stitched on — 1.5 mm of proud leather is
+        // what makes the terminator survive a 30 px figure, because it catches
+        // its own specular line instead of relying on albedo alone
+        + (bandC ? 0.045 * bump(t, 1 - bandH, 0.09) : 0),
+      colorAt: bandC
+        ? (_th: number, t: number) => _bootC.copy(upperC).lerp(bandC, inBand(t))
+        : undefined,
+      matAt: bandC
+        ? (_th: number, t: number) => [(o.rough ?? 0.6) + 0.26 * inBand(t), 0, 0]
+        : undefined,
       uvScale: [1, 0.8],
     });
     if (o.strap) {
