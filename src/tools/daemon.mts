@@ -1759,7 +1759,7 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
      * no `warmup` on its GAME, and that must degrade to the previous behaviour
      * rather than fail every capture of it.
      */
-    await page.evaluate(() => { window.GAME.warmup?.(); }).catch(() => {});
+    await warmPage(page);
     const out = await fn(page, slot, build);
     lastUsed = Date.now();
     return out;
@@ -1773,6 +1773,48 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
 }
 
 // -------------------------------------------------------------------- routes
+
+/**
+ * Warm a page, and say so when it cannot.
+ *
+ * The first version of this was `page.evaluate(...).catch(() => {})`, and it
+ * was wrong in two ways that a measurement tool cannot afford. `window.GAME`
+ * was not optional-chained, so a page that had not published it yet *threw*;
+ * and the throw went into a bare catch, so the page silently went on unwarmed.
+ * Posing one shot four times through the daemon returned **514, 574, 514,
+ * 514** -- one request in four measured a page whose bestiary had not been
+ * built, and the 60-call gap is exactly the quantum `warmquantum.mts` names.
+ *
+ * A silent catch on the thing that guarantees determinism is the worst possible
+ * place for silence: it converts a hard failure into noise in a gate that is
+ * already fighting noise. So this verifies the result, retries once, and logs
+ * loudly if the page is still cold -- the caller carries on either way, because
+ * an unwarmed capture is worth more than no capture, but nobody has to guess
+ * afterwards which one they got.
+ */
+async function warmPage(page: Page): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const n = await page.evaluate(() => {
+        const g = window.GAME;
+        if (!g || typeof g.warmup !== 'function') return -1;
+        g.warmup();
+        const e = g.get('Enemies');
+        return e && e.prototypes ? e.prototypes.size : 0;
+      });
+      // -1 means this build predates `warmup()`, which is a fact about the
+      // tree being served, not a fault: say it once and stop retrying.
+      if (n === -1) return;
+      if (n > 0) return;
+    } catch (e) {
+      if (attempt === 1) {
+        console.log(`[daemon] warmup failed, page is COLD and its counts are not comparable: ${String(e).split('\n')[0]}`);
+        return;
+      }
+    }
+  }
+  console.log('[daemon] warmup built 0 prototypes; page is COLD and its counts are not comparable');
+}
 
 async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
   const {
