@@ -125,7 +125,34 @@ export class VelocityPass extends Pass {
     } else {
       proxy = new THREE.Mesh(src.geometry, mat);
     }
-    proxy.frustumCulled = false;
+    /**
+     * **Cull the ones three.js can actually cull.**
+     *
+     * This was `false` for every proxy, so a scene with a hundred movers in it
+     * drew a hundred velocity proxies whether or not any of them was on
+     * screen. Attributed on `town_forecourt`'s peak frame by wrapping
+     * `renderer.renderBufferDirect`, this pass was **~106 of that frame's
+     * draws** against a total of 1013 and a BRIEF budget of 800 — the single
+     * cheapest block left in the frame, and it was cost with nothing on screen
+     * to show for it.
+     *
+     * `matrixWorld` is copied from the source every frame just below, and
+     * three.js culls from `matrixWorld` and the geometry's bounding sphere, so
+     * a plain mesh proxy culls correctly even with `matrixAutoUpdate` off.
+     *
+     * The two kinds that must stay unculled are unculled for real reasons and
+     * not out of caution:
+     *
+     * - **Skinned**: three.js culls a `SkinnedMesh` against the geometry's
+     *   *bind pose* bounding sphere, which a posed skeleton routinely leaves.
+     *   A character whose velocity proxy pops out at the frame edge streaks
+     *   under motion blur exactly where the eye is.
+     * - **Instanced**: an `InstancedMesh` culls against the geometry's own
+     *   sphere, not the union of its instances, so a camera-following
+     *   instanced field would vanish wholesale. That is the same reason every
+     *   layer in `src/world/veg/` sets `frustumCulled = false`.
+     */
+    proxy.frustumCulled = !isSkinnedMesh(proxy) && !(proxy as THREE.InstancedMesh).isInstancedMesh;
     proxy.matrixAutoUpdate = false;
     proxy.matrixWorldAutoUpdate = false;
     entry.proxy = proxy;
