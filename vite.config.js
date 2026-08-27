@@ -46,7 +46,40 @@ export default defineConfig({
   // reads, which is why it cannot live in `dist/`: the build empties that.
   publicDir: path.join(ROOT, 'src', 'public'),
   plugins: [bakePlugin(), reviewPlugin(), debugUrlPlugin()],
-  server: { port: 5173, strictPort: true, host: '127.0.0.1' },
+  /**
+   * **HMR AND FILE WATCHING ARE OFF, AND THIS IS NOT A PREFERENCE.**
+   *
+   * Every server this repo runs is started by the capture daemon and consumed
+   * by an agent's probe, never by a human refreshing a tab. Live reload in that
+   * setting is not a convenience, it is a fault injector: the `dirty:` build
+   * serves the **shared working tree**, so the moment *any* agent on the
+   * machine saves *any* watched file, vite navigates every open page — and a
+   * page under a long `page.evaluate` dies with
+   *
+   *     page.evaluate: Execution context was destroyed, most likely because
+   *     of a navigation
+   *
+   * which reads like a crash and is not one. It killed a twelve-minute
+   * `longplay` session, killed `regaliadrive` twice mid-run, and cost two
+   * lanes real time diagnosing it as a browser or memory problem. With four
+   * lanes committing, a probe that runs longer than a few minutes could not
+   * finish at all.
+   *
+   * Turning it off here rather than reaching for `vite build` + `vite preview`
+   * is deliberate: a preview server has no source URLs, and `heightcheck`,
+   * `bootprof` and the probe rigs `import('/world/...')` **inside the page** to
+   * compare the GPU's answer against the same source the shader was built
+   * from. Preview 404s those, and the failure looks like a broken probe rather
+   * than a wrong server. So: keep the source URLs, delete the reloading.
+   *
+   * `pnpm dev` is gone from `package.json` for the same reason. Nobody starts a
+   * server here — a hook blocks it, and `daemon.mts` owns every one.
+   */
+  server: {
+    port: 5173, strictPort: true, host: '127.0.0.1',
+    hmr: false,
+    watch: { ignored: ['**/*'] },
+  },
   preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
   // outDir sits outside `root`, so emptyOutDir must be explicit.
   build: { target: 'esnext', sourcemap: false, outDir: path.join(ROOT, 'dist'), emptyOutDir: true },

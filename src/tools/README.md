@@ -128,6 +128,15 @@ do not look the same to an agent reading an exit code.
 
 ## Things that will bite you
 
+- **Live reload is off, and a long probe is why.** `vite.config.js` sets
+  `server.hmr = false` and ignores every watched path, and `pnpm dev` no longer
+  exists. The `dirty:` build serves the shared working tree, so with HMR on, any
+  agent saving any file navigated every open page and killed whatever was
+  mid-`page.evaluate` with *"Execution context was destroyed, most likely
+  because of a navigation"*. That reads like a crash, is not one, and it cost
+  two lanes real time. A "dev server" here means source URLs and no bundling
+  step — which `heightcheck`, `bootprof` and the probe rigs need, because they
+  `import('/world/...')` inside the page — and nothing else.
 - **Editing `daemon.mts` does not restart the running daemon.** `PROTOCOL` and
   `/version` catch it and restart; if you add a route, bump `PROTOCOL`.
 - **`texbake --force` writes the shared bake cache.** Every materialised tree

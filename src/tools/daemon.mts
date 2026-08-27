@@ -527,7 +527,14 @@ class BuildStore {
   }
 
   /**
-   * DEV IS THE DEFAULT, EVEN FOR AN IMMUTABLE SHA TREE.
+   * DEV IS THE DEFAULT, EVEN FOR AN IMMUTABLE SHA TREE — **BUT NOT LIVE.**
+   *
+   * `vite.config.js` sets `server.hmr = false` and ignores every watched path.
+   * Read its comment before turning either back on: live reload is a fault
+   * injector on a shared trunk, because the `dirty:` build serves the working
+   * tree and any agent's save navigates every open page, killing whatever was
+   * mid-`page.evaluate` with "Execution context was destroyed". A "dev server"
+   * here means source URLs and no bundling step, and nothing else.
    *
    * The plan proposed `vite build` + `preview` for sha builds, on the grounds
    * that an immutable tree only pays the build once. Two things overturned it.

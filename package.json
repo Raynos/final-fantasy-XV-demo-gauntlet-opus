@@ -4,7 +4,6 @@
   "description": "I want you to build an action role playing game at the level of the most recent Final Fantasy XV for PS4. It should be utterly perfect, visually beautiful, with every single thing done at AAA quality\u2014from textures to physics to anything you could think of.",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "shoot": "node src/tools/shoot.mts",
