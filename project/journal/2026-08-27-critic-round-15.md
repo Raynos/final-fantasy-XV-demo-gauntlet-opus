@@ -13,13 +13,26 @@ written down while the key was still sealed.
 
 ## The tells, in the order they were actually noticed
 
-1. **The clouds are separate cotton-wool sprites on a flat blue gradient.**
-   The loudest tell in the set by a wide margin, and it decided pairs 2, 5 and
-   8 within a second of looking. FFXV's daylight sky is a continuous field with
-   internal structure and a horizon haze; ours is discrete blobs with visible
-   edges and a swirl artefact, pasted on a smooth gradient. `STATUS.md` already
-   ranks the cloud layer second behind the head; this round says it is first
-   for **landscape** frames.
+1. **The clouds.** The loudest tell in the set by a wide margin, and it decided
+   pairs 2, 5 and 8 within a second of looking.
+
+   > **The mechanism in this note was wrong and the correction matters more
+   > than the observation.** Written blind, it said "separate cotton-wool
+   > sprites on a flat blue gradient". They are not sprites: `Clouds.ts` is a
+   > half-resolution screen-space raymarch of a real 3D density field with
+   > anvils, a base-lift deck, worley shape and TAA jitter. Cropped at 2x the
+   > *shapes* are good — soft billows, shaded undersides, wispy edges.
+   >
+   > What is actually wrong is **organisation and scale**: the field is many
+   > similar-sized puffs spread evenly across the whole sky, with no streets,
+   > no systems, no clear lanes and no large cell next to a small one. Real
+   > cumulus gathers. That is a weather-map problem, not a shading one, and it
+   > is a different piece of work from the one this note would have sent
+   > somebody to do. Recorded because a wrong diagnosis costs more than a
+   > stale row.
+
+   `STATUS.md` ranks the cloud layer second behind the head; for **landscape**
+   frames this round says it is first.
 2. **The near-field ground is bare.** Pairs 5, 7 and 8. Every FFXV plate fills
    the bottom third of frame with continuous cover — grass reaching into the
    lens, leafy shrubs, saplings. Ours is dirt with sparse dots. This is the
@@ -40,9 +53,18 @@ written down while the key was still sealed.
 
 ## What this changes
 
-Items 2 and 3 are phase 4's own subject and are actionable now. Item 1 is the
-standing backlog's cloud row and is now the top-ranked landscape item rather
-than the second. Item 5 is cheap and nobody owns it.
+Items 2 and 3 are phase 4's own subject and were acted on the same day. Laying
+the terrain's cover octaves out against the distance each stops resolving at
+found the gap arithmetically: 0.74 m and 1.9 m are gone by 300 m, 52 m and
+165 m do not resolve below 800 m, and **nothing occupied 4-30 m** — the band
+that carries a hillside at 150-400 m. Two octaves at 7 m and 22 m, with the
+bare half taking a cooler bleached tint rather than only ever adding green to
+brown, move `vista_noon` 3.466 mean/255 over 8.2% of pixels against a 0.39
+floor. `e3897af`.
+
+Item 1 is the standing backlog's cloud row, re-specified above as a
+weather-map organisation problem, and is now the top-ranked landscape item
+rather than the second. Item 5 is cheap and nobody owns it.
 
 The composites are `tmp/ab/r15/` and are deliberately not kept: they are
 regenerable from the shot corpus and the plates in one command.
