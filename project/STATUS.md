@@ -7,6 +7,11 @@
 **`main`.** Zero `any`, both typechecks clean, **`pnpm run check` 18/18**, and
 **both perf gates certify** — `gameplay.mts` for the first time ever.
 
+**Live lanes:** `benchmaxx` (opus) owns
+`docs/plans/2026-08-24-opus-benchmaxx-harness.md`, IN-PROGRESS — every phase has
+shipped and its definition of done is weekly, so it closes on a week of ledger
+rather than on a diff. See `project/handoff/benchmaxx.md`.
+
 ## Phase 4 is DONE, 5 of 5, and graduated
 
 `2026-08-22-opus-phase4-content-and-gameplay` — the last phase of the four-phase

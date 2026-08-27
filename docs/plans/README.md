@@ -66,7 +66,11 @@ are the three parallel plans that ran beside it.
     water · harness debt · creatures           MEASURED NEGATIVES — read it
                                                before re-opening anything
 
-  2026-08-24-opus-benchmaxx-harness           PROPOSED, unstaffed
+  2026-08-24-opus-benchmaxx-harness           IN-PROGRESS, opus (benchmaxx)
+    ledger · wait primitive · gate cache ·      A-F implemented 2026-08-27; its
+    two pools · turbo · prewarm · policy        definition of done is WEEKLY, so
+                                                it closes on a week of ledger,
+                                                not on a diff
 ```
 
 Phase 4's own leftovers are named at the end of its §5, each with an owner in
