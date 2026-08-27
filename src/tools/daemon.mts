@@ -81,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 11;
+export const PROTOCOL = 12;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -346,6 +346,19 @@ export interface EvalResponse extends Counters { value: unknown }
 export interface LeaseRequest extends PageOpts {
   ttlMs?: number;
   /**
+   * How many CPU cores this holder will actually keep busy, declared by the
+   * holder. Default 0: a lease that is mostly waiting on the GPU costs a
+   * browser slot and nothing else, and that is the common case.
+   *
+   * A long probe is the exception and the reason this exists. `longplay` steps
+   * `g.frame(1/60)` 1800 times per game-minute inside one `page.evaluate`, and
+   * `probes/turbocost.mts` prices a stepped frame at 11.66 ms of which 11.0 is
+   * draw submission -- all of it CPU, none of it visible to a browser-slot
+   * count. `check` used to size its CPU pool off `os.cpus()` alone and so ran
+   * four terrain-building gates flat out next to it.
+   */
+  cpu?: number;
+  /**
    * This tool can be handed a page somebody else has already driven.
    *
    * **Opt-in, and it stays opt-in.** `routeLease` forces a cold page because
@@ -446,7 +459,7 @@ export interface HealthResponse {
    * An exclusive request queues behind these rather than closing them, so this
    * is the honest answer to "why can perf not start yet".
    */
-  leases: { holder: string, secLeft: number }[];
+  leases: { holder: string, secLeft: number, cpu: number }[];
   resetDrift: Record<string, string>;
   /**
    * Cumulative totals since this daemon started, and where the ledger is.
@@ -2194,14 +2207,17 @@ interface LeaseEntry {
   holder: string;
   /** When the TTL fires. The bound on how long an exclusive request will wait. */
   expiresAt: number;
+  /** Cores the holder declared it would keep busy. See `LeaseRequest.cpu`. */
+  cpu: number;
 }
 const leases = new Map<string, LeaseEntry>();
 
 /** Live leases, newest TTL last, for the exclusive route and `/health`. */
-const liveLeases = (): { holder: string, secLeft: number }[] =>
+const liveLeases = (): { holder: string, secLeft: number, cpu: number }[] =>
   [...leases.values()].map((l) => ({
     holder: l.holder,
     secLeft: Math.max(0, Math.round((l.expiresAt - Date.now()) / 1000)),
+    cpu: l.cpu,
   }));
 
 /**
@@ -2245,6 +2261,7 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
         slot, build: null, pid: Number(body.pid) || 0,
         timer: setTimeout(() => { void releaseLease(id); }, ttlMs),
         holder: typeof body.agent === 'string' ? body.agent : 'anon',
+        cpu: Math.max(0, Number(body.cpu) || 0),
         expiresAt: Date.now() + ttlMs,
       });
       return {
@@ -2317,6 +2334,7 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
     leases.set(id, {
       slot, build, timer, pid: Number(body.pid) || 0,
       holder: typeof body.agent === 'string' ? body.agent : 'anon',
+      cpu: Math.max(0, Number(body.cpu) || 0),
       expiresAt: Date.now() + ttlMs,
     });
     return {

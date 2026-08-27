@@ -95,18 +95,36 @@ for (let i = 0; i < argv.length; i++) {
   if (eq < 0) throw new Error(`--set wants KEY=VALUE, got ${JSON.stringify(kv)}`);
   sets.push([kv.slice(0, eq), kv.slice(eq + 1)]);
 }
-const VALUE_FLAGS = new Set(['--shot', '--ttl', '--turbo', '--set']);
+const VALUE_FLAGS = new Set(['--shot', '--ttl', '--turbo', '--set', '--cpu']);
+const cpuIdx = argv.indexOf('--cpu');
+/** Cores this probe will keep busy; `check` subtracts it from its CPU pool. */
+const cpuCost = cpuIdx >= 0 ? Math.max(0, Number(argv[cpuIdx + 1]) || 0) : 1;
 const probeFile = argv.find((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
 if (!probeFile) {
   throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg] [--ttl <minutes>] '
-    + '[--turbo <N>] [--set KEY=VALUE]');
+    + '[--turbo <N>] [--set KEY=VALUE] [--cpu <cores>]');
 }
 const src = await readFile(probeFile, 'utf8');
 const ha = harnessArgs(process.argv.slice(2), {});
 announceBuild(ha);
+/**
+ * A probe declares one core, because it genuinely uses one.
+ *
+ * A probe body runs inside a single `page.evaluate`, and the work it does there
+ * is CPU: `probes/turbocost.mts` measures a stepped frame at 11.66 ms of which
+ * 11.0 ms is draw submission and 0.58 ms is the simulation, all of it on one
+ * thread. The browser-slot count never saw that -- a lease looks the same to the
+ * pool whether the page is idle or stepping 1800 frames a game-minute -- so
+ * `check` sized its CPU pool off `os.cpus()` alone and put four terrain-building
+ * gates next to a live probe on the same box.
+ *
+ * `--cpu` overrides it for a probe that is genuinely idle (waiting on a
+ * download, say) or genuinely parallel.
+ */
 const leased = await lease({
   ...pageOpts(ha),
   ...(ttlMin > 0 ? { ttlMs: Math.round(ttlMin * 60_000) } : {}),
+  cpu: cpuCost,
 });
 const page = leased.page;
 page.on('console', (m) => console.log(`[page:${m.type()}]`, m.text()));

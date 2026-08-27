@@ -714,9 +714,28 @@ if (opts.serial) {
   const held = health ? health.leases.length : 0;
   const budget = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
   const browsers = Math.max(1, budget - 1 - held);
-  const cpus = Math.max(2, Math.min(4, os.cpus().length - 2));
+  /**
+   * And the CPU pool gives way to a live probe too.
+   *
+   * A lease costs a browser slot, which the line above already accounts for.
+   * What it did not account for is that some holders also burn a core: a probe
+   * runs its whole body inside one `page.evaluate`, stepping the simulation,
+   * and `probes/turbocost.mts` prices that at 11.66 ms of CPU per frame with
+   * nothing on the GPU waiting for it. Sizing this pool off `os.cpus()` alone
+   * put four terrain-building gates flat out beside a probe doing the same.
+   *
+   * Holders declare it (`probe.mts --cpu`, default 1) and `/health` reports it,
+   * so this is a real number rather than an assumption about who is running.
+   */
+  const leasedCpu = health ? health.leases.reduce((a, l) => a + (l.cpu || 0), 0) : 0;
+  // Subtracted from the CAP, not just from the core count, so the declaration
+  // actually binds. On a box with ten cores `min(4, cores - 2 - 1)` is still 4
+  // and the tag would be decorative -- and a flag that can never fire is worse
+  // than no flag, because it reads as a control that is doing something.
+  const cpus = Math.max(2, Math.min(4, os.cpus().length - 2) - leasedCpu);
   console.log(`  (${browsers} browser gate(s) at a time, of a machine budget of ${budget}`
-    + `${held ? `, ${held} already leased` : ''})\n`);
+    + `${held ? `, ${held} already leased` : ''}`
+    + `${leasedCpu ? `; CPU pool ${cpus}, ${leasedCpu} core(s) declared by live probe(s)` : ''})\n`);
   await Promise.all([
     pool(rest.filter((g) => g.kind === 'cpu' && !g.perf), cpus),
     pool(rest.filter((g) => g.kind === 'browser' && !g.perf), browsers),
