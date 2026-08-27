@@ -48,6 +48,9 @@ export class Player {
   _gazeT!: number;
   _fwd!: THREE.Vector3;
   _gait!: number;
+  /** Where the gait blend and the speed damp are heading. See `converge()`. */
+  _gaitWant!: number;
+  _speedWant!: number;
   /** counts gaze flips; also seeds which companion he glances at. */
   _gazeSeq!: number;
   _look!: THREE.Vector3;
@@ -133,6 +136,30 @@ export class Player {
       radius: 0.36, height: 1.78, stepUp: 0.45, stepDown: 0.55,
     });
     this._gait = 0;
+    this._gaitWant = 0;
+    this._speedWant = 0;
+  }
+
+  /**
+   * Finish settling now, so no capture depends on how long the page has run.
+   *
+   * `speed` and `_gait` are exponential damps, so they approach their targets
+   * and never reach them; `_gait` drives the walk-cycle blend, the blend moves
+   * the skeleton, and five of Noctis's non-skinned accessory meshes hang off
+   * bones. At the 68 frames a posed shot runs, those five are still moving by
+   * more than `VelocityPass`'s 1e-6 matrix-equality threshold and draw five
+   * velocity proxies; by the second pose on the same page they have arrived and
+   * do not. That is a draw count that depends on run history, which is the
+   * thing a capture may never do.
+   *
+   * `Game.settle()` calls this on every system that has it. `VehicleBody` has
+   * the same shape and the same fix, for the same reason, from the same bug.
+   */
+  converge() {
+    // The TARGET, not zero: `WALK_SHOTS` pose the player mid-stride on purpose,
+    // and freezing him would change the picture rather than settle it.
+    this.speed = this._speedWant;
+    this._gait = this._gaitWant;
   }
 
   get position() { return this.root.position; }
@@ -171,9 +198,10 @@ export class Player {
     if (mag > 0.001) {
       wish.normalize();
       this.heading = Math.atan2(wish.x, wish.z);
-      const target = (run ? this.runSpeed : this.walkSpeed) * Math.min(1, mag);
-      this.speed = THREE.MathUtils.damp(this.speed, target, 8, dt);
+      this._speedWant = (run ? this.runSpeed : this.walkSpeed) * Math.min(1, mag);
+      this.speed = THREE.MathUtils.damp(this.speed, this._speedWant, 8, dt);
     } else {
+      this._speedWant = 0;
       this.speed = THREE.MathUtils.damp(this.speed, 0, 12, dt);
     }
 
@@ -196,7 +224,8 @@ export class Player {
 
     // The gait follows the distance actually covered, so walking into a wall
     // stops the legs rather than moonwalking on the spot.
-    this._gait = THREE.MathUtils.damp(this._gait, this.speed * this.body.progress, 10, dt);
+    this._gaitWant = this.speed * this.body.progress;
+    this._gait = THREE.MathUtils.damp(this._gait, this._gaitWant, 10, dt);
 
     const combat = game.get('Combat');
     this._gaze(dt, game, combat);

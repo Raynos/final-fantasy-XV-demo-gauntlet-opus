@@ -483,6 +483,19 @@ export class RegaliaSystem {
 
   /* -------------------------------------------------------------- internals */
 
+  /**
+   * Finish settling now, so no capture depends on how long the page has run.
+   *
+   * `Game.settle()` calls this on every system that has it, on its first frame,
+   * which is the same contract `Vegetation.converge` and `Props.converge` are
+   * written against. The car's suspension is an exponential damp and therefore
+   * never actually arrives — see `VehicleBody.converge` for what that cost.
+   */
+  converge() {
+    this.body.converge();
+    this._sync(0);
+  }
+
   /** Push the simulation state onto the scene graph. */
   _sync(_dt?: number) {
     const b = this.body;

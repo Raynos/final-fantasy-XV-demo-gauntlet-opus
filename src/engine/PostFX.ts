@@ -507,6 +507,12 @@ export class PostFX {
   resetHistory() {
     this.taa.reset();
     this.exposure.reset();
+    // Velocity is history too, and it was the one kind this method did not
+    // drop. Its `tracked` map survived every cut, carrying each mesh's previous
+    // world matrix across shot changes, which is both a motion-blur streak on
+    // the frame after a cut and the reason `drawcheck` disagreed with itself by
+    // up to 60 calls depending on how long the page had been alive.
+    this.velocity.reset();
     // The jitter index selects the Halton sample, so leaving it running makes
     // an otherwise identical capture land on a different subpixel offset.
     this.frame = 0;

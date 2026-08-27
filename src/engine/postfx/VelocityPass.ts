@@ -73,6 +73,8 @@ interface TrackedMesh {
 export class VelocityPass extends Pass {
   _black!: THREE.Color;
   _frame!: number;
+  /** Set by `reset()`; consumed by the next `render()` as one motion-free frame. */
+  _reseed!: boolean;
   fx!: PostFX;
   moverCount!: number;
   proxyScene!: THREE.Scene;
@@ -87,7 +89,31 @@ export class VelocityPass extends Pass {
     this.proxyScene.matrixWorldAutoUpdate = false;
     this.tracked = new Map();
     this._frame = 0;
+    this._reseed = false;
     this._black = new THREE.Color(0, 0, 0);
+  }
+
+  /**
+   * Drop motion history, the way `PostFX.resetHistory` drops TAA's and
+   * exposure's. A cut or a shot change means no object moved *across* it, so
+   * every `prev` is meaningless and every velocity is zero.
+   *
+   * The proxies and their materials are deliberately KEPT. They are keyed on
+   * the source mesh and are still valid; disposing 127 materials on every
+   * camera cut would trade a correctness fix for allocation churn on the one
+   * frame that is already the most expensive in the shot.
+   *
+   * **`_frame` is deliberately NOT rewound.** It is the clock the prune below
+   * runs on (`_frame - seen > 120`), so zeroing it on every camera cut — and
+   * `CameraRig` cuts often — means the difference never reaches 120 and the map
+   * grows without bound. The first version of this method did exactly that and
+   * pinned `tracked` at 913 entries. A one-frame flag says "no motion" without
+   * touching the clock.
+   */
+  reset() {
+    this._reseed = true;
+    for (const [, e] of this.tracked) if (e.proxy) e.proxy.visible = false;
+    this.moverCount = 0;
   }
 
   _makeMaterial(src: THREE.Mesh): THREE.ShaderMaterial {
@@ -166,6 +192,8 @@ export class VelocityPass extends Pass {
     const rt = fx.rtVel;
     if (!rt) return;
     this._frame++;
+    const reseed = this._reseed;
+    this._reseed = false;
 
     const movers: TrackedMesh[] = [];
     fx.rnd.scene.traverse((o) => {
@@ -179,7 +207,41 @@ export class VelocityPass extends Pass {
         this.tracked.set(o.uuid, e);
         return; // first sight: no motion yet
       }
+      /**
+       * **A mesh that was absent last frame has no previous position.**
+       *
+       * The traverse skips anything invisible, so `prev` is only rolled forward
+       * on frames where the mesh was drawn. An LOD ring or a streamed prop that
+       * pops back in therefore compares its *current* matrix against wherever
+       * it was the last time it was visible — which may be a different shot
+       * entirely — and reads as having moved that whole distance in one frame.
+       *
+       * The consequences were two, and they looked unrelated:
+       *
+       * - **Visually**, a popped-in object gets a velocity vector the length of
+       *   its own absence and streaks under motion blur on the frame it
+       *   returns. This is the reason to fix it.
+       * - **In `drawcheck`**, it made the draw count a function of run history.
+       *   Measured on `town_forecourt`: the first pose on a page drew 806 and
+       *   every pose after it drew 786, deterministically, because 20 meshes
+       *   carried a `prev` from boot into the first pose and none after it.
+       *   That is the whole of the ±60 the gate disagreed with itself by, and
+       *   six earlier hypotheses missed it because it is not in the frame, the
+       *   chunk, the roster or the bestiary — it is in this map.
+       *
+       * `resetcheck.mts` digests 35 fields of game state and every one of them
+       * is clean across the boundary. This was the 36th, and it lives in a post
+       * pass rather than in the game, which is why nothing in the game's own
+       * reset could ever have caught it.
+       *
+       * The rule is the one the branch above already applies to a mesh seen for
+       * the very first time; it just was not applied to one seen again.
+       */
+      const contiguous = !reseed && e.seen === this._frame - 1;
       e.seen = this._frame;
+      // `prev` is rolled forward by the tail loop below for anything seen this
+      // frame, so returning here is exactly "no motion", with no second copy.
+      if (!contiguous) return;
       const moved = isSkinnedMesh(o) || !matrixNearlyEqual(e.prev, o.matrixWorld);
       if (moved) movers.push(e);
     });

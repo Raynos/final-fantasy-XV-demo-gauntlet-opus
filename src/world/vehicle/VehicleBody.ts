@@ -113,6 +113,9 @@ export class VehicleBody {
   odometer!: number;
   offRoadMode!: boolean;
   pitch!: number;
+  /** Where the attitude springs are heading. `converge()` arrives there. */
+  _pitchWant!: number;
+  _rollWant!: number;
   pos!: THREE.Vector3;
   reverseForce!: number;
   road!: RoadPath;
@@ -208,6 +211,8 @@ export class VehicleBody {
     this.steer = 0;
     this.pitch = 0;
     this.roll = 0;
+    this._pitchWant = 0;
+    this._rollWant = 0;
     this.chassisY = 0;
     this.heaveV = 0;
     this.speed = 0;
@@ -260,10 +265,38 @@ export class VehicleBody {
     this.vel.set(0, 0, 0);
     this.steer = 0;
     this.pitch = 0; this.roll = 0;
+    this._pitchWant = 0; this._rollWant = 0;
     this.heaveV = 0;
     this._sampleGround();
     this.chassisY = this._groundAvg + this.wheelR;
     this.pos.y = this.chassisY;
+  }
+
+  /**
+   * Arrive, instead of approaching forever.
+   *
+   * `pitch` and `roll` are exponential damps (`damp(..., 9, dt)`), and an
+   * exponential damp is asymptotic: it gets closer every frame and never
+   * arrives. That is right for a car being driven and wrong for a car being
+   * photographed, because "how close has it got" is then a function of how many
+   * frames the page has run — which is history, and a capture may not depend on
+   * history.
+   *
+   * It was measured costing real money. `drawcheck`'s ±60-call disagreement
+   * with itself — six hypotheses deep, `TOLERANCE` is 8 — was this: at the 68
+   * frames a pose runs, the residual attitude error is still above
+   * `matrixNearlyEqual`'s 1e-6, so `VelocityPass` counted all twenty of the
+   * Regalia's meshes as movers and drew twenty extra velocity proxies. On the
+   * second pose of the same page the springs had arrived, and it drew twenty
+   * fewer. `town_forecourt`: **806 then 786, 786, 786.**
+   *
+   * `Game.settle()` calls `converge()` on every system on its first frame for
+   * exactly this reason, and `Vegetation` and `Props` have implemented it since
+   * the streaming work. The car simply never did.
+   */
+  converge() {
+    this.pitch = this._pitchWant;
+    this.roll = this._rollWant;
   }
 
   /** Unit forward vector in world space. @returns */
@@ -571,8 +604,10 @@ export class VehicleBody {
     // weight transfer: nose dives under braking, squats under power, leans out
     const pitchLoad = clamp(-ax * 0.0125, -0.075, 0.075);
     const rollLoad = clamp(-ay * 0.0110, -0.085, 0.085);
-    this.pitch = damp(this.pitch, pitchTerrain + pitchLoad, 9, dt);
-    this.roll = damp(this.roll, rollTerrain + rollLoad, 9, dt);
+    this._pitchWant = pitchTerrain + pitchLoad;
+    this._rollWant = rollTerrain + rollLoad;
+    this.pitch = damp(this.pitch, this._pitchWant, 9, dt);
+    this.roll = damp(this.roll, this._rollWant, 9, dt);
 
     // ---- wheels --------------------------------------------------------------
     const sp = Math.sin(this.pitch), sr = Math.sin(this.roll);
