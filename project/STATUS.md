@@ -102,14 +102,14 @@ head** — four of five changes were BETTER or UNCHANGED, the head was WORSE:
 costed advice is *"fix the head, and only the head"*, worth 3.0 -> 4.0. The
 detail and the trap that has caught three agents are in `after-phase3.md` WS-1.
 
-## Gates — 17/17 on a quiet tree, 2026-08-25
+## Gates — 17/17 on a quiet tree 2026-08-25, plus `drawcheck` since: **18**
 
 Re-run after `build:full` and both `texbake` passes. The suite has grown
-**9 -> 12 -> 17**; do not quote an older count from any plan or handoff.
+**9 -> 12 -> 17 -> 18**; do not quote an older count from any plan or handoff.
 `build` · `anycheck` 0 · `orphans` **302/302** · `silhouette` · `silrocks` ·
 `geocheck` · `hydrocheck` · `integration` **27** · `uxcheck` 93/93 ·
 `creaturecheck` 207 · `combatloop` **31/31** · `roadcheck` · `reachcheck` ·
-`floatcheck` · `horizoncheck` · `heightcheck` · `driftcheck`.
+`floatcheck` · `horizoncheck` · `heightcheck` · `driftcheck` · `drawcheck` PASS.
 
 **Two gate failures were the harness, not the code** — see `LANDMINES.md`;
 check `daemon --health` and `cleanup.mts` before believing a leased-page gate.
@@ -120,8 +120,9 @@ check `daemon --health` and `cleanup.mts` before believing a leased-page gate.
 best contention-proof number puts `streaming-traverse` at **67.3 fps**, 4
 hitches. **The 33 ms rule is still breached**: `sprint+turn` 90-104 ms, a
 GPU-process stall when Hammerhead first draws. The tail that made earlier runs
-unreadable **was the ruler**, not the game. Also open: **ten town shots draw
-924-1011 calls against BRIEF's 800, ungated.**
+unreadable **was the ruler**, not the game. **The draw-call ceiling is gated
+(`drawcheck.mts`) and cut 1013 -> 945**; **11 shots are still over, 818-945,
+all Hammerhead**, rest ≤792, missing 145 is NPCs/grass/`VelocityPass` — WS-6.
 
 ## Still weak
 
