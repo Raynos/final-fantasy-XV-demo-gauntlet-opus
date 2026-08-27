@@ -57,7 +57,7 @@ import {
   ROOT, repoKey, keyHash, derivedPort, repoCacheDir, readRegistry, writeRegistry, clearRegistry,
   resolveBuild, isDirty, shaOf, shortBuild, DIRTY_PREFIX,
 } from './identity.mts';
-import type { BuildId, Registry } from './identity.mts';
+import type { BuildId } from './identity.mts';
 import { appendJob, ledgerPath, daemonLogPath } from './ledger.mts';
 import type { JobRecord } from './ledger.mts';
 
@@ -1641,9 +1641,31 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
     const claims = new Map<string, { resolve: (m: Sidecar) => void, reject: (e: unknown) => void }>();
     if (cacheable) {
       for (const t of render) {
-        inflight.set(t.key, new Promise<Sidecar>((resolve, reject) => {
+        const claim = new Promise<Sidecar>((resolve, reject) => {
           claims.set(t.key, { resolve, reject });
-        }));
+        });
+        /**
+         * A CLAIM NOBODY HAPPENS TO BE WAITING ON MUST NOT KILL THE DAEMON.
+         *
+         * The `finally` below rejects every unsettled claim, correctly — a key
+         * left in `inflight` after a failed render makes every later request
+         * for it wait on a promise that never settles. But in the common case
+         * nothing is awaiting the claim (no second agent asked for that frame
+         * in that window), so the rejection is *unhandled*, and Node's default
+         * since v15 is to kill the process.
+         *
+         * The process is the shared daemon. One failed render therefore closed
+         * every browser on the machine, and every tool mid-`page.evaluate` died
+         * with `Target page, context or browser has been closed` — which reads
+         * at the call site as the game crashing.
+         *
+         * It has certainly been happening for a while and nobody could see it:
+         * autostart used `stdio: 'ignore'`, so the stack went to a closed pipe.
+         * The FIRST full `check` after `daemon.log` landed caught it twice, in
+         * a table that read `drawcheck VOID` and four gates FAIL.
+         */
+        claim.catch(() => { /* the waiters catch their own; see above */ });
+        inflight.set(t.key, claim);
       }
     }
     try {
@@ -2293,15 +2315,45 @@ async function serve() {
       }
     });
   });
-  srv.listen(DAEMON_PORT, '127.0.0.1');
   srv.on('error', (e) => { console.error('[daemon]', e.message); process.exit(1); });
+  /**
+   * Claim the registry only once the socket is actually ours.
+   *
+   * Several clients noticing a dead daemon all spawn one, and all but the first
+   * lose the port with `EADDRINUSE`. Writing the registry before that race
+   * resolves let a loser stamp its own pid over the winner's on the way out, so
+   * `readRegistry()` named a process that no longer existed. Harmless today
+   * because the port is derived rather than read, and a trap the moment
+   * anything trusts the pid.
+   */
+  srv.listen(DAEMON_PORT, '127.0.0.1', () => {
+    writeRegistry({
+      port: DAEMON_PORT, pid: process.pid, key: KEY, protocol: PROTOCOL,
+      started: new Date().toISOString(), startedFrom: ROOT,
+    });
+    console.log(`[daemon] ${keyHash(KEY)} listening on ${DAEMON_PORT}, budget ${BROWSER_BUDGET}, protocol ${PROTOCOL}`);
+  });
 
-  const reg: Registry = {
-    port: DAEMON_PORT, pid: process.pid, key: KEY, protocol: PROTOCOL,
-    started: new Date().toISOString(), startedFrom: ROOT,
-  };
-  writeRegistry(reg);
-  console.log(`[daemon] ${keyHash(KEY)} listening on ${DAEMON_PORT}, budget ${BROWSER_BUDGET}, protocol ${PROTOCOL}`);
+  /**
+   * A shared service does not get to die of somebody else's bug.
+   *
+   * Normally letting a process crash on an unhandled rejection is right: it
+   * fails loudly rather than continuing in an unknown state. Not here. This
+   * process owns every browser and every vite on the machine for every agent,
+   * so its death is not one tool's failure, it is five agents' work — and the
+   * state it protects (the pool, the queue, the leases) is re-derivable per
+   * request in a way that a normal program's is not.
+   *
+   * So: log it with its stack, to `daemon.log`, and keep serving. The bug that
+   * made this necessary is fixed above; this is the backstop for the next one.
+   */
+  process.on('unhandledRejection', (e) => {
+    console.error('[daemon] UNHANDLED REJECTION (kept serving):',
+      e instanceof Error ? e.stack ?? e.message : String(e));
+  });
+  process.on('uncaughtException', (e) => {
+    console.error('[daemon] UNCAUGHT EXCEPTION (kept serving):', e.stack ?? e.message);
+  });
 
   const stop = async () => {
     clearRegistry(KEY);

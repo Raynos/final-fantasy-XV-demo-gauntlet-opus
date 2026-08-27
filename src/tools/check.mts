@@ -48,7 +48,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ensureDaemon } from './daemon.mts';
+import { call, ensureDaemon } from './daemon.mts';
+import type { HealthResponse } from './daemon.mts';
 import { lookup, store, prune } from './gatecache.mts';
 import { appendJob } from './ledger.mts';
 import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
@@ -329,15 +330,31 @@ function portOpen(port: number): Promise<boolean> {
  */
 const treeSha = workingTreeDirty() ? null : shaOf(resolveBuild('HEAD'));
 /**
+ * What else is on this machine, asked rather than inferred.
+ *
+ * Null when no daemon is running, which is itself the quietest answer there is.
+ */
+async function machineState(): Promise<HealthResponse | null> {
+  try { return await call<HealthResponse>('/health', undefined, { timeout: 5_000 }); }
+  catch { return null; }
+}
+const health = await machineState();
+
+/**
  * Was the machine quiet? Provenance for the cache and the ratchet, not a gate.
  *
- * Load average over the physical cores, sampled once at the start. It is a
- * blunt instrument and it is the honest one available without asking every
- * other agent what it is doing; `TIMINGS.md` records the same gates running a
- * third faster on a quiet box, so a suite time without this stamp is not a
- * number anyone can compare.
+ * Load average alone is a blunt instrument and it was the only one available
+ * before the daemon kept a ledger. Now the daemon can be *asked*: a live page
+ * lease, a busy worker or a held quiet lane each mean somebody else is on this
+ * box, and each is a fact rather than an inference from a number that also
+ * moves when the OS indexes a disk.
+ *
+ * `TIMINGS.md` records the same gates running a third faster on a quiet box, so
+ * a suite time without this stamp is not a number anyone can compare — which is
+ * exactly why the ratchet below refuses to grade a run that was not quiet.
  */
-const quiet = os.loadavg()[0] < os.cpus().length / 3;
+const quiet = os.loadavg()[0] < os.cpus().length / 3
+  && !(health && (health.workers.busy || health.leases.length || health.exclusive));
 
 const auxPort = await freePort(basePort + 50);
 /**
@@ -447,8 +464,12 @@ async function pool(gates: Gate[], limit: number): Promise<void> {
 
 // ------------------------------------------------------------------- the run
 
+const busyWhy = health && health.exclusive ? `quiet lane held by ${health.exclusive}`
+  : health && health.leases.length ? `${health.leases.length} lease(s) live`
+    : health && health.workers.busy ? `${health.workers.busy} daemon worker(s) busy`
+      : `load ${os.loadavg()[0].toFixed(1)}`;
 console.log(`  ${treeSha ? `tree ${treeSha.slice(0, 12)}` : 'DIRTY tree — nothing cached, nothing recorded'}`
-  + `  ·  ${quiet ? 'quiet' : `busy (load ${os.loadavg()[0].toFixed(1)})`}`
+  + `  ·  ${quiet ? 'quiet' : `busy (${busyWhy})`}`
   + `  ·  ${opts.serial ? 'serial' : 'parallel'}\n`);
 
 /**
@@ -510,8 +531,22 @@ if (opts.serial) {
    * and closes every leased page. They cannot overlap with anything, including
    * each other, so they run last and alone.
    */
-  const browsers = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
+  /**
+   * Leave room for whatever else is on the box.
+   *
+   * A long probe holds one of the daemon's four slots for its whole run, so a
+   * suite that still asks for four spends the difference queueing — and the
+   * plan's own last Phase-D bullet is that probes and the suite's parallel
+   * phase must not oversubscribe the machine the way six uncounted chromiums
+   * once did. The budget is enforced daemon-side either way; this is about not
+   * spawning node processes that will only wait.
+   */
+  const held = health ? health.leases.length : 0;
+  const browsers = Math.max(1, Number(process.env.HARNESS_BROWSER_BUDGET || 4) - held);
   const cpus = Math.max(2, Math.min(4, os.cpus().length - 2));
+  if (held) {
+    console.log(`  (${held} page lease(s) live — running ${browsers} browser gate(s) at a time)\n`);
+  }
   await Promise.all([
     pool(rest.filter((g) => g.kind === 'cpu' && !g.perf), cpus),
     pool(rest.filter((g) => g.kind === 'browser' && !g.perf), browsers),
