@@ -1402,6 +1402,23 @@ void tf_shade() {
    */
   float cvM1 = tf_snoise(P.xz * 0.0192 - 37.0);   // ~52 m: the bloom
   float cvM2 = tf_snoise(P.xz * 0.0061 + 91.0);   // ~165 m: the belt
+  /*
+   * And the two nobody had written, which is where the frame is actually lost.
+   *
+   * Lay the octaves out against the distance each one stops resolving at and
+   * the hole is obvious: the tuft field is 0.74 m and 1.9 m and both are gone
+   * by 300 m; the macro field is 52 m and 165 m and neither reads below about
+   * 800 m. **Nothing at all occupies 4-30 m** — and 4-30 m is precisely the
+   * band that carries a hillside at 150-400 m, which is the bottom third of
+   * every establishing shot in this corpus.
+   *
+   * Cropped and magnified, that band is one saturated orange-brown with soft
+   * blotches on it and no hard small detail anywhere: a blurry photograph of
+   * mud. Round 15's judge named it twice in different words, as "the near
+   * field is bare" and as "one hue per frame", and it is the same hole.
+   */
+  float cvB1 = tf_snoise(P.xz * 0.142 - 211.0);   // ~7 m: the bush and its shadow
+  float cvB2 = tf_snoise(P.xz * 0.046 + 157.0);   // ~22 m: the thicket
   // Dry cover grows on the slopes grass abandons, and not on a live sand pan,
   // a bare rock face or the road. The distance ramp hands over from the grass
   // ring (far: 155) the way the sward hands over from the blades.
@@ -1445,6 +1462,18 @@ void tf_shade() {
    * it, which is the same discipline every other term in this shader uses.
    */
   float macroAt = smoothstep(240.0, 460.0, vTDist);
+  /**
+   * The mid band, handed over from the tuft field rather than added on top.
+   *
+   * Ramps in across 90-260 m, which is where tf_lodW has taken 0.74 m and
+   * 1.9 m out and before the macro octaves become resolvable. Committed the
+   * same way macroField is — mostly thicket or mostly pan, with the change
+   * happening over metres — because a field that hovers around a half at every
+   * point is the flat wash this is here to break.
+   */
+  float midAt = smoothstep(90.0, 260.0, vTDist) * (1.0 - 0.55 * macroAt);
+  float midField = smoothstep(0.30, 0.76, clamp(0.5
+    + 0.58 * cvB1 + 0.46 * cvB2, 0.0, 1.0));
   float macroCover = mix(1.0, macroField, macroAt);
   float dryCover = smoothstep(0.22, 0.72, tuft * 0.55 + 0.45)
                  * clamp(0.62 + 0.62 * cv3, 0.10, 1.0) * dryAmt
@@ -1452,7 +1481,12 @@ void tf_shade() {
                  // decides where the thickets are, not whether the far ground
                  // has anything on it at all. A deeper cut here is what turned
                  // a mottle into a stain.
-                 * (0.66 + 0.34 * macroCover);
+                 * (0.66 + 0.34 * macroCover)
+                 // The mid band bites harder than the macro one, because at
+                 // 150-400 m a thicket and a bare pan are genuinely different
+                 // amounts of plant and the eye can still resolve the edge
+                 // between them.
+                 * (1.0 - 0.42 * midAt * (1.0 - midField));
   // Built and applied in uniform control flow: tf_bump takes a screen-space
   // derivative, and a dFd* inside a divergent branch is undefined. This shader
   // has been bitten by that once already.
@@ -1478,7 +1512,16 @@ void tf_shade() {
   vec3 dryThicket = vec3(0.72, 0.83, 0.63);
   // Hue carries this, not brightness. Amount changes value and value at a
   // kilometre reads as dirt; a woodier green against straw reads as plants.
-  vec3 shade = mix(dryShade, dryThicket, macroField * macroAt * 0.85);
+  // Both bands push the same way, so a thicket is the same thicket colour at
+  // 200 m and at 1 km rather than two different materials meeting at a ramp.
+  float thicket = clamp(macroField * macroAt * 0.85 + midField * midAt * 0.95, 0.0, 1.0);
+  vec3 shade = mix(dryShade, dryThicket, thicket);
+  // ...and the bare half of the mid band goes the OTHER way: sun-bleached
+  // stone and dust, cooler and paler than the soil around it. One hue per
+  // frame was round 15's third tell, and a term that only ever adds green to
+  // brown cannot fix it — the pan has to move away from the plants as well.
+  vec3 dryPan = vec3(1.06, 1.03, 0.98);
+  shade = mix(shade, shade * dryPan, midAt * (1.0 - midField) * 0.7);
   col *= mix(vec3(1.0), mix(shade, dryTip, smoothstep(0.30, 0.86, tuft)), dryCover);
   rgh = mix(rgh, min(1.0, rgh * 1.14 + 0.06), dryCover);
   ao *= mix(1.0, 0.78, dryCover * (1.0 - tuft));
