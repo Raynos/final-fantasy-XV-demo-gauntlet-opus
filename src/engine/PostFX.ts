@@ -809,8 +809,34 @@ export class PostFX {
       // settles in, and capture determinism is not something to spend on an
       // unmeasured hypothesis. So: measure it first. `warmupDone` is what the
       // measurement awaits.
-      const async = typeof location !== 'undefined'
-        && new URLSearchParams(location.search).get('warm') === 'async';
+      const warmMode = typeof location !== 'undefined'
+        ? new URLSearchParams(location.search).get('warm') : null;
+      /**
+       * `?warm=off` — skip the warm-up entirely.
+       *
+       * The warm-up compiles every weather x time-of-day x weapon variant up
+       * front so that *play* never hitches: 181 programs, **1.7 s, 30% of a
+       * 6.5 s boot**, and it is paid on every one of the ~6 page boots a suite
+       * still does as well as by every player.
+       *
+       * A gate that asserts on game STATE does not care. `integration`,
+       * `combatloop`, `uxcheck` and `reachcheck` drive input and read numbers;
+       * they never look at a pixel, they already run under `HARNESS_TURBO`
+       * submitting one frame in ten, and a program the frame needs that the
+       * driver has not linked yet is compiled on demand for the same pixels.
+       *
+       * **Never for `perf` or `gameplay`**, which measure frame time and for
+       * which a deferred compile is precisely the hitch they exist to catch,
+       * and never for a player. It is opt-in per tool, and it changes the page
+       * key, so a warmed page and an unwarmed one are never confused.
+       */
+      if (warmMode === 'off') {
+        const report: WarmupReport = { ms: 0, programs: 0, steps: [{ name: 'skipped (?warm=off)' }] };
+        this.warmupReport = report;
+        this.warmupDone = Promise.resolve(report);
+        return report;
+      }
+      const async = warmMode === 'async';
       if (async) {
         const report: WarmupReport = { ms: 0, programs: 0, steps: [] };
         this.warmupReport = report;

@@ -104,6 +104,11 @@ export const HARNESS_FLAGS: ReadonlyMap<string, 0 | 1> = new Map<string, 0 | 1>(
   ['--build', 1], ['--dirty', 0], ['--lane', 1], ['--agent', 1],
   ['--deadline', 1], ['--cold', 0], ['--prod', 0], ['--ablate', 1], ['--post', 1],
   ['--wait-lease', 1],
+  // `--extra` appends to the page query. It is how a tool -- or an experiment
+  // -- reaches a page switch the harness has no first-class flag for, such as
+  // `?warm=off`. It is part of the page key, so a page booted with it is never
+  // confused with one booted without.
+  ['--extra', 1],
 ]);
 
 /**
@@ -139,7 +144,7 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
     nobake: has('nobake'),
     prod: has('prod'),
     play: defaults.play ?? false,
-    extra: defaults.extra ?? '',
+    extra: val('extra', defaults.extra ?? ''),
   };
 }
 

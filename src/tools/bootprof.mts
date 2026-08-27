@@ -206,7 +206,7 @@ async function main() {
       // penalises both arms equally rather than whichever went second.
       const async = warmAb && run % 2 === 1;
       const t0 = Date.now();
-      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra${play ? '' : '&shoot=1'}${nobake ? '&nobake=1' : ''}`
+      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra${play ? '' : '&shoot=1'}${nobake ? '&nobake=1' : ''}${ha.extra ? `&${ha.extra}` : ''}`
         + `${async ? '&warm=async' : ''}`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
