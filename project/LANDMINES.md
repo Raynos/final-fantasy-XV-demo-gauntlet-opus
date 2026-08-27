@@ -1074,3 +1074,70 @@ logged and survived). What to keep from it:
 - **It was invisible for as long as it existed** because autostart used
   `stdio: 'ignore'`. Any hazard in a detached process that writes nowhere is not
   rare, it is unobserved.
+
+## `drawcheck`'s tolerance is smaller than its own reproducibility
+
+`TOLERANCE = 8` (`drawcheck.mts`), and the gate does not reproduce to 8.
+
+Measured three ways on 2026-08-27, all on **byte-identical game code**:
+
+- two full `--capture` runs at one sha differ on 7 of 142 shots, six of them at
+  exactly **-15** in one cluster (`menu_title`, `cine_opening`, and all four
+  `dun_fociaugh_*`);
+- nine archived manifests in `~/.cache/ffxv-harness/<key>/drawmanifest/`, mapped
+  to their commits, have **zero** game-side files changed between consecutive
+  pairs and disagree on **24 of 142**;
+- `probes/posecost.mts` found 10 of 142 shots whose own two A/B/A arms disagree,
+  `setpiece_deadeye` by **65**.
+
+So the ratchet's slack is a third of the gate's noise. It has not cried wolf yet
+only because the shots that swing are not near the flat 800 — the highest shot
+carrying no debt entry is `poi_reststop` at **780**, which leaves **20 draws**
+against a +15 excursion. A single commit that adds five draws there makes the
+gate red for a reason nobody will be able to reproduce.
+
+**Do not "fix" this by widening `TOLERANCE`** — that trades regression
+sensitivity for false-red immunity 1:1, and the gate exists to catch drift of
+exactly this size. The fix is to find what moves in ±15 steps. The clustering
+is the clue: whole shot *families* move together, which points at one subsystem
+toggling a fixed instance group rather than at noise.
+
+## A gate with a cache of its own silently defeats `--no-cache`
+
+`check.mts`'s gate cache keys on the tree sha and `--no-cache` bypasses it. But
+`drawcheck` keeps a SECOND cache the suite knows nothing about — a whole-corpus
+memo per sha in `drawmanifest/`. So:
+
+    pnpm run check --no-cache      ->   drawcheck  PASS  0.3s
+
+re-derived seventeen gates, served the eighteenth from storage, and reported
+`18/18 in 94.5s` as a cold run. The one flag whose entire purpose is "re-derive
+what this tree already has" was the one that did not, on the only gate expensive
+enough for anyone to reach for it. Anyone re-checking a red drawcheck the
+documented way was handed the answer it had already given.
+
+`Gate.ownCacheFlag` fixes it, and `--set-baseline` defeats it too — a budget
+recorded from a memo run would enshrine 0.3 s as the cost of 142 poses. **If you
+give a tool a cache, tell `check.mts` how to turn it off.**
+
+## A validation that excuses the population where the effect hides is not a validation
+
+`countsOnly` ablated draw submission across the settle: **5.71x**, and
+`probes/posecost.mts` A/B/A'd all 142 shots and reported **zero hard
+mismatches**. It shipped. It was wrong.
+
+The probe classified any disagreement as acceptable when the shot's own two FULL
+arms also disagreed (`inSpread`). That is exactly the population a *systematic*
+offset lives in: a shot that is noisy is also a shot where a real +15 looks like
+noise. The test could not have detected the thing it was run to rule out, and it
+ran no null arm and no `resetHistory()` — both of which this file already
+requires.
+
+The experiment that settles it is embarrassingly simpler: run the two paths on
+**one sha** and diff the numbers.
+
+    142 compared, 14 differ     prompto_closeup  498 -> 518  (+20)
+    tolerance is 8              poi_reststop     780 -> 795  (+15)
+
+**When an optimisation is validated by a statistic rather than by a diff, ask
+what the statistic forgives.** Reverted; the settle is drawn again.
