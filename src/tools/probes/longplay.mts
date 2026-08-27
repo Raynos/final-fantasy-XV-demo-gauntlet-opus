@@ -18,6 +18,24 @@
 // because an earlier step consumed something, a prompt that stops appearing,
 // a director that wedges in `combat` and never comes back.
 //
+// TWO HARNESS HAZARDS BOUND HOW LONG THIS CAN RUN. Neither is the game, and
+// both look exactly like a crash from in here:
+//
+//  - **`perf.mts` / `gameplay.mts` will kill this run.** `withExclusive` posts
+//    `/exclusive`, and the daemon answers it with `pool.closeAll()` — which
+//    closes every browser context, *including the one this probe holds a lease
+//    on*. `takeExclusive` drains `busyWorkers`, and a lease is not a worker
+//    job, so it is not waited for. Measured: a 4-minute run against `HEAD` died
+//    at 93 s with `page.evaluate: Target page, context or browser has been
+//    closed` the moment a co-agent's `perf` run took the quiet lane. Check
+//    `daemon.mts --health` for `"exclusive"` before starting a long one.
+//  - **The lease TTL is 15 minutes.** `routeLease` defaults `ttlMs = 15 * 60_000`
+//    and `harness.lease()` never overrides it, so at 15 minutes of WALL clock
+//    the daemon closes the page out from under whatever is running. That is a
+//    ceiling on wall time, not on game time — hence the per-minute heartbeat
+//    and the rate line below, which say how much wall clock a game minute
+//    costs on this machine.
+//
 // Run: node src/tools/probe.mts src/tools/probes/longplay.mts --dirty
 const g = window.GAME;
 const out = [];
@@ -37,8 +55,16 @@ g.get('Director')?.play?.();
 rig?.clearShot?.();
 g.resetClock();
 
-/** Minutes of game time this session represents, at 60 Hz. */
-const MINUTES = Number(window.__PLAY_MINUTES || 4);
+/**
+ * Minutes of game time this session represents, at 60 Hz.
+ *
+ * **30, because 30 is the box.** Phase 4's definition of done says "a person
+ * can play for 30 minutes"; a probe that defaults to 4 answers a question
+ * nobody asked. It defaulted to 4 only while long runs could not survive vite
+ * HMR navigating the page (`server.hmr = false` fixed that), and there is no
+ * reason left to ask a shorter question by default.
+ */
+const MINUTES = Number(window.__PLAY_MINUTES || 30);
 const step = (n) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
 const ok = (name, cond, detail) => {
   out.push(`  ${cond ? 'ok  ' : 'FAIL'}  ${name.padEnd(38)} ${detail || ''}`);
@@ -75,6 +101,12 @@ const last = player.position.clone();
 const seenPrompts = new Set();
 let yaw = 0.7;
 const heap = [];
+// Wall clock, not game clock. A run that dies is the normal failure here, and
+// without a heartbeat all it leaves is a Playwright error with no idea whether
+// it got two minutes in or twenty-eight. `probe.mts` pipes page console
+// straight to stdout, so each of these lands live.
+const wall0 = performance.now();
+const wallMin = () => (performance.now() - wall0) / 60000;
 const forage = props && props.foraging;
 let detours = 0, minSpot = Infinity, chasing = false, forageOffered = 0;
 for (let f = 0; f < FRAMES; f++) {
@@ -108,7 +140,12 @@ for (let f = 0; f < FRAMES; f++) {
       }
     }
   }
-  if (f % 3600 === 0 && performance.memory) heap.push(Math.round(performance.memory.usedJSHeapSize / 1e6));
+  if (f % 3600 === 0) {
+    if (performance.memory) heap.push(Math.round(performance.memory.usedJSHeapSize / 1e6));
+    if (f) console.log(`[longplay] game minute ${f / 3600}/${MINUTES} — `
+      + `${wallMin().toFixed(1)} min wall, ${(travelled / 1000).toFixed(2)} km, `
+      + `${events['encounter:start'] || 0} encounters, ${forages} forage`);
+  }
   inp.keys.clear();
   inp.keys.add('KeyW');
   if ((f % 1800) < 1200) inp.keys.add('ShiftLeft');
@@ -148,6 +185,10 @@ step(30);
 
 out.push('');
 out.push('--- what happened ---');
+const wallMinutes = wallMin();
+out.push(`  ${MINUTES} game minutes cost ${wallMinutes.toFixed(1)} min of wall clock `
+  + `(${(FRAMES / (wallMinutes * 60)).toFixed(0)} sim frames/s, `
+  + `${(wallMinutes / MINUTES).toFixed(2)} wall min per game min)`);
 out.push(`  travelled ${(travelled / 1000).toFixed(2)} km`);
 out.push(`  encounters started ${events['encounter:start'] || 0}, `
   + `victories ${events['encounter:victory'] || 0}, kills ${events['encounter:kill'] || 0}`);
