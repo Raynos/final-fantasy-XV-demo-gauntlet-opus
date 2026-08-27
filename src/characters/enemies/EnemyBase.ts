@@ -1291,6 +1291,21 @@ export class Enemy {
   }
 
   /**
+   * Can this creature already hit `t` from where it stands?
+   *
+   * The rouse is the *approach* beat, and something you have walked on top of
+   * does not stand and stare at you — it bites. This is also what keeps the
+   * beat out of the way of every fixture that spawns an enemy at arm's length
+   * and expects a fight: `combatloop`'s `engage()` puts a sabertusk six metres
+   * out and asserts the combat HUD is up one second later.
+   */
+  _withinReach(t: Threat | null): boolean {
+    const p = threatPos(t);
+    if (!p) return false;
+    return Math.hypot(p.x - this.root.position.x, p.z - this.root.position.z) <= this.reach;
+  }
+
+  /**
    * Is this creature behind `t`? Companions carry no heading, so a threat that
    * cannot say which way it is facing is never counted as having a back.
    */
@@ -1397,7 +1412,11 @@ export class Enemy {
     this.phase += dt;
     /** Frame delta, so `pose()` can advance stride phase and springs. */
     this._dt = dt;
-    if (this.frozenPose) return;
+    // A posed enemy never reaches the `_hadTarget` bookkeeping below, and
+    // `inCombat` reads that field. Without this, a scenario that pins a
+    // creature and hands it a target leaves it permanently "not yet engaged"
+    // and the encounter layer never comes up around it.
+    if (this.frozenPose) { this._hadTarget = !!this.target; return; }
     if (this._atkCooldown > 0) {
       this._atkCooldown -= dt;
       if (this._atkCooldown <= 0) this.reloading = false;
@@ -1435,7 +1454,9 @@ export class Enemy {
 
     this._sense(dt, ctx);
 
-    if (wasCalm && this.target && !this.passive) this._rouse = this.rouseTime;
+    if (wasCalm && this.target && !this.passive && !this._withinReach(this.target)) {
+      this._rouse = this.rouseTime;
+    }
     this._hadTarget = !!this.target;
 
     // The beat itself: hold the ground, face the threat, posture. `_sense`
