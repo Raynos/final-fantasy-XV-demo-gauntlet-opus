@@ -69,27 +69,35 @@ are the three parallel plans that ran beside it.
   2026-08-24-opus-benchmaxx-harness           DONE 08-28 -> archive/plans/
   2026-08-27-opus-gate-audit                  SUPERSEDED 08-28 — items 1-2 built
   2026-08-28-opus-the-100x-map                SUPERSEDED 08-28 — it was a RECORD
-                    |
-                    v
-  2026-08-28-opus-close-out                   LOCKED, ten items, one spine:
-    root · drawcheck's 36th field · draw        a page boots in 7.46 s and
-    baseline · error rate · CPU budget ·        everything expensive here is a
-    driftcheck's probe · play viewports ·       multiple of it. Carries the
-    content cache · shader cache · materials    KILL LIST — nine approaches
-                                                measured at zero. Read it
-                                                before re-opening any of them
+  2026-08-28-opus-close-out                   DONE 08-28 -> archive/plans/
+                    |                           8 of 10 closed the same night;
+                    v                           5 of those as NEGATIVE results
+  2026-08-26-opus-the-standing-backlog §WS-12   the two that were builds:
+    12a content cache · 12b materials           ~1.5 s of a 6.5 s boot, and
+                                                288 material buckets
 ```
 
 The three that graduated on 08-28 were **not** half-built: benchmaxx had shipped
 every phase and was held open by a DoD written against a calendar; the gate audit
 had built two of its four items and staffed neither of the rest; the 100x map was
-a retrospective wearing a `Status:` line. Their residue is close-out's ten items,
-and the reason they are one plan is that eight of the ten are the same boot.
+a retrospective wearing a `Status:` line. Their residue became close-out's ten
+items, and close-out itself graduated the same night.
+
+**Read close-out's "What actually happened" before re-opening any harness cost
+work.** Five of its ten items closed as measured negatives — deleting
+`Vegetation`'s origin prime moves `hero_full` by 13/255; `combatloop` matching
+the page-pool key costs +28 s to save 7.5 s; the shader warm-up is worth 0.53 s,
+not the 1.71 s its own line claims — and **two of the numbers the plan was
+written against were instrument defects**, not real: "median shoot 22.6 s" was
+corpus chunks sharing a row-kind with `shoot` (a real shoot is 8.0 s cold, 1 s
+warm), and "4.5% job errors" was 0.66% once red gates stopped counting as
+faults.
 
 Phase 4's own leftovers are named at the end of its §5, each with an owner in
-one of the two live plans above — including the one shot in 142 still over the
-draw-call budget, and round 16's ranked list of what a blind judge still
-identifies us by.
+one of the two live plans above — including round 16's ranked list of what a
+blind judge still identifies us by. **Its one shot still over the draw-call
+budget is closed**: the full corpus is 0 of 142 over 800, and
+`project/draw-baseline.json` has been deleted rather than emptied.
 
 The three parallel plans collided on two directories. They were assigned to
 **one** of them each:

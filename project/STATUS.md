@@ -1,4 +1,4 @@
-# Status — 2026-08-27
+# Status — 2026-08-28
 
 > **A snapshot, REPLACED in place, never appended to.** Dated bullets belong in
 > `journal/`. Deleting a line that has stopped being true loses nothing.
@@ -7,34 +7,33 @@
 **`main`.** Zero `any`, both typechecks clean, **`pnpm run check` 18/18**, and
 **both perf gates certify** — `gameplay.mts` for the first time ever.
 
-**Live lanes:** `benchmaxx` (opus) owns
-`docs/plans/2026-08-24-opus-benchmaxx-harness.md`, IN-PROGRESS — every phase has
-shipped and its definition of done is weekly, so it closes on a week of ledger
-rather than on a diff. See `project/handoff/benchmaxx.md`.
+**Live lanes: none.** The three that sat IN-PROGRESS with no owner — benchmaxx,
+the gate audit, the 100x map — were audited on 08-28, folded into
+`docs/plans/2026-08-28-opus-close-out.md`, and all four are now in
+`project/archive/plans/`. Eight of close-out's ten items closed the same night;
+its two builds are `docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-12.
+
+**Two of the numbers this repo was steering by were wrong, and both were the
+same defect** — an instrument folding a bad result into a failed measurement.
+"Median `shoot` 22.6 s against a target of 8" was 370 `drawcheck` corpus chunks
+sharing a ledger row-kind with `shoot`: a real shoot is **8.0 s cold and 1 s
+warm**. "80 errors in 1818 jobs, 4.5%" was 28 red gates plus 40 duplicate rows:
+the real fault rate is **0.66%**. The ledger now records `units` per job and
+distinguishes `fail`/`void`/`busy` from `error`.
 
 ## Phase 4 is DONE, 5 of 5, and graduated
 
-`2026-08-22-opus-phase4-content-and-gameplay` — the last phase of the four-phase
-sequence it absorbed — is in `project/archive/plans/`. Its §5 carries the
-evidence per box; this is the shape of it.
+`2026-08-22-opus-phase4-content-and-gameplay` is in `project/archive/plans/` and
+its §5 carries the evidence per box. The headline: **perf mean 208.0 fps** with
+142/142 shots clearing 60 by more than their own noise, **gameplay certifying
+for the first time ever** (worst segment 127.4 fps, from 67.3), 18/18 gates, and
+27-28 unbroken minutes of play across two lanes in which every ending was the
+harness closing the page rather than the game. Round 16, blind: 19 of 20
+identified, and the first non-zero hesitation in five rounds.
 
-    perf      mean 208.0 fps, worst 116 (regalia_drive), 142/142 shots clear
-              the 60 fps target by more than their own noise, RULER_VALID true
-    gameplay  every segment >= 60 fps, worst 127.4 (streaming-traverse, from
-              67.3), 3 hitches, RULER_VALID true — it had NEVER certified before
-    check     18/18 (the suite grew 17 -> 18: `drawcheck` is new)
-    loop      one den pays 66 EXP / 2 AP / 84 gil / 4 drops; the AP buys a real
-              Ascension node; the identical swing goes 249 -> 254
-    session   27-28 unbroken minutes across two lanes, ~10 km, 21-22 encounters
-              all resolved, 77-81 forage, every menu still answering, zero page
-              errors, flat heap — and EVERY ending in eight runs was the
-              harness closing the page, never the game
-    critic    round 16, blind: 19 of 20 identified, and the FIRST non-zero
-              hesitation in five rounds
-
-**The 33 ms rule is breached by 3 frames and is owned, not met.** One of them is
-a 660 m teleport `streaming-traverse` performs on purpose and no player pays
-for; the other two are 1% of one segment, down from 90-104 ms. Grounds in
+**The 33 ms rule is breached by 3 frames and is owned, not met.** One is a 660 m
+teleport `streaming-traverse` performs on purpose and no player pays for; the
+other two are 1% of one segment, down from 90-104 ms. Grounds in
 `journal/2026-08-27-perf-certified.md`.
 
 ## The world was barren, and four systems were never read by any code
@@ -77,7 +76,7 @@ numbers:
 
 | | before | after |
 |---|---|---|
-| `pnpm run check`, cold, quiet | ~780 s serial | **272.9 s**, 18/18, two pools |
+| `pnpm run check`, cold, quiet | ~780 s serial | **72.2 s**, 18/18, two pools |
 | `pnpm run check`, tree already graded | ~780 s | **0.68 s** |
 | `drawcheck` (the old critical path) | 269 s | **120 s** alone (`--par 4`), 0.18 s memoised |
 | pre-commit | 1.59 s | **1.04 s**, three jobs at once |
@@ -94,13 +93,11 @@ it never had. `post-commit` prewarms the sha you just made.
 A/B/A drift, with the simulation at 0.58 ms (`probes/turbocost.mts`). That, not
 the sim, was always what a long probe paid for.
 
-Still true, and still the way to kill a long run: a long probe needs
-**`--ttl <minutes>`** or the lease closes its page at fifteen, and **committing
-during one** can drop the tree it is served from (trees are pruned at ten).
-**`perf`/`gameplay` no longer kill it** — `/exclusive` queues behind a live lease
-now, bounded by its TTL. Vite HMR is still off and `pnpm dev` still gone: the
-`dirty:` build serves the shared tree, so any lane's save navigated every open
-page and killed whatever was mid-`page.evaluate`, which read as a crash.
+Still the way to kill a long run: a probe needs **`--ttl <minutes>`** or the
+lease closes its page at fifteen, and **committing during one** can drop the tree
+it is served from. **`perf`/`gameplay` no longer kill it** — `/exclusive` queues
+behind a live lease. HMR is off and `pnpm dev` gone: the `dirty:` build serves the
+shared tree, so any lane's save navigated every open page.
 
 **A page costs 2 449 MB of chromium RSS, and four cost 16 465 MB** — `ps` over
 the process tree, so shared pages are counted per process; it is a trendline on
@@ -110,17 +107,22 @@ ledger line.
 
 ## Draw calls: 1013 -> 786, and nothing is over budget
 
-`drawcheck` gates it, parses the budget out of `BRIEF.md` rather than copying
-it, and ratchets `project/draw-baseline.json` so a recorded shot can only fall.
-`town_forecourt`, the last entry in that ledger, now reads **786 against 800** —
-it has cleared the budget outright, but its spread across runs is wider than the
-ratchet's tolerance, so confirm across two runs before deleting the entry.
-Corpus median 567, worst 786.
+`drawcheck` gates it and parses the budget out of `BRIEF.md` rather than copying
+it. **`project/draw-baseline.json` is gone**: over the full 142-shot corpus, zero
+shots are over 800, median 567, worst 786 (`town_forecourt`, confirmed across two
+independent runs). The gate is now the flat BRIEF rule carrying no exceptions,
+which is the strongest state it has been in.
+
+**It also agrees with itself now.** The +/-60 it disagreed by was
+`VehicleBody`/`Player` damping attitude and gait *exponentially* — asymptotic, so
+still moving at a pose's 68th frame on a page's first pose and at rest by its
+second, which drew a velocity proxy per still-moving mesh. Both implement
+`converge()` now, as `Vegetation` and `Props` always had.
 
 **A held pose does not draw a constant number of calls**: `poi_reststop` goes
 707 / 855 / 707 / 1005 as three shadow cascades refresh on a rotating schedule.
 The capture lands on a fixed phase, so it is comparable and it is the expensive
-phase.
+one.
 
 ## Still weak, and who owns it
 
@@ -133,16 +135,16 @@ sky fill in shadow**, then **no foreground occluder in any establishing shot**.
 
 `Layers.ts`'s splat still reads as one texture. `RpgSystem.enemyScaling` is
 documented as reading the party's level and does not. There is terrain where
-holding forward yields zero progress with no slide-off. Cold boot is ~6.6 s with
-every cache warm and the game-side diet is `after-phase3`'s WS-2 (shader
-programs, 1.83 s) and WS-3 (geometry bake, ~950 ms), not the harness lane's.
+holding forward yields zero progress with no slide-off. **Cold boot is 6.54 s**
+(`bootprof`): Vegetation 1216 ms, Props 930, shader warm-up 1710 — the diet is
+`the-standing-backlog` §WS-12, not the harness lane's.
 
 ## Next
 
 `docs/plans/2026-08-25-opus-after-phase3.md` (WS-1 the head — worth 3.0 -> 4.0
 on its own costing, more than everything else combined) and
 `docs/plans/2026-08-26-opus-the-standing-backlog.md`, whose table of **measured
-negatives** lists ten claims not worth re-opening.
+negatives** now lists seventeen claims not worth re-opening.
 
 **After any merge: `build:full`**, not `build` — `build` deletes the
 painted-face cache without replacing it and cold boot regresses ~2.5 s.

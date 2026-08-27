@@ -1,8 +1,13 @@
 # Close-out: one plan, ten items, every one of them finishable
 
-Status: LOCKED (2026-08-28, opus) — supersedes `2026-08-24-opus-benchmaxx-harness`,
-`2026-08-27-opus-gate-audit` and `2026-08-28-opus-the-100x-map`, all three of
-which are archived with this plan named as their replacement.
+Status: DONE (2026-08-28, opus) — **eight of ten closed the same night.**
+Supersedes `2026-08-24-opus-benchmaxx-harness`, `2026-08-27-opus-gate-audit` and
+`2026-08-28-opus-the-100x-map`, all three archived with this plan named. Items
+8b and 10 were builds rather than fixes and went to
+`2026-08-26-opus-the-standing-backlog` §WS-12, with every number below; the six
+measured negatives went to that plan's negatives table and to `LANDMINES.md`.
+**See "What actually happened" at the end — five of the ten closed as negative
+results, and two of the numbers this plan was written against were wrong.**
 
 Three plans sat IN-PROGRESS with no owner between them. None was half-built: two
 had shipped everything they specified and were held open by bookkeeping, and the
@@ -277,3 +282,85 @@ calendar. This one is written against instruments that already exist:
 - root holds fourteen entries and the hook enforces it
 
 Any item that cannot show its number is not done, whatever its diff says.
+
+## What actually happened
+
+Written the same night the work was done, against the ten items above.
+
+| | item | outcome |
+|---|---|---|
+| 1 | root roster | **done.** `$SP/` gone; the roster is a pre-commit predicate with two arms, staged (blocks) and untracked (warns) |
+| 2 | `drawcheck`'s 36th field | **done, and it was two fields.** Named, fixed, instrumented |
+| 3 | drop the draw baseline | **done.** 0 of 142 shots over 800, worst 786; the file is deleted and `--set-baseline` now deletes rather than writing empty |
+| 4 | the 80 error verdicts | **done.** 12 were real (0.66%); the ledger was calling a red gate an error |
+| 5 | probe CPU-budget tag | **done.** Declared, reported in `/health`, subtracted by `check`. Phase D is finally complete |
+| 6 | `driftcheck`'s probe | **done, and it was blind.** A 5 m morph error moved nothing; the rect is 340 m now |
+| 7 | play-gate viewports | **closed negative, with numbers.** Not reachable |
+| 8 | median `shoot` / content cache | **the metric was wrong**; the cache is WS-12a |
+| 9 | 181 shader programs | **closed negative on both routes** |
+| 10 | material consolidation | **not started** — WS-12b |
+
+### The two numbers this plan was written against, both wrong
+
+**"Median `shoot` is 22.6 s against a target of 8."** This was benchmaxx's one
+failing DoD and the entire reason the boot diet was in scope. It is a population
+artefact: `kind: 'shots'` is one ledger row whether the job posed one shot or
+sixteen, and **370 of 378 rows were `drawcheck` corpus chunks**. A real `shoot`
+is 8.0 s p50 — at target — and timed directly, a cold single shot is 8 s, a warm
+one is **1 s**, and four warm shots are 4 s. `JobRecord.units` now records how
+many shots a job posed so the median is a median of shoots.
+
+**"80 errors in 1818 jobs, 4.5%."** 28 were a gate returning FAIL or VOID, 40
+were a `tool:` row echoing a child already counted, and **12 were real — 0.66%**,
+nine of them inside the 17:22–17:49 window when `PROTOCOL` went 5 to 6, which is
+a documented landmine rather than a new fault.
+
+Both are the same defect: **an instrument that folds "the thing I measured is
+bad" into "I could not measure", or one duration into a different unit of work.**
+The suite already knew this — `VOID` exists in `check.mts` for exactly this
+reason — and the ledger had simply never been given the vocabulary.
+
+### Five of ten closed as negative results
+
+That is the honest ratio and it is worth stating, because a plan that reports
+eight wins reads very differently from one that reports three wins, five
+falsifications and two builds handed on:
+
+- Deleting `Vegetation`'s origin prime: 610 ms, and it moves `hero_full` by
+  **13.359/255** against a 2.25 floor. Four of five shots said it was free.
+- `combatloop` matching the pool key: **+28 s to save 7.5 s.**
+- `integration` taking a warm lease: impossible, it needs `audio=force`.
+- Chromium's disk cache holding the 181 programs: ANGLE translates in-process.
+- Skipping the shader warm-up: **0.53 s, not the 1.71 s its own line claims.**
+
+Each is in the standing backlog's negatives table, `LANDMINES.md`, or
+`src/tools/README.md` — somewhere a person will actually look, not in a plan
+that was about to be archived.
+
+### The one that changed how the gates are read
+
+`drawcheck`'s ±60 self-disagreement, six hypotheses deep, was **not one bug**:
+
+1. `VehicleBody` and `Player` damp attitude and gait *exponentially*. An
+   exponential damp is asymptotic: at the 68 frames a pose runs it is still
+   moving by more than `VelocityPass`'s 1e-6 threshold, so twenty Regalia meshes
+   and five of Noctis's accessories drew a velocity proxy each on a page's first
+   pose and none after. `town_forecourt` 806/786/786/786 → flat **786**. Both now
+   implement `converge()`, which `Vegetation` and `Props` have had all along.
+2. `setpiece_deadeye`'s remaining 65 is **not a bug**:
+   `Director._setPieceScenario` turns the encounter loop back on deliberately, so
+   the fight really does have 16 enemies on a cold page and 4 later. It costs the
+   gate nothing — the ratchet grades only shots over budget, and it sits 220
+   under.
+
+The instrument that found it is `probes/thesixty.mts`, and the method is the
+point: six earlier hypotheses were guesses about the mechanism, and this one
+asked the renderer which objects it drew, then walked the geometry uuid back
+from an anonymous proxy to the thing in the world that owns it.
+
+### What is left
+
+`2026-08-26-opus-the-standing-backlog` §WS-12: **12a** the generated-content
+cache (~1.5 s of a 6.5 s boot, and the bake pattern already exists), **12b**
+material consolidation (288 buckets, 127 sites, 5.2 M triangles — and not a cost
+today at mean 208 fps).

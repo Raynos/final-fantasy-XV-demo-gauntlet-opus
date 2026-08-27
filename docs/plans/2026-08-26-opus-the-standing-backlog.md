@@ -533,6 +533,60 @@ halves, or neither. `project/handoff/ws2-fight-shape.md` carries the frames.
 
 ---
 
+## WS-12 — The boot diet, 2026-08-28, from the close-out plan
+
+`2026-08-28-opus-close-out` closed eight of its ten items and handed these two
+back, because they are builds rather than fixes and it is the close-out plan's
+own rule that open work returns to a queue rather than dying in a handoff.
+
+**Cold boot is 6.54 s** (`bootprof --dirty`, quiet, this tree), of which
+`Game.init()` is 6.36 s. Where it goes:
+
+    1216 ms  Vegetation   (trees.build 538, prime.bushes 450, bushes.build 132,
+                           prime.grass 119, prime.trees 43, grass.build 18)
+     930 ms  Props        (poiPrebuild 392, mega 330, rocks 86, landmarks 47)
+    1710 ms  postfx+compile+warmup, +181 shader programs
+     388 ms  Water · 349 Npcs · 311 Director · 303 Sky · 300 Terrain
+
+The boot matters at 188 cold boots per suite cycle, and it is `TODO.md` line 1.
+
+### WS-12a — cache the generated content (~1.5 s of the 6.5 s)
+
+`trees.build` 538 ms, `Props.poiPrebuild` 392 ms, `Props.mega` 330 ms,
+`bushes.build` 132 ms, `Props.rocks` 86 ms are pure functions of source plus a
+fixed seed. `src/tools/bake.mts` already does exactly this for the height field
+— generator-source content hash, `src/public/baked/`, browser inflates or falls
+back to generating in place — so the pattern is established and the work is a
+geometry codec plus a second bake entry, not a new idea.
+
+**The one that is not simply CPU:** `Trees.build` takes the renderer and draws
+its impostor atlases on the GPU. Those are rendered art and would need baking as
+images with the image baselines re-checked, so stage it last or leave it.
+
+**Do not confuse this with deleting the prime.** That was tried on 2026-08-28
+and reverted: it is 610 ms, it looks certainly redundant under `?shoot`, and it
+moves `hero_full` by 13.359/255 against a floor of 2.25. See `LANDMINES.md`.
+
+### WS-12b — material consolidation (was the 100x map's #12)
+
+`probes/drawwhere.mts` on `town_forecourt`: 496 draw calls but **5 231 106
+triangles**, a third of it skinned character mesh at ~29k triangles per draw with
+no LOD, across **288 distinct object/material buckets**, and 152 calls drawing
+under 60 triangles each. The bucket count is the likely source of the 181 shader
+programs, and of `Trying to use 16 texture units while this GPU supports only
+16`, logged dozens of times a frame.
+
+One fix pays boot, frame and texture-unit exhaustion. 127 material construction
+sites. It moves pixels, so it needs both perf gates re-certified and a corpus
+image diff at the 1.5/255 floor.
+
+**Not a cost today** and that is why it is here rather than urgent: the game is
+mean 208 fps against a 60 fps target. This is bought for boot and for headroom.
+
+**Character LOD is folded in here**, not run as its own line: the 5.2 M triangles
+are real and latent, and splitting them from the bucket work would mean touching
+the same 127 sites twice.
+
 ## Negatives worth not re-opening
 
 Collected because each one cost a lane real time and none is discoverable
@@ -550,6 +604,12 @@ without opening the handoff it lived in.
 | Turning CAS's constant down | its benefit is in the same octave as its cost; the lever must be spatial |
 | PCSS blocker search on our shadow path | needs a depth read `sampler2DShadow` cannot do, and the page is already at 16/16 texture units |
 | The ambient probe is the shadow-warmth gap | the **whole** diffuse ambient is worth 2.6 of 15 points |
+| Skipping `Vegetation`'s origin prime under `?shoot`, since `converge()` re-streams at the shot camera | 610 ms and **wrong**: `hero_full` moves **13.359/255** against a 2.25 floor. Sixty budgeted `update()` calls are not the same resident set as "stream until finished" |
+| `combatloop` and `integration` can take warm leases once the viewport matches | `integration` needs `audio=force` in the query and no pooled page has it; `combatloop` matching the pool key costs **+28 s (42 -> 70)** to save a 7.5 s boot |
+| Chromium's disk cache can hold the 181 shader programs | `gl` and `metal` both compile +181 on a warm load; the cost is ANGLE's in-process translation, which no disk cache stores |
+| Skipping the shader warm-up is worth its 1.71 s line | **0.53 s**: `warm=off` boots 6.01 s against 6.54 s, because `postfx+compile` pays for it either way |
+| `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
+| `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 
 ## Order
 
