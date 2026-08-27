@@ -210,7 +210,21 @@ function recordToolRun(tool: string, startedAt: number): void {
         build: '',
         queuedMs: 0,
         ranMs: Date.now() - startedAt,
-        verdict: code === 0 ? 'ok' : 'error',
+        /**
+         * A gate exiting non-zero has usually WORKED and said no, and calling
+         * that an error made the ledger's fault rate meaningless -- 4.5% on an
+         * evening whose real rate was 0.7%.
+         *
+         * The exit codes are the shared vocabulary in `check.mts`: 3 is VOID
+         * (the oracle could not be read), 4 is BUSY (the machine was somebody
+         * else's), and every other non-zero code is the tool's own considered
+         * "no". A tool that genuinely crashes reports through the daemon's job
+         * rows, which is where a closed page or a protocol fault shows up.
+         */
+        verdict: code === 0 ? 'ok'
+          : code === 3 ? 'void'
+            : code === 4 ? 'busy'
+              : 'fail',
       });
     } catch { /* never let a ledger line change an exit code */ }
   });

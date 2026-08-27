@@ -588,7 +588,12 @@ async function runGate(g: Gate): Promise<Result> {
     build: treeSha ? `sha:${treeSha.slice(0, 12)}` : 'dirty',
     queuedMs: 0,
     ranMs: Date.now() - started,
-    verdict: r.code === 0 ? 'ok' : 'error',
+    // A red gate is a RESULT, not a harness fault. Conflating them is what made
+    // the ledger read 4.5% errors on an evening whose real fault rate was 0.7%.
+    verdict: r.code === 0 ? 'ok'
+      : r.code === VOID ? 'void'
+        : r.code === BUSY ? 'busy'
+          : 'fail',
     note: verdict(r.code),
   });
   return r;

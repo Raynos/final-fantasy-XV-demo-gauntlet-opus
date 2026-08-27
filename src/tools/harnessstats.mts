@@ -65,18 +65,23 @@ const keyOf = (j: JobRecord): string => {
 
 interface Row {
   key: string; n: number; queuedMs: number; ranMs: number;
-  errors: number; deadlines: number; worstQueue: number; queues: number[];
+  /** The harness broke. Counted apart from `fails`, which is the suite working. */
+  errors: number;
+  /** A gate ran correctly and said no. Not a fault, and it must not read as one. */
+  fails: number;
+  deadlines: number; worstQueue: number; queues: number[];
 }
 const rows = new Map<string, Row>();
 for (const j of jobs) {
   const k = keyOf(j);
-  const r = rows.get(k) ?? { key: k, n: 0, queuedMs: 0, ranMs: 0, errors: 0, deadlines: 0, worstQueue: 0, queues: [] };
+  const r = rows.get(k) ?? { key: k, n: 0, queuedMs: 0, ranMs: 0, errors: 0, fails: 0, deadlines: 0, worstQueue: 0, queues: [] };
   r.n++;
   r.queuedMs += j.queuedMs;
   r.ranMs += j.ranMs;
   r.queues.push(j.queuedMs);
   if (j.queuedMs > r.worstQueue) r.worstQueue = j.queuedMs;
   if (j.verdict === 'error') r.errors++;
+  if (j.verdict === 'fail' || j.verdict === 'void' || j.verdict === 'busy') r.fails++;
   if (j.verdict === 'deadline') r.deadlines++;
   rows.set(k, r);
 }
@@ -100,7 +105,7 @@ if (has('--json')) {
       key: r.key, n: r.n,
       queuedSec: Math.round(r.queuedMs / 1000), ranSec: Math.round(r.ranMs / 1000),
       p50QueueMs: pct(r.queues, 50), p90QueueMs: pct(r.queues, 90), worstQueueMs: r.worstQueue,
-      errors: r.errors, deadlines: r.deadlines,
+      errors: r.errors, fails: r.fails, deadlines: r.deadlines,
     })),
   }, null, 2));
   process.exit(0);
@@ -108,14 +113,26 @@ if (has('--json')) {
 
 const mins = (ms: number) => (ms >= 60_000 ? `${(ms / 60_000).toFixed(1)}m` : `${(ms / 1000).toFixed(1)}s`);
 
+const totalErrors = [...rows.values()].reduce((a, r) => a + r.errors, 0);
+const totalFails = [...rows.values()].reduce((a, r) => a + r.fails, 0);
+
 console.log(`\n${jobs.length} jobs since ${new Date(since).toISOString().replace('T', ' ').slice(0, 16)}`
   + `  ·  waited ${mins(totalQueued)}  ·  ran ${mins(totalRan)}`
-  + `  ·  ${totalQueued + totalRan ? Math.round((100 * totalQueued) / (totalQueued + totalRan)) : 0}% of it was queue\n`);
+  + `  ·  ${totalQueued + totalRan ? Math.round((100 * totalQueued) / (totalQueued + totalRan)) : 0}% of it was queue`);
+/**
+ * The fault rate, stated once and plainly, because it is the number that says
+ * whether the harness itself is healthy -- and it is separate from `red`, which
+ * says whether the TREE is healthy. Folding the two together read as "4.5% of
+ * jobs errored" on an evening whose real fault rate was 0.7%.
+ */
+console.log(`  ${totalErrors} harness fault(s) (${jobs.length ? ((100 * totalErrors) / jobs.length).toFixed(2) : '0.00'}%)`
+  + `  ·  ${totalFails} red verdict(s), which are the suite working\n`);
 
 console.log(`  ${by.padEnd(16)}${'n'.padStart(6)}${'wait'.padStart(9)}${'run'.padStart(9)}`
   + `${'p50q'.padStart(8)}${'p90q'.padStart(8)}${'worstq'.padStart(9)}   notes`);
 for (const r of [...rows.values()].sort((a, b) => (b.queuedMs + b.ranMs) - (a.queuedMs + a.ranMs)).slice(0, 24)) {
-  const notes = [r.errors ? `${r.errors} err` : '', r.deadlines ? `${r.deadlines} 429` : ''].filter(Boolean).join(', ');
+  const notes = [r.errors ? `${r.errors} err` : '', r.fails ? `${r.fails} red` : '',
+    r.deadlines ? `${r.deadlines} 429` : ''].filter(Boolean).join(', ');
   console.log(`  ${r.key.slice(0, 15).padEnd(16)}${String(r.n).padStart(6)}`
     + `${mins(r.queuedMs).padStart(9)}${mins(r.ranMs).padStart(9)}`
     + `${mins(pct(r.queues, 50)).padStart(8)}${mins(pct(r.queues, 90)).padStart(8)}`

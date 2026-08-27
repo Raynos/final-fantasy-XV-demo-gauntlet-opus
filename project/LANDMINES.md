@@ -1204,3 +1204,32 @@ reads, and an unlisted dependency is not a slow cache, it is a wrong answer
 delivered instantly.** When you narrow a cache key, write the test that edits
 each dependency and asserts the key moved — `scratchpad/keytest` does this in
 eight arms and caught this one.
+
+## A red gate is not a broken harness, and a ledger that conflates them lies
+
+The daemon's ledger recorded `verdict: 'error'` for a job that faulted **and**
+for a gate that ran perfectly and returned FAIL. Over the first evening of
+ledger that read as **80 errors in 1818 jobs — 4.5%**, which looks like a
+harness falling apart. Decomposed, it was:
+
+    28  a gate saying no (FAIL / VOID / BUSY) -- the suite working
+    40  a `tool:` row echoing the child job that had already been counted
+    12  genuine faults -- 0.66%
+
+and **nine of the twelve fall between 17:22 and 17:49**, the window in which
+`PROTOCOL` went 5 → 6. Bumping `PROTOCOL` restarts the daemon and a restart
+closes every leased page, so `page.evaluate: Target page, context or browser has
+been closed` is that landmine's signature, not a new one.
+
+`verdict` is now `ok | fail | void | busy | error | deadline`, and
+`harnessstats` prints the fault rate and the red-verdict count on separate
+lines, because they answer different questions: **`error` says whether the
+HARNESS is healthy; `fail` says whether the TREE is.**
+
+**The general shape:** an instrument that folds "the thing I measured is bad"
+into "I could not measure" produces a number nobody can act on. This repo
+already learnt it once at a finer grain — `VOID` exists in `check.mts` for
+exactly this reason, and `drawcheck` VOIDs rather than passing when it cannot
+read the budget out of `BRIEF.md`. The ledger simply had not been given the same
+vocabulary. When you add a verdict field, enumerate the *kinds* of not-ok before
+you write the first row; retrofitting leaves a history you cannot re-read.

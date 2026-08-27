@@ -51,7 +51,25 @@ export interface JobRecord {
   queuedMs: number;
   /** Milliseconds the job actually ran. */
   ranMs: number;
-  verdict: 'ok' | 'error' | 'deadline';
+  /**
+   * What happened to the JOB, which is not the same question as what the gate
+   * decided.
+   *
+   * `fail` was originally folded into `error`, and it made the ledger's error
+   * rate unreadable: of 80 `error` rows in the first evening of ledger, **23
+   * were a gate returning FAIL and 5 returning VOID** -- runs that worked
+   * perfectly and reported bad news -- against about a dozen genuine harness
+   * faults. "4.5% of jobs errored" was really "0.7% errored and the rest were
+   * the suite doing its job on a tree that was mid-repair".
+   *
+   * - `ok`       the job ran and the thing it checked was fine.
+   * - `fail`     the job ran correctly and returned a red verdict. NOT an error.
+   * - `void`     the job could not measure (its oracle was unreadable).
+   * - `busy`     the machine was somebody else's; nothing was measured.
+   * - `error`    the job itself broke: a closed page, a protocol fault, a crash.
+   * - `deadline` the queue gave up on it.
+   */
+  verdict: 'ok' | 'fail' | 'void' | 'busy' | 'error' | 'deadline';
   /** Who held the exclusive lease when this was enqueued, if anyone. */
   holder?: string | null;
   /** Jobs queued or running ahead of this one at enqueue. */
