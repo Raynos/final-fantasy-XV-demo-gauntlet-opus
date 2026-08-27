@@ -36,29 +36,29 @@ hook warns on a new plan with no `Status:` line; it does not block.
 
 ## Order — one agent per plan
 
+**Everything upstream of `after-phase3` is archived.** The four-phase sequence
+— rescue, TypeScript, boot and memory, content and gameplay — is closed, and so
+are the three parallel plans that ran beside it.
+
 ```
-  2026-08-21-opus-harness-daemon   DONE 2026-08-23 -> project/archive/plans/
+  2026-08-21-opus-harness-daemon              DONE 08-23 -> archive/plans/
+  2026-08-21-fable-sibling-ports              DONE 08-25 -> archive/plans/
+  2026-08-21-fable-procedural-modeling        DONE       -> archive/plans/
+  2026-08-22-opus-phase3-boot-and-memory      DONE 08-25 -> archive/plans/
+  2026-08-21-opus-rescue-and-sequencing       SUPERSEDED 08-26 — never staffed;
+                                              it was the four-phase ORDER, and
+                                              phase 4 was the last one open, so
+                                              it folded into phase4 §0
+  2026-08-22-opus-phase4-content-and-gameplay DONE 08-27 -> archive/plans/
+                                              5 of 5, and it took WS-0b's
+                                              per-shot floor with it: perf and
+                                              gameplay both certify
                     |
-    +---------------+---------------+
-    |               |               |
-  2026-08-21-     2026-08-21-     2026-08-22-                     parallel
-  fable-sibling-  fable-          opus-phase4-
-  ports           procedural-     content-and-
-  DONE 08-25 ->   modeling        gameplay
-  archive/plans/  DONE -> archive
-    |               |               |
-    +---------------+---------------+
-                    |
-  2026-08-22-opus-phase3-boot-and-memory      DONE 2026-08-25 -> project/archive/plans/
-                    |
+                    v
   2026-08-25-opus-after-phase3                four independent workstreams,
-    WS-1 head · WS-2 programs · WS-3          one agent each, no collisions
-    geometry bake · WS-4 canopy patch
-                    |
-  phase4's WS-0b perf                         the re-baseline is PUBLISHED and
-    frame-cost split · per-shot floor          PASSING (2026-08-25). What is
-                                               left is the cost split, and the
-                                               ruler defect that blocked it
+    WS-1 head · WS-2 programs · WS-3          one agent each, no collisions.
+    geometry bake · WS-4 canopy patch         WS-1 is the top item in the game:
+                                              worth 3.0 -> 4.0 on its own costing
 
   2026-08-26-opus-the-standing-backlog        WS-1..10, extracted from the 52
     head/hair · ground+light · alpha edges ·   handoffs that outlived their
@@ -66,14 +66,16 @@ hook warns on a new plan with no `Status:` line; it does not block.
     water · harness debt · creatures           MEASURED NEGATIVES — read it
                                                before re-opening anything
 
-  2026-08-21-opus-rescue-and-sequencing       SUPERSEDED 2026-08-26 -> archive.
-                                              Never staffed — it was the four-
-                                              phase order, and phase 4 was the
-                                              last one open, so it folded into
-                                              phase4 §0 rather than outliving it
+  2026-08-24-opus-benchmaxx-harness           PROPOSED, unstaffed
 ```
 
-The parallel three collide on two directories. Assign each to **one** of them:
+Phase 4's own leftovers are named at the end of its §5, each with an owner in
+one of the two live plans above — including the one shot in 142 still over the
+draw-call budget, and round 16's ranked list of what a blind judge still
+identifies us by.
+
+The three parallel plans collided on two directories. They were assigned to
+**one** of them each:
 `src/characters/**` (all three want it) and `src/world/veg/` (sibling-ports
 §3.6, procedural-modeling §7) both go to **procedural-modeling**.
 

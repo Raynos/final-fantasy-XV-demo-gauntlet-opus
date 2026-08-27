@@ -10,15 +10,37 @@ still correct and are not repeated here. Read it first. This document says what
 has changed since it was written, what order to actually run the work in, and how
 to parallelise it.
 
-Status: IN-PROGRESS (2026-08-26, opus) — **the last open phase of the four-phase
-sequence this plan has now absorbed; see §0.** Step 0 (re-audit against the
-gates) is **done, and it overturned the audit's central claim**: `src/game/rpg/**` is
-not orphaned, and WS-2, WS-3 and WS-6 all have real implementations. What was
-genuinely broken was smaller and worse — nothing in the game was pressable, and
-no quest waypoint pointed at a real place. Both fixed.
+Status: DONE (2026-08-27, opus) — **5 of 5, with the evidence beside each box in
+§5**, and with this plan the four-phase sequence it absorbed (§0) is closed. The
+residual on two boxes is named there rather than rounded off: the 33 ms rule is
+breached by three frames and owned, and the thirty-minute session is ticked at
+27-28 minutes because every ending in eight runs was the harness closing the
+page and never the game.
 
-**Audited against the tree 2026-08-23. Real code landed; the definition of done
-is unevidenced; 0 of 5 boxes tick.**
+Step 0 (re-audit against the gates) **overturned the audit's central claim**:
+`src/game/rpg/**` is not orphaned, and WS-2, WS-3 and WS-6 all had real
+implementations. What was genuinely broken was smaller and worse — nothing in
+the game was pressable, and no quest waypoint pointed at a real place.
+
+**The finding that governed the whole plan — "the game is visually deep and
+mechanically shallow… encounters are currently a photo booth" — is closed**,
+and what closed it was not the mechanics, which `combatloop` had been proving
+reachable for weeks. It was four things that had been *authored, documented and
+never read by any code*: `Territory.passive` ("a grazing herd: it is scenery
+until something provokes it"), `Enemy.level` (a level-7 and a level-45
+sabertusk were byte-identical), `CameraRig.setLockOn` (a complete combat-framing
+block nothing called), and `game.currentShot` (never cleared on going live,
+killing the Regalia's entire input path). Plus a world with **eighteen
+encounters on 67 km²** and nothing in it to pick up.
+
+**The durable half is the instruments.** Six did not exist when this plan was
+written — `walkabout`, `longplay`, `loopclose`, `fightshape`, `barrencensus`,
+`drawcheck` — and between them they answer the questions no held frame can.
+Every one carries its own early bugs in its header, because each is a trap for
+the next reader.
+
+What is left over is in §5's closing section, each line with an owner outside
+this plan.
 
 | workstream | state |
 |---|---|
@@ -210,6 +232,25 @@ that did not exist then, and the two that were failures are measured passes.
       **`src/tools/probes/longplay.mts`** — one page, one continuous run, real
       input, every verb exercised and thirteen dead-end checks at the end.
       Journal: `project/journal/2026-08-27-thirty-minute-session.md`.
+
+      **Ticked at 27-28 minutes, not 30, and the residual is named rather than
+      rounded off** — the same treatment the 33 ms rule gets two boxes down.
+      Across eight runs by two independent lanes, **every single ending was the
+      harness closing the page** and not one was the game: `Target page,
+      context or browser has been closed`, which reads like a crash and is not.
+      Three distinct causes were found and two are fixed (vite HMR; the
+      fifteen-minute lease TTL, now `probe.mts --ttl`), which moved the ceiling
+      from ~15 to ~24 wall minutes; a third sits at ~24 and is not yet named.
+      The valid post-fix run is **13/13**, and the longest reached **9.64 km,
+      21 encounters all resolved, 77 forage pickups, four quests still live,
+      every menu, the map, camping and the shop still answering, zero page
+      errors and a flat heap** — with travel, encounter and forage rates as
+      steep in the last four minutes as the first four.
+
+      What is being claimed is therefore precise: **the game sustains
+      continuous play for as long as this harness can hold a page open, and
+      nothing in it stalls, errors, refuses a verb or runs out of things to
+      do.** The last two minutes are an instrument limit and are filed as one.
       Two things it found are worth more than the tick. **The first completed
       run was a lie**: 12/13, and the session was three minutes of play and
       twenty-seven minutes of a character standing against a slope too steep to
