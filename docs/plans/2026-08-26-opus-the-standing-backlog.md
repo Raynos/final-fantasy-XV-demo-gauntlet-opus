@@ -358,9 +358,42 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
   creating no programs, textures or geometries, and surviving every ablation.
 - **`day-night-sweep`: 11.3 ms, 11% over budget, unattributed.**
 - **The frame is a draw-call count** (~8.7 µs/draw, corr 0.801 vs 0.628 for
-  triangles) — and **ten town shots draw 924–1011 against BRIEF's 800, ungated.**
-  `town_forecourt` is 991; reconcile its 349-draw ablation against the 46-mesh
-  page count *first*, because one of them is wrong.
+  triangles). **Gated now** — `src/tools/drawcheck.mts`, in `check.mts`, budget
+  parsed out of BRIEF rule 3, ratcheted on `project/draw-baseline.json`. It
+  also settles the "reconcile the 349-draw ablation against the 46-mesh page
+  count" question above: **both were wrong, because both counted scene meshes.**
+  Wrapping `renderer.renderBufferDirect` attributes every real draw, and about
+  40% of a town frame is not scene meshes at all — three shadow cascades on a
+  rotating refresh schedule, plus the velocity pass's proxy scene. Held poses of
+  `poi_reststop` go 707 855 707 **1005** and repeat; the capture lands on the
+  1005 phase.
+
+  **Eleven shots are still over, 818–945, and every one of them is Hammerhead.**
+  Nothing else in the corpus exceeds 792. Merging the town's and the POI kits'
+  shadow casters took the worst from 1013 to 945; the remaining 145 is **not in
+  `world/town/` or `PoiKits.ts`**. Attributed on `town_forecourt`'s peak frame,
+  by owner:
+
+  | draws | owner | what |
+  |---|---|---|
+  | 156 | `src/characters/npc/` | 11 town NPCs, ~6 meshes each, casting individually |
+  | 136 | `src/world/veg/` | three grass rings |
+  | ~106 | `src/engine/postfx/VelocityPass.ts` | motion-vector proxies — **`frustumCulled = false`, so off-screen movers still draw** |
+  | 90 | `src/characters/` | the four party rigs |
+  | 80 | `src/world/terrain/Clipmap.ts` | 28 clipmap rings |
+  | 65 | `src/world/veg/` | trees |
+  | 52 | `src/world/props/Landmarks.ts` | |
+  | ~46 | — | Hammerhead, after the merge (was 100) |
+  | 36 + 36 | `RoadFurniture.ts`, `Outposts.ts` | |
+  | 44 | `src/world/props/Rocks.ts` | ten families, 4 draws each |
+
+  The instrument that produced that table is a ten-line
+  `renderBufferDirect` wrapper; `src/tools/probes/vegcensus.mts` is the nearest
+  thing in the tree and it uses `traverseVisible`, which cannot see any of the
+  shadow or velocity work. **The single cheapest remaining win is the velocity
+  pass's missing frustum cull**, and the next is the same shadow-proxy merge
+  applied to the NPCs — see `shadowProxy` in `world/town/Hammerhead.ts` and
+  `world/props/PoiKits.ts` (duplicated in both; it belongs on `PartBuilder`).
 - **`tf_stoch` has never been measured.** `splat.md` calls this its
   highest-priority remaining item: 6 array fetches per active layer instead of 4,
   ~2 layers typically live, so roughly +4 fetches per pixel, and the fragment
