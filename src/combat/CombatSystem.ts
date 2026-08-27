@@ -245,6 +245,9 @@ export class CombatSystem {
   _sweepTmp!: THREE.Vector3;
   weaponSlot!: number;
   _armigerBeat!: number;
+  /** What `_frameCombat` last handed the camera. Null when it handed it nothing. */
+  _framedTarget: Enemy | null = null;
+
   /** Set by `Director` for a scenario shot; absent in normal play. */
   _armigerCentre?: THREE.Vector3;
   _armigerOpts?: ArmigerLayout;
@@ -1329,6 +1332,71 @@ export class CombatSystem {
     }
 
     this.elemancy?.update();
+    this._frameCombat();
+  }
+
+  /**
+   * Put the fight in frame.
+   *
+   * `CameraRig` has carried a complete combat-framing block since it was
+   * written — bias the orbit onto the target, tilt to it, and back the arm off
+   * so both silhouettes fit — behind `rig.lockOn`, and **nothing in the tree
+   * has ever called `rig.setLockOn`**, so it has never run once.
+   * `CombatSystem.setLockOn` drives the HUD reticle and stops there.
+   *
+   * The cost of that was visible the moment a real fight was photographed
+   * (`probes/fightshape.mts`): at the frame the encounter starts, the pack is a
+   * thirty-pixel smudge forty metres out and the camera is still framing a
+   * country walk. A fight you cannot see is not a fight, and this is why every
+   * combat still in the corpus is an authored shot.
+   *
+   * Fed from here rather than from `setLockOn` on purpose. `Director` calls
+   * `combat.lockOn(boss)` to pose the scenario shots, and routing the camera
+   * through that call would move `combat_stagger` and its neighbours — frames
+   * this lane does not own. The gate here is narrower and cannot fire under a
+   * capture: an authored shot is up (`rig.shot`), or the live encounter
+   * director is not actually in a fight, and nothing happens. A posed page
+   * never enters `combat` state, because `Director.setLive(false)` under
+   * `?shoot` stops the encounter loop before it can.
+   */
+  _frameCombat() {
+    const game = this.game;
+    if (!game) return;
+    const rig = game.get('CameraRig');
+    if (!rig || rig.shot) return;
+    const enc = game.get('Encounters');
+    const live = !!enc && enc.state === 'combat';
+    if (!live) {
+      if (this._framedTarget) { rig.setLockOn(null); this._framedTarget = null; }
+      return;
+    }
+    // The lock target when the player has set one; otherwise whatever is
+    // closest and in front, which is what the fight is *about* right now.
+    let t: Enemy | null = this.lockTarget;
+    if (!t || t.dead) t = this.autoTarget(38);
+    if (!t) t = this._nearestThreat(42);
+    if (t !== this._framedTarget) {
+      rig.setLockOn(t ? t.root : null);
+      this._framedTarget = t;
+    }
+  }
+
+  /**
+   * Nearest live enemy within `maxDist`, regardless of where the camera is
+   * pointing. `autoTarget` deliberately wants one in front; framing wants one
+   * to turn *towards*, which is the opposite requirement.
+   */
+  _nearestThreat(maxDist: number): Enemy | null {
+    const p = this.player;
+    if (!this.enemies || !p) return null;
+    let best: Enemy | null = null, bd = maxDist * maxDist;
+    for (const e of this.enemies.list) {
+      if (e.dead || !e.fighting) continue;
+      const dx = e.root.position.x - p.position.x, dz = e.root.position.z - p.position.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bd) { bd = d2; best = e; }
+    }
+    return best;
   }
 
   /**
