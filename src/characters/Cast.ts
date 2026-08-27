@@ -465,7 +465,13 @@ export const CAST = {
         ],
       },
       outfit: [
-        { type: 'shirt', color: 0x8d897e, rough: 0.94, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016 },
+        // Black, not pale grey. `character-prompto-daylight-01.jpg` and
+        // `party-three-field-02.jpg` agree: every layer he wears is black and
+        // the only lighter value on him is a grey collar and the boot bands.
+        // A pale chest panel differentiated him from the other three, but it
+        // differentiated him into a character FFXV does not have — it read as
+        // moulded body armour, not a tee under an open vest.
+        { type: 'shirt', color: 0x232228, rough: 0.94, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016, neckRib: 0.012 },
         { type: 'pants', color: 0x302d2d, rough: 0.90, padHip: 0.016, padAnkle: 0.011, u1: 0.95, wrinkle: 0.026, knee: 0.03 },
         { type: 'jacket', color: 0x2f2c2b, rough: 0.52, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16, zip: true, zipAt: 0.28, pockets: true, pocketTh: 0.86, pocketT: 0.48, studColor: 0x94989f },
         // A vest, so the armhole stops at the deltoid. He is the only one of

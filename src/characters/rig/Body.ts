@@ -296,9 +296,17 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   // 82 mm from the wrist to the middle knuckle, 74 mm across: a hand, not a
   // paddle. uvScale puts the pore map at ~13 mm/tile, matching the forearm.
   B.skin([[I[`hand${side}`], 1]]);
+  // The cuff. Ungloved, the palm's first ring sits 14 mm proximal of the wrist
+  // bone at almost exactly the forearm's own radius, so the two sweeps
+  // interpenetrate — invisibly, while both were skin. Put a black glove on the
+  // palm and that intersection becomes a bright wedge of forearm cutting into
+  // the leather at the wrist, which is what
+  // `tmp/shots/ws7-p2/noctis_hand.png` shows. A glove is *worn over* the
+  // wrist: the ring moves 20 mm up the forearm and clears its radius.
+  const armR = 0.0254 + 0.0056 * rig.profile.muscle;
   sweepTube(B, {
     nodes: [
-      { p: pt(-0.014, 0.001, 0.000).toArray(), rx: R(0.0248), rz: R(0.0158), w: [[I[`hand${side}`], 0.65], [I[`twist${side}`], 0.35]] },
+      { p: pt(gl ? -0.034 : -0.014, 0.001, 0.000).toArray(), rx: R(gl ? armR + 0.0032 : 0.0248), rz: R(gl ? (armR + 0.0032) * 0.66 : 0.0158), w: [[I[`hand${side}`], 0.65], [I[`twist${side}`], 0.35]] },
       { p: pt(0.016, 0.002, 0.0015).toArray(), rx: R(0.0308), rz: R(0.0162), w: [[I[`hand${side}`], 1]] },
       { p: pt(0.046, 0.001, 0.0028).toArray(), rx: R(0.0356), rz: R(0.0146), w: [[I[`hand${side}`], 0.94], [I[`fingers${side}`], 0.06]] },
       { p: pt(0.070, -0.001, 0.0032).toArray(), rx: R(0.0366), rz: R(0.0116), w: [[I[`hand${side}`], 0.74], [I[`fingers${side}`], 0.26]] },
