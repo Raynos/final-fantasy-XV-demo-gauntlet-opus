@@ -16,9 +16,10 @@ that the root holds `README.md`, `CLAUDE.md`, `BRIEF.md` and build config, and
 this is working state.
 
 > **The single most useful fact below:** the whole gate suite was ~13 minutes,
-> serial, with no memory. It is now **272.9 s** cold and **0.68 s** on a tree it
-> has already graded. Everything a human runs between edits — both typechecks
-> and a production build — is **~1.0 s**, run together.
+> serial, with no memory. It is now **71.6 s** cold and **~8.5 s** after a
+> commit that touches docs or the harness — which is **70% of commits on this
+> trunk** (84 of the last 120). Everything a human runs between edits — both
+> typechecks and a production build — is **~1.0 s**, run together.
 
 ## The fast lane: what pre-commit runs on every commit
 
@@ -45,15 +46,38 @@ seconds when the cache is current.
 
 ## `pnpm run check` — the 18 gates
 
-**Total 272.9 s cold on a quiet box, in two pools; 0.68 s on a tree already
-graded.** It was ~13 minutes, serial, with no cache. Three changes, each
-measured:
+**71.6 s cold on a quiet box, in two pools.** It was ~13 minutes, serial, with
+no cache. Measured, 2026-08-28:
 
 | | before | after |
 |---|---|---|
-| whole suite, cold, quiet | ~780 s | **272.9 s**, 18/18 |
-| whole suite, same clean tree | ~780 s | **0.68 s** (`gatecache`, keyed on the tree sha) |
-| `drawcheck` alone | 269 s | **120 s** (`--par 4`), then **0.18 s** memoised |
+| whole suite, cold, quiet | ~780 s | **71.6 s**, 18/18 |
+| after a docs commit — 43% of commits | 308.9 s | **8.2 s** |
+| after a harness commit — 27% of commits | 308.9 s | **8.5 s** |
+| after a game edit (must re-derive) | 308.9 s | 76.9 s |
+| `drawcheck` alone | 269 s | **42.6 s** (37 of 142 shots) |
+| `heightcheck` | 7.29 s | **1.03 s** (warm lease) |
+| `creaturecheck` | 7.75 s | **1.13 s** (warm lease) |
+
+**The cache key is what each gate READS, not which commit moved.** It used to be
+the whole tree sha, so any commit re-derived all eighteen gates — and 84 of the
+last 120 commits here touch no game code at all. It also refused to cache a
+dirty tree, which is where an agent actually lives. See `gatecache.mts` for what
+is in the key and the staleness that trades against.
+
+**`drawcheck` poses the shots that could breach, plus a rotating sixth.** Only 9
+of 142 shots come within 100 draws of the 800 budget and only 4 within 60, which
+is the gate's own run-to-run spread. The rotation is what keeps it sound: every
+shot is measured at least every sixth run, so a grower promotes itself.
+
+**Two gates take a warm lease.** `routeLease` still forces `cold: true` for
+everyone else — reusing a driven page has burned this repo twice — but
+`LeaseRequest.reuse` is opt-in and earned by measurement. `floatcheck` was
+tested and REFUSED it: on a reused page it reported `91 force-built this run`
+against `115` cold. The safety property that makes the others defensible is
+structural: `releaseLease` throws a leased page away rather than pooling it, so
+a reused page can only ever have come from `/shots` — a posed capture, never
+another gate's driven page.
 
 The suite now **ratchets its own wall time** against
 `project/check-baseline.json` and fails itself past tolerance, because it grew
