@@ -126,6 +126,49 @@ And two specials:
   owning one machine: RESCUE §B6 threw away a session of perf numbers taken under
   six concurrent chromiums, and under per-worktree daemons that was unfixable.
 
+## Warm leases: who can inherit a booted page, and who has been measured out
+
+`routeLease` boots a cold page unless the caller passes `reuse`, and that
+default is load-bearing — reusing a driven page has burned this repo twice.
+`reuse` is earned per gate by showing a byte-identical verdict, never assumed.
+
+The structural limit is `pageKey`, which is `build | WxH | query`, and the fact
+that **only `/shots` ever pools a page**. So the only page there is to inherit is
+shoot-mode at the capture defaults: **1600x900, `?q=ultra&shoot=1`**. A gate can
+inherit exactly when it wants that, and the boot it saves is ~7.5 s.
+
+| gate | asks for | verdict |
+|---|---|---|
+| `heightcheck` | the defaults | **reuse — 7.1x**, byte-identical |
+| `creaturecheck` | the defaults | **reuse — 6.8x**, byte-identical |
+| `floatcheck` | the defaults | cold: it *could* inherit and **failed the verdict test**, 91 against 115 force-built |
+| `reachcheck` | the defaults | cold **on principle**: its whole question is "did this code run", so a page that has already run code is the wrong oracle. Counts drift 93 038 vs 93 080 and say so |
+| `uxcheck` | `play: true`, so no `&shoot=1` | cannot inherit. Tested anyway: 48.5 s -> 46.8 s, which is noise, not a skipped boot |
+| `combatloop` | `q=low`, 1280x720 | **measured and NOT taken — see below** |
+| `integration` | `q=low`, 1280x720, `audio=force` | cannot inherit at all — see below |
+| `driftcheck` | — | cold by premise: it baselines at a fresh boot |
+
+**`combatloop` and `integration` were the two the boot audit left open, on the
+theory that only the viewport separated them. It is not, and the arithmetic goes
+the wrong way.**
+
+Both also run `q=low`, and `integration` additionally carries `audio=force` in
+the query. `audio=force` is what its audio assertions need, and no pooled
+`/shots` page has it — so `integration` cannot match the key without giving up
+what it measures. That is a hard stop, not a cost question.
+
+`combatloop` can match, and matching costs more than it saves. Measured, same
+tree, same machine: **42 s as it is, 70 s at `--q ultra --w 1600 --h 900`**, both
+reporting 31/31. Rendering every combat frame at ultra in 1600x900 costs **+28 s**
+to avoid a **7.5 s** boot — a net loss of about 20 s, on a gate that is not the
+suite's critical path. `q=low` at 1280x720 is not an oversight; it is why the
+gate is cheap.
+
+**So the reachable set is three, two took it, and the remaining ~38 s is not
+reachable by matching keys.** Getting it needs pooling play-mode pages, which
+is a much bigger change and would undo the property (`releaseLease` destroys a
+driven page) that makes today's reuse safe. Do not undo it casually.
+
 ## The ledger, and never polling again
 
 The daemon writes **one JSONL line per job** to
