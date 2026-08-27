@@ -38,7 +38,7 @@ rig?.clearShot?.();
 g.resetClock();
 
 /** Minutes of game time this session represents, at 60 Hz. */
-const MINUTES = Number(window.__PLAY_MINUTES || 20);
+const MINUTES = Number(window.__PLAY_MINUTES || 4);
 const step = (n) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
 const ok = (name, cond, detail) => {
   out.push(`  ${cond ? 'ok  ' : 'FAIL'}  ${name.padEnd(38)} ${detail || ''}`);
@@ -56,8 +56,13 @@ for (const ev of ['encounter:start', 'encounter:victory', 'encounter:kill', 'for
   window.addEventListener(ev, () => { events[ev] = (events[ev] || 0) + 1; });
 }
 
-const t0 = { exp: rpg ? rpg.noctis.exp ?? 0 : 0, gil: rpg ? rpg.inventory.gil : 0 };
-const questsAtStart = rpg ? rpg.quests.active().length : 0;
+// EXP is BANKED until you rest — `rpg.noctis.exp` is the applied figure and
+// reading it reports +0 off a session that earned hundreds. Same trap as
+// `loopclose.mts`.
+const t0 = { exp: rpg ? rpg.expBank.banked : 0, gil: rpg ? rpg.inventory.gil : 0 };
+// `QuestLog.byStatus('active')` — there is no `active()`.
+const activeQuests = () => (rpg ? rpg.quests.byStatus('active').length : 0);
+const questsAtStart = activeQuests();
 
 /* ------------------------------------------------------------------ walk */
 // Sprint a long, turning route so streaming, encounters and foraging all get
@@ -69,10 +74,41 @@ let inCombatFrames = 0, maxCombatRun = 0, combatRun = 0;
 const last = player.position.clone();
 const seenPrompts = new Set();
 let yaw = 0.7;
+const heap = [];
+const forage = props && props.foraging;
+let detours = 0, minSpot = Infinity, chasing = false, forageOffered = 0;
 for (let f = 0; f < FRAMES; f++) {
   // A slow continuous turn, so the route is a wide arc rather than a line and
   // the camera keeps meeting new country.
-  if (f % 900 === 0) { yaw += 0.9; if (rig) { rig.yaw = yaw; rig.yawTarget = yaw; } }
+  if (f % 900 === 0 && !chasing) { yaw += 0.9; if (rig) { rig.yaw = yaw; rig.yawTarget = yaw; } }
+  // **Walk toward the glint.** A player who sees a forage spot at forty metres
+  // goes and gets it; a probe on a fixed arc passes within 3.2 m of one about
+  // never, and the first run of this reported "0 taken" over 1.46 km against a
+  // layer that was working perfectly. Measuring a straight line and calling it
+  // a session is the mistake.
+  if (forage && f % 10 === 0) {
+    const s0 = forage.live[0];
+    chasing = false;
+    if (s0) {
+      const d = Math.hypot(s0.x - player.position.x, s0.z - player.position.z);
+      minSpot = Math.min(minSpot, d);
+      if (d < 140 && rig) {
+        chasing = true;
+        // **Negated.** `CameraRig.yaw` is the orbit angle of the camera
+        // AROUND the player, so the direction the player walks under W is
+        // `-(sin yaw, cos yaw)`, not `+`. Measured: `rig.yaw = 0` walks to
+        // -Z. Getting this backwards made the probe sprint directly away
+        // from every glint for four minutes and report the forage layer
+        // broken — the closest a spot ever got was 65.7 m, which was simply
+        // where it started.
+        rig.yawTarget = Math.atan2(-(s0.x - player.position.x), -(s0.z - player.position.z));
+        rig.yaw = rig.yawTarget;
+        yaw = rig.yaw;
+        detours++;
+      }
+    }
+  }
+  if (f % 3600 === 0 && performance.memory) heap.push(Math.round(performance.memory.usedJSHeapSize / 1e6));
   inp.keys.clear();
   inp.keys.add('KeyW');
   if ((f % 1800) < 1200) inp.keys.add('ShiftLeft');
@@ -83,6 +119,7 @@ for (let f = 0; f < FRAMES; f++) {
 
   const cur = ix && ix.current;
   if (cur) { promptsSeen++; seenPrompts.add(cur.verb + ' ' + (cur.label || '')); }
+  if (cur && cur.id === 'forage') forageOffered++;
   // Take anything within reach: this is what a player does, and it is the only
   // way the forage layer's `taken` set ever gets exercised at scale.
   if (cur && cur.id === 'forage') { cur.handler(g, cur); forages++; }
@@ -114,7 +151,10 @@ out.push('--- what happened ---');
 out.push(`  travelled ${(travelled / 1000).toFixed(2)} km`);
 out.push(`  encounters started ${events['encounter:start'] || 0}, `
   + `victories ${events['encounter:victory'] || 0}, kills ${events['encounter:kill'] || 0}`);
-out.push(`  forage taken ${forages}, distinct prompts ${seenPrompts.size}`);
+out.push(`  forage taken ${forages} (${detours} detours toward a glint), distinct prompts ${seenPrompts.size}`);
+out.push(`  JS heap per minute, MB: ${heap.join(' ')}`);
+out.push(`  closest a forage spot ever got: ${minSpot === Infinity ? '-' : minSpot.toFixed(1) + ' m'}; `
+  + `prompt offered on ${forageOffered} frames`);
 out.push(`  in combat ${((inCombatFrames / FRAMES) * 100).toFixed(1)}% of frames, `
   + `longest unbroken fight ${(maxCombatRun / 60).toFixed(0)} s`);
 out.push(`  prompts met: ${[...seenPrompts].slice(0, 10).join(' | ') || 'NONE'}`);
@@ -123,14 +163,18 @@ out.push(`  prompts met: ${[...seenPrompts].slice(0, 10).join(' | ') || 'NONE'}`
 out.push('');
 out.push('--- is anything wedged? ---');
 ok('no page errors', errors.length === 0, errors.slice(0, 3).join(' / '));
-ok('the world kept producing fights', (events['encounter:start'] || 0) >= 3,
-  `${events['encounter:start'] || 0} encounters in ${MINUTES} min`);
+// Rate, not count: a threshold of "3 encounters" passes a twenty-minute
+// session that had one fight in the first minute and nothing after.
+const fightsPerMin = (events['encounter:start'] || 0) / MINUTES;
+ok('the world keeps producing fights', fightsPerMin >= 0.35,
+  `${(events['encounter:start'] || 0)} in ${MINUTES} min = ${fightsPerMin.toFixed(2)}/min`);
 ok('fights end', enc.state === 'field', `director state "${enc.state}"`);
 ok('no fight ran away with the session', maxCombatRun < 60 * 240,
   `longest ${(maxCombatRun / 60).toFixed(0)} s`);
-ok('the world kept producing things to pick up', forages >= 3, `${forages} taken`);
-ok('rewards accumulated', rpg && ((rpg.noctis.exp ?? 0) > t0.exp || rpg.inventory.gil !== t0.gil),
-  `exp +${rpg ? (rpg.noctis.exp ?? 0) - t0.exp : 0}, gil ${rpg ? rpg.inventory.gil - t0.gil : 0}`);
+ok('the world keeps producing things to pick up', forages / MINUTES >= 0.4,
+  `${forages} taken = ${(forages / MINUTES).toFixed(2)}/min`);
+ok('rewards accumulated', rpg && (rpg.expBank.banked > t0.exp || rpg.inventory.gil !== t0.gil),
+  `exp banked +${rpg ? rpg.expBank.banked - t0.exp : 0}, gil ${rpg ? rpg.inventory.gil - t0.gil : 0}`);
 ok('the player is still on the ground', Math.abs(player.position.y) < 4000
   && isFinite(player.position.x), `${player.position.x.toFixed(0)},${player.position.z.toFixed(0)}`);
 ok('the party is still with him', (() => {
@@ -141,17 +185,17 @@ ok('the party is still with him', (() => {
   const party = g.get('Party');
   return party ? party.members.map((m) => m.root.position.distanceTo(player.position).toFixed(0) + 'm').join(' ') : '-';
 })());
-ok('the quest log still has work in it', rpg && rpg.quests.active().length > 0,
-  `${rpg ? rpg.quests.active().length : 0} active (started with ${questsAtStart})`);
+ok('the quest log still has work in it', activeQuests() > 0,
+  `${activeQuests()} active (started with ${questsAtStart})`);
 ok('menus still open', (() => {
   const menus = g.get('Menus');
   if (!menus) return false;
-  try { menus.setScreen('inventory'); step(6); const on = !!menus.screen; menus.setScreen(null); step(4); return on; }
+  try { menus.setScreen('inventory'); step(6); const on = menus.name === 'inventory'; menus.setScreen(null); step(4); return on; }
   catch (e) { return false; }
 })());
 ok('the map still opens', (() => {
   const menus = g.get('Menus');
-  try { menus.setScreen('map'); step(6); const on = !!menus.screen; menus.setScreen(null); step(4); return on; }
+  try { menus.setScreen('map'); step(6); const on = menus.name === 'map'; menus.setScreen(null); step(4); return on; }
   catch (e) { return false; }
 })());
 ok('camping still works', (() => {

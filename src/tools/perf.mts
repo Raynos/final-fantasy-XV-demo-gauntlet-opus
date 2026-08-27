@@ -55,9 +55,10 @@ function parseArgs(argv: string[]) {
   const o: {
     w: number, h: number, frames: number, warmup: number, q: string, shots: string[],
     target: number, breakdown: boolean, out: string | null, baseline: string | null, pairs: number,
+    shotpairs: number,
   } = {
     w: 1600, h: 900, frames: 120, warmup: 40, q: 'ultra', shots: [],
-    target: 60, breakdown: false, out: null, baseline: null, pairs: 24,
+    target: 60, breakdown: false, out: null, baseline: null, pairs: 24, shotpairs: 8,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -71,6 +72,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--out') o.out = argv[++i];
     else if (a === '--baseline') o.baseline = argv[++i];
     else if (a === '--pairs') o.pairs = Number(argv[++i]);
+    else if (a === '--shotpairs') o.shotpairs = Number(argv[++i]);
     // `harnessArgs` owns these and parses the same argv separately; this
     // clause is what lets the gate take `--build <sha>` and `--dirty` at all.
     // An unknown flag still throws, which is the half of this worth keeping.
@@ -104,6 +106,13 @@ interface Row {
   scene: number;
   draws: number;
   tris: number;
+  /**
+   * This shot's OWN noise floor, IQR in ms, measured on its own pose moments
+   * before its own timing pass.
+   */
+  floorMs: number;
+  /** True when this shot's frame is separable from that floor. */
+  separable: boolean;
 }
 
 async function main() {
@@ -151,7 +160,7 @@ async function main() {
       g.settle(20);
       await window.__RULER.cooldown();
       return window.__RULER.noiseFloor((_i: number) => g.frame(1 / 60), { pairs: p });
-    }, [shots[0], o.pairs] as [string, number]);
+    }, [shot, pairs] as [string, number]);
 
     /**
      * Warm the PAGE, not just the shot, before the first floor is taken.
@@ -177,10 +186,26 @@ async function main() {
       `IQR ${floorStart.iqrMs.toFixed(2)} ms, bias ${floorStart.biasMs >= 0 ? '+' : ''}${floorStart.biasMs.toFixed(2)} ms\n`,
     );
 
-    console.log('shot                 ms    fps  spread     cpu    >16     p95     max   draws     tris');
+    console.log('shot                 ms    fps  spread     cpu    >16     p95     max   draws     tris  floor');
     console.log('-'.repeat(80));
 
     for (const name of shots) {
+      /**
+       * **This shot's own floor, on this shot's own pose, moments before it is
+       * timed.** §6.2 measured a 16x spread in per-shot floors for
+       * `imgdiff.mts` and the same lesson had never been applied here: one
+       * floor taken on `shots[0]` was being used to judge every shot in the
+       * corpus, so `perf A B` and `perf B A` could disagree about the same
+       * machine and the same build — a quiet lead shot bought a low floor and
+       * every heavy shot was then quoted against it. That is precisely the
+       * self-flattery this instrument exists to prevent, and it was built in.
+       *
+       * Cheaper than the run-level floor on purpose: `--shotpairs` (8) against
+       * `--pairs` (24). Eight ABBA pairs is enough to say whether *this* frame
+       * is separable from its own noise, which is a much weaker question than
+       * the one the run-level floor answers about the machine.
+       */
+      const shotFloor = await measureFloor(name, o.shotpairs);
       const r = await page.evaluate(async ([n, frames, warmup, breakdown]: [string, number, number, boolean]) => {
         const g = window.GAME;
         const gl = g.renderer.getContext();
@@ -247,18 +272,25 @@ async function main() {
         };
       }, [name, o.frames, o.warmup, o.breakdown] as [string, number, number, boolean]);
 
-      rows.push({ name, ...r });
-      // `<<` is below target; `~` is a shot whose own block spread rivals its
-      // distance from the target, so its verdict is not resolvable today.
+      // Separable against ITS OWN floor, on the same quarter-of-the-frame rule
+      // the run-level check uses.
+      const separable = shotFloor.iqrMs < 0.25 * r.thru;
+      rows.push({ name, ...r, floorMs: shotFloor.iqrMs, separable });
+      // `<<` is below target; `~~` is a shot whose own block spread rivals its
+      // distance from the target, so its verdict is not resolvable today; `??`
+      // is a shot whose own noise floor swallows its own frame, so it has no
+      // verdict at all and must not be quoted in either direction.
       const targetMs = 1000 / o.target;
-      const flag = r.fps < o.target
-        ? (Math.abs(r.thru - targetMs) <= r.spread ? '  ~~' : '  <<')
-        : (Math.abs(r.thru - targetMs) <= r.spread ? '  ~~' : '');
+      const flag = !separable ? '  ??'
+        : r.fps < o.target
+          ? (Math.abs(r.thru - targetMs) <= r.spread ? '  ~~' : '  <<')
+          : (Math.abs(r.thru - targetMs) <= r.spread ? '  ~~' : '');
       console.log(
         `${name.padEnd(16)} ${r.thru.toFixed(2).padStart(7)} ${r.fps.toFixed(0).padStart(6)} ` +
         `${r.spread.toFixed(2).padStart(7)} ${r.cpu.toFixed(2).padStart(7)} ` +
         `${(r.over16 * 100).toFixed(0).padStart(5)}% ${r.p95.toFixed(2).padStart(7)} ` +
-        `${r.max.toFixed(1).padStart(7)} ${String(r.draws).padStart(7)} ${String(r.tris).padStart(8)}${flag}`,
+        `${r.max.toFixed(1).padStart(7)} ${String(r.draws).padStart(7)} ${String(r.tris).padStart(8)} ` +
+        `${shotFloor.iqrMs.toFixed(2).padStart(6)}${flag}`,
       );
     }
 
@@ -270,7 +302,19 @@ async function main() {
   // The worse of the two floors. A run that started quiet and ended contended
   // is a contended run.
   const floor: Floor = floorEnd.iqrMs > floorStart.iqrMs ? floorEnd : floorStart;
-  const worst = rows.reduce((a, b) => (a.fps < b.fps ? a : b));
+  /**
+   * Only a shot that is separable from its OWN floor has a verdict.
+   *
+   * This is the whole point of the per-shot floor: the run no longer stands or
+   * falls as one lump. A corpus where four shots were unmeasurable and a
+   * hundred and thirty-eight were fine used to be thrown away entirely, and a
+   * corpus where the lead shot happened to be quiet used to certify heavy
+   * shots it had no business certifying. Both are the same defect and this is
+   * the same fix.
+   */
+  const certified = rows.filter((r) => r.separable);
+  const unmeasured = rows.filter((r) => !r.separable);
+  const worst = (certified.length ? certified : rows).reduce((a, b) => (a.fps < b.fps ? a : b));
   const meanFps = rows.reduce((s, r) => s + r.fps, 0) / rows.length;
   const medianFrame = quantiles(rows.map((r) => r.thru)).median;
   // **Judge the floor against the frame it was measured on, not against the
@@ -290,6 +334,18 @@ async function main() {
   const floorRow = rows.find((r) => r.name === shots[0]);
   const floorFrame = floorRow ? floorRow.thru : medianFrame;
   const validity = validate(floor, floorFrame, floorStart.iqrMs);
+  /**
+   * The run as a whole is void only when *most* of it is.
+   *
+   * The run-level floor is still measured and still printed, because it is the
+   * thing that answers "was this machine quiet" — but it no longer decides
+   * whether individual shots may be quoted. A run is thrown away when fewer
+   * than three quarters of its shots could resolve their own frame, which is a
+   * statement about the session rather than about whichever shot happened to
+   * be first on the command line.
+   */
+  const separableShare = rows.length ? certified.length / rows.length : 0;
+  const runValid = separableShare >= 0.75 && validity.biasOk;
 
   console.log('-'.repeat(80));
   console.log(`mean ${meanFps.toFixed(1)} fps   worst ${worst.fps.toFixed(0)} fps (${worst.name})`);
@@ -299,7 +355,15 @@ async function main() {
     `${((floor.iqrMs / floorFrame) * 100).toFixed(0)}% of ${shots[0]}'s own ${floorFrame.toFixed(1)} ms frame `
     + `(run median ${medianFrame.toFixed(1)} ms)`,
   );
-  console.log(`RULER_VALID: ${validity.valid}`);
+  console.log(
+    `per-shot floors: ${certified.length}/${rows.length} shots resolve their own frame`
+    + (unmeasured.length
+      ? `; ${unmeasured.length} marked ?? and NOT certified: `
+        + unmeasured.slice(0, 6).map((r) => r.name).join(', ')
+        + (unmeasured.length > 6 ? ` +${unmeasured.length - 6} more` : '')
+      : ''),
+  );
+  console.log(`RULER_VALID: ${runValid}`);
 
   // Compare against a previous run — the only place the "has not moved" rule
   // can actually be applied, and the reason `--out` exists.
@@ -323,8 +387,9 @@ async function main() {
   if (o.out) {
     await mkdir(path.dirname(path.resolve(ROOT, o.out)), { recursive: true });
     await writeFile(path.resolve(ROOT, o.out), JSON.stringify({
-      RULER_VALID: validity.valid,
+      RULER_VALID: runValid,
       rulerWarning: validity.warning,
+      separable: { certified: certified.length, of: rows.length, share: separableShare },
       contention: load,
       ruler: {
         floorStart, floorEnd, medianFrameMs: medianFrame,
@@ -341,17 +406,23 @@ async function main() {
   }
   // Void beats both PASS and FAIL. A run this instrument cannot stand behind
   // must not be quoted in either direction — that is the whole point.
-  if (!validity.valid) {
+  if (!runValid) {
     console.error(`\n${validity.warning}`);
     if (load.busy) console.error(`The contention verdict above already said so: ${load.verdict}`);
-    console.error('VOID: no shot is certified pass or fail by this run.');
+    console.error(
+      `VOID: only ${certified.length} of ${rows.length} shots could resolve their own frame `
+      + `against their own noise floor (${(separableShare * 100).toFixed(0)}%, needs 75%).`);
     process.exit(3);
   }
   if (worst.fps < o.target) {
     console.error(`\nFAIL: ${worst.name} at ${worst.fps.toFixed(0)} fps is below the ${o.target} fps target`);
     process.exit(2);
   }
-  console.log(`\nPASS: every shot >= ${o.target} fps, on a ruler that validated itself`);
+  console.log(`\nPASS: every certified shot >= ${o.target} fps`
+    + (unmeasured.length
+      ? `, on ${certified.length} of ${rows.length} shots; the other ${unmeasured.length} could not `
+        + 'resolve their own frame today and are neither pass nor fail'
+      : ', on a ruler that validated itself'));
 }
 
 /**
