@@ -73,6 +73,59 @@ EOF
   done
 fi
 
+# ---------------------------------------------------------------------------
+# The root roster.
+#
+# CLAUDE.md says the root holds four buckets, build config and three documents,
+# and "a new file that is none of those belongs in one of the four buckets".
+# That was prose, and prose does not stop anything: an empty directory named
+# `$SP` -- a shell variable that never expanded -- sat at the root for a day.
+# It was untracked, so `git status` read clean, and no gate looks at the root at
+# all. TODO.md line 3 is "repo feels chaotic, with too many top level files".
+#
+# Two arms, because the two failure modes are different:
+#  - a STAGED new root entry is somebody adding a file, and blocks.
+#  - an UNTRACKED one is debris like `$SP`, and warns -- it is not this commit's
+#    fault, but the commit is when somebody is looking.
+#
+# Dotfiles are out of scope: they are all config by construction, which is the
+# one thing the root is explicitly allowed to hold.
+# ---------------------------------------------------------------------------
+
+ROOT_ROSTER='BRIEF.md CLAUDE.md README.md
+docs project src tmp
+dist node_modules
+package.json pnpm-lock.yaml tsconfig.json tsconfig.tools.json vite.config.js'
+
+on_roster() {
+  for allowed in $ROOT_ROSTER; do
+    [ "$1" = "$allowed" ] && return 0
+  done
+  return 1
+}
+
+rootfail=0
+for added in $(git diff --cached --name-only --diff-filter=A | grep -v '/'); do
+  case "$added" in .*) continue ;; esac
+  on_roster "$added" || {
+    echo "pre-commit: ROOT ROSTER -- '$added' is a new top-level entry."
+    echo "            The root holds four buckets (src/ docs/ project/ tmp/),"
+    echo "            build config, and three documents. See CLAUDE.md."
+    echo "            If it genuinely belongs, add it to ROOT_ROSTER in this hook."
+    rootfail=1
+  }
+done
+if [ "$rootfail" = 1 ]; then
+  echo
+  echo "pre-commit: commit aborted. SKIP_ROOTROSTER=1 to bypass."
+  [ -z "$SKIP_ROOTROSTER" ] && exit 1
+fi
+
+for entry in *; do
+  [ "$entry" = '*' ] && break
+  on_roster "$entry" || echo "pre-commit: note -- untracked root entry '$entry' is not on the roster."
+done
+
 if [ -n "$SKIP_BUILD_CHECK" ]; then
   echo "pre-commit: build check skipped (SKIP_BUILD_CHECK set)"
   exit 0
