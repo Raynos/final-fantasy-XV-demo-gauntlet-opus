@@ -77,9 +77,9 @@ numbers:
 
 | | before | after |
 |---|---|---|
-| `pnpm run check`, cold, quiet | ~780 s serial | **~150 s**, two pools |
+| `pnpm run check`, cold, quiet | ~780 s serial | **~270 s**, two pools |
 | `pnpm run check`, tree already graded | ~780 s | **0.68 s** |
-| `drawcheck` (the old critical path) | 269 s | **120 s**, then 0.18 s memoised |
+| `drawcheck` (the old critical path) | 269 s | **120 s** alone (`--par 4`), 0.18 s memoised |
 | pre-commit | 1.59 s | **1.04 s**, three jobs at once |
 | 30-game-minute `longplay` | ~22 wall-min | **~3**, `--turbo 10`, telemetry identical |
 | "why was that slow?" | 2 h of transcript archaeology | `harnessstats.mts`, one command |

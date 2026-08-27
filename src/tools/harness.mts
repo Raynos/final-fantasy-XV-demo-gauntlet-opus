@@ -314,7 +314,31 @@ export interface Leased {
 export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   await ensureDaemon();
   const r = await call<LeaseResponse>('/lease', { ...opts, pid: process.pid });
-  const browser = await chromium.connectOverCDP(r.cdp);
+  /**
+   * Connect PATIENTLY, and retry once.
+   *
+   * `connectOverCDP` defaults to a 30 s timeout on the websocket handshake.
+   * That is generous for an idle browser and not generous at all for one of
+   * four chromiums on a saturated GPU: the daemon has already booted the page
+   * (so the endpoint exists and the lease is real), but the browser can be too
+   * busy to complete a handshake inside half a minute.
+   *
+   * The failure is unmistakable once you have seen it and unreadable before —
+   * `Error ... log: ['  - <ws preparing> retrieving websocket url from
+   * http://127.0.0.1:9335']` and a Node stack, which in `check`'s table read as
+   * three different gates being broken. It cost this lane four suite runs.
+   *
+   * The retry is safe: the lease is already granted and held, so a second
+   * attempt is talking to the same browser, and if it fails too the lease is
+   * released by the `bail` handlers below or by its TTL.
+   */
+  let browser: Browser;
+  try {
+    browser = await chromium.connectOverCDP(r.cdp, { timeout: 120_000 });
+  } catch (e) {
+    console.warn(`[harness] CDP connect to ${r.cdp} failed (${(e as Error).message.split('\n')[0]}); retrying once`);
+    browser = await chromium.connectOverCDP(r.cdp, { timeout: 120_000 });
+  }
   const ctx = browser.contexts()[0];
   const page = ctx.pages().find((p) => p.url().startsWith('http')) ?? ctx.pages()[0];
   if (!page) throw new Error('the leased browser has no page');

@@ -31,10 +31,14 @@ full tree sha, never on a dirty tree); two pools (`cpu` / `browser`,
 longest-first) instead of one serial queue; `HARNESS_LANE=sweep` for the whole
 suite; a ratchet on the suite's own wall time in `project/check-baseline.json`.
 `drawcheck` captures its chunks `--par 4` and memoises a full corpus per sha.
-*Verified:* **18/18 in 270 s against ~780 s serial** on the first parallel run,
-where `drawcheck` alone was 269 s of the 270; parallelising ITS chunks then took
-it to 120 s. A second `check` on the same clean tree is **0.68 s**, and
-`drawcheck` on a memoised tree is **0.18 s**.
+*Verified:* **18/18 in ~270 s against ~780 s serial.** A second `check` on the same
+clean tree is **0.68 s**, and `drawcheck` on a memoised tree is **0.18 s**.
+
+The one counter-intuitive result: `drawcheck --par 4` halves the gate standalone
+(269 -> 120 s) and made the SUITE slower (420 s), because four chunks starve
+every other browser gate out of a pool of four. It runs `--par 2` inside `check`
+and 4 outside. Making one gate faster made the whole thing slower, and only the
+ledger showed it.
 
 **Phase D — measured first.** `src/tools/probes/turbocost.mts` prices a stepped
 frame by A/B/A ablation of `post.render`: **draw submission is 11.0 ms of an
