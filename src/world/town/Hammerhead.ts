@@ -60,10 +60,19 @@ interface TownLight {
 
 /** What `_build` reports for the debug line and `integration.mts`. */
 interface TownStats {
-  shellDraws: number;
-  clutterDraws: number;
+  /** Merged meshes, plus the one shadow proxy. One per material, and no more. */
+  draws: number;
   triangles: number;
 }
+
+/**
+ * Materials whose shadow is a lie: flat signage and glazing.
+ *
+ * Tested against the MATERIAL's name (`sign_hh`, `town_glass`,
+ * `town_glass_dark`), which is where the mesh names this used to test were
+ * derived from anyway.
+ */
+const NO_CAST = /sign_|glass/;
 
 /**
  * The part of `RpgSystem.restAt`'s result the caravan dialogue reads.
@@ -109,7 +118,6 @@ export class Hammerhead {
   anchors!: Record<string, THREE.Vector3>;
   /** Height of the graded pad. Everything local is measured from it. */
   base!: number;
-  clutter!: THREE.Group;
   eco!: Ecology;
   game!: Game;
   mats!: TownMats;
@@ -299,15 +307,38 @@ export class Hammerhead {
 
     const rng = this.rng = new Rng(90210);
 
-    // Two builders: the shell (always drawn) and the clutter (culled far away).
+    // ONE builder, for what used to be two.
+    //
+    // The shell and the clutter were separate groups so the clutter could be
+    // switched off past 95 m — and because they were separate they were merged
+    // separately, so every material the two had in common (rubber, galv,
+    // scrap, wood, four of the painted panels, glass, slab, corrugated: nine
+    // of fourteen) was drawn TWICE whenever anyone was in the town. That is 14
+    // draw calls to save vertex work on 20 000 triangles, on a machine the
+    // perf lane measured as submission-bound at ~8.7 us a draw and where
+    // triangles are close to free. Merged, the town is one mesh per material
+    // at every distance, the pop at 95 m is gone, and the sub-metre dressing
+    // reads from further out — which is the direction `BRIEF.md`'s detail
+    // density rule points anyway.
+    //
+    // `putS` and `putC` stay distinct because the shell/clutter split still
+    // means something: only `putS` pieces go into the shadow proxy below.
     const S = new PartBuilder();
-    const C = new PartBuilder();
+    /** Shell geometry in world space, kept for the one merged caster. */
+    const castParts: THREE.BufferGeometry[] = [];
     // `texelPlace` re-UVs every piece to the constant world texel density its
     // material was authored for. Without it a box's 0..1 face UVs stretch one
     // 256-pixel tile across whatever the box happens to be: the canopy soffit
     // was a paint-chip texture over 16.4 x 11.2 m, which read as water caustics.
-    const putS: PlaceFn = texelPlace((m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); });
-    const putC: PlaceFn = texelPlace((m, g, p, r, sc) => { C.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); });
+    const putS: PlaceFn = texelPlace((m, g, p, r, sc) => {
+      const world = this.world.clone().multiply(mat4(p, r, sc));
+      S.add(m, g, world);
+      // Signage and glazing never cast: they are flat planes whose shadows
+      // read as artefacts. Nor does anything alpha-tested — see
+      // {@link shadowProxy}; a chain-link fence's shadow IS the holes in it.
+      if (!NO_CAST.test(m.name || '') && !alphaCut(m)) castParts.push(posOnly(g, world));
+    });
+    const putC: PlaceFn = texelPlace((m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); });
 
     bootPhase('Town.parts', () => {
       this._ground(putS, M);
@@ -324,43 +355,28 @@ export class Hammerhead {
 
     this.shell = new THREE.Group();
     this.shell.name = 'hh_shell';
-    bootPhase('Town.merge', () => S.build(this.shell, { cast: true, receive: true, name: 'hh' }));
+    // `cast: false` on every one of them: the proxy below is the only caster.
+    bootPhase('Town.merge', () => S.build(this.shell, { cast: false, receive: true, name: 'hh' }));
     this.root.add(this.shell);
 
-    // Signage and glazing never cast: they are flat planes whose shadows read
-    // as artefacts, and every caster costs a draw in each of three cascades.
+    // ONE merged caster for the whole town, instead of one per material.
     //
-    // Everything else casts through ONE merged proxy rather than as itself.
-    // The shell is already merged per material, and a material is exactly what
-    // a depth pass does not care about — so twenty-five casters were
-    // twenty-five draws per cascade to produce a silhouette that one mesh
-    // produces identically. Measured on `town_forecourt`: 88 draws of
-    // `hammerhead` became 30. Alpha-tested materials are the one exception
-    // (see {@link shadowProxy}) and stay their own casters.
-    const flat = (m: THREE.Object3D) => /_sign_|_glass/.test(m.name);
-    for (const m of this.shell.children) m.castShadow = false;
-    const proxy = shadowProxy(this.shell.children.filter((m) => !flat(m)), 'hh_shadow');
+    // A shadow map writes depth and reads a material only for an alpha cutout,
+    // so twenty-five merged meshes were twenty-five draws in EVERY cascade to
+    // cast a silhouette their union casts identically in one. Measured on
+    // `town_forecourt`: 88 draws of `hammerhead` became 30.
     this._casters = [];
-    if (proxy) { this.shell.add(proxy); this._casters.push(proxy); }
-    // An alpha-tested caster cannot go in the proxy — its shadow is the holes
-    // in it — so a chain-link fence keeps its own three cascade draws.
+    const proxy = shadowProxy(castParts, 'hh_shadow');
+    if (proxy) { this.root.add(proxy); this._casters.push(proxy); }
+    // Alpha-tested surfaces cannot go in it and keep casting as themselves.
     for (const m of this.shell.children) {
-      if (!flat(m) && isMesh(m) && alphaCut(m.material)) this._casters.push(m);
+      if (isMesh(m) && !NO_CAST.test(m.material instanceof THREE.Material ? m.material.name : '')
+        && alphaCut(m.material)) this._casters.push(m);
     }
 
-    // The clutter pass is a hundred sub-metre objects. None of them casts —
-    // between the buildings, the vehicles and the people there is already more
-    // than enough shadow on this forecourt, and 14 merged meshes across three
-    // cascades is 42 draw calls nobody would miss.
-    this.clutter = new THREE.Group();
-    this.clutter.name = 'hh_clutter';
-    bootPhase('Town.mergeClutter', () => C.build(this.clutter, { cast: false, receive: true, name: 'hhc' }));
-    this.root.add(this.clutter);
-
     this.stats = {
-      shellDraws: this.shell.children.length,
-      clutterDraws: this.clutter.children.length,
-      triangles: countTris(this.shell) + countTris(this.clutter),
+      draws: this.shell.children.length + (proxy ? 1 : 0),
+      triangles: countTris(this.shell),
     };
   }
 
@@ -1214,15 +1230,14 @@ export class Hammerhead {
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     const d = this._camPos.distanceTo(this.origin);
 
-    // Detail LOD: the clutter pass is a hundred small objects that stop being
-    // legible well before a hundred metres, and a building's shadow stops
-    // earning three cascade draws not much after that.
-    const showClutter = d < 95;
-    if (this.clutter.visible !== showClutter) this.clutter.visible = showClutter;
+    // A building's shadow stops earning cascade draws past about sixty metres.
+    // The proxy is HIDDEN as well as stopped, not merely stopped: it writes no
+    // pixel and no depth, so a colour-pass draw of it beyond that distance
+    // would be a draw call that does nothing at all.
     const cast = d < 62;
     if (this._cast !== cast) {
       this._cast = cast;
-      for (const m of this._casters) m.castShadow = cast;
+      for (const m of this._casters) { m.castShadow = cast; if (m.name === 'hh_shadow') m.visible = cast; }
     }
 
     for (const l of this.lights) {
@@ -1276,6 +1291,32 @@ function uvScale(g: THREE.BufferGeometry, su: number, sv: number) {
   return authored(g);
 }
 
+/**
+ * One piece's positions, transformed into world space and nothing else.
+ *
+ * A depth pass binds no normal, no UV and no vertex colour, so carrying them
+ * into the shadow proxy's merge would triple a buffer whose only reader is
+ * `gl_Position`. Indices come along because dropping them would triple the
+ * vertex count instead.
+ */
+function posOnly(src: THREE.BufferGeometry, world: THREE.Matrix4): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  const pos = src.getAttribute('position');
+  g.setAttribute('position', pos.clone());
+  // `mergeGeometries` returns **null**, silently, when one member of the batch
+  // is indexed and another is not — and a null merge here would delete the
+  // town's entire shadow. So the index is synthesised rather than left absent.
+  const idx = src.getIndex();
+  if (idx) g.setIndex(idx.clone());
+  else {
+    const seq = new Uint32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) seq[i] = i;
+    g.setIndex(new THREE.BufferAttribute(seq, 1));
+  }
+  g.applyMatrix4(world);
+  return g;
+}
+
 /** Does this material's silhouette live in its alpha channel? */
 function alphaCut(m: THREE.Material | THREE.Material[]): boolean {
   const one = Array.isArray(m) ? m[0] : m;
@@ -1307,23 +1348,7 @@ function alphaCut(m: THREE.Material | THREE.Material[]): boolean {
  * depth — a rasterisation the depth test rejects almost entirely. One draw
  * against the sixty it removes.
  */
-function shadowProxy(meshes: THREE.Object3D[], name: string): THREE.Mesh | null {
-  const parts: THREE.BufferGeometry[] = [];
-  for (const m of meshes) {
-    if (!isMesh(m) || alphaCut(m.material)) continue;
-    // Position only: a depth pass reads nothing else, and carrying normals,
-    // UVs and the bake tone through the merge would triple the buffer for
-    // attributes no depth shader binds.
-    const g = new THREE.BufferGeometry();
-    const pos = m.geometry.getAttribute('position');
-    if (!pos) continue;
-    g.setAttribute('position', pos.clone());
-    const idx = m.geometry.getIndex();
-    if (idx) g.setIndex(idx.clone());
-    // The shell's pieces are baked in world space and the proxy shares their
-    // parent, so no matrix is applied here on purpose.
-    parts.push(g);
-  }
+function shadowProxy(parts: THREE.BufferGeometry[], name: string): THREE.Mesh | null {
   if (!parts.length) return null;
   const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
   if (!merged) return null;
