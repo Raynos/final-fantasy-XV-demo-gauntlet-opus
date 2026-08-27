@@ -1,127 +1,242 @@
-# Benchmaxx: make the loop fast, not the agents patient
+# Benchmaxx v2: primitives, ledgers and ratchets — not a list of fixes
 
-Status: PROPOSED (2026-08-24, opus; revised same day after the second-pass
-audit and the human's decisions). Evidence:
-`project/audits/2026-08-24-toolcall-wallclock.md` (two measured passes over
-48 h of transcripts) and `project/journal/2026-08-23-harness-bench.md`.
+Status: PROPOSED (2026-08-24, opus; rewritten 2026-08-27, fable, after none of
+v1's ten fixes were staffed and a 7-day audit showed the waiting had morphed
+rather than died). Evidence: `project/audits/2026-08-27-wallclock-7day.md`
+(new), `project/audits/2026-08-24-toolcall-wallclock.md`, `project/TIMINGS.md`.
+Implementation remains **a fresh lane's job**; this session only writes the plan.
 
-Decisions already taken by the human (do not re-litigate):
-- Poll-loop ban is a **hard-block hook, with a last-resort escape hatch**.
-- Gate-result cache keys on the **full tree sha only** (input scopes rejected:
-  an under-declared scope is a gate that silently stops running).
-- This session writes the plan; **implementation is a fresh lane's job**.
+Decisions already taken by the human (carried from v1, do not re-litigate):
+- Poll-loop ban is a **hard-block hook with a last-resort escape hatch**.
+- Gate-result cache keys on the **full tree sha only**.
+- The plan-writing session does not implement.
 
-## The measured shape
+## Why v1 failed, in one sentence each
 
-48 h of transcripts: 45.5 h tool wall-clock, ~53–61 h model gap, 3.78 M output
-tokens — and **3.18 B cache-read input tokens**. The gap decomposition says
-generation explains only ~525 of ~3 177 gap-minutes; the rest is per-turn
-overhead (TTFT on 300–530 k-token contexts, ~11.6 s/turn × 13 742 turns). So
-the model isn't slow because it thinks hard (thinking = 14 % of output); it's
-slow and expensive because **enormous contexts are re-read every turn of
-enormously long sessions**. Context size is the tax on everything; wall-clock
-sinks (poll loops, cold boots, cold tsc) multiply it by adding turns.
+1. **Nobody was assigned.** Ten fixes ranked by impact, zero commits in 105.
+   A plan whose every item needs a volunteer loses to plans with named owners.
+2. **Its premises rotted while it waited.** Native tsc made fix 5 obsolete
+   (typecheck is 0.39 s); phase 3 took boot 13.7→6.6 s under fix 10's stale
+   9.2 s number; per-shot floors fixed perf certification without fix 9;
+   the daemon grew a lease FIFO that does the *opposite* of fix 9's
+   deadline-by-default — defensibly, and invisibly.
+3. **It banned behaviour without replacing it.** The 7-day audit's core
+   finding: the old poll bucket fell 764→24 min while `until`-loops rose,
+   ten-minute blocking `TaskOutput` calls appeared (234 min), and `/health`
+   polling grew. Agents poll because nothing in this repo can be *waited on*.
+   A ban moves the pattern to the next syntax; only a primitive retires it.
 
-## Top 10 fixes, ranked by measured impact
+So v2 is organised around three design rules, each phase shipping one thing
+that makes the fast path the easy path:
 
-| # | fix | evidence | expected win |
-|---|---|---|---|
-| 1 | **Context discipline: hard session caps.** End a lane at ~3 h / ~150 turns and respawn from the handoff (which CLAUDE.md already mandates and every long lane ignored — 8 lanes past 24 h, 1 000+ turns). A respawned lane restarts at ~30 k context instead of dragging 500 k. | 3.18 B cache-read tokens; 356 M in one session | **~2–3× token spend**, plus faster TTFT every turn |
-| 2 | **Capture-look loops in disposable context.** The look-tweak-look cycle (48 recaptures of one shot; 174 images in one agent's context) runs in a short-lived subagent that returns a verdict, or after crops — never 48 full frames accumulated in a 26 h context. Add to CLAUDE.md; enforce by convention + review. | 1 359 images / 520 MB carried; same-shot counts 48/47/27/25 | large token + TTFT win, fewer polish spirals |
-| 3 | **Poll-loop ban (hard-block hook + escape).** PreToolUse hook rejects `sleep`-in-loop / busy-wait Bash; message says use `run_in_background`. Escape of last resort: `CC_ALLOW_POLL=1` prefix (logged, so abuse is auditable). | 617 min Bash:other; 37× nine-minute sleeps; 600 s timeouts | ~8 h/48 h + the turns those waits burned |
-| 4 | **Prewarm on commit.** post-commit hook → daemon `/prewarm`: materialise sha + boot a page in the background while the agent writes prose; evictable the instant a fix lease wants the slot. Bump `PROTOCOL`. | shoot avg 38.9 s vs 2.3 s warm render, 864 calls | ~5 h/48 h, median shot <8 s |
-| 5 | **Incremental tsc.** `"incremental": true` + `tsBuildInfoFile` in `node_modules/.cache/tsbuildinfo/` (shared trunk: one shared file, keyed on content, safe). Pre-commit drops ~20 s → ~3 s. | 1 005 typechecks = 107 min; embedded in 891 git calls (353 min); one agent ran 172 typechecks | ~4 h/48 h |
-| 6 | **Gate-result cache, full-tree sha.** `check.mts` stores `{gate, sha, verdict}` in `~/.cache/ffxv-harness/gatecache/`; same-sha re-run replays in ~1 s. Kills the check-as-a-tic habit (63/58/55 runs per session, mostly unchanged trees; 172-typecheck-0-commit babysitting). | 57 full runs avg 124.6 s; per-session check counts | ~2 h/48 h + removes a whole agent behaviour |
-| 7 | **Parallel browser gates + shard creaturecheck.** Run integration/uxcheck/creaturecheck/combatloop/roadcheck through the daemon sweep lane concurrently (4 slots); shard the 207 poses across the pool. | serial suite wall time; 4 slots idle during check | full cold `check` ≈ 3 min → ~1 min; narrow edit ≤ 60 s |
-| 8 | **Batch turns and batch shots.** One turn issues typecheck + shoot batch + git status together; one shoot invocation carries all names (`shoot.mts a b c` already works). This attacks the ~11.6 s/turn overhead directly: fewer turns, same work. | 13 742 turns × 11.6 s overhead ≈ 44 h | tens of hours across lanes |
-| 9 | **perf/gameplay hygiene.** Cache verdicts by sha (same store as #6), add `--quick` (half segments/dwell, validated once against full), default `--deadline` so a busy machine 429s in seconds instead of queueing 10 min. | perf 227 min + gameplay 46 min; 601 s queue rows | ~2 h/48 h, honest perf numbers |
-| 10 | **Boot diet: 9.2 s → ~4 s, RSS 1.4 GB → <800 MB.** bootprof-led; `?shoot=1` skips audio/input/UI/minimap warm-up; daemon `/health` warns when the painted-face cache is missing (silent 6.9→9 s today). Re-measure the two-boot determinism floor (1.493/255) after every cut; any cut that moves it reverts. | boot 9.2 s multiplies every page boot in #4/#7; TODO.md's two complaints | multiplies 4 and 7; fixes both TODO items |
+- **Observability before optimisation** — you cannot hold a budget you cannot
+  read. The daemon is the chokepoint everything already goes through; make it
+  the single source of timing truth.
+- **Primitives before prohibitions** — every ban ships with the affordance
+  that makes it unnecessary, in the same commit, named in the rejection text.
+- **Ratchets before budgets** — a budget in prose regressed 9→13 min while
+  everyone watched gates pass. A budget the suite enforces cannot.
 
-Ranked out of the top 10 but kept: a CLAUDE.md rule that mechanical lanes
-(corpus capture, log grepping, retry verification) run on cheaper/faster
-models, with Opus reserved for judgement calls (blind A/B, diagnosis) — real
-but unquantified here; and `--jpeg` stays the review default (already the
-rule, keeps transcripts small).
+## The measured shape (7 days, 203 transcripts)
 
-## Phase details
+71.4 h tool wall-clock, 22 808 calls. Decomposed for the first time:
 
-### Poll-ban hook (fix 3)
+| where a tool-second actually goes | /week | the mechanism |
+|---|---|---|
+| self-inflicted waiting (sleep/until loops, TaskOutput blocks, health polls) | **~15 h falling to ~8 h** | no wait primitive exists |
+| daemon queue contention (median inflation × contended calls) | **~2.5 h** | invisible: silent HTTP block, `stdio: 'ignore'`, no ledger |
+| genuinely long CPU-bound runs | the rest | serial `check` (420 s solo), longplay (contention-immune at ~420 s), perf sweep |
 
-`settings.json` PreToolUse hook on Bash. Reject when the command matches
-`(for|while|until)[^\n]*\bsleep\s+\d+` or `while\s*\(.*Date\.now\(\)\s*<` —
-unless the command starts with `CC_ALLOW_POLL=1` (the escape; each use lands
-in the hook log). Rejection message, verbatim: *"Poll loops are banned: run
-the slow command with `run_in_background: true` — you are re-invoked when it
-exits. Escape hatch of last resort: prefix `CC_ALLOW_POLL=1`."* A bare
-`sleep N` (N ≤ 5, no loop) passes. Hook edits need a session restart to take
-effect — note it in the rollout commit.
+Cross-session overlap separates the last two: longplay and `check` run the
+same speed alone or contended (CPU-bound); combatloop is 5.8× and driftcheck
+18× slower contended (queue-bound). `git` is the second half's #1 sink
+(60 s avg against a 1.4 s pre-commit gate — index-lock contention has no
+queue either). Background execution is used on 2.1 % of Bash calls.
 
-### Prewarm route (fix 4)
+Context: per-turn cost has NOT improved — ~250 k tokens and ~10–13 s of gap
+per turn, same as the 48 h audit; total burn fell only because phase 4 closed
+and turn volume fell 3.7×. The cap language in CLAUDE.md still says 400 turns.
 
-`POST /prewarm {sha}` → materialise tree (~0.75 s), boot one `?shoot=1` page
-to `GAME.ready`, park it. Constraints: counts against `BROWSER_BUDGET`;
-evicted (page closed, not reused) the moment any fix-lane lease needs the
-slot; at most one prewarm outstanding, newest sha wins; no-op when the sha's
-frame-cache already has the requested shots. Wire: `.githooks/post-commit`
-fire-and-forget curl. Bump `PROTOCOL`.
+## Phase A — the job ledger (observability first; ~half a day)
 
-### Gate cache (fix 6)
+Everything below is unverifiable without this, so it goes first.
 
-Store per `{gate, treeSha}`: verdict, one-line summary, duration, timestamp.
-`check.mts` prints the same table with `cached` markers and a
-`--no-cache` override. Invalidation is trivial by construction: any commit
-changes the sha. Perf gates (#9) reuse the same store but also record the
-machine-quiet flag; a verdict taken non-quiet is never replayed as a pass.
+- The daemon appends one line per job to
+  `~/.cache/ffxv-harness/<key>/jobs.jsonl`: tool, agent, lane, build,
+  enqueuedAt/startedAt/finishedAt, verdict, exclusive holder at enqueue,
+  boots/reuses. Rotate at 10 MB. `Counters` already rides every response;
+  add `queuedMs`/`ranMs` so **every client prints one exit line**:
+  `[harness] queued 12.3 s · ran 41.0 s (2 ahead: perf@agent-ab)`. A slow
+  call then *names its reason* in the transcript, which is what kills the
+  health-poll habit at the source.
+- Autostart stops discarding telemetry: `stdio: 'ignore'` →
+  `daemon.log` in the cache dir (append, truncate at 5 MB). Today every
+  queue decision the daemon logs is written to nowhere.
+- `/health` gains cumulative counters since start (jobs, queue-seconds by
+  lane, exclusive holds, evictions). Bump `PROTOCOL`.
+- A reader: `agentstats.mts --daemon` (or a sibling `harnessstats.mts`)
+  renders the ledger — wait vs run by tool, agent, day. The weekly audit
+  becomes one command instead of 2 h of transcript archaeology; the scripts
+  in `project/audits/` stay as the cross-check that reads the model side.
 
-### Session caps (fix 1) — the only genuinely new policy
+DoD: "how much of yesterday was queue wait, and whose?" answers in <5 s from
+the ledger; every tool >30 s in a transcript carries its queued/ran line.
 
-CLAUDE.md already says 3 h / ~400 turns; the audit says every long lane blew
-through it. Make it structural, not aspirational:
-- Coordinator prompts must include the cap and the respawn instruction
-  (fresh agent, read handoff, continue) — respawning is cheap *because*
-  handoffs are already mandatory and current.
-- Drop the turn guidance to **~150 turns** for worker lanes: past that, the
-  context is mostly stale capture history. (The 400 figure predates these
-  token numbers.)
-- The coordinator polls less (fix 3 removes its sleep loops) and delegates
-  look-loops (fix 2), which is what made its own context balloon.
+## Phase B — waiting gets a primitive, then the ban (~1 day)
 
-## Sequencing
+Order matters: primitive, doc, then hook — in that order, same lane.
 
-1+2+3 are policy/hook work (~2 h total) and pay immediately; do them first.
-5 is an hour. 4 and 6 are the daemon/check work (~1 day together). 7 rides on
-6's plumbing. 9 is half a day. 10 is profile-led game work (1–2 days) and the
-only phase touching `src/` outside tools — do it once, after bootprof names
-the top sinks.
+- **`daemon.mts --wait quiet|exclusive-free|job <id> [--for <s>]`** —
+  long-poll routes that return when the condition holds. One blocking call
+  with a printed reason replaces 40 health polls or an `until` loop.
+- **Git stops being a second, queueless queue.** A `--wait git-lock` is the
+  wrong altitude; instead the repo standard becomes committing through a
+  wrapper (or `core.hooksPath` pre-flight) that retries the index lock with
+  capped backoff and then *names the holder pid*. The 94-minute
+  `git reset --hard` and every `[ -f .git/index.lock ]` spin loop are the
+  receipts.
+- **Long tools self-describe.** Any tool whose ledger history predicts >60 s
+  prints at start: `[harness] expect ~Ns — run_in_background and be
+  re-invoked`. The affordance exists (2.1 % adoption says agents forget, not
+  refuse); the tool is the right place to remember, at the moment it matters.
+- **Then the poll-ban hook** (the human's decision, unchanged: PreToolUse
+  hard-block + `CC_ALLOW_POLL=1` escape, each use logged). Widen v1's regex
+  to what agents actually wrote after the audit: `until …; do sleep`,
+  `while ! grep`, `while [ ! -f`, big bare sleeps ≥60 s, and busy-wait
+  `Date.now()` loops. The rejection text names the replacements: background
+  + re-invoke, `--wait`, the commit wrapper. Note in the rollout commit that
+  hook edits need a session restart.
+- **TaskOutput discipline** goes next to the ban in HANDOFF §4: a blocking
+  ten-minute `TaskOutput` is a poll loop wearing a tool costume (34 calls,
+  234 min, one coordinator, one day) — end the turn; completion re-invokes.
 
-**Definition of done:** re-run both audit scripts after two working days of
-agent traffic. Done when: tool wall-clock ≤ 15 h/48 h with the same gate
-roster; no 600 s poll rows; cache-read tokens ≤ 1 B/48 h; no session over
-4 h span or 250 turns; median shoot call ≤ 8 s; same-sha `check` ≤ 5 s.
+DoD (ledger + transcripts): self-inflicted wait <30 min/week; zero
+index-lock spin loops; `run_in_background` >25 % of Bash calls ≥60 s.
 
-## Per-tool budgets (third pass: every tool benchmarked, 2026-08-24)
+## Phase C — the gate suite: cached, parallel, and self-budgeting (~1 day)
 
-Measured serially on HEAD with a warm daemon (ledger + raw CSV in
-`project/audits/`). Rule: **any tool over 30 s gets a named fix and an owner;
-everything else is closed.** The capture path is already fast on a quiet
-machine (shoot 1-shot 19 s / cache 1 s / 5-batch 21 s), which re-ranks the
-work: contention and habits caused the 38.9 s average, not shoot itself.
+`check.mts` is 18 gates run strictly serially (`check.mts:257` — one `await`
+per child) with no cache; ~13 min while four browser slots idle, and the
+suite grew 9→13 min unnoticed because nothing meters the meter.
 
-| tool | now | budget | the fix |
-|---|---|---|---|
-| check.mts full | 535 s | ≤ 60 s cold, ≤ 5 s cached | fixes 6+7 (sha cache, parallel browser gates); gates sum ~9 min serial while 4 slots idle |
-| perf.mts | 704 s w/ queue | ≤ 120 s quick, full on demand | fix 9: `--quick` + sha cache + default `--deadline` |
-| reachcheck | 263 s (76 s in-check) | ≤ 30 s | sampling budget: `farSeat` runs 5 516×; cap per-path executions, keep coverage assertion. Also explain the 3.4× standalone/in-check gap before trusting either number |
-| uxcheck | 151 s, fragile | ≤ 40 s | profile the 93 checks; batch page.evaluates; find the standalone page-close crash |
-| floatcheck | 96 s + throws standalone; 13.8 s in-check | ≤ 15 s everywhere | make standalone take the in-check path; the 7× gap is a bug, not a budget |
-| combatloop | 87 s | ≤ 40 s | 31 scenarios serial on one page → shard across pool or trim settle frames |
-| gameplay.mts | 76 s (VOID) | keep | void logic is correct; fix 9's deadline stops the queueing waste |
-| driftcheck | 55 s in-check; FAILS standalone | ≤ 55 s + consistent | fix the `--only` inversion (LANDMINES candidate) |
-| integration | 40 s; red standalone | ≤ 40 s + consistent | same standalone/in-suite diagnosis as floatcheck/driftcheck |
+- **Gate cache** in `~/.cache/ffxv-harness/gatecache/`, keyed `{gate, tree
+  sha}` (full sha only — decided). Store verdict, one-line tail, duration,
+  timestamp, machine-quiet flag; `check.mts` prints `cached` markers,
+  `--no-cache` overrides; a verdict taken non-quiet never replays as a pass.
+  Invalidation is trivial by construction: any commit changes the sha.
+- **Parallel browser gates** through the daemon's sweep lane (integration,
+  uxcheck, creaturecheck, combatloop, roadcheck, driftcheck, drawcheck);
+  CPU-only gates keep cheapest-first serial fail-fast. TIMINGS' quiet-run
+  numbers say the browser set sums ~6 min serial; four slots make it ~2.
+- **drawcheck reuses the corpus by default** when a manifest for the same sha
+  exists (`--manifest` already works; 281 s cold vs "costs nothing" reused).
+- **The meta-gate:** `check` records its own wall time per gate in the ledger
+  and **fails itself when the roster's quiet-machine sum regresses past its
+  ratchet**, exactly like drawcheck's draw ledger. A new gate joins by paying
+  its row. This is what makes 9→13 min impossible to repeat silently.
+- Fold in v1's standalone-vs-in-suite mystery as a named task: floatcheck,
+  integration and driftcheck disagree between invocation paths; until
+  diagnosed, a red standalone gate is not evidence (LANDMINES candidate).
 
-Closed by measurement (no work): creaturecheck 17 s, roadcheck 16 s,
-silrocks 22 s, silhouette 11 s, hydrocheck 14 s, heightcheck 12 s, build 2 s,
-typechecks 3 s, all CLIs ≤ 1 s, imgdiff/imagestats ≤ 1 s, shoot (see above).
+DoD: same-sha `check` ≤5 s; cold full suite ≤5 min contended / ≤3 min quiet;
+the suite's own time is a gate with a ratchet file in `project/`.
 
-New standalone finding for the perf owner: **town_forecourt 46 fps** on a
-valid run (RULER_VALID true) — below the 60 fps gate.
+## Phase D — long-run throughput: make playtesting cheap (~1–2 days)
+
+longplay is the one workload contention cannot explain (421 s solo, 412 s
+contended): pure CPU, 0.7–1.5 wall-min per game-min, stepping `g.frame(1/60)`
+1 800× per game-minute inside one `page.evaluate`. gameplay.mts prices the sim
+at 4.3–7.8 ms/frame, which predicts ~0.26–0.47 wall-min/game-min — the
+observed floor is ~0.7, so up to half the bill is not the sim.
+
+- **Measure first** (bootprof-style, in-page): sim step vs draw submission vs
+  GC vs evaluate overhead, per probe frame. Draw submission is
+  resolution-independent CPU, which is consistent with TIMINGS' "640×360 is
+  no faster and `--q` does nothing".
+- If draw submission is material: **`--turbo`** — step the sim, render
+  1-in-N frames (or none; `?shoot=1` pages never present anyway). Validate
+  by determinism, which this game uniquely can: minute 6 must still read
+  `2.14 km, 4 encounters, 19 forage` with rendering off. Any drift reverts.
+- **Exclusive stops killing probes.** perf's `pool.closeAll()` closing a
+  28-minute run's leased page is the top documented probe killer (five dead
+  longplay runs; prose warnings in three documents). Daemon-side: an
+  exclusive request while a long-TTL lease is live *queues behind it by
+  default* (the FIFO landed 08-25; extend it to leased pages, bounded by the
+  lease TTL) and the refusal/queue message names the probe and its remaining
+  TTL. A probe agent gets told at grant time that perf is waiting.
+- Probes register a CPU-budget tag in the ledger so `check`'s parallel phase
+  and probes do not oversubscribe the machine the way six chromiums used to.
+
+DoD: 30 game-min session ≤12 wall-min quiet (inside one default TTL — the
+`--ttl` footgun mostly retires); a week of ledger with zero probe deaths by
+exclusive; turbo-vs-normal telemetry byte-identical.
+
+## Phase E — boot, RSS, prewarm (game-facing residue; coordinate, don't duplicate)
+
+Corrected premises: cold boot is **6.4–16 s observed** (phase 3 closed at
+6.6 s; `src/tools/README.md` still says 9.2 — fix the constant); a page costs
+**~1.94 GB RSS** (STATUS), *worse* than TODO.md's 1.4 GB complaint. The boot
+work itself is owned elsewhere — after-phase3 WS-2 (shader programs, 1.83 s)
+and WS-3 (geometry bake, ~950 ms) — so this phase keeps only the harness side:
+
+- **Prewarm on commit** (unchanged from v1): post-commit fire-and-forget
+  `POST /prewarm {sha}` → materialise + boot one `?shoot=1` page; counts
+  against `BROWSER_BUDGET`; evicted the instant a fix lease wants the slot;
+  newest sha wins; no-op when the frame cache already covers it. `PROTOCOL`
+  bump. This is what turns "commit to see your work" from a 38.9 s average
+  shoot into the 2.3 s warm render the bench already proves.
+- **`/health` warns when the painted-face cache is missing** — today a
+  silent ~2.5 s cold-boot regression guarded only by prose in two documents.
+- **RSS gets a number in the ledger** (per-page RSS at boot, from the daemon)
+  so WS-2/WS-3 can see their own effect and TODO.md's complaint gets a
+  trendline instead of a vibe.
+
+DoD: median shoot ≤8 s across a real week of ledger; boot constant in README
+matches the bench; RSS per page recorded per build.
+
+## Phase F — policy that the numbers actually support (~an hour of writing)
+
+- **Session caps, written where they bind.** CLAUDE.md is at its 120-line
+  cap; the cap language lives in HANDOFF §4 (179/250 lines): worker lanes
+  end at ~3 h / **~150 turns** and respawn from the handoff; coordinator
+  prompts must include the cap and the respawn instruction. Per-turn context
+  is flat at ~250 k — the plan's biggest token lever is still unclaimed.
+- **Capture-look loops run in disposable context** (subagent or crops), and
+  **one shoot call carries all names** (`shoot.mts a b c` — documented as
+  the rule, same section).
+- Model-tiering for mechanical lanes stays out of scope until the ledger can
+  price it per lane (it now can — revisit after two weeks of Phase A data).
+
+## Disposition of v1's ten fixes
+
+| v1 fix | disposition |
+|---|---|
+| 1 session caps | **kept**, Phase F, with the honest premise (per-turn cost never improved) |
+| 2 look-loops in subagents | **kept**, Phase F |
+| 3 poll ban | **kept but re-ordered**: primitive first (Phase B), ban second, wider regex |
+| 4 prewarm | **kept**, Phase E, unchanged |
+| 5 incremental tsc | **obsolete** — native tsc landed 08-22; typecheck is 0.39 s |
+| 6 gate cache | **kept**, Phase C |
+| 7 parallel gates | **kept**, Phase C, plus the meta-gate ratchet v1 lacked |
+| 8 batch turns/shots | **kept**, Phase F (doc line) — turn overhead is unchanged at ~11 s |
+| 9 perf --quick/--deadline | **superseded**: per-shot floors + lease FIFO landed instead; residue (sha-cached verdicts, quiet-flag) folds into Phase C's cache |
+| 10 boot diet | **split**: game side owned by after-phase3 WS-2/3; harness side is Phase E |
+
+## Sequencing and the standing audit
+
+A → B → C are the lane's first week (A is half a day and everything else's
+measurement). D and E are independent after A. F is written alongside B.
+
+**Definition of done for the plan** — checked weekly by one command
+(`agentstats --daemon` + the two `audit7-*.mjs` scripts), not by a one-off:
+
+- self-inflicted wait ≤ 30 min/week; zero poll rows at the 600 s timeout
+- queue wait visible per job; fix-lane p50 ≤ 2 s
+- same-sha `check` ≤ 5 s; cold ≤ 3 min quiet; suite time ratcheted
+- 30 game-min probe ≤ 12 wall-min; zero probe deaths by exclusive
+- median shoot ≤ 8 s over a real week
+- no session > 4 h span or 250 turns; per-turn context trending down, not
+  just total volume
+
+Each phase names its DoD in-line above; a phase that cannot show its numbers
+from the ledger is not done, whatever its diff says.
