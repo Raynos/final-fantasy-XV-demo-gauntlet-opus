@@ -22,7 +22,7 @@
 import { contention, printContention } from './ruler.mts';
 import { execFileSync } from 'node:child_process';
 import { launchPersistent } from './chromium.mts';
-import { harnessArgs, announceBuild, buildServer, withExclusive } from './harness.mts';
+import { harnessArgs, announceBuild, buildServer, withExclusive, EXIT_BUSY } from './harness.mts';
 
 /**
  * Everything the page can see about its own footprint.
@@ -303,4 +303,19 @@ async function reportMemory(PORT: number, nobake: boolean) {
  * three. Under one daemon owning one machine that is enforceable rather than
  * hoped for -- which is exactly what RESCUE §B6 could not do.
  */
-await withExclusive('bootprof', main).catch((e) => { console.error(e); process.exit(1); });
+/**
+ * A machine somebody else is legitimately using is not a broken build.
+ *
+ * `/exclusive` now queues behind a live page lease rather than closing it -- so
+ * a refusal here means a probe is mid-run, not that anything is wrong. Exit
+ * `EXIT_BUSY` (4) so `check.mts` renders it BUSY rather than FAIL and an agent
+ * reading the code can tell "retry in a minute" from "debug the renderer".
+ */
+await withExclusive('bootprof', main).catch((e) => {
+  if ((e as { busy?: true }).busy) {
+    console.error(`[harness] ${(e as Error).message}`);
+    process.exit(EXIT_BUSY);
+  }
+  console.error(e);
+  process.exit(1);
+});

@@ -40,10 +40,6 @@ log_escape() {
     >> "$d/pollban.log" 2>/dev/null || true
 }
 
-case "$raw" in
-  *CC_ALLOW_POLL=1*) log_escape "$raw"; exit 0 ;;
-esac
-
 # Strip heredoc BODIES before matching, for the same reason guard-harness.sh
 # does: every long commit message here arrives through a heredoc, and a guard
 # that fires on prose *about* polling is a guard that gets disabled. The
@@ -82,6 +78,18 @@ case "$cmd" in
     cmd="$(printf '%s' "$cmd" | sed -E "s/(-m|--message|-b|--body|--body-file)[ =]+'[^']*'//g; s/(-m|--message|-b|--body|--body-file)[ =]+\"[^\"]*\"//g")"
     ;;
 esac
+
+# The escape, checked AFTER the heredoc strip and only in COMMAND POSITION.
+#
+# The first version matched `CC_ALLOW_POLL=1` anywhere in the raw command, which
+# meant that writing *about* the escape -- a commit message, a doc patch, this
+# comment -- exempted the whole command from the guard. That is a false allow
+# rather than a false block, so it is quiet, which makes it worse. An env prefix
+# only means anything at the start of a command, so that is where it is matched.
+if printf '%s\n' "$cmd" | grep -Eq '(^|[;&|]|&&|\|\|)[[:space:]]*CC_ALLOW_POLL=1[[:space:]]'; then
+  log_escape "$cmd"
+  exit 0
+fi
 
 REPLACEMENTS="What to do instead — each of these EXISTS, and each replaces a whole loop:
 

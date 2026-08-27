@@ -49,7 +49,7 @@ import path from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { call, ensureDaemon } from './daemon.mts';
-import type { HealthResponse } from './daemon.mts';
+import type { HealthResponse, WaitResponse } from './daemon.mts';
 import { lookup, store, prune } from './gatecache.mts';
 import { appendJob } from './ledger.mts';
 import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
@@ -175,8 +175,16 @@ const GATES: Gate[] = [
   // the flat 800. Frames come from the cache on a build anyone has already
   // shot, which is why it sits here and not with the perf gates. It is the
   // suite's longest single gate, so the pool starts it first.
+  // `--par 2`, NOT the standalone default of 4, and the difference is measured.
+  // Alone, four concurrent chunks take this gate 269 s -> 120 s. Inside the
+  // suite there are only four browser slots in total, so four chunks starve
+  // every other browser gate and the SUITE gets slower even though the gate
+  // gets faster: 242 s for drawcheck and a longer tail behind it, against a
+  // 270 s suite when it ran one chunk at a time. Two is the split that keeps
+  // half the pool for everyone else.
   {
-    name: 'drawcheck', script: 'drawcheck.mts', kind: 'browser', cost: 146,
+    name: 'drawcheck', kind: 'browser', cost: 200,
+    args: [path.join(HERE, 'drawcheck.mts'), '--par', '2'],
     expect: 'no new shot over BRIEF\'s 800, no recorded shot worse',
   },
   { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true, kind: 'browser', cost: 780 },
@@ -251,13 +259,37 @@ function serve(port: number): Promise<ChildProcess> {
  * overall, because a run that certified nothing must not report success.
  */
 const VOID = 3;
+/**
+ * "The machine was somebody else's", as distinct from either of the above.
+ *
+ * `EXIT_BUSY` in `harness.mts`. The two perf gates take the daemon's exclusive
+ * lease, which now QUEUES behind a live page lease rather than closing it — so
+ * a refusal means a probe is mid-run, and rendering that as FAIL would be the
+ * same lie VOID exists to prevent, one cause further out.
+ */
+const BUSY = 4;
 
 function verdict(code: number | null): string {
   if (code === 0) return 'PASS';
-  return code === VOID ? 'VOID' : 'FAIL';
+  if (code === VOID) return 'VOID';
+  return code === BUSY ? 'BUSY' : 'FAIL';
 }
 
-interface Result { gate: Gate; code: number | null; ms: number; tail: string; cached: boolean }
+interface Result {
+  gate: Gate; code: number | null; ms: number; tail: string; cached: boolean;
+  /**
+   * The last few lines in full, kept only for a gate that did not pass.
+   *
+   * `tail` is two lines clipped to 110 characters — right for a PASS row, and
+   * useless for the thing that actually goes wrong here, which is a Node stack
+   * whose first line names the cause. `LANDMINES.md` records two separate lanes
+   * investigating a gate that was not failing but never running, because all the
+   * table could show was `at process.processTicksAndRejections`. Printing six
+   * lines under the summary costs nothing on a green run and is the difference
+   * between "the terrain regressed" and "the browser was closed".
+   */
+  excerpt?: string;
+}
 
 function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<Result> {
   return new Promise((resolve) => {
@@ -268,10 +300,14 @@ function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<Result> {
     const p = spawn(cmd, args, { env: env || process.env, cwd: ROOT });
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
-    p.on('close', (code) => resolve({
-      gate, code, ms: Date.now() - t0, cached: false,
-      tail: out.trim().split('\n').filter(Boolean).slice(-2).join(' | ').slice(0, 110),
-    }));
+    p.on('close', (code) => {
+      const lines = out.trim().split('\n').filter(Boolean);
+      resolve({
+        gate, code, ms: Date.now() - t0, cached: false,
+        tail: lines.slice(-2).join(' | ').slice(0, 110),
+        excerpt: code === 0 ? undefined : lines.slice(-8).join('\n'),
+      });
+    });
     p.on('error', (e) => resolve({ gate, code: 127, ms: Date.now() - t0, tail: String(e.message), cached: false }));
   });
 }
@@ -338,6 +374,24 @@ async function machineState(): Promise<HealthResponse | null> {
   try { return await call<HealthResponse>('/health', undefined, { timeout: 5_000 }); }
   catch { return null; }
 }
+/**
+ * `--set-baseline` waits for the machine before it measures it.
+ *
+ * The ratchet only grades a quiet run, and the moment you most want to record a
+ * new budget is right after a commit — which is exactly when `post-commit`'s
+ * prewarm is booting a page. Refusing at that moment is correct and useless.
+ *
+ * So the tool uses the primitive it tells everyone else to use, instead of
+ * making the caller notice, guess and re-run. This is what `--wait` is for.
+ */
+if (process.argv.includes('--set-baseline')) {
+  await ensureDaemon().catch(() => false);
+  const w = await call<WaitResponse>('/wait', { what: 'quiet', forMs: 300_000 }, { timeout: 360_000 })
+    .catch(() => null);
+  if (w && !w.ok) console.log(`  waited ${(w.waitedMs / 1000).toFixed(0)}s for a quiet box — ${w.why}\n`);
+  else if (w && w.waitedMs > 1000) console.log(`  quiet after ${(w.waitedMs / 1000).toFixed(1)}s\n`);
+}
+
 const health = await machineState();
 
 /**
@@ -558,18 +612,34 @@ if (aux.p) aux.p.kill();
 prune();
 
 const wallSec = (Date.now() - t0) / 1000;
-const failed = results.filter((r) => r.code !== 0 && r.code !== VOID);
-const voided = results.filter((r) => r.code === VOID);
+const failed = results.filter((r) => r.code !== 0 && r.code !== VOID && r.code !== BUSY);
+const voided = results.filter((r) => r.code === VOID || r.code === BUSY);
 const cached = results.filter((r) => r.cached);
 
 console.log(`\n${results.length - failed.length - voided.length}/${results.length} gates passed`
   + ` in ${wallSec.toFixed(1)}s${cached.length ? ` (${cached.length} from cache)` : ''}`);
 if (voided.length) {
-  console.log(`VOID (measured nothing, not a regression): ${voided.map((v) => v.gate.name).join(', ')}`);
-  console.log('  the ruler refused to certify -- re-run on a quiet tree; do not read these as numbers.');
+  console.log(`VOID/BUSY (measured nothing, not a regression): ${voided.map((v) => v.gate.name).join(', ')}`);
+  console.log('  the ruler refused to certify, or the machine was somebody else\'s. Re-run on a');
+  console.log('  quiet tree -- `daemon.mts --wait quiet --for 600` -- and do not read these as numbers.');
 }
 if (failed.length) {
   console.log(`failing: ${failed.map((f) => `${f.gate.name} (expected ${f.gate.expect})`).join(', ')}`);
+  for (const f of failed) {
+    if (!f.excerpt) continue;
+    console.log(`\n  --- ${f.gate.name}, last lines ---`);
+    for (const line of f.excerpt.split('\n')) console.log(`  ${line.slice(0, 160)}`);
+  }
+  /**
+   * The two things that are the harness rather than the game, named where the
+   * red row is, because that is where somebody is standing when they decide
+   * whether to investigate the renderer.
+   */
+  if (failed.some((f) => /has been closed|Execution context was destroyed/.test(f.excerpt ?? ''))) {
+    console.log('\n  One or more gates lost their browser mid-run. That is almost never the game:');
+    console.log('  check ~/.cache/ffxv-harness/<key>/daemon.log, and see LANDMINES.md on the');
+    console.log('  daemon restarting (a PROTOCOL bump) or dying. Re-run before believing this table.');
+  }
 }
 
 // --------------------------------------------- the meta-gate: the suite's own time

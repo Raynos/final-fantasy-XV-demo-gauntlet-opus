@@ -38,7 +38,7 @@ import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } fr
 import type { Floor } from './ruler.mts';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts, withExclusive, HARNESS_FLAGS } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, withExclusive, EXIT_BUSY, HARNESS_FLAGS } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -430,4 +430,19 @@ async function main() {
  * a perf number without it is not comparable, and two sessions arguing about a
  * regression that was really a busy box is a whole afternoon.
  */
-await withExclusive('gameplay', main).catch((e) => { console.error(e); process.exit(1); });
+/**
+ * A machine somebody else is legitimately using is not a broken build.
+ *
+ * `/exclusive` now queues behind a live page lease rather than closing it -- so
+ * a refusal here means a probe is mid-run, not that anything is wrong. Exit
+ * `EXIT_BUSY` (4) so `check.mts` renders it BUSY rather than FAIL and an agent
+ * reading the code can tell "retry in a minute" from "debug the renderer".
+ */
+await withExclusive('gameplay', main).catch((e) => {
+  if ((e as { busy?: true }).busy) {
+    console.error(`[harness] ${(e as Error).message}`);
+    process.exit(EXIT_BUSY);
+  }
+  console.error(e);
+  process.exit(1);
+});

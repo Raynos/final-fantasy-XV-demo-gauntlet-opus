@@ -1049,3 +1049,28 @@ existed here: `project/TODO.md` says "1.4 GB", `project/STATUS.md` says
 as a **trendline on one machine** — is this build worse than the last one — and
 never as an absolute. First readings, for the record: **2 449 MB with one page
 live, 16 465 MB across four.**
+
+## The shared daemon used to die of one failed render, silently
+
+`routeShots` claims every frame key in `inflight` before leasing a page, so a
+second agent asking for the same frame waits instead of rendering it twice. Its
+`finally` rejects any claim that never settled. In the common case **nothing is
+awaiting that claim** — no second agent happened to want that frame in that
+window — so the rejection was unhandled, and Node kills the process for that.
+
+The process is the daemon that owns every browser on the machine. So one failed
+render closed every context, and four other agents' tools died mid-`page.evaluate`
+with **`Target page, context or browser has been closed`** — which reads at the
+call site as the game crashing, and is the same string this file already records
+costing two lanes an investigation each.
+
+Fixed (`claim.catch(() => {})`, plus `unhandledRejection`/`uncaughtException`
+logged and survived). What to keep from it:
+
+- **That string almost never means the game crashed.** It means something closed
+  the browser: a daemon restart from a `PROTOCOL` bump, a `pool.closeAll()`, an
+  exclusive lease, or the daemon dying. Check **`~/.cache/ffxv-harness/<key>/daemon.log`**
+  first — it exists now, and it is where the answer was.
+- **It was invisible for as long as it existed** because autostart used
+  `stdio: 'ignore'`. Any hazard in a detached process that writes nowhere is not
+  rare, it is unobserved.

@@ -43,7 +43,7 @@
  * machine's harness down with it.
  */
 import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
@@ -779,10 +779,28 @@ function pruneTrees() {
   const root = path.join(repoCacheDir(KEY), 'trees');
   let entries: string[];
   try { entries = readdirSync(root); } catch { return; }
+  /**
+   * NEVER prune a tree that is being served right now.
+   *
+   * `CLAUDE.md`, `STATUS.md` and `TIMINGS.md` each warn "do not commit while a
+   * long probe runs -- trees are pruned at ten and it will drop the one being
+   * served". Three documents describing a hazard instead of one predicate
+   * preventing it, and the symptom is a probe dying with a bare Node stack
+   * minutes into a half-hour run because somebody else committed nine times.
+   *
+   * A served tree is one a `Build` has a vite pointed at, which is exactly the
+   * set that must survive. The cap still holds for everything else, and the
+   * worst case is a handful of extra 115 MB directories on a box that has
+   * 137 GB of RAM and does not care.
+   */
+  const live = new Set(
+    [...store.builds.values()].map((b) => shaOf(b.id)).filter((sha): sha is string => !!sha),
+  );
   const byAge = entries
     .map((name) => ({ name, at: statSync(path.join(root, name)).mtimeMs }))
     .sort((a, b) => b.at - a.at);
   for (const stale of byAge.slice(MAX_TREES)) {
+    if (live.has(stale.name)) continue;
     rmSync(path.join(root, stale.name), { recursive: true, force: true });
   }
 }
@@ -993,8 +1011,29 @@ class BrowserPool {
   sampleRss(force = false): number {
     if (!force && Date.now() - this.lastRssAt < 60_000) return this.lastRssMb;
     this.lastRssAt = Date.now();
+    void this.refreshRss();
+    return this.lastRssMb;
+  }
+
+  /**
+   * ASYNCHRONOUS, because this runs inside the daemon's event loop.
+   *
+   * The first version was `execFileSync('ps', ['-axo', …])`. On a box with
+   * hundreds of processes that is a few hundred milliseconds of the loop
+   * **stopped** — and this loop is serving four browsers for every agent on the
+   * machine, so the cost lands on somebody's capture rather than on the sampler.
+   * A telemetry probe that degrades the thing it measures is worse than no
+   * probe.
+   *
+   * The caller gets the previous value and this updates it a moment later,
+   * which is exactly right for a number whose whole purpose is a trendline.
+   */
+  private async refreshRss(): Promise<void> {
     try {
-      const out = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], { encoding: 'utf8', maxBuffer: 8 << 20 });
+      const out = await new Promise<string>((resolve, reject) => {
+        execFile('ps', ['-axo', 'pid=,ppid=,rss=,command='], { maxBuffer: 8 << 20 },
+          (err, stdout) => (err ? reject(err) : resolve(stdout)));
+      });
       const rows = out.split('\n').map((l) => {
         const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(l);
         return m ? { pid: Number(m[1]), ppid: Number(m[2]), rss: Number(m[3]), cmd: m[4] } : null;
@@ -1015,7 +1054,6 @@ class BrowserPool {
       const kb = rows.filter((r) => seen.has(r.pid)).reduce((a, r) => a + r.rss, 0);
       this.lastRssMb = Math.round(kb / 1024);
     } catch { /* ps is not worth failing a capture for */ }
-    return this.lastRssMb;
   }
 
   /** A wedged page must never be pooled; recycle the whole context. */
