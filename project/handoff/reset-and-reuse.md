@@ -129,3 +129,54 @@ discrete thing, not a distribution. See `LANDMINES.md`.
 `warmup()` stays regardless: it is correct, it removes a real history dependence
 (`probes/warmquantum.mts` shows 574 -> 514 within one page), and it is what made
 the boot-vs-reuse split legible once it was firing reliably.
+
+## In-browser cost: where it actually is, measured 2026-08-28
+
+Asked to optimise the frontend three.js so every saved millisecond compounds.
+Measured first, and the answer redirects the effort:
+
+**The frame is not the problem.** `project/STATUS.md` has the game at **mean 208
+fps, worst 116, against a 60 fps target** — 3.5x over. Cutting frame cost would
+not make this suite faster either: its browser time is a third page boots, and
+most of the rest is driving input rather than rendering.
+
+**Boot is the problem, and one line of it dominates.** `bootprof --dirty`:
+
+    load cold:   6.66 s wall, 6.49 s in Game.init()
+    load warm 1: 6.43 s wall, 6.32 s in Game.init()
+
+      1959 ms  postfx+compile+warmup      <- 30% of boot
+      1277 ms  Vegetation
+       858 ms  Props
+       374 ms  Water
+       363 ms  Npcs
+
+      -- warmup 1760 ms, +181 programs   (cold)
+      -- warmup 1711 ms, +181 programs   (warm)
+
+**The GPU program cache is doing nothing, and that is a bug worth fixing.**
+`--health` reports `persistentProfile: true`, `chromium.mts` implements it
+carefully and correctly — `launchPersistentContext` rather than a
+`--user-data-dir` flag playwright would override, one machine-wide profile — and
+a *warm* load still compiles **181 programs in 1711 ms**, within 3% of cold.
+1.7 s x ~10 boots per suite is ~17 s, and it is paid again by every page a
+player opens.
+
+**Hypothesis, untested:** `CHROMIUM_ARGS` pins `--use-angle=metal`, and ANGLE's
+Metal backend does not expose program binaries, so Chromium's shader disk cache
+has nothing it can store. The cheap experiment is one `bootprof` run with
+`--use-angle=gl` and nothing else changed, comparing `+N programs` and warmup
+ms. **Do not casually make that the default** — the backend decides pixels, so
+it would move every image baseline in the repo; measure first, then decide
+whether it is worth a re-baseline.
+
+**Second finding, recorded not chased:** `probes/drawwhere.mts` (new) attributes
+every call through `renderBufferDirect`. On `town_forecourt`: 496 calls but
+**5,231,106 triangles**, a third of them skinned character mesh at ~29k
+triangles per draw with no apparent LOD, across **288 distinct object/material
+buckets** — almost nothing batches, and 152 calls draw under 60 triangles each.
+That bucket count is also the likely reason there are 181 shader programs to
+compile, so material consolidation would pay boot *and* frame *and* the texture
+-unit exhaustion the probe surfaced (`Trying to use 16 texture units while this
+GPU supports only 16`, dozens of times a frame). Latent risk at 208 fps; the
+first thing to reach for if that ever stops being true.
