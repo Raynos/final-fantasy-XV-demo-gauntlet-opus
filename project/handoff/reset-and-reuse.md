@@ -55,7 +55,14 @@ any claim on this page.
 
 ## What is left, in the order I would take it
 
-1. **The enemy roster.** `enemies.n 10 -> 0` under the `shots` workload.
+1. **The enemy roster — do this first; it is worth double.** `enemies.n 10 -> 0`
+   under the `shots` workload. It is not only a reuse blocker: **it is the cause
+   of `drawcheck`'s 60-call disagreement with itself.** Posing one shot
+   repeatedly and restarting the daemon between series gives
+   `579 514 514 514 514 574 514` three times identically — runs 1 and 6 boot a
+   page, the rest reuse one, and a reused page draws **60 fewer calls** because
+   ten enemies at ~6 draws each (mesh, three shadow cascades, velocity proxy)
+   are missing. Fix the roster and the gate stops being unreadable.
    `Director.scenario()` (`src/game/Director.ts:251`) calls `enemies.clear()`
    on every posed shot, and `Director` has **no `reset()`**. The honest
    difficulty: the boot roster of 10 is a dynamic outcome of the live encounter
