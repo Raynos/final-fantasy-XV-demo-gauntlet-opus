@@ -50,7 +50,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { call, ensureDaemon } from './daemon.mts';
 import type { HealthResponse, WaitResponse } from './daemon.mts';
-import { lookup, store, prune } from './gatecache.mts';
+import { inputsKey, lookup, store, prune } from './gatecache.mts';
 import { appendJob } from './ledger.mts';
 import { resolveBuild, shaOf, workingTreeDirty } from './identity.mts';
 import { powerState, powerWarning } from './power.mts';
@@ -405,12 +405,22 @@ function portOpen(port: number): Promise<boolean> {
 // ------------------------------------------------------------- what this run is
 
 /**
- * The tree every verdict in this run is about, or null when there isn't one.
+ * What this run is about — per gate, and by content rather than by commit.
  *
- * Null on a dirty tree, deliberately: half these gates read the working tree in
- * process and half capture `--build HEAD`, and one key can only honestly cover
- * both when they are the same thing.
+ * This used to be one tree sha for the whole suite, null on a dirty tree. Both
+ * halves of that were costing more than they bought. **84 of the last 120
+ * commits here touch no game code at all** — 52 docs or config, 32 the harness
+ * — and each of them re-derived all eighteen gates because the sha had moved
+ * for reasons no gate could see. And the null-on-dirty rule turned the cache
+ * off for the entire edit-check loop it exists to shorten.
+ *
+ * `inputsKey` hashes the bytes each gate actually reads: the game, that gate's
+ * own tool, the daemon and harness for browser gates, the baselines, the root
+ * config, the argv. See `gatecache.mts` for what is deliberately excluded and
+ * the staleness that trades against.
  */
+const keyOf = (g: Gate): string | null => (opts.cache ? inputsKey(g) : null);
+/** Only for the ratchet and the ledger, which are about a commit, not a verdict. */
 const treeSha = workingTreeDirty() ? null : shaOf(resolveBuild('HEAD'));
 /**
  * What else is on this machine, asked rather than inferred.
@@ -506,8 +516,9 @@ function report(r: Result): void {
  * other harness job, which is the whole of "nothing metered the meter".
  */
 async function runGate(g: Gate): Promise<Result> {
+  const key = keyOf(g);
   if (opts.cache) {
-    const hit = lookup(g.name, treeSha);
+    const hit = lookup(g.name, key);
     // A measurement is not an assertion: a perf verdict taken on a busy box
     // says nothing about a quiet one, so it never replays as a pass.
     if (hit && !(g.perf && !hit.quiet)) {
@@ -562,7 +573,7 @@ async function runGate(g: Gate): Promise<Result> {
   results.push(r);
   report(r);
   store({
-    gate: g.name, sha: treeSha ?? '', code: r.code ?? 1, ms: r.ms, tail: r.tail,
+    gate: g.name, sha: key ?? '', code: r.code ?? 1, ms: r.ms, tail: r.tail,
     at: new Date().toISOString(), quiet, loadavg: Number(os.loadavg()[0].toFixed(2)),
   });
   appendJob({
