@@ -346,6 +346,29 @@ export interface EvalResponse extends Counters { value: unknown }
 export interface LeaseRequest extends PageOpts {
   ttlMs?: number;
   /**
+   * This tool can be handed a page somebody else has already driven.
+   *
+   * **Opt-in, and it stays opt-in.** `routeLease` forces a cold page because
+   * reusing a driven one has burned this repo twice: `integration` reports 27
+   * pass on a fresh page and 24 on a used one, and `creaturecheck` once
+   * reported a false 0.034 m animation drift in 1.5 s -- far too fast to have
+   * booted. A default of "reuse unless you object" would have shipped both of
+   * those again.
+   *
+   * The prize is real: **8 leases per suite x (8.39 s boot - 1.97 s reset) =
+   * 51.4 s**, the largest single remaining cost in the harness, and every gate
+   * that takes it back also stops paying it on a player's behalf in
+   * `project/TODO.md`. But a gate earns this flag by being shown to survive it,
+   * not by wanting it -- run `src/tools/resetcheck.mts` first, then prove the
+   * gate's own verdict byte-identical with the flag on and off, which is the
+   * same discipline that validated turbo.
+   *
+   * `heightcheck` is the first and currently the only holder: it is read-only,
+   * and the boot audit found it the one gate of nine that can safely receive a
+   * used page today.
+   */
+  reuse?: boolean;
+  /**
    * A page with no game in it.
    *
    * Six tools -- `sheet`, `corpus`, `compare`, `imagestats`, `reliefstat`,
@@ -2270,12 +2293,14 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
    * pages are destroyed on release, so the only page a lease could ever have
    * matched was somebody else's — which is exactly the contamination.
    */
-  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body), body.prod), w, h, true);
+  // `true` unless the caller has explicitly earned otherwise -- see `reuse`.
+  const wantsCold = !body.reuse;
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body), body.prod), w, h, wantsCold);
   try {
     // The page is booted here so the caller connects to something ready, and so
     // a boot failure is the daemon's problem rather than arriving as a mystery
     // on the far side of a CDP socket.
-    const page = await preparePage(slot, build, { ...body, cold: true });
+    const page = await preparePage(slot, build, { ...body, cold: wantsCold });
     if (turbo > 1) {
       // Patched here rather than in each of the six gates, so one flag reaches
       // all of them and the page is already in turbo when the tool connects.

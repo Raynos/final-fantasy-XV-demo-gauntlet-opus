@@ -28,9 +28,26 @@ import type { BrowserContext } from 'playwright';
  *   --hide-scrollbars            no scrollbar in the frame
  *   --mute-audio                 the audio system is real
  */
+/**
+ * The ANGLE backend, overridable for MEASUREMENT ONLY.
+ *
+ * `metal` is the default and stays the default: the backend decides pixels, so
+ * changing it would move every image baseline in the repo. But it is also the
+ * prime suspect for a real cost — `--health` reports `persistentProfile: true`
+ * and a *warm* load still compiles **181 programs in 1711 ms**, within 3% of
+ * cold, which is ~1.7 s x ten boots per suite bought for nothing. The
+ * hypothesis is that ANGLE's Metal backend does not expose program binaries, so
+ * Chromium's shader disk cache has nothing it can store.
+ *
+ * `HARNESS_ANGLE=gl` lets `bootprof` test that in one run without anybody
+ * having to change a default first. Pair it with `HARNESS_PROFILE_DIR` so the
+ * experiment gets its own profile and cannot pollute the shared one.
+ */
+const ANGLE_BACKEND = process.env.HARNESS_ANGLE || 'metal';
+
 export const CHROMIUM_ARGS = [
   '--use-gl=angle',
-  '--use-angle=metal',
+  `--use-angle=${ANGLE_BACKEND}`,
   '--enable-gpu',
   '--ignore-gpu-blocklist',
   '--force-color-profile=srgb',

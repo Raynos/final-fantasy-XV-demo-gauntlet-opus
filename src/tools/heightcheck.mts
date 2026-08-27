@@ -11,7 +11,22 @@ import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 const SHOT = process.argv[2] || 'hero_closeup';
 const ha = harnessArgs(process.argv.slice(2));
 announceBuild(ha);
-const leased = await lease(pageOpts(ha));
+/**
+ * This gate can take a page somebody else has already driven.
+ *
+ * It compares the terrain vertex shader's `tf_height()` against
+ * `Terrain.heightAt()` at chosen world positions. Both sides are pure functions
+ * of position: no prior camera, pose, menu, inventory or combat state can move
+ * either one, which is why the boot audit found this the single gate of nine
+ * that can safely receive a used page. Everything else either rewrites system
+ * prototypes (`reachcheck`), asserts on counts a driven page changes
+ * (`integration`), or moves the player (`combatloop`).
+ *
+ * Worth 7.4 s of the 8.39 s this used to spend booting a page to ask a
+ * question it answers in 1.2 s. Verified by running the gate with the flag on
+ * and off and diffing the output, not by argument.
+ */
+const leased = await lease({ ...pageOpts(ha), reuse: true });
 const page = leased.page;
 page.on('pageerror', (e) => console.error('PAGEERR', String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') console.error('CONSOLE', m.text().split('\n')[0]); });
