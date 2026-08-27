@@ -62,7 +62,8 @@ import { appendJob, ledgerPath, daemonLogPath } from './ledger.mts';
 import type { JobRecord } from './ledger.mts';
 
 /**
- * Bumped whenever a route, a request shape or a response shape changes.
+ * Bumped whenever a route, a request shape, a response shape **or any behaviour
+ * a client can observe** changes.
  *
  * An agent editing this file does **not** restart the running daemon, so
  * without this a new client talks to an old daemon over a port that is open and
@@ -71,8 +72,15 @@ import type { JobRecord } from './ledger.mts';
  * it, the fix was applied, the capture came back wrong *again*, and the code
  * being blamed was not the code that ran. Harness work is self-hosting; this is
  * the one place it bites.
+ *
+ * **Behaviour counts, not just shapes.** The fix that stopped a lease inheriting
+ * a pooled page changed no route and no type, so it was landed without a bump —
+ * and the next full `check` reported the same gate failing for the same reason,
+ * because every client was still talking to the daemon that predated it. The
+ * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
+ * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 5;
+export const PROTOCOL = 6;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
