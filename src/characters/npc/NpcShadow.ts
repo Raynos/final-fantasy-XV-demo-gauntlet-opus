@@ -103,6 +103,14 @@ export function skinnedShadowProxy(
   // posed skeleton routinely leaves, and a shadow caster that pops out at the
   // frame edge takes the character's whole shadow with it.
   mesh.frustumCulled = false;
+  // `VelocityPass` treats every visible `SkinnedMesh` as a mover unconditionally
+  // — a posed skeleton moves whatever its `matrixWorld` says — so without this
+  // the proxy gets a motion-vector proxy of its own, at one more draw and one
+  // more copy of the character's triangles per frame, writing velocity into
+  // pixels the four real meshes have already written. `noVelocity` is that
+  // pass's own opt-out and this is exactly what it is for: the proxy has no
+  // pixels, so it has no motion to blur.
+  mesh.userData.noVelocity = true;
   mesh.bind(skeleton, bindMatrix);
   return mesh;
 }
