@@ -75,10 +75,30 @@ any claim on this page.
    POI), so the question is not "dispose everything" but "which of these can a
    later gate see". **This is also a share of the 1.4 GB in `project/TODO.md`**,
    so it pays twice and deserves its own lane.
-3. **Only then**, flip `cold: true` per gate, with `resetcheck` green and each
-   gate's verdict shown byte-identical — the same discipline that validated
-   turbo. `heightcheck` is the safe first candidate: read-only, and the boot
-   audit found it the only one of nine that can receive a used page today.
+3. ~~Flip `cold: true` per gate~~ — **DONE for two of them, and the mechanism
+   is landed.** `LeaseRequest.reuse` is opt-in; a gate earns it by measurement.
+
+       heightcheck     off 7280/7299/7282 ms   on 1035/1038/1008   IDENTICAL  7.1x
+       creaturecheck   off 7736/7775/7737 ms   on 1156/1157/1084   IDENTICAL  6.8x
+       floatcheck      DIFFERS — stays cold
+
+   **The structural safety argument**, which matters more than the three runs:
+   `releaseLease` throws a leased game page away rather than pooling it, so a
+   page handed out under `reuse` can only ever have come from `/shots` — a posed
+   capture. It can never be a page another *gate* drove, and that is where both
+   of this repo's reuse burns came from. The flag does not ask gates to tolerate
+   each other; it lets them inherit a posed page.
+
+   `floatcheck` failed honestly and is the reason to keep testing rather than
+   reasoning: on a reused page it reported `91 force-built this run` against
+   `115` cold, and its floater list reordered. Not predictable from reading it.
+
+   **To test the next candidate**, A/B its lease line three runs each way with a
+   pool-priming capture before every run, and diff the output ignoring harness
+   timing lines. `driftcheck` is disqualified by its own premise ("baseline, at
+   a fresh boot"); `reachcheck` rewrites every system prototype with no unwrap;
+   `integration` and `combatloop` are the documented burns. So the remaining
+   candidates are thin — the boot cost that is left is mostly theirs.
 
 ## Do not repeat these
 
