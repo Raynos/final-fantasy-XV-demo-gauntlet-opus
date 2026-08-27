@@ -84,28 +84,51 @@ if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.
 fi
 
 # ---------------------------------------------------------------------------
-# The build and both typechecks, CONCURRENTLY.
+# The build, both typechecks, and every gate cheap enough to be free.
 #
-# They are three independent readers of the same tree -- vite strips types and
-# never looks at them, and the two tsc invocations cover disjoint configs -- so
-# nothing here is ordered. Run serially they were 0.64 + 0.39 + 0.40 = ~1.4 s;
-# run together they are bounded by the slowest, ~0.7 s.
+# They are seven independent readers of the same tree, so nothing here is
+# ordered, and the hook's wall time is the SLOWEST job rather than the sum.
+# That is what makes the four gates below cost nothing to add:
 #
-# Half a second sounds like nothing. It is not nothing here: CLAUDE.md says
-# commit early and often and keep commits small, so this hook runs dozens of
-# times a day per lane, and it is the one gate whose whole design rationale is
-# that a gate slow enough to skip gets skipped. Making the fast lane faster is
-# how it stays the fast lane.
+#     vite build     0.50 s  <- the pole
+#     tsc game       0.40 s
+#     tsc tools      0.40 s
+#     geocheck       0.68 s
+#     horizoncheck   0.24 s
+#     orphans        0.18 s
+#     anycheck       0.16 s
+#                    ------
+#     serial         2.56 s      concurrent ~0.7 s
 #
-# Each job's output is captured to its own file rather than interleaved: three
-# compilers writing to one terminal at once produce a diagnostic nobody can
-# read, and the whole value of this hook is that its failure is legible.
+# WHY THESE FOUR AND NOT THE OTHERS. Every one is bare Node — no daemon, no
+# browser, no server — so none of them can queue behind another agent, and none
+# can fail for a reason that is not the code. The next cheapest gate is
+# `silhouette` at 3.47 s, which would take the hook from 0.7 s to 3.5 s: five
+# times the cost of the thing it is protecting. `CLAUDE.md`'s rule is that a
+# gate slow enough to skip gets skipped, and this hook runs dozens of times a
+# day per lane, so the bar for joining it is "free", not "cheap".
+#
+# WHAT THEY BUY, at commit time rather than at push:
+#   anycheck      a single `any` anywhere under src/, ceiling zero
+#   orphans       a module no longer reachable from main.ts
+#   geocheck      non-finite vertices, bad indices, winding and UV asserts
+#   horizoncheck  the horizon sweep against its brute-force reference
+#
+# All four used to be discovered minutes later by `pnpm run check`, or hours
+# later at push. `anycheck` in particular is a ratchet at zero that a single
+# careless `as any` breaks, and finding that at the commit that caused it is
+# worth far more than finding it in a suite run over somebody else's merge.
+#
+# Output is captured per job rather than interleaved: seven writers on one
+# terminal produce a diagnostic nobody can read, and the whole value of this
+# hook is that its failure is legible.
 # ---------------------------------------------------------------------------
 
-echo "pre-commit: build + typechecks (concurrent)..."
+echo "pre-commit: build, typechecks and 4 cheap gates (concurrent)..."
 work=$(mktemp -d "${TMPDIR:-/tmp}/ffxv-precommit.XXXXXX")
 cleanup() {
-  rm -f "$work/build" "$work/game" "$work/tools"
+  rm -f "$work/build" "$work/game" "$work/tools" \
+        "$work/anycheck" "$work/orphans" "$work/geocheck" "$work/horizoncheck"
   rmdir "$work" 2>/dev/null
 }
 trap cleanup EXIT
@@ -113,6 +136,14 @@ trap cleanup EXIT
 ./node_modules/.bin/vite build                          >"$work/build" 2>&1 & p_build=$!
 ./node_modules/.bin/tsc --noEmit -p tsconfig.json       >"$work/game"  2>&1 & p_game=$!
 ./node_modules/.bin/tsc --noEmit -p tsconfig.tools.json >"$work/tools" 2>&1 & p_tools=$!
+
+# The cheap gates, by name so the loop below can report which one spoke.
+CHEAP="anycheck orphans geocheck horizoncheck"
+cheap_pids=""
+for g in $CHEAP; do
+  node "src/tools/$g.mts" >"$work/$g" 2>&1 &
+  cheap_pids="$cheap_pids $!"
+done
 
 wait $p_build; rc_build=$?
 wait $p_game;  rc_game=$?
@@ -137,9 +168,27 @@ if [ "$rc_tools" -ne 0 ]; then
   echo "pre-commit: TYPECHECK FAILED (tsconfig.tools.json) -- commit aborted."
   fail=1
 fi
+
+# Collect the gates in the order they were started, so a pid lines up with a
+# name. `wait` on each in turn gives the exit code of that specific job.
+i=0
+set -- $cheap_pids
+for g in $CHEAP; do
+  i=$((i + 1))
+  eval "pid=\${$i}"
+  wait "$pid"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    tail -12 "$work/$g"
+    echo
+    echo "pre-commit: GATE FAILED ($g) -- commit aborted."
+    fail=1
+  fi
+done
+
 if [ "$fail" = 1 ]; then
   echo "            fix the error, or re-run with --no-verify if you know better."
+  echo "            SKIP_BUILD_CHECK=1 skips all of it."
   exit 1
 fi
-echo "pre-commit: build ok, typecheck ok"
+echo "pre-commit: build ok, typecheck ok, $(echo $CHEAP | wc -w | tr -d ' ') gates ok"
 exit 0
