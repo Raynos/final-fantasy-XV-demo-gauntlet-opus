@@ -98,18 +98,34 @@ any claim on this page.
 
 ## What this bought the drawcheck instrument
 
-`warmup()` was built for reuse and paid off somewhere else. `drawcheck`
-disagreed with itself on 25/142 shots; two passes showed **nine shots differing
-by exactly +15 and `setpiece_deadeye` by -60, which is 4x15**. A shared constant
-across unrelated shots is one thing present or absent, not variance.
+`warmup()` was built for reuse and the answer arrived from the same lane, but
+**not the way this section first recorded it** — the earlier version credited
+warmup with the 60 and that was wrong, so here is the settled version.
 
-`probes/warmquantum.mts` proved half of it: `Enemies.prototype()` builds a
-species' geometry on first spawn and caches it forever, so a draw count depended
-on run history. Warming every species moves `setpiece_deadeye` 574 → 514 — the
-null arm's -60, exactly.
+Posing one shot repeatedly through the daemon, restarting it between series:
 
-**And `stableAfterWarmup: true`: on a warmed page, three consecutive passes over
-twelve shots are byte-identical.** So the remaining +15 is *boot-to-boot*, not
-accumulation within a run — which is why `resetClock()` did not touch it and why
-restoring the booted state did not either. That is the one open question about
-this instrument now, instead of one of five.
+    restart 1:  579 514 514 514 514 574 514 514
+    restart 2:  579 514 514 514 514 574
+    restart 3:  579 514 514 514 514 574 514
+
+Identical three times, and the daemon log says warmup fired on every request and
+built 21 prototypes each time. **So it was never noise and it is not lazy
+construction.** Runs 1 and 6 are where the pool boots a page; the rest reuse
+one:
+
+    579 / 574   freshly booted page
+    514         reused page, after Game.reset()
+
+A reused page draws **60 fewer calls**, and `resetcheck` names what is missing:
+`enemies.n 10 -> 0`. That is item 1 above, and it is why item 1 is worth double.
+
+Five hypotheses died before this one, recorded so nobody re-runs them: frame
+parity (`resetClock`), chunk sizing, wasted boots, state accumulating across
+shots within a run, and lazy bestiary construction. Each was measured; each was
+wrong. What finally pointed here was histogramming the deltas instead of
+modelling them as variance — nine unrelated shots landing on exactly +15 is a
+discrete thing, not a distribution. See `LANDMINES.md`.
+
+`warmup()` stays regardless: it is correct, it removes a real history dependence
+(`probes/warmquantum.mts` shows 574 -> 514 within one page), and it is what made
+the boot-vs-reuse split legible once it was firing reliably.
