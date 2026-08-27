@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { PartBuilder, type Vec3 } from './PartBuilder.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { isMesh } from '../../util/three-guards.ts';
 import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
 import { dressAt, type Dress } from './ZoneDress.ts';
 import {
@@ -247,6 +249,14 @@ export interface BuiltSite extends PoiSite {
   draw: number;
   /** Whether the group is currently casting; unset until the first test. */
   casting?: boolean;
+  /**
+   * What actually casts for this site: one merged proxy for everything opaque,
+   * plus any alpha-tested mesh that has to cast as itself. See
+   * {@link shadowProxy}.
+   */
+  casters: THREE.Object3D[];
+  /** The proxy inside `casters`, hidden whenever it is not casting. */
+  proxy: THREE.Mesh | null;
 }
 
 /**
@@ -2230,6 +2240,15 @@ export class PoiKits {
     g.name = `poi_${p.type}_${p.id}`;
     g.position.set(p.x, base, p.z);
     B.build(g, { cast: false, receive: true, name: p.type });
+    // ONE merged caster per site, instead of one per material. A kit is merged
+    // per material because it has that many surfaces, not that many objects,
+    // and a depth pass reads a material only for an alpha cutout -- so the
+    // union of those meshes casts the same silhouette in one draw per cascade.
+    // Measured on `poi_haven`: `poi_kits` went from 66 draws to 40.
+    const proxy = shadowProxy(g.children, `${p.type}_shadow`);
+    const casters: THREE.Object3D[] = [];
+    if (proxy) { g.add(proxy); casters.push(proxy); }
+    for (const m of g.children) if (m !== proxy && isMesh(m) && alphaCut(m.material)) casters.push(m);
     this.root.add(g);
     site.group = g;
     this.built.push({
@@ -2238,6 +2257,8 @@ export class PoiKits {
       canCast: res.cast !== false,
       radius: res.r || 20,
       draw: DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R,
+      casters,
+      proxy,
     });
   }
 
@@ -2264,7 +2285,10 @@ export class PoiKits {
       const cast = s.canCast && d2 < 90 * 90;
       if (s.casting !== cast) {
         s.casting = cast;
-        for (const m of s.group.children) m.castShadow = cast;
+        for (const m of s.casters) m.castShadow = cast;
+        // The proxy writes no pixel and no depth, so a colour-pass draw of it
+        // at a range where it casts nothing is a draw call that does nothing.
+        if (s.proxy) s.proxy.visible = cast;
       }
     }
     const M = this.mats;
@@ -2287,4 +2311,78 @@ function hashId(str: string) {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+/** Does this material's silhouette live in its alpha channel? */
+function alphaCut(m: THREE.Material | THREE.Material[]): boolean {
+  const one = Array.isArray(m) ? m[0] : m;
+  return !!one && ((one as THREE.MeshStandardMaterial).alphaTest > 0 || one.transparent === true);
+}
+
+/**
+ * One merged, colour-less caster standing in for a whole POI compound.
+ *
+ * **Why this is a merge and not a cull.** A shadow map writes depth, and reads
+ * a material only to find an alpha cutout. A kit is split into meshes because
+ * it has that many *materials*, not that many objects — so its pieces cast
+ * exactly the same silhouette as their union, at one draw per cascade instead
+ * of one each. Measured on `poi_haven`, `poi_kits` went from 66 draws to 40,
+ * and nothing in the frame changed: the same triangles are rasterised into the
+ * same depth buffer under fewer draw calls.
+ *
+ * **The exception** is an alpha-tested surface — a chain-link run, a foliage
+ * card — whose shadow *is* the holes in its map. Those keep casting as
+ * themselves; the caller filters them out of `casters` separately.
+ *
+ * **And why the proxy is visible when it casts.** three.js skips an object
+ * whose `visible` is false, whose material's `visible` is false, or that fails
+ * `object.layers.test(camera.layers)` against the VIEW camera, in the shadow
+ * pass exactly as in the colour pass (`WebGLShadowMap.renderObject` tests all
+ * three) — so there is no such thing as a caster the main camera cannot see.
+ * It therefore costs ONE colour-pass draw, with `colorWrite` and `depthWrite`
+ * off so it changes no pixel and no depth, against the dozens it removes. It
+ * is hidden outright whenever the site is out of shadow range.
+ *
+ * Duplicated from `src/world/town/Hammerhead.ts`, which does the same thing to
+ * the town for the same reason. Both belong on `PartBuilder`, which is another
+ * lane's file.
+ */
+function shadowProxy(meshes: THREE.Object3D[], name: string): THREE.Mesh | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const m of meshes) {
+    if (!isMesh(m) || alphaCut(m.material)) continue;
+    const src = m.geometry;
+    const pos = src.getAttribute('position');
+    if (!pos) continue;
+    // Position only: a depth pass binds no normal, no UV and no vertex colour,
+    // so carrying them through the merge would triple a buffer whose only
+    // reader is `gl_Position`.
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', pos.clone());
+    // `mergeGeometries` returns **null**, silently, when one member of a batch
+    // is indexed and another is not — and a null merge here deletes a whole
+    // site's shadow. So the index is synthesised rather than left absent.
+    const idx = src.getIndex();
+    if (idx) g.setIndex(idx.clone());
+    else {
+      const seq = new Uint32Array(pos.count);
+      for (let i = 0; i < pos.count; i++) seq[i] = i;
+      g.setIndex(new THREE.BufferAttribute(seq, 1));
+    }
+    // The kit's pieces are already in the site group's frame, and the proxy
+    // joins that same group, so no matrix is applied here on purpose.
+    parts.push(g);
+  }
+  if (!parts.length) return null;
+  const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+  if (!merged) return null;
+  merged.computeBoundingSphere();
+  const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  mat.name = `${name}_mat`;
+  const mesh = new THREE.Mesh(merged, mat);
+  mesh.name = name;
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  mesh.visible = false;
+  return mesh;
 }
