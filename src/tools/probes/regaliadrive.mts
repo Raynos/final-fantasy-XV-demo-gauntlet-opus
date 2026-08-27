@@ -38,17 +38,27 @@ out.push('--- 1. get in ---');
 // Stand the player on the car before pressing F: `enter` is allowed from a
 // reach, and a probe that teleports into the seat proves nothing about whether
 // a player could have got there.
-const carPos = reg.body && reg.body.position ? reg.body.position : (reg.group && reg.group.position);
+// `VehicleBody.pos`, not `.position` — the latter is undefined and reading
+// it is how the first run of this died on `.clone()`.
+const carPos = (reg.body && reg.body.pos) || (reg.root && reg.root.position);
 ok('the car exists and is somewhere', !!carPos,
   carPos ? `${carPos.x.toFixed(0)},${carPos.z.toFixed(0)}` : '-');
 if (carPos) {
   player.position.set(carPos.x + 2.4, player.position.y, carPos.z);
   step(10);
 }
+// **`keyDown()` reads `Input.pressed`, the per-frame EDGE set, not `keys`.**
+// `keys` is the held set that drives movement; a probe that adds to it is
+// testing itself, not the game. `pressed` is cleared by `endFrame`, so the
+// press has to be re-armed on each frame it should be seen on.
 inp.keys.clear();
-inp.keys.add('KeyF');
-step(4);
-inp.keys.clear();
+ok('the prompt offers the car', (() => {
+  step(6);
+  return !!(reg.prompt && reg.prompt.label === 'Drive');
+})(), reg.prompt ? `"${reg.prompt.label}" at ${reg.distanceToPlayer().toFixed(1)} m`
+  : `no prompt at ${reg.distanceToPlayer().toFixed(1)} m`);
+inp.pressed.add('KeyF');
+g.frame(1 / 60);
 step(20);
 ok('pressing F puts him in the driver seat', !!reg.isDriving, `driving=${reg.isDriving}`);
 if (!reg.isDriving) { reg.enter(false); step(20); }
@@ -58,7 +68,7 @@ if (window.__shot) await window.__shot('seated');
 /* ---- 2. drive it ----------------------------------------------------- */
 out.push('');
 out.push('--- 2. drive it ---');
-const p0 = reg.body.position.clone();
+const p0 = reg.body.pos.clone();
 let topKmh = 0;
 inp.keys.clear();
 inp.keys.add('KeyW');
@@ -66,18 +76,18 @@ for (let f = 0; f < 60 * 14; f++) {
   g.frame(1 / 60);
   topKmh = Math.max(topKmh, reg.body.kmh || 0);
 }
-const straight = reg.body.position.distanceTo(p0);
+const straight = reg.body.pos.distanceTo(p0);
 ok('the throttle moves it', straight > 60, `${straight.toFixed(0)} m in 14 s, top ${topKmh.toFixed(0)} km/h`);
 ok('it reaches a road speed', topKmh > 45, `${topKmh.toFixed(0)} km/h`);
 if (window.__shot) await window.__shot('driving');
 
 // steering: hold a turn and see the heading actually come round
-const h0 = reg.body.heading ?? reg.body.yaw ?? 0;
+const h0 = reg.body.heading ?? 0;
 inp.keys.clear();
 inp.keys.add('KeyW');
 inp.keys.add('KeyA');
 for (let f = 0; f < 60 * 5; f++) g.frame(1 / 60);
-const h1 = reg.body.heading ?? reg.body.yaw ?? 0;
+const h1 = reg.body.heading ?? 0;
 let dh = Math.abs(h1 - h0) % (Math.PI * 2);
 if (dh > Math.PI) dh = Math.PI * 2 - dh;
 ok('it steers', dh > 0.3, `${(dh * 57.3).toFixed(0)} degrees in 5 s of left lock`);
@@ -87,27 +97,40 @@ step(30);
 /* ---- 3. hand it to Ignis --------------------------------------------- */
 out.push('');
 out.push('--- 3. auto-drive ---');
-reg.setAutoDrive(true);
+// **Give it a destination.** `setAutoDrive(true)` alone hands Ignis the wheel
+// with nowhere to go; `driveTo`/`nextDestination` is what puts a target on the
+// highway. The first run of this handed over after 380 m of manual off-road
+// driving and then blamed Ignis for being off the carriageway — the car was
+// nowhere near a road and had not been told where to go.
+const dest = reg.nextDestination();
 step(30);
-ok('auto-drive engages', !!reg.auto, `auto=${reg.auto}`);
+ok('auto-drive engages', !!reg.auto, `auto=${reg.auto}, heading for ${dest && dest.name}`);
 const roadDist = () => {
   const props = g.get('Props');
   const eco = props && props.ecology;
-  return eco ? eco.roadDist(reg.body.position.x, reg.body.position.z) : -1;
+  return eco ? eco.roadDist(reg.body.pos.x, reg.body.pos.z) : -1;
 };
-const a0 = reg.body.position.clone();
-let offRoadFrames = 0, worstOff = 0, autoTop = 0;
+const a0 = reg.body.pos.clone();
+let offRoadFrames = 0, worstOff = 0, autoTop = 0, rejoinAt = -1;
+const startOff = roadDist();
 inp.keys.clear();
-for (let f = 0; f < 60 * 40; f++) {
+for (let f = 0; f < 60 * 60; f++) {
   g.frame(1 / 60);
   autoTop = Math.max(autoTop, reg.body.kmh || 0);
   const d = roadDist();
-  if (d > 7) { offRoadFrames++; worstOff = Math.max(worstOff, d); }
+  if (rejoinAt < 0 && d <= 7) rejoinAt = f;
+  // Only count time off the road AFTER it has had a chance to rejoin: the
+  // handover happens wherever the player left the car, and getting back to
+  // the highway is Ignis' job, not a failure of it.
+  if (rejoinAt >= 0 && d > 7) { offRoadFrames++; worstOff = Math.max(worstOff, d); }
 }
-const autoDist = reg.body.position.distanceTo(a0);
-ok('Ignis actually drives', autoDist > 120, `${autoDist.toFixed(0)} m in 40 s, top ${autoTop.toFixed(0)} km/h`);
-ok('and stays on the road', offRoadFrames / (60 * 40) < 0.15,
-  `off the carriageway ${((offRoadFrames / (60 * 40)) * 100).toFixed(0)}% of frames, worst ${worstOff.toFixed(0)} m`);
+const held = Math.max(1, 60 * 60 - Math.max(0, rejoinAt));
+const autoDist = reg.body.pos.distanceTo(a0);
+ok('Ignis actually drives', autoDist > 150, `${autoDist.toFixed(0)} m in 60 s, top ${autoTop.toFixed(0)} km/h`);
+ok('he finds the road', rejoinAt >= 0,
+  `handed over ${startOff.toFixed(0)} m off it; rejoined after ${rejoinAt >= 0 ? (rejoinAt / 60).toFixed(0) + ' s' : 'NEVER'}`);
+ok('and then stays on it', rejoinAt >= 0 && offRoadFrames / held < 0.15,
+  `off the carriageway ${((offRoadFrames / held) * 100).toFixed(0)}% of the time after rejoining, worst ${worstOff.toFixed(0)} m`);
 if (window.__shot) await window.__shot('auto');
 
 /* ---- 4. get out ------------------------------------------------------ */
@@ -123,7 +146,7 @@ for (let f = 0; f < 60 * 6; f++) g.frame(1 / 60);      // roll to a stop
 reg.exit();
 step(30);
 ok('he gets out', !reg.isDriving, `driving=${reg.isDriving}`);
-const gap = player.position.distanceTo(reg.body.position);
+const gap = player.position.distanceTo(reg.body.pos);
 ok('and is standing next to the car', gap < 12 && gap > 0.5, `${gap.toFixed(1)} m away`);
 const terrain = g.get('Terrain');
 const groundY = terrain ? terrain.heightAt(player.position.x, player.position.z) : player.position.y;
