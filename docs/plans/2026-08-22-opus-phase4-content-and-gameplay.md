@@ -30,7 +30,7 @@ is unevidenced; 0 of 5 boxes tick.**
 | WS-4 quests and hunts | **DONE** — 21 dead objectives to zero, six uncompletable hunts fixed, main chain reaches end of chapter 5 |
 | WS-5 camp / cook / rest / day cycle | **DONE** — `HavenCamp`, four recipes, and a gate that actually presses the key and rests |
 | WS-6 the Regalia | partial — `AutoDrive` exists; nothing verified this round |
-| WS-7 character fidelity | partial and **unjudged** — hair and eyes shipped in four commits with +8 draws and +0.42 M triangles, never measured and never scored |
+| WS-7 character fidelity | hands and outfits done and priced (2026-08-27, `626908b..347041c`, **+28.5 k triangles and zero draw calls**); hair and eyes **now judged** — hair helps and its new tell is named, the eyes cannot be graded until the head lands. `project/handoff/ws7-hands-outfits.md` §7 is what is left. The "+8 draws and +0.42 M triangles" the audit quoted was never re-measured and the nine-shot table in that handoff supersedes it |
 | **beyond the plan** | **fishing** — ten `type: 'fishing'` POIs had been authored into the map and did nothing. `src/game/fishing/` is a real non-combat verb, and the lane before it was right to refuse to tick a `fish` objective off a keypress |
 
 **The gate numbers in the body of this file are stale.** Live, 2026-08-23:
@@ -121,7 +121,7 @@ has become a named, measured, unowned problem.
 | **WS-4** | Quests and hunts | WS-1, WS-3 | |
 | **WS-5** | Camp, cook, rest, day cycle | WS-1, WS-3 | |
 | **WS-6** | The Regalia | WS-1, WS-3 | Note `SHOT_STAGES` and the two-Regalia trap in `project/archive/handoff/cineui.md` §6.3 |
-| **WS-7** | Character fidelity | — | Parallel, whole-run. **Start from `project/handoff/heroart.md`** — hands and outfits are untouched and are the largest single art gap |
+| **WS-7** | Character fidelity | — | Parallel, whole-run. Hands and outfits landed 2026-08-27 — **start from `project/handoff/ws7-hands-outfits.md`**, not from `project/archive/handoff/heroart.md`, which predates them. Judge every character change against `docs/reference/plates/party-three-field-02.jpg` through `src/tools/_probe/ws7.mts`: it is `party_formation`'s own framing with the shipped outfits in it, and four of the five defects that pass found were things the plate simply has |
 
 ### WS-0b's inbox, from the sibling-ports plan
 
