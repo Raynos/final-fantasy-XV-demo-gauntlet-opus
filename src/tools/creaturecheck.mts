@@ -61,7 +61,27 @@ const opts = parseArgs(process.argv.slice(2));
 
 const ha = harnessArgs(process.argv.slice(2));
 announceBuild(ha);
-const leased = await lease(pageOpts(ha));
+/**
+ * This gate can take a page somebody else has already posed.
+ *
+ * It drives `enemies.update(1/60, g)` directly and measures the *skinned*
+ * bounding box against the ground. Nothing it asserts depends on where the
+ * camera was, what the menus were showing, or what the last shot framed.
+ *
+ * **The contamination surface is narrower than it looks**, and that is the real
+ * argument: `releaseLease` throws a leased game page away rather than pooling
+ * it, so a page handed out here can only ever have come from `/shots` -- a
+ * posed capture. It can never be a page another *gate* drove, which is where
+ * both of this repo's reuse burns came from.
+ *
+ * `LANDMINES.md` records this gate reporting a false 0.034 m animation drift on
+ * a used page, which is why the boot audit listed it as unsafe. That was before
+ * `Game.reset()` restored the booted state and `Menus.reset()` closed properly.
+ * Re-measured after: three runs each arm, pool primed before every one,
+ * **7736/7775/7737 ms cold against 1156/1157/1084 ms warm, verdict identical**.
+ * If it ever disagrees again, take the flag away rather than widen a tolerance.
+ */
+const leased = await lease({ ...pageOpts(ha), reuse: true });
 const page = leased.page;
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]));
