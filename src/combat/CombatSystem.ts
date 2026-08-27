@@ -1758,9 +1758,36 @@ export class CombatSystem {
     if (!w.struck && t >= w.dash) {
       w.struck = true;
       if (w.enemy) {
+        /**
+         * A strong opener, not an execute.
+         *
+         * `fightshape.mts` measured warp-strike doing **62-77% of all damage
+         * in every fight**, across beasts and imperials alike, and `combatloop`
+         * has a row reading "780 damage" against a 780 hp sabertusk. Into a
+         * staggered target it measured **3951-6994**. A fight with one button
+         * that deletes it has no shape: the party's techniques, the combo, the
+         * elemancy and the stagger window are all decoration behind it, which
+         * is most of what "currently a photo booth" still means after the
+         * mechanics were wired.
+         *
+         * The multiplier was compounding three ways at once — 2.9x motion,
+         * then `blindside` 1.35x, then `Enemy.hit`'s 1.7x on a staggered
+         * target with `resolve`'s own stagger multiplier already folded in.
+         * Two changes, and deliberately not a flat nerf:
+         *
+         * - **2.9 -> 1.9 motion.** Still comfortably the biggest single hit
+         *   the player has, and still the right way to open on a full-health
+         *   target from range.
+         * - **No blindside bonus on a target that is already staggered.** You
+         *   cannot catch something unawares while it is reeling in front of
+         *   you, and stacking the two is where 7 000 came from.
+         *
+         * The stagger multiplier itself is untouched: punishing a stagger is
+         * the loop, and warp is still the best thing to punish it with.
+         */
         this._applyDamage(w.enemy, w.from, {
-          motion: this.weaponMotion * 2.9, poise: 80, warp: true,
-          blindside: this._isBlindside(w.enemy),
+          motion: this.weaponMotion * 1.9, poise: 80, warp: true,
+          blindside: !w.enemy.staggered && this._isBlindside(w.enemy),
         });
       }
       this.hitstop = 0.12;
