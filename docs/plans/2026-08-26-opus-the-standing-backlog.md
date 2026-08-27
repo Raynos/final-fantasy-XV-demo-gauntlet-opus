@@ -489,6 +489,48 @@ every corpus shoreline is 250 m+ from camera and cannot show this.
   `mix`/`blend` helpers rather than `Palette.mixc`, which exists precisely
   because two registers cannot survive a nested blend (`LANDMINES.md`).
 
+### `Enemy.level` is decoration, and the danger gradient is cosmetic
+
+From WS-2's fight-shape lane, 2026-08-27, measured with
+`src/tools/probes/fightshape.mts`. **The largest single reason a field
+encounter here lasts 5.8 seconds and costs 0.8% of Noctis' HP**, and it needs
+two owners at once, which is why it is a queue item rather than a commit.
+
+`EnemyBase` reads `level` for `defense`, `magicDefense`, the EXP bucket and the
+nameplate. **Nothing scales HP or damage by it.** A `level: 7` sabertusk
+(`SpawnTables.ts:160`) and a level 45 one are byte-identical animals, so
+`WildTerritories.ts:102`'s promise — *"a coeurl in Leide is a level 22 coeurl
+and the same coeurl in Cleigne is a level 45 coeurl, which is how the danger
+gradient survives being procedural"* — moves the number over the creature's head
+and nothing else.
+
+The curve is already in the bestiary and fits its own table: Anak (lv 9, 900 hp,
+60 damage) through Red Giant (lv 50, 22 000 hp, 520 damage) is **×1.085 per
+level for HP, ×1.058 for damage**. At a species' own listed level the factor is
+exactly 1, so the corpus and every gate are untouched by construction.
+
+It was **built and reverted** because it cannot live inside
+`src/characters/enemies/**` alone. Two writers outside it defeat every version:
+
+- `src/characters/Enemies.ts:171` — `if (o.hp) { e.maxHp = o.hp; e.hp = o.hp; }`
+  overwrites a constructor-computed value on the **fresh-spawn** path while the
+  pooled path goes through `reset()`. The first pack of each species would
+  behave differently from every later one.
+- `src/game/encounters/EncounterDirector.ts:438` —
+  `e.maxHp = Math.round(e.maxHp * 3.2)` is a read-modify-write, so a read-time
+  scaling is applied twice to every hunt mark.
+
+The clean shape: `Enemies.spawn` hands the level to the constructor and
+`reset()` and stops assigning raw `hp`/`damage` afterwards.
+
+**Half of it is worse than none.** The dens a player of this demo actually meets
+are **level 3-5** while Noctis is **level 27** (`Game.ts:224` boots
+`startLevel: 27`; `WildTerritories.ts:246` takes the zone band, `[1, 8]` by
+default), and `RpgSystem.enemyScaling` — documented *"given the party's level"*
+— is `nightScaling(hour, isDaemon)` and has never read a party level. Applying
+the curve without moving the bands makes the measured fights *weaker*. Both
+halves, or neither. `project/handoff/ws2-fight-shape.md` carries the frames.
+
 ---
 
 ## Negatives worth not re-opening

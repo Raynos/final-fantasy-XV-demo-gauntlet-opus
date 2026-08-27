@@ -1447,6 +1447,17 @@ export class Enemy {
       if (this.state === 'chase' || this.state === 'approach' || this.state === 'strafe') {
         this.setState('alert');
       }
+      // ...and at the end of it, commit. Leaving the state to `_sense` meant a
+      // packmate that had been *told* about you but could not see you decayed
+      // its awareness from `Pack.alert`'s 0.7 back to nothing while it stood
+      // in `alert`, and dropped to `patrol` — so the far half of a den now
+      // gave up instead of joining. Measured at 18% of enemy-frames spent
+      // patrolling *during a fight*. Holding the beat only works if the beat
+      // ends in a charge.
+      if (this._rouse <= 0 && this.target && !this.passive) {
+        this.awareness = Math.max(this.awareness, 0.8);
+        this.setState('chase');
+      }
     }
 
     const target = this.target;
@@ -1627,6 +1638,13 @@ export class Enemy {
    */
   get inCombat() {
     if (this._rouse > 0) return false;
+    // A target handed over by `Pack.alert` arrives from *inside another
+    // enemy's* `_sense`, together with `state = 'chase'`. If this one's own
+    // update has already run this frame it will not arm its rouse until the
+    // next, and for that single frame it reads as engaged — which is enough
+    // for `EncounterDirector` to enter combat and collapse the two events back
+    // onto one frame. `_hadTarget` is false for exactly that frame.
+    if (!this._hadTarget && this.target) return false;
     const s = this.state;
     return s === 'chase' || s === 'approach' || s === 'strafe'
       || s === 'telegraph' || s === 'attack' || s === 'recover';
@@ -1703,6 +1721,7 @@ export class Enemy {
       const a = this._chooseAttack(dist, ctx.rng);
       if (a) { this._beginAttack(a); return; }
     }
+    if (this._tryHarry(dt, target, dist, ctx)) return;
     if (this.packRole !== 'engage' && dist < want * 1.4) { this.setState('strafe'); return; }
 
     // Everyone closes along their own bearing, not down the same line: the
@@ -1717,6 +1736,28 @@ export class Enemy {
     const d = Math.hypot(dx, dz) || 1;
     if (d < 0.6) { this.setState('strafe'); return; }
     this._move(dt, dx / d, dz / d, this.speed, ctx);
+  }
+
+  /**
+   * A flanker takes the shot it is given. Returns true when it opened one.
+   *
+   * Called from **both** `chase` and `strafe`, which is the difference between
+   * this working and not. The first version lived only in `strafe`, and a
+   * flanker whose target keeps moving — which is every fight — spends 1-2% of
+   * its frames there: measured pressure did not move at all (0.37 -> 0.36
+   * attacks per second). The ring is a place a pack member is *heading*, not a
+   * place it stands.
+   */
+  _tryHarry(dt: number, target: Threat | null, dist: number, ctx: EnemyCtx): boolean {
+    if (this.packRole === 'engage') return false;
+    if (this._harryCooldown > 0) { this._harryCooldown -= dt; return false; }
+    if (this._atkCooldown > 0 || this.reloading) return false;
+    if (dist > this.reach || !this._isBehind(target)) return false;
+    const a = this._harryAttack(dist);
+    if (!a) return false;
+    this._harryCooldown = HARRY_COOLDOWN + (this.id % 5) * 0.3;
+    this._beginAttack(a);
+    return true;
   }
 
   /** Circle the target waiting for a turn. This is what stops the conga line. */
@@ -1757,16 +1798,7 @@ export class Enemy {
     //   from behind is not pressure, it is a coin flip.
     // - *the long cooldown* is on the harry, not on the attack, so the token
     //   holder's cadence is untouched and the flankers cannot out-damage it.
-    if (this._harryCooldown > 0) this._harryCooldown -= dt;
-    else if (this._atkCooldown <= 0 && !this.reloading
-      && this.stateTime > 0.8 && dist <= this.reach && this._isBehind(target)) {
-      const a = this._harryAttack(dist);
-      if (a) {
-        this._harryCooldown = HARRY_COOLDOWN + (this.id % 5) * 0.3;
-        this._beginAttack(a);
-        return;
-      }
-    }
+    if (this._tryHarry(dt, target, dist, ctx)) return;
     if (dist > want * 2.6 + 4) { this.setState('chase'); return; }
 
     // Head down, so get into something. This is MGS5's "cover scored as
