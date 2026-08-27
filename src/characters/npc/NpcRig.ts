@@ -10,6 +10,7 @@ import {
   skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, contactShadowMaterial,
 } from '../rig/Materials.ts';
 import { Rng } from '../../util/Rng.ts';
+import { skinnedShadowProxy } from './NpcShadow.ts';
 import type { AnimState, AnimTarget } from '../rig/Anim.ts';
 import type { CharacterDef, Look } from '../rig/Look.ts';
 import type { Rig, RigDims } from '../rig/Skeleton.ts';
@@ -30,7 +31,9 @@ import type { Rig, RigDims } from '../rig/Skeleton.ts';
  * hero's hair density.
  *
  * Per instance: five skinned draws plus a contact shadow, LODed down to three
- * at distance and culled entirely past ~110 m.
+ * at distance and culled entirely past ~110 m. The sun shadow is not five more:
+ * body, head and outfit cast through one merged skinned proxy, and only the
+ * hair casts as itself — see {@link skinnedShadowProxy}.
  */
 
 /**
@@ -171,6 +174,15 @@ export class NpcBody implements AnimTarget {
   root!: THREE.Group;
   seedRnd!: Rng;
   /**
+   * What actually casts this person's sun shadow: the merged proxy standing in
+   * for body + head + outfit, plus the hair, which has to cast as itself
+   * because its silhouette lives in its alpha channel. See
+   * {@link skinnedShadowProxy}.
+   */
+  shadowCasters!: THREE.Object3D[];
+  /** The proxy inside `shadowCasters`; hidden whenever it is not casting. */
+  shadowProxy!: THREE.SkinnedMesh | null;
+  /**
    * @param arch result of {@link archetype}
    * @param seed per-instance seed — drives blink timing, stance and
    *   idle phase so two copies of the same archetype never move in lockstep
@@ -193,6 +205,22 @@ export class NpcBody implements AnimTarget {
     this.head = this._skinned(arch.geo.head, arch.mat.face, 'head');
     this.hair = this._skinned(arch.geo.hair, arch.mat.hair, 'hair');
     this.outfit = this._skinned(arch.geo.outfit, arch.mat.garment, 'outfit');
+
+    // ONE merged caster for the three opaque meshes instead of one each. The
+    // hair keeps casting as itself — its shadow IS the alpha cutout in it.
+    // Measured on `town_forecourt`'s peak frame: the eleven town NPCs spent 84
+    // shadow draws of a 942-draw frame; three of every four of those were
+    // body / head / outfit re-drawn per cascade. See {@link skinnedShadowProxy}.
+    const opaque = [this.body, this.head, this.outfit];
+    const proxy = skinnedShadowProxy(opaque, this.rig.skeleton, this.body.bindMatrix, `npc_${arch.key}_shadow`);
+    this.shadowProxy = proxy;
+    this.shadowCasters = proxy ? [proxy, this.hair] : this.meshes.slice();
+    if (proxy) {
+      this.root.add(proxy);
+      // Only the hair and the proxy cast now. If the merge returned null the
+      // fallback above leaves every mesh casting, which is the old behaviour.
+      for (const m of opaque) m.castShadow = false;
+    }
 
     // One pivot per globe at its own centre; `eyes` is the gaze carrier at the
     // midpoint and holds no geometry. See `buildEyes` for why.
@@ -253,7 +281,11 @@ export class NpcBody implements AnimTarget {
     if (this._lod === level) return;
     this._lod = level;
     const vis = level < 2;
-    for (const m of this.meshes) { m.visible = vis; m.castShadow = level === 0; }
+    for (const m of this.meshes) m.visible = vis;
+    for (const m of this.shadowCasters) m.castShadow = level === 0;
+    // The proxy writes no pixel and no depth, so a colour-pass draw of it at a
+    // level where it casts nothing is a draw call that does nothing at all.
+    if (this.shadowProxy) this.shadowProxy.visible = level === 0;
     for (const em of this.eyeMeshes) em.visible = level === 0;
     this.groundShadow.visible = level === 0;
   }
