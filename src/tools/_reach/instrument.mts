@@ -30,12 +30,28 @@ function wrapProto(proto, label) {
     if (named.has(id)) continue;
     const fn = d.value;
     named.set(id, true);
-    counts.set(id, 0);
+    /**
+     * A CELL, not a Map entry, and `arguments`, not a rest array.
+     *
+     * This wrapper runs on every call to every method of every system, and the
+     * hot ones are very hot: `Terrain.erosionAt` alone is called **93,038
+     * times** in one run. The original spelling paid two Map hash lookups
+     * (`get` then `set`) and allocated a rest array on each of those calls, so
+     * the instrument cost far more than the code it was measuring, in a gate
+     * that is the suite's longest at 54 s.
+     *
+     * A closure over a one-field object turns the two hash lookups into a
+     * property increment, and `arguments` removes the allocation. **The counts
+     * are identical** -- this is the same measurement, spelled so that it does
+     * not dominate what it measures.
+     */
+    const cell = { n: 0 };
+    counts.set(id, cell);
     Object.defineProperty(proto, key, {
       ...d,
-      value: function reachWrapped(...args) {
-        counts.set(id, counts.get(id) + 1);
-        return fn.apply(this, args);
+      value: function reachWrapped() {
+        cell.n++;
+        return fn.apply(this, arguments);
       },
     });
   }
@@ -67,7 +83,7 @@ window.__REACH_COUNTS = counts;
 window.__REACH = () => {
   const reached = {};
   const unreached = [];
-  for (const [id, n] of counts) { if (n > 0) reached[id] = n; else unreached.push(id); }
+  for (const [id, cell] of counts) { if (cell.n > 0) reached[id] = cell.n; else unreached.push(id); }
   unreached.sort();
   return { reached, unreached, instrumented: counts.size, errors: [] };
 };
