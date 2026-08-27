@@ -1973,12 +1973,39 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
 
   const buildId = body.build ?? (DIRTY_PREFIX + ROOT);
   const build = await store.acquire(buildId, body.prod);
-  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body), body.prod), w, h, cold);
+  /**
+   * A LEASE ALWAYS GETS A FRESH PAGE. It is never handed a pooled one.
+   *
+   * `releaseLease` already throws a leased game page away rather than pooling
+   * it, and the reason is written there: the discriminator is not the query,
+   * it is HOW THE PAGE WAS OBTAINED. A tool that asked for frames only posed
+   * shots; a tool that took a lease intends to do something the daemon cannot
+   * see or undo.
+   *
+   * That rule was only ever enforced on RELEASE. On acquire, a lease whose
+   * page identity happened to match a page some `/shots` job had left in the
+   * pool was handed that page — reset, but reset is a frame-level guarantee
+   * (`checkResetDrift` measures 0.974/255 against a 1.493 boot-to-boot floor),
+   * not an animation-state one.
+   *
+   * `creaturecheck` caught it: in-suite it came back in **1.5 s** — far too
+   * fast for a boot — reporting `voretooth/run: drifts 0.034 m over 240
+   * frames`, and passed twice standalone at 0 failures. A gate measuring a page
+   * somebody else had already driven, and reporting it as a content
+   * regression. That is the most expensive kind of wrong answer this harness
+   * can give, and `LANDMINES.md` records the same shape costing two lanes an
+   * investigation each.
+   *
+   * The cost is one boot per lease, and it is smaller than it looks: leased
+   * pages are destroyed on release, so the only page a lease could ever have
+   * matched was somebody else's — which is exactly the contamination.
+   */
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body), body.prod), w, h, true);
   try {
     // The page is booted here so the caller connects to something ready, and so
     // a boot failure is the daemon's problem rather than arriving as a mystery
     // on the far side of a CDP socket.
-    await preparePage(slot, build, body);
+    await preparePage(slot, build, { ...body, cold: true });
     const id = newLeaseId();
     const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
     leases.set(id, {
