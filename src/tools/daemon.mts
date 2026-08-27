@@ -1774,6 +1774,15 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
 
 // -------------------------------------------------------------------- routes
 
+/** Last prototype count logged, so a steady one is silent and a change is not. */
+let lastWarmCount = -2;
+const warnedOnce = new Set<string>();
+function warnOnce(key: string, msg: string): void {
+  if (warnedOnce.has(key)) return;
+  warnedOnce.add(key);
+  console.log(`[daemon] ${msg}`);
+}
+
 /**
  * Warm a page, and say so when it cannot.
  *
@@ -1804,8 +1813,10 @@ async function warmPage(page: Page): Promise<void> {
       });
       // -1 means this build predates `warmup()`, which is a fact about the
       // tree being served, not a fault: say it once and stop retrying.
-      if (n === -1) return;
-      if (n > 0) return;
+      if (n === -1) { warnOnce('warmup-old-build', 'warmup: build predates warmup(), pages left lazy'); return; }
+      // Only when it CHANGES: a per-request line is noise, but a count that
+      // moves between pages is the shape of the bug this exists to prevent.
+      if (n > 0) { if (n !== lastWarmCount) { lastWarmCount = n; console.log(`[daemon] warmup: ${n} prototypes`); } return; }
     } catch (e) {
       if (attempt === 1) {
         console.log(`[daemon] warmup failed, page is COLD and its counts are not comparable: ${String(e).split('\n')[0]}`);
