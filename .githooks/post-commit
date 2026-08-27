@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Boot one page of the tree you just committed, in the background, for free.
+#
+# CLAUDE.md's rule is "you commit to see your work": every capture defaults to
+# `--build HEAD`, so the FIRST shot after every commit pays a cold boot. The
+# 7-day audit prices that at a **38.9 s average `shoot`** against the 2.3 s a
+# warm page costs, and the commit is the ideal moment to pay it -- the sha has
+# just become knowable and nobody is waiting on anything.
+#
+# Deliberately weak, in three ways, because a post-commit hook must never be a
+# reason a commit was slow or a reason one failed:
+#
+#   - It does NOT start a daemon. If none is running, this is a no-op; paying a
+#     chromium launch on a commit nobody will capture is the wrong trade.
+#   - It is detached and its output goes nowhere. The daemon logs its own.
+#   - It always exits 0. git ignores a post-commit exit code anyway, and a hook
+#     that could look like a failure would just teach people to remove it.
+#
+# The daemon decides whether the work is worth doing (`prewarm()` in
+# daemon.mts): a dirty build, an already-warm page, a held quiet lane and a
+# second commit racing the first are all refused there, where the state is.
+#
+# Skip with: SKIP_PREWARM=1 git commit ...
+
+[ -n "$SKIP_PREWARM" ] && exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+(node src/tools/daemon.mts --prewarm HEAD >/dev/null 2>&1 &) >/dev/null 2>&1
+exit 0

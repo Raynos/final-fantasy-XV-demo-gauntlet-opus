@@ -83,25 +83,63 @@ if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.
   exit 0
 fi
 
-echo "pre-commit: building..."
-if ! out=$(./node_modules/.bin/vite build 2>&1); then
-  echo "$out" | tail -25
+# ---------------------------------------------------------------------------
+# The build and both typechecks, CONCURRENTLY.
+#
+# They are three independent readers of the same tree -- vite strips types and
+# never looks at them, and the two tsc invocations cover disjoint configs -- so
+# nothing here is ordered. Run serially they were 0.64 + 0.39 + 0.40 = ~1.4 s;
+# run together they are bounded by the slowest, ~0.7 s.
+#
+# Half a second sounds like nothing. It is not nothing here: CLAUDE.md says
+# commit early and often and keep commits small, so this hook runs dozens of
+# times a day per lane, and it is the one gate whose whole design rationale is
+# that a gate slow enough to skip gets skipped. Making the fast lane faster is
+# how it stays the fast lane.
+#
+# Each job's output is captured to its own file rather than interleaved: three
+# compilers writing to one terminal at once produce a diagnostic nobody can
+# read, and the whole value of this hook is that its failure is legible.
+# ---------------------------------------------------------------------------
+
+echo "pre-commit: build + typechecks (concurrent)..."
+work=$(mktemp -d "${TMPDIR:-/tmp}/ffxv-precommit.XXXXXX")
+cleanup() {
+  rm -f "$work/build" "$work/game" "$work/tools"
+  rmdir "$work" 2>/dev/null
+}
+trap cleanup EXIT
+
+./node_modules/.bin/vite build                          >"$work/build" 2>&1 & p_build=$!
+./node_modules/.bin/tsc --noEmit -p tsconfig.json       >"$work/game"  2>&1 & p_game=$!
+./node_modules/.bin/tsc --noEmit -p tsconfig.tools.json >"$work/tools" 2>&1 & p_tools=$!
+
+wait $p_build; rc_build=$?
+wait $p_game;  rc_game=$?
+wait $p_tools; rc_tools=$?
+
+fail=0
+if [ "$rc_build" -ne 0 ]; then
+  tail -25 "$work/build"
   echo
   echo "pre-commit: BUILD FAILED — commit aborted."
+  fail=1
+fi
+if [ "$rc_game" -ne 0 ]; then
+  tail -25 "$work/game"
+  echo
+  echo "pre-commit: TYPECHECK FAILED (tsconfig.json) -- commit aborted."
+  fail=1
+fi
+if [ "$rc_tools" -ne 0 ]; then
+  tail -25 "$work/tools"
+  echo
+  echo "pre-commit: TYPECHECK FAILED (tsconfig.tools.json) -- commit aborted."
+  fail=1
+fi
+if [ "$fail" = 1 ]; then
   echo "            fix the error, or re-run with --no-verify if you know better."
   exit 1
 fi
-echo "pre-commit: build ok"
-
-echo "pre-commit: typechecking..."
-for cfg in tsconfig.json tsconfig.tools.json; do
-  if ! out=$(./node_modules/.bin/tsc --noEmit -p "$cfg" 2>&1); then
-    echo "$out" | tail -25
-    echo
-    echo "pre-commit: TYPECHECK FAILED ($cfg) -- commit aborted."
-    echo "            fix the error, or re-run with --no-verify if you know better."
-    exit 1
-  fi
-done
-echo "pre-commit: typecheck ok"
+echo "pre-commit: build ok, typecheck ok"
 exit 0

@@ -41,6 +41,7 @@ import type {
   EvalResponse, LeaseRequest, LeaseResponse, Lane, PageOpts, ShotsRequest, ShotsResponse,
 } from './daemon.mts';
 import { ROOT, resolveBuild, shortBuild, workingTreeDirty, isDirty } from './identity.mts';
+import { appendJob, recentToolRuns } from './ledger.mts';
 import type { BuildId } from './identity.mts';
 
 export { call, ensureDaemon, PROTOCOL, reportTiming } from './daemon.mts';
@@ -159,7 +160,61 @@ export function pageOpts(a: HarnessArgs): PageOpts {
  * edit — is the single most expensive mistake this harness can make, because it
  * has no symptom other than "nothing changed".
  */
+/**
+ * Tell the caller how long this tool has historically taken, before it takes it.
+ *
+ * **The affordance exists and agents forget it.** `run_in_background` was used
+ * on 2.1 % of Bash calls across a 7-day window, while sixteen calls died at the
+ * 600 s Bash timeout and one coordinator spent 234 minutes inside blocking
+ * `TaskOutput` calls. That is not refusal, it is not remembering at the moment
+ * it matters — so the tool is the right place to remember, and the moment it
+ * matters is now, before the wait rather than after it.
+ *
+ * The number is the tool's own p50 from the ledger, not a guess in a table: a
+ * table would drift the way `src/tools/README.md`'s 9.2 s boot constant drifted
+ * from a measured 6.6 s. A tool with no history says nothing.
+ */
+function announceCost(tool: string): void {
+  try {
+    const runs = recentToolRuns(tool);
+    if (runs.length < 3) return;
+    const p50 = runs.sort((a, b) => a - b)[Math.floor(runs.length / 2)];
+    if (p50 < 60_000) return;
+    console.log(`[harness] expect ~${Math.round(p50 / 1000)} s (p50 of ${runs.length} past runs) — `
+      + 'run_in_background and be re-invoked rather than waiting on it.');
+  } catch { /* a hint is never worth failing a tool for */ }
+}
+
+/**
+ * Record what this whole tool run cost, on the way out.
+ *
+ * The daemon's ledger sees *jobs*; a tool is many jobs plus its own CPU, and
+ * "how long does `drawcheck` take" is a question about the second thing. Hung
+ * off `process.exit` so it is recorded however the tool ends — including the
+ * `process.exit(2)` that `perf.mts` takes on a failing shot, which skips every
+ * `finally` in the process.
+ */
+function recordToolRun(tool: string, startedAt: number): void {
+  process.on('exit', (code) => {
+    try {
+      appendJob({
+        t: new Date().toISOString(),
+        kind: `tool:${tool}`,
+        agent: tool,
+        lane: process.env.HARNESS_LANE === 'sweep' ? 'sweep' : 'fix',
+        build: '',
+        queuedMs: 0,
+        ranMs: Date.now() - startedAt,
+        verdict: code === 0 ? 'ok' : 'error',
+      });
+    } catch { /* never let a ledger line change an exit code */ }
+  });
+}
+
 export function announceBuild(a: HarnessArgs): void {
+  const tool = path.basename(process.argv[1] || 'anon', '.mts');
+  announceCost(tool);
+  recordToolRun(tool, Date.now());
   const label = shortBuild(a.build);
   if (isDirty(a.build)) {
     console.log(`[harness] ${label} — the LIVE tree. Frames are not cached, not shared, `

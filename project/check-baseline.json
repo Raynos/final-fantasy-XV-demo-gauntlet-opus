@@ -1,0 +1,27 @@
+{
+  "note": "What the whole suite costs on a quiet machine, cold. `check` fails itself when it regresses past `tolerance`. A new gate joins the roster by paying its row here.",
+  "wallSec": 270,
+  "tolerance": 0.3,
+  "gates": {
+    "build": 0.5,
+    "silhouette": 3.6,
+    "geocheck": 0.7,
+    "horizoncheck": 0.2,
+    "anycheck": 0.1,
+    "orphans": 0.2,
+    "roadcheck": 8.9,
+    "hydrocheck": 9.7,
+    "silrocks": 10.1,
+    "reachcheck": 114.6,
+    "integration": 119.9,
+    "uxcheck": 135.3,
+    "creaturecheck": 1.7,
+    "floatcheck": 11,
+    "heightcheck": 10.6,
+    "driftcheck": 98.3,
+    "combatloop": 114.3,
+    "drawcheck": 269.4
+  },
+  "at": "2026-08-27T17:03:44.884Z",
+  "cores": 18
+}

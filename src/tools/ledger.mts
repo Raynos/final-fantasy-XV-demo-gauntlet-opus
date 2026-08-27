@@ -24,7 +24,7 @@
  * a cache directory somebody deleted mid-run must cost a lost line, never a
  * failed capture.
  */
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, createReadStream } from 'node:fs';
+import { appendFileSync, closeSync, createReadStream, existsSync, mkdirSync, openSync, readSync, renameSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { repoCacheDir } from './identity.mts';
@@ -99,6 +99,46 @@ function rotate(file: string): void {
     if (!existsSync(file) || statSync(file).size < MAX_BYTES) return;
     renameSync(file, `${file.replace(/\.jsonl$/, '')}.1.jsonl`);
   } catch { /* ignore */ }
+}
+
+/**
+ * The tail of the ledger, synchronously, for a hint that must not cost anything.
+ *
+ * `announceBuild()` wants "how long does this tool usually take" *before* the
+ * tool does anything, which rules out both the async reader and reading 10 MB.
+ * So: open, seek to the last chunk, drop the partial first line, parse. A
+ * bounded read of the end of an append-only file is the cheapest correct thing
+ * available, and a hint that is occasionally computed from 200 records instead
+ * of 2 000 is still a hint.
+ */
+export function tailJobsSync(bytes = 256 * 1024): JobRecord[] {
+  const out: JobRecord[] = [];
+  let fd: number | null = null;
+  try {
+    const file = ledgerPath();
+    if (!existsSync(file)) return out;
+    const size = statSync(file).size;
+    const from = Math.max(0, size - bytes);
+    const buf = Buffer.alloc(Math.min(size, bytes));
+    fd = openSync(file, 'r');
+    readSync(fd, buf, 0, buf.length, from);
+    const lines = buf.toString('utf8').split('\n');
+    // The first line is a fragment unless the read started at byte zero.
+    if (from > 0) lines.shift();
+    for (const line of lines) {
+      if (!line) continue;
+      try { out.push(JSON.parse(line) as JobRecord); } catch { /* torn line */ }
+    }
+  } catch { /* ignore */ } finally { if (fd !== null) try { closeSync(fd); } catch { /* ignore */ } }
+  return out;
+}
+
+/** How long past runs of `tool` took, milliseconds, newest last. */
+export function recentToolRuns(tool: string, limit = 25): number[] {
+  return tailJobsSync()
+    .filter((j) => j.kind === `tool:${tool}` && j.ranMs > 0)
+    .slice(-limit)
+    .map((j) => j.ranMs);
 }
 
 /**
