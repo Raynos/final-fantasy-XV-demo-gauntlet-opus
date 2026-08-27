@@ -1,6 +1,12 @@
 # What every gate is for, and what it costs
 
-Status: IN-PROGRESS (2026-08-27, opus) — items 1 and 2 are DONE and verified
+Status: SUPERSEDED (2026-08-28, opus) by
+`docs/plans/2026-08-28-opus-close-out.md`. Items 1 (key each gate on what it
+reads, `61a0c0b`) and 2 (tier `drawcheck`, `27a4af2`) are DONE and verified
+across five arms. Items 3 (the 7.46 s boot) and 4 (`drawcheck`'s instrument)
+were never staffed and carry forward as close-out items 7-9 and 2. The audit's
+own conclusion — **no gate should be deleted; zero of eighteen assert anything
+wrong** — is carried into close-out's kill list unchanged.
 
 Eighteen gates, ~309 s of wall on a cold run. This asks of each one: what does
 it assert, what regression does it exist to catch, has it ever caught one, and

@@ -66,12 +66,25 @@ are the three parallel plans that ran beside it.
     water · harness debt · creatures           MEASURED NEGATIVES — read it
                                                before re-opening anything
 
-  2026-08-24-opus-benchmaxx-harness           IN-PROGRESS, opus (benchmaxx)
-    ledger · wait primitive · gate cache ·      A-F implemented 2026-08-27; its
-    two pools · turbo · prewarm · policy        definition of done is WEEKLY, so
-                                                it closes on a week of ledger,
-                                                not on a diff
+  2026-08-24-opus-benchmaxx-harness           DONE 08-28 -> archive/plans/
+  2026-08-27-opus-gate-audit                  SUPERSEDED 08-28 — items 1-2 built
+  2026-08-28-opus-the-100x-map                SUPERSEDED 08-28 — it was a RECORD
+                    |
+                    v
+  2026-08-28-opus-close-out                   LOCKED, ten items, one spine:
+    root · drawcheck's 36th field · draw        a page boots in 7.46 s and
+    baseline · error rate · CPU budget ·        everything expensive here is a
+    driftcheck's probe · play viewports ·       multiple of it. Carries the
+    content cache · shader cache · materials    KILL LIST — nine approaches
+                                                measured at zero. Read it
+                                                before re-opening any of them
 ```
+
+The three that graduated on 08-28 were **not** half-built: benchmaxx had shipped
+every phase and was held open by a DoD written against a calendar; the gate audit
+had built two of its four items and staffed neither of the rest; the 100x map was
+a retrospective wearing a `Status:` line. Their residue is close-out's ten items,
+and the reason they are one plan is that eight of the ten are the same boot.
 
 Phase 4's own leftovers are named at the end of its §5, each with an owner in
 one of the two live plans above — including the one shot in 142 still over the

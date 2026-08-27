@@ -1,17 +1,23 @@
 # Benchmaxx v2: primitives, ledgers and ratchets — not a list of fixes
 
-Status: IN-PROGRESS (2026-08-24, opus; rewritten 2026-08-27, fable; **A-F
-implemented 2026-08-27, opus** — see `project/handoff/benchmaxx.md`). Evidence:
-`project/audits/2026-08-27-wallclock-7day.md`,
-`project/audits/2026-08-24-toolcall-wallclock.md`, `project/TIMINGS.md`.
+Status: DONE (2026-08-28, opus) — every phase A-F shipped and verified. Its
+definition of done was written *weekly*, which is why it sat open; it does not
+need a week, it needs a ledger, and the 1758-job ledger closes **five of its six
+numbers**: fix-lane p50 0.00 s, same-sha `check` 0.2 s, cold suite 71.6 s,
+10.9 min of queue wait total (1% of wall), 30 game-min in ~3 wall-min. The sixth
+— **median `shoot` 22.6 s against a target of 8 s** — and the two residues
+(Phase D's probe CPU-budget tag, the `town_forecourt` baseline row) move to
+`docs/plans/2026-08-28-opus-close-out.md` as items 8, 5 and 3.
 
-**Why it is not DONE.** Every phase has shipped and each is verified against a
-number in this session. But this plan's own definition of done is deliberately
-*weekly* — self-inflicted wait per week, fix-lane p50, median `shoot` over a
-real week, zero probe deaths — and one session cannot close a week. What it can
-do, and did, is make every one of those readable in one command. Re-check with
-`harnessstats.mts` after seven days of ledger and mark it DONE or reopen the
-phase that failed.
+**Why it took four days to close.** Every phase shipped on 2026-08-27 and each
+was verified against a number that same session. What held it open afterwards
+was its own DoD, written against a *calendar* — "median `shoot` over a real
+week", "a week with zero probe deaths" — which no session can satisfy, and which
+made the plan unclosable rather than merely unfinished. The lesson is carried
+into the close-out plan's own DoD: **write the definition of done against an
+instrument, not against a date.** The instruments were the deliverable all
+along, and they answered every one of these questions the moment somebody ran
+them.
 
 ### What landed, per phase
 
