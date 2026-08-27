@@ -111,6 +111,22 @@ export function skinnedShadowProxy(
   // pass's own opt-out and this is exactly what it is for: the proxy has no
   // pixels, so it has no motion to blur.
   mesh.userData.noVelocity = true;
+  // **And it rasterises nothing in the colour pass.** The draw call itself is
+  // unavoidable — see above — but its triangles are not. three.js calls
+  // `onBeforeRender` immediately before `renderBufferDirect` and `onAfterRender`
+  // immediately after it, on the colour path ONLY: the shadow path has its own
+  // `onBeforeShadow`/`onAfterShadow` hooks and never touches these. So the draw
+  // range is closed for the duration of the colour draw and open everywhere
+  // else, and `renderBufferDirect` reads `geometry.drawRange` each time.
+  //
+  // Worth doing because the proxy is the whole character: body + head + outfit
+  // is ~60k triangles, and eleven of them rasterising to no colour and no depth
+  // was +660k triangles a frame. Measured on `town_npcs`, 12.47 -> 11.83 Mtris
+  // with the call count unchanged, which is the pre-merge triangle count back.
+  // `drawCount === 0` is drawn, not skipped — `renderBufferDirect` returns early
+  // only on a NEGATIVE count — so this trades no shadow for those triangles.
+  mesh.onBeforeRender = () => { merged.setDrawRange(0, 0); };
+  mesh.onAfterRender = () => { merged.setDrawRange(0, Infinity); };
   mesh.bind(skeleton, bindMatrix);
   return mesh;
 }
