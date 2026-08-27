@@ -125,6 +125,15 @@ interface Gate {
    * all, so there is nothing for turbo to ablate.
    */
   pixelBlind?: boolean;
+  /**
+   * The flag that defeats this gate's own cache, if it keeps one.
+   *
+   * `drawcheck` memoises a whole corpus per tree sha, which the suite's gate
+   * cache knows nothing about — so `--no-cache` re-derived seventeen gates and
+   * served the eighteenth from storage in 0.3 s against ~250 s of real work,
+   * and called the run cold.
+   */
+  ownCacheFlag?: string;
 }
 
 /** Ordered cheapest-first; the pools re-sort by `cost`, this order is for reading. */
@@ -221,6 +230,7 @@ const GATES: Gate[] = [
      * the documented way was reading the answer it had already given.
      */
     args: [path.join(HERE, 'drawcheck.mts'), '--par', '2'],
+    ownCacheFlag: '--no-reuse',
     expect: 'no new shot over BRIEF\'s 800, no recorded shot worse',
   },
   { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true, kind: 'browser', cost: 780 },
@@ -510,9 +520,21 @@ async function runGate(g: Gate): Promise<Result> {
     }
     env = { ...process.env, PORT: String(auxPort) };
   }
-  // A gate with a cache of its own has to be told, or `--no-cache` is a lie.
-  // `drawcheck` is the only one today; the flag is harmless on the others.
-  const gate = opts.cache ? g : { ...g, args: g.args ? [...g.args, '--no-reuse'] : g.args };
+  /**
+   * A gate with a cache of its OWN has to be told, or `--no-cache` is a lie.
+   *
+   * Named per gate rather than appended to whatever has `args`, because the
+   * first version of this did the latter and turned `check --no-cache` into
+   * `vite build --no-reuse` — the build gate died on an unknown option inside
+   * three minutes. Every tool here rejects a flag it does not know, correctly,
+   * so a flag may only go to a gate that asked for it.
+   */
+  // `--set-baseline` defeats it too: a budget recorded from a run that served a
+  // memo would enshrine 0.3 s as the cost of 142 poses, and every later run
+  // would blow a ratchet set by a number nobody paid.
+  const gate = (opts.cache && !opts.setBaseline) || !g.ownCacheFlag
+    ? g
+    : { ...g, args: [...(g.args ?? [path.join(HERE, g.script!)]), g.ownCacheFlag] };
   const started = Date.now();
   const r = await run(gate, {
     ...env,
