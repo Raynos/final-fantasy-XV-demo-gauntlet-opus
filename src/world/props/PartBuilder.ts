@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { assertAttributeContract } from '../../util/GeoAssert.ts';
+import { bakedGeo } from '../../engine/GeoBake.ts';
 
 /**
  * A position / rotation / scale triple, written as an array literal at every
@@ -65,12 +66,28 @@ export class PartBuilder {
    * for every opaque mesh this call produced, which then stop casting for
    * themselves. Use it wherever a structure is split by material rather than by
    * object — see the note on {@link shadowProxy} for when it pays.
+   *
+   * Split into {@link PartBuilder.merge} and {@link emitParts} so the geometry
+   * bake can sit between the two: `merge()` is what a cache hit replaces,
+   * `emitParts()` is what both paths still run. Behaviour is unchanged either
+   * way round.
    */
-  build(parent: THREE.Object3D, { cast = true, receive = true, name = 'part', mergeShadow = false }: {cast?:boolean, receive?:boolean, name?:string, mergeShadow?:boolean} = {}): THREE.Object3D {
-    // Only what THIS call made: `parent` may already hold another builder's
-    // output — `RoadFurniture` runs two builders into one group — and a proxy
-    // that swallowed those would take their shadows with it.
-    const made: THREE.Mesh[] = [];
+  build(parent: THREE.Object3D, opts: BuildOpts = {}): THREE.Object3D {
+    emitParts(parent, this.merge(), opts);
+    return parent;
+  }
+
+  /**
+   * Merge the accumulated pieces into one geometry per material.
+   *
+   * Consumes the builder — `byMat` is cleared — and makes no meshes, so this is
+   * the half of `build()` that produces *vertices*, and therefore the half a
+   * cache can serve. Measured: the merge itself is 23 ms of the 417 ms the eight
+   * prebuilt POI compounds cost, so the win is in never running the kit function
+   * at all, not in skipping the merge.
+   */
+  merge(): MergedPart[] {
+    const out: MergedPart[] = [];
     for (const [mat, list] of this.byMat) {
       // If the material reads vertex colours -- or if any piece in this batch
       // carries them -- then every piece must have them. `mergeGeometries`
@@ -97,68 +114,143 @@ export class PartBuilder {
         console.warn(`[PartBuilder] merge returned null for ${mat.name || mat.type} (${list.length} pieces); drawing them unmerged`);
         for (const g of list) {
           g.computeBoundingSphere();
-          const m = new THREE.Mesh(g, mat);
-          m.castShadow = cast; m.receiveShadow = receive;
-          m.name = `${name}_unmerged`;
-          parent.add(m);
-          made.push(m);
+          out.push({ mat, geo: g, unmerged: true });
         }
         continue;
       }
       merged.computeBoundingSphere();
-      /**
-       * **The attribute contract, checked on the shipped mesh.**
-       *
-       * `assertAttributeContract` was the one assert in `GeoAssert.ts` with no
-       * caller in the game at all — `geocheck` gates it over the bestiary, which
-       * is the only population it can build in bare Node, and nothing in
-       * `src/world/` had ever run it. This is the call site the harness lane
-       * handed over, and `build()` is the right one because it is where the
-       * geometry and the material finally meet: every prop kit, all 124 POIs,
-       * the megastructures, the outposts and the road furniture come through
-       * here, so one call covers the whole prop layer.
-       *
-       * The failure it is looking for is silent by construction. An undeclared
-       * attribute binds to a constant of zero, so a missing UV samples texel
-       * (0,0) of every map — which is a colour, so it reads as a material
-       * choice — and `vertexColors` with no `color` attribute draws BLACK. This
-       * class of bug has shipped here more than once: it is the reason the loop
-       * above synthesises white, and it is the reason `Megastructures.M.stone`
-       * carries a paragraph about `instanceTint`.
-       *
-       * **`try`/`catch` + `console.error`, never a bare throw.** A throw from
-       * anything on an `init()` path means `GAME.ready` is never set, and every
-       * browser-backed tool on the machine then returns a bare
-       * `waitForFunction` timeout with no message — indistinguishable from a
-       * slow boot, a broken build or a restarting daemon, all of which can be
-       * true at once. That cost an agent most of an hour the day
-       * `GeoAssert.ts` landed. Catching and logging is still red — `shoot.mts`
-       * exits non-zero on any console error — and the page still boots, so you
-       * can look at the thing the assert is complaining about.
-       */
-      ATTR_CONTRACT.checked++;
-      const mm = mat as THREE.Material & { map?: unknown, normalMap?: unknown, aoMap?: unknown };
-      if (mm.map || mm.normalMap || mm.aoMap || mm.vertexColors) ATTR_CONTRACT.binding++;
-      try { assertAttributeContract(merged, mm, `PartBuilder.build ${name}/${mat.name || mat.type}`); }
-      catch (e) { ATTR_CONTRACT.broken++; console.error(e); }
-      const mesh = new THREE.Mesh(merged, mat);
-      mesh.castShadow = cast;
-      mesh.receiveShadow = receive;
-      mesh.name = `${name}_${mat.name || mat.uuid.slice(0, 4)}`;
-      parent.add(mesh);
-      made.push(mesh);
+      out.push({ mat, geo: merged });
     }
     this.byMat.clear();
-    if (cast && mergeShadow) {
-      const proxy = shadowProxy(made, `${name}_shadow`);
-      if (proxy) {
-        proxy.visible = true;
-        for (const m of made) if (!alphaCut(m.material)) m.castShadow = false;
-        parent.add(proxy);
-      }
-    }
-    return parent;
+    return out;
   }
+}
+
+/** One material's merged geometry, on its way to a mesh. */
+export interface MergedPart {
+  mat: THREE.Material;
+  geo: THREE.BufferGeometry;
+  /** true when `mergeGeometries` refused and the piece ships on its own */
+  unmerged?: boolean;
+}
+
+/** {@link PartBuilder.build}'s options, shared with {@link bakedParts}. */
+export interface BuildOpts { cast?: boolean; receive?: boolean; name?: string; mergeShadow?: boolean }
+
+/**
+ * Turn merged parts into meshes under `parent`.
+ *
+ * @returns only what THIS call made — `parent` may already hold another
+ *   builder's output (`RoadFurniture` runs two builders into one group) and a
+ *   proxy that swallowed those would take their shadows with it.
+ */
+export function emitParts(parent: THREE.Object3D, parts: MergedPart[],
+  { cast = true, receive = true, name = 'part', mergeShadow = false }: BuildOpts = {}): THREE.Mesh[] {
+  const made: THREE.Mesh[] = [];
+  for (const { mat, geo, unmerged } of parts) {
+    if (!geo.boundingSphere) geo.computeBoundingSphere();
+    if (unmerged) {
+      const m = new THREE.Mesh(geo, mat);
+      m.castShadow = cast; m.receiveShadow = receive;
+      m.name = `${name}_unmerged`;
+      parent.add(m);
+      made.push(m);
+      continue;
+    }
+    /**
+     * **The attribute contract, checked on the shipped mesh.**
+     *
+     * `assertAttributeContract` was the one assert in `GeoAssert.ts` with no
+     * caller in the game at all — `geocheck` gates it over the bestiary, which
+     * is the only population it can build in bare Node, and nothing in
+     * `src/world/` had ever run it. This is the call site the harness lane
+     * handed over, and it is the right one because it is where the geometry and
+     * the material finally meet: every prop kit, all 124 POIs, the
+     * megastructures, the outposts and the road furniture come through here, so
+     * one call covers the whole prop layer.
+     *
+     * It also runs on geometry restored from the **geometry bake**, which makes
+     * it a free correctness gate on that codec: a part whose attributes did not
+     * survive the round trip fails here, loudly, on the first boot after a bake.
+     *
+     * The failure it is looking for is silent by construction. An undeclared
+     * attribute binds to a constant of zero, so a missing UV samples texel
+     * (0,0) of every map — which is a colour, so it reads as a material
+     * choice — and `vertexColors` with no `color` attribute draws BLACK. This
+     * class of bug has shipped here more than once: it is the reason `merge`
+     * synthesises white, and it is the reason `Megastructures.M.stone` carries
+     * a paragraph about `instanceTint`.
+     *
+     * **`try`/`catch` + `console.error`, never a bare throw.** A throw from
+     * anything on an `init()` path means `GAME.ready` is never set, and every
+     * browser-backed tool on the machine then returns a bare `waitForFunction`
+     * timeout with no message — indistinguishable from a slow boot, a broken
+     * build or a restarting daemon, all of which can be true at once. That cost
+     * an agent most of an hour the day `GeoAssert.ts` landed. Catching and
+     * logging is still red — `shoot.mts` exits non-zero on any console error —
+     * and the page still boots, so you can look at the thing the assert is
+     * complaining about.
+     */
+    ATTR_CONTRACT.checked++;
+    const mm = mat as THREE.Material & { map?: unknown, normalMap?: unknown, aoMap?: unknown };
+    if (mm.map || mm.normalMap || mm.aoMap || mm.vertexColors) ATTR_CONTRACT.binding++;
+    try { assertAttributeContract(geo, mm, `PartBuilder.build ${name}/${mat.name || mat.type}`); }
+    catch (e) { ATTR_CONTRACT.broken++; console.error(e); }
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = receive;
+    mesh.name = `${name}_${mat.name || mat.uuid.slice(0, 4)}`;
+    parent.add(mesh);
+    made.push(mesh);
+  }
+  if (cast && mergeShadow) {
+    const proxy = shadowProxy(made, `${name}_shadow`);
+    if (proxy) {
+      proxy.visible = true;
+      for (const m of made) if (!alphaCut(m.material)) m.castShadow = false;
+      parent.add(proxy);
+    }
+  }
+  return made;
+}
+
+/**
+ * {@link PartBuilder.build}, served from the geometry bake.
+ *
+ * On a hit `fill` never runs: the kit function, every primitive it lofts and
+ * every merge are all replaced by an array copy out of the container. On a miss
+ * it runs exactly as it always did and the parts are recorded on the way past.
+ *
+ * `resolve` is what makes a hit safe. A material's only identity that survives a
+ * page load is its `name`, so the entry stores names and this turns them back
+ * into materials; a name the caller cannot answer means the entry was never
+ * recorded in the first place. See {@link bakedGeo}.
+ *
+ * @param key namespaced cache key, `system/thing`
+ * @param parent where the meshes go
+ * @param resolve `material.name` -> material
+ * @param fill runs the generator into a fresh builder; its return value is
+ *   carried through the cache as JSON, so keep it small and plain
+ */
+export function bakedParts<M>(
+  key: string,
+  parent: THREE.Object3D,
+  resolve: (name: string) => THREE.Material | undefined,
+  fill: (B: PartBuilder) => M,
+  opts: BuildOpts = {},
+): { made: THREE.Mesh[], meta: M, hit: boolean } {
+  const r = bakedGeo<M>(key, resolve, () => {
+    const B = new PartBuilder();
+    const meta = fill(B);
+    return { parts: B.merge().map(({ mat, geo }) => ({ mat: mat.name, geo })), meta };
+  });
+  const parts: MergedPart[] = [];
+  for (const p of r.parts) {
+    const mat = resolve(p.mat);
+    if (mat) parts.push({ mat, geo: p.geo });
+  }
+  const made = emitParts(parent, parts, opts);
+  return { made, meta: r.meta, hit: r.hit };
 }
 
 /** Does this material's silhouette live in its alpha channel? */
