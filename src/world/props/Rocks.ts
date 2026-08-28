@@ -1686,7 +1686,54 @@ export function torPlan(
     cx += rise * Math.tan(axisLean) * leanS + rng.gauss(0, wz * arch.drift);
     cz += rise * Math.tan(axisLean) * leanC + rng.gauss(0, wz * arch.drift);
   }
-  return { form: arch.key, s0: height, foot: w0, courses };
+  /**
+   * **The archetype's stated height, delivered — for the first time.**
+   *
+   * `arch.h` is documented as "finished height above ground, metres", and the
+   * table's own comment records why it is stated that way: `fin` once shipped
+   * at thirty metres on a three-metre base because "no line in the file ever
+   * said how tall a fin is". It still did not. Solving `h0` backwards from
+   * `2 * h_i * lap` assumes each course contributes its whole bounding box,
+   * and a course contributes the part of itself between its two faces —
+   * 72 to 94 % of the box, per kind — so a tor drew at **0.75 to 0.91** of what
+   * it asked for even before the joints were closed, and at 0.58 to 0.72 after.
+   *
+   * The frames are what forced this. Seating the joints took ~20 % of world
+   * height off every tor, and a sweep of four rock-heavy shots found the cost
+   * on SCREEN is consistently larger, because every tor stands with part of its
+   * base behind a ridge or the ground line and the whole loss therefore comes
+   * out of the visible part: the ridge pinnacle in `landmark_meteor` **22 px ->
+   * 16**, the hoodoo on the skyline in `zone_three_valleys` **63 px -> 43**, a
+   * 32 % loss of the exact thing the family exists for.
+   *
+   * So: measure what the plan drew and scale it to what it said. The whole plan
+   * is **homogeneous of degree 1** in `h0` and `w0` — every width, every course
+   * height, the drift, the dip term, the shoulder drops, and `placedScale`'s
+   * sink are all linear in the scale, while `sy`, `sz` and both aspect clamps
+   * are ratios and invariant. So a uniform factor is exact: it preserves every
+   * proportion, every joint and every silhouette parameter, and only makes the
+   * number in the table true. Nothing here re-draws, so the rng stream is
+   * untouched and `silhouette.mts`'s subject numbering does not shift.
+   *
+   * Capped at 2.2. A tor that has collapsed further than that into itself is a
+   * plan that went wrong, and a 2.2x rescale of it would be a landform-sized
+   * mistake rather than a tor.
+   */
+  let top = -Infinity, bot = Infinity;
+  for (const c of courses) {
+    const e = ext.get(c.kind) ?? _EXT1;
+    const b = c.dy - c.s * c.sy * e[3], t = c.dy + c.s * c.sy * e[4];
+    if (b < bot) bot = b;
+    if (t > top) top = t;
+  }
+  const grow = top > bot ? Math.min(2.2, height / (top - bot)) : 1;
+  for (const c of courses) {
+    c.dx *= grow; c.dz *= grow; c.s *= grow;
+    // Re-datumed as well as scaled: `dy` is measured from the stack's buried
+    // foot, and `_genTor` seats that foot on the ground.
+    c.dy = (c.dy - bot) * grow;
+  }
+  return { form: arch.key, s0: height, foot: w0 * grow, courses };
 }
 
 /** The shape parameters {@link rockGeometry} takes; see its own defaults. */
