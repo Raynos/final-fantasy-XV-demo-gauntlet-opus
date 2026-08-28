@@ -8,6 +8,11 @@ Sources: `project/archive/handoff/{content-wire,water,hydrology}.md`.
 is landed or closed with a measured number. Ten of ten fishing pins are now
 either fishable or drawn as unavailable.**
 
+**`pnpm run check`: 19/19 in 259 s** on a busy tree with three leases live, and
+the gate that matters here says it in its own words —
+`integration: PASS a fish can be caught and cooked with — 8 holes with water;
+landed a 1.6 kg Slough Trout at "Neeglyss Pond"`. It read four before.
+
 ---
 
 ## The headline: eight of ten fishing pins had water and the survey was looking at the sea
