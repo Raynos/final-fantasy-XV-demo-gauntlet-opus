@@ -47,9 +47,9 @@ export const DETAIL_LAYERS = 4;
  * the far LOD, because a narrow range of sRGB numbers read as linear is narrow
  * *and* wrong, and it was flattest exactly where the frame is largest.
  *
- * Re-derive with `tmp/gl/layerstat.mts` (or any 256x256 evaluation of
- * `buildLayerData`) after editing a recipe; nothing regenerates this
- * automatically, and a recipe edit that does not update it puts the seam back.
+ * Re-derive with `node src/tools/layeravg.mts` after editing a recipe; nothing
+ * regenerates this automatically, and a recipe edit that does not update it
+ * puts the seam back.
  */
 export const LAYER_AVG = [
   [0.538, 0.328, 0.172],   // sand   – red ochre

@@ -72,7 +72,7 @@ different values" that outruns its own positive control by a factor of three.
    difference of medians. `zone_fallgrove` at −9.5 is *the same number* as
    `duscae-wilderness-04`.
 2. **The darkest quartile is not what the docstring assumes, and it was never
-   looked at.** `tmp/gl/shadowmask.mts` paints it: in-quartile pixels keep
+   looked at.** `src/tools/shadowmask.mts` paints it: in-quartile pixels keep
    their colour, everything else goes magenta.
 
    | shot | quartile cut | mean rgb | what it is, by eye |
@@ -132,7 +132,7 @@ Two things fall out.
   is documented as returning linear albedo and blends `LAYER_AVG` to do it,
   bled into every tint at `GROUND_BLEED = 0.34`.
 
-Fixed by measurement, with `tmp/gl/layerstat.mts` named in the docstring as the
+Fixed by measurement, with `src/tools/layeravg.mts` named in the docstring as the
 thing to re-run after any recipe edit. **No recipe is touched**, so the near
 field is byte-identical by construction.
 
@@ -369,7 +369,8 @@ not close the gap.** In the plan's negatives table.
   full cover. **The `ABLATE` set must stay above `NOISE_GLSL`**: the shader
   template literals interpolate it at module-evaluation time and a `const`
   declared below them is in its temporal dead zone when they run.
-- `tmp/gl/shadowmask.mts` — paints the darkest quartile so `sh(R-B)` can be
-  *looked at*. Scratch; promote it to `src/tools/` if a second lane wants it.
-- `tmp/gl/layerstat.mts` — the recipes' real mean linear albedo. **Re-run this
-  after editing any recipe in `Layers.ts`**; `LAYER_AVG` does not regenerate.
+- `src/tools/shadowmask.mts` — paints the darkest quartile so `sh(R-B)` can be
+  *looked at*.
+- `src/tools/layeravg.mts` — the recipes' real mean linear albedo, printed in
+  the shape `LAYER_AVG` is written in. **Re-run after editing any recipe in
+  `Layers.ts`**; the table does not regenerate itself.
