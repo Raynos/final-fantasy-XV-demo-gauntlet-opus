@@ -33,11 +33,15 @@ joint; the imperial tor reads as one mass instead of a cap hanging over a shaft.
 | `f396cc8` | this handoff | — |
 | `84bdaa1` | `probes/tombsight.mts` — `poi_tomb` sees 2.8 m of a 13 m temple | **MEASURED** |
 | `8aee74b` | `probes/outcropjoint.mts` — the third joint site gets its first instrument | **MEASURED** |
+| `6c2e0b7` | a tor is delivered at the height `arch.h` states, repaying the seat's skyline cost | **MEASURED** + **VERIFIED BY EYE** |
 
 ### Gates at HEAD
 
-- **`pnpm run check` 19/19**, 76.8 s, tree `3b7b4fc94eb7`.
-- **`floatcheck` PASS** — `poiFloating` 0/0, `poiBuried` 0/0, `instBuried` **859**
+- **`pnpm run check` 19/19.** One caveat worth carrying: `creaturecheck` went
+  red once mid-lane and passed on a re-run with nothing changed — the
+  `creatures` lane is live on the same trunk. Re-run before reading a red there
+  as yours.
+- **`floatcheck` PASS** — `poiFloating` 0/0, `poiBuried` 0/0, `instBuried` **843**
   against a baseline of 861.
 - **`silhouette --set rocks --seeds 24 --reseeds 5` PASS**, all six family floors
   held, and **three rows went UP**: `fin` 20.6 -> 22.2/24 distinct, `hoodoo`
@@ -121,14 +125,7 @@ axis clean OFF its support, which no amount of sinking can seat.
    offset the proxy under-sinks. Closing them wants the two specific hulls
    raycast against each other, which means moving the seat out of `torPlan` and
    into `_genTor`, where the geometry is. Priced but not taken.
-2. **`arch.h` has never been true and is now less true.** A tor's stated
-   finished height was already only 0.75-0.91 of what it draws (**MEASURED**,
-   `tmp/rockseat/torh.mts`) because the courses do not fill their own boxes; it
-   is 0.58-0.72 now. The plan is homogeneous of degree 1 in `h0`/`w0`, so a
-   uniform rescale after the course loop would make `arch.h` exact — but at
-   `g = 1.6` it also makes every tor 1.6x wider in plan, and whether that reads
-   as a fatter landform or a better one is a question for a frame, not a table.
-   **UNVERIFIED either way.** Do not take it without capturing.
+2. ~~`arch.h` has never been true~~ — **taken, in `6c2e0b7`.** See below.
 3. **`_genOutcrop`'s pure-function extraction.** Both halves of "ungraded" are
    now answered differently than `landmarks-r2` proposed. The **joint** half is
    landed (it seats on the faces, same as the other two sites) and it is
@@ -144,6 +141,43 @@ axis clean OFF its support, which no amount of sinking can seat.
    so it is a different mechanism from the joint — most likely a `_genTor`
    skirt block thrown `foot * 3.6` out from a tor whose own seat is well above
    the ground under the skirt. `probes/outcropjoint.mts` names it every run.
+
+## The seat's skyline cost, found by looking and then repaid
+
+A sweep of four rock-heavy shots before and after the seat (`zone_ostium_gorge`,
+`zone_mencemoor`, `zone_three_valleys`, `landmark_meteor`; frames in
+`tmp/shots/rsq-a` / `rsq-b`, heatmaps in `tmp/shots/rsq-heat/`) said two things.
+
+**The seat is well scoped and sound.** Whole-frame `imgdiff` means were all at
+or under each shot's own noise floor, and every changed pixel was a rock
+instance — terrain, sky, the Meteor megastructure, vegetation and lighting
+untouched. No new floats, no merged blobs, no deep interpenetration, and the
+hero stack in `zone_ostium_gorge` that *was* floating is now seated.
+
+**And it cost the skyline more than the world numbers said.** Tors lost ~20 % of
+world height; on screen the loss was 27-40 %, because a tor stands with part of
+its base behind a ridge and the whole loss comes out of the visible part —
+`landmark_meteor`'s ridge pinnacle 22 px -> 16, `zone_three_valleys`'s skyline
+hoodoo **63 px -> 43**. That is precisely what `rock:tor` exists to do.
+
+`6c2e0b7` repays it by delivering the height the archetype states. `arch.h` is
+documented as "finished height above ground" and had **never** been true — 0.75
+to 0.91 before the seat, 0.58 to 0.72 after — because `h0` is solved backwards
+from each course's whole bounding box and a course only fills 72-94 % of it.
+The plan is **homogeneous of degree 1** in `h0`/`w0` (every width, course
+height, the drift, the dip term, both shoulder drops and `placedScale`'s sink
+are linear; `sy`, `sz` and both aspect clamps are ratios), so one factor applied
+after the loop is exact. Drawn/stated is now 0.97-1.00, and both benches confirm
+rather than tolerate it: `stackjoint` **16 open of 6111, unchanged**, and
+`silhouette --set rocks --seeds 24 --reseeds 5` **byte-identical on all six
+floors** — a bench that grades shape cannot see a uniform scale. No rng draw
+moves, so subject numbering does not shift either.
+
+**VERIFIED BY EYE**: `tmp/shots/rs-tall/zone_three_valleys.jpg` (the ridge tor
+is an emphatic spire again, not a thin blade) and
+`tmp/shots/rs-tall/zone_longwythe.jpg` (the mid-ground has its vertical back and
+the foreground corestone stack is untouched — `_stack` is not a tor and the
+factor correctly does not reach it).
 
 ## `probes/outcropjoint.mts` — the third joint site, measured (**MEASURED**)
 
@@ -188,5 +222,9 @@ ridge" — 79 % is.
   arithmetic with what it grades.
 - **The measurement is not the bar.** The variant with 1 open joint of 5919 is
   the wrong ship. Capture and look.
+- **And a whole-frame diff under the noise floor is not "no change".** Every
+  regression this lane found was invisible to `imgdiff`'s mean and obvious in a
+  crop; the pixels that moved were 0.2-0.9 % of the frame and all of them
+  mattered. Read the heatmap, then read the crop.
 - Editing `Rocks.ts` prunes the geometry bake — it is in `GEO_SOURCES`. Run
   `node src/tools/texbake.mts --geo`; `daemon.mts --health` reports it missing.
