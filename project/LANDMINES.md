@@ -196,6 +196,29 @@ in this file.
   silently serves the first blend to the whole world.
 - **Vegetation once used a road the terrain never carved** — `Ecology` probed for
   `terrain.roadCenterX` and silently fell back.
+- **A coarse density lattice cannot see a narrow feature, and the interpolation
+  puts the plants back.** `GrassField._makeTile` samples `grassDensity` on a 6x6
+  grid per tile and bilerps it: **2 m pitch on the blade ring, 4 on the clump
+  ring, 8 on the far one.** Any *hard* 0/1 predicate narrower than that pitch —
+  a river at a mean 5.5 m wide, a footpath, a wall — is read as dry at both ends
+  of the cell it crosses and the bilerp fills it back in. Measured: 1 251 blades
+  standing in one reach and 7 000 in one tarn, with a sampler that correctly
+  returned zero at every one of its own sample points. Soft ramps (the road
+  corridor's `smoothstep(rd, 2.4, 10.5)`) survive the lattice; step functions do
+  not. If the predicate must be hard, ask it **per instance** —
+  `Ecology.standsInWater` is the pattern, and it costs one hash lookup per tuft
+  because it gates twelve blades, not one.
+- **`WORLD.seaLevel` is not the answer to "how high is the water here", and
+  `Ecology` was the fourth file to assume it was.** `Tarns.ts` carries the
+  running table — `Water._findTarns`, `Fishing._survey`, `rasterChart`, and then
+  `Ecology.waterDepth`, which had every population's water test reading −190 m
+  on a reach at +180 and grew grass, scrub and trees straight up through every
+  river and tarn in the world (95.8% / 77.4% / 41.2% of the drawn sheet). Ask
+  `Water.mask` (`water/WaterMask.ts`). And when you mask against water, derive
+  the mask from the **drawn** geometry rather than re-deriving the hydrology:
+  `emitWater` ramps the sheet's outer 38% down onto the bed, so a mask built on
+  `wsl` strips a bald ring of plants along every bank in the band where the
+  water is drawn transparent.
 
 ## Characters and faces
 
