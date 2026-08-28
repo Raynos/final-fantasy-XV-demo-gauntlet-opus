@@ -768,9 +768,39 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     idx.push(row);
   }
   B.mat(0.5, 0, 0);
+  /**
+   * **This winding was inside out, and that is the whole of "an egg with two
+   * eyes stuck in it".**
+   *
+   * `u` increases with `theta` and therefore with `+x` at the front; `v`
+   * increases with `phi` and therefore with `-y`. So `(a, b, c) = ((u,v),
+   * (u+1,v), (u+1,v+1))` had `(b-a) x (c-a) = x_hat x (x_hat - y_hat) = -z_hat`
+   * — every triangle on this shell was wound **into the head**. The face
+   * material is `FrontSide`, so the near surface was culled on every frame and
+   * what reached the picture was the **inside of the far side of the skull**:
+   * a smooth ovoid, in front of which the lids, lashes, ears and hair — built
+   * by `blob`/`ribbon`/`buildLid`, all correctly wound — still drew.
+   *
+   * That is, literally, four rounds of judging: *"an egg with two eyes stuck in
+   * it"*, *"no mouth geometry or mouth texture on the mouth's location"*, and
+   * *"the chin projects further forward than the nose"* — on an inside-out
+   * occiput the lowest forward point is the chin. It is why the profile carried
+   * a nose (a silhouette is the same surface either way round) and the front
+   * did not; why every sculpt change measured on the *position* buffer and
+   * moved the frame by ~1 of 255; and why widening a socket brush twice, and
+   * four rounds of mouth paint, changed nothing that could be photographed.
+   *
+   * `src/tools/probes/facewind.mts` is the instrument: 0% of the 1 155
+   * front-most triangles had a `+z` geometric normal, and the mesh's max-z
+   * vertex — the nose tip, at `uv = (0.500, 0.372)` — carried a normal of
+   * `(0.01, 0.35, -0.94)`. `facenrm.mts` puts it at 91% of the shell.
+   *
+   * The chin cap below is wound to match, and had been "fixed" once already to
+   * match this same inverted grid.
+   */
   for (let v = 0; v < segV; v++) {
     for (let u = 0; u < segU; u++) {
-      B.quad(idx[v][u], idx[v][u + 1], idx[v + 1][u + 1], idx[v + 1][u]);
+      B.quad(idx[v][u], idx[v + 1][u], idx[v + 1][u + 1], idx[v][u + 1]);
     }
   }
   // the jaw profile leaves an open ring under the chin — cap it (the neck
@@ -783,7 +813,7 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // under the face material's old `DoubleSide` that cost nothing and was
     // invisible; the moment the material became `FrontSide` the cap vanished
     // and left a hole under the jaw looking into the inside of the head.
-    for (let u = 0; u < segU; u++) B.tri(centre, last[u], last[u + 1]);
+    for (let u = 0; u < segU; u++) B.tri(centre, last[u + 1], last[u]);
   }
 
   // ---- ears --------------------------------------------------------------
