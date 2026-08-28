@@ -1800,7 +1800,31 @@ export class Field {
       // (105 m), or the rim is still on the original slope and the basin spills
       // no matter how deep the bowl is — which is exactly how the first attempt
       // here failed, with `spill == floor` unchanged.
-      const bowl = 78, flat = 118, R = 232;
+      /**
+       * **The bowl's radius is set by `findTarns`' quantile, not by taste.**
+       *
+       * `probes/tarnbed.mts` measures the hollow — every point below the
+       * body's own rim shelf — against the water in it, and before this the
+       * four tarns read **68.7% emergent bed**: dished ground, visibly a lake
+       * floor, with a 27–44 m dry ring around a pond covering 31% of it. That
+       * is the "tarns read as flooded ground" the water lane handed over, and
+       * it is worse than the fifth it estimated.
+       *
+       * The cause is arithmetic and it is not in this file's half. `findTarns`
+       * takes the **26th percentile of its 105 m sample disc** as the surface,
+       * so the wet area is pinned at `pi * 105^2 * 0.26` = 9 000 m^2 whatever
+       * shape the bowl is. Deepening it, steepening it or mottling it cannot
+       * move that; the only thing that can, from here, is to stop dishing
+       * ground the water will never reach. A 78 m bowl is 19 100 m^2 and the
+       * water gets 9 000 of it by construction.
+       *
+       * So the bowl is cut to the radius the quantile actually fills, and the
+       * profile goes from `(1-t^2)^2` — which is nearly flat for the last
+       * third of its radius, and is therefore most of the dry ring — to
+       * `1 - t^2.6`, a flat floor with a 14 deg bank. The pond's surface does
+       * not change; the dry dish around it goes away.
+       */
+      const bowl = 56, flat = 118, R = 232;
       let sum = 0;
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2;
@@ -1830,7 +1854,9 @@ export class Field {
           //    does not sit on a machined cone
           if (d < bowl) {
             const t = d / bowl;
-            const dish = (1 - t * t) * (1 - t * t);
+            // Flat floor, banked rim: the exponent is what decides how much
+            // of the dish ends up above the water, see the note on `bowl`.
+            const dish = 1 - Math.pow(t, 2.6);
             const mottle = 0.86 + 0.14 * this.n2.fbm2(x * 0.021 + 7.3, z * 0.021 - 4.9, 3);
             h[idx] -= depth * dish * mottle * keep;
           }

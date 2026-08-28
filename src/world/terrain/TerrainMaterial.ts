@@ -43,6 +43,8 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *                    ablation and never a shipping mode.
  *
  *   `?post=nodry`  — the tier-D dry-cover term removed.
+ *   `?post=nogully` — the three erosion-channel octaves of the relief field
+ *     removed, which is what attributes the corduroy on a massif flank.
  *   `?post=noiao` / `iaomax` — the terrain's IN-MATERIAL occlusion of
  *     indirect diffuse off, and at full occlusion. WS-2d's own ablation pair.
  *   `?post=nomeso` / `mesomax` — the tier-C 4-30 m mesorelief off, and at
@@ -722,6 +724,7 @@ void tf_shade() {
   float gully = 3.20 * tf_lodW(59.0, tfPx) * (0.32 - tf_sabs(gy1))
               + 1.05 * tf_lodW(19.0, tfPx) * (0.32 - tf_sabs(gy2))
               + 0.34 * tf_lodW( 6.5, tfPx) * (0.32 - tf_sabs(gy3));
+  ${ABLATE.has('nogully') ? 'gully = 0.0;' : ''}
 
   // And the ground away from the faces: pans, braided wash and scour, which is
   // what a basin floor has instead of gullies. p1 and p2 are the patch
@@ -1723,9 +1726,20 @@ void tf_shade() {
   float mzL = 1.0 - tf_sabs(tf_snoise(P.xz * 0.088 + 63.0));
   mzL = clamp(mzL, 0.0, 1.0);
   mzL = mzL * mzL * tf_lodW(11.0, tfPx);
-  float mesoH = (0.16 * mzA + 0.52 * mzB - 0.34 * mzL) * mesoAmt;
+  // **The amplitude is the measured one, not a first guess.** Shipped at
+  // 0.16/0.52/0.34 first and priced against its own 2.5x control in the same
+  // capture: median d4 11.9 -> 15.2, d8 12.5 -> 15.3, d16 12.6 -> 15.2,
+  // tot 32.5 -> 38.1 against the reference's 49.0, and d1 stayed at 11.8
+  // against the reference's 11.3 -- so unlike ?post=drymax it buys the middle
+  // bands without buying pixel noise. Note WHICH half of the term moved it:
+  // mesoAmt is already 1.0 over open ground, so the control's colour endpoints
+  // were identical and every one of those points came from the HEIGHT. Looked
+  // at on zone_longwythe and the 2.5x plain reads as broken hummocky badland
+  // with lit and shaded sides instead of one brown carpet, so the control is
+  // what ships and ?post=mesomax is a further 2x above it.
+  float mesoH = (0.40 * mzA + 1.30 * mzB - 0.85 * mzL) * mesoAmt;
   ${ABLATE.has('nomeso') ? 'mesoAmt = 0.0; mesoH = 0.0;' : ''}
-  ${ABLATE.has('mesomax') ? 'mesoAmt = min(1.0, mesoAmt * 2.5); mesoH *= 2.5;' : ''}
+  ${ABLATE.has('mesomax') ? 'mesoAmt = min(1.0, mesoAmt * 2.0); mesoH *= 2.0;' : ''}
   Nw = tf_bump(Nw, P, mesoH, tfBumpOk);
   // Committed rather than hovering: mostly pan or mostly lag, with the change
   // happening over metres. The same discipline macroField uses, for the same
