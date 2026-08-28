@@ -1488,6 +1488,50 @@ is what made the defect visible as a missing surface. Expect the same order of
 events anywhere else `DoubleSide` is masking geometry: **fixing the material is
 step one, and step two is checking the winding it was hiding.**
 
+## `renderer.compile()` builds a different program than the frame draws, unless you make it match
+
+Two conditions, each worth about sixty shader programs of the 271 this page
+used to hold, and neither visible in a program *count*.
+
+- **A material compiled before it is patched is dead the moment it is patched.**
+  `Game.init()` runs `renderer.compile(scene, camera)` and one warm
+  `post.render()` before `PostFX.precompile()` builds `Warmup`, and
+  `Warmup._patchAll()` is where `MaterialPatch.scan` runs. Every lit material
+  visible at that moment compiled with no CSM defines and no `atmo1|` key; the
+  patch then set `needsUpdate` and three compiled it again. Sixty programs,
+  `usedTimes` 234, bound by no frame in the corpus.
+- **three keys TWO fields on `_currentRenderTarget === null`** —
+  `outputColorSpace` and `toneMapping` — and both are in the program cache key.
+  This game renders every scene pixel through `EffectComposer`, which owns a
+  target, so a compile with no target bound builds the *canvas* twin of every
+  material in the scene and nothing ever binds one. Eighty-five programs.
+
+`src/engine/CompileGuard.ts` wraps the renderer so both are true of every
+caller: **a compile sees what a frame sees.** Do not put this back in the call
+sites; there are four of them and `Game.ts` is shared.
+
+**The measurement that separates waste from content is `gl.useProgram`, not the
+count.** 271 programs might be 271 different surfaces. `probes/progused.mts`
+hooks the bind and poses twelve shots: 134 programs are ever bound, and of
+those exactly one is canvas flavour.
+
+## Do not parse three's program `cacheKey` from the end
+
+It looks like you can: the tail is fixed-length — 48 scalar parameters, two
+boolean bitmasks, `outputColorSpace`, `customProgramCacheKey` — and the head is
+the shaderID plus `name,value` per `#define`. But three's **default**
+`customProgramCacheKey` is `this.onBeforeCompile.toString()`, and a stringified
+function is full of commas. That misparsed **44 of 271** rows and produced a
+confident phantom — "srgb splits every material, 103 against 124" — that
+survived being cross-tabbed against three other fields. Anchor **forward** on
+the GLSL precision qualifier, which is the tail's first token
+(`probes/progkeys.mts`).
+
+**And a cache-key field cannot be read one at a time.** Held alone,
+`outputColorSpace` collapses 4 programs and `toneMapping` 1. They are two
+readings of one condition, and held together they collapse 85 of 211. An
+inventory that varies one field at a time walks straight past a pair.
+
 ## A GLSL compile or link failure is invisible on a warm page, and the pre-commit hook cannot see it either
 
 **2026-08-28: the river water surface was not drawn at all for a whole day**, in

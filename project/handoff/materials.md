@@ -78,33 +78,62 @@ forward on the GLSL precision qualifier.
 
 `material.program` is `undefined` in three 0.185. Use `renderer.info.programs`.
 
-## Verified so far
+## Verified
 
-- Cold capture of six shots at HEAD: **zero console errors**, and the frames
-  read correctly — atmosphere, CSM shadows, night emissives all present. Looked
-  at `hero_full` and `vista_night` at 1:1.
-- Cold-vs-cold six-shot diff, `cc7a9b6` against `ea90e0b`: **all six under
-  their floor** (`hero_full` 1.557 against 2.25, `storm` 0.071 against 0.18,
-  `town_forecourt` 0.260 against 2.00, `vista_dusk` 0.175/0.25, `vista_night`
-  0.530/0.82, `zone_longwythe` 0.694/1.23).
-- `pre-commit` build + both typechecks + 4 gates green on both commits.
+- **Full-corpus cold diff, 142 shots, `cc7a9b6` -> `ea90e0b`: 136 under floor.**
+  The six that were not — `warp_strike` 5.530, `warp_wide` 2.681,
+  `bestiary_goblin` 2.593, `combat_stagger` 2.435, `combat_armiger` 2.411,
+  `combat_magic_ice` 2.265 — are **all combat VFX and all belong to `10c2688`**,
+  another lane's deliberate warp-shard blending change that landed between the
+  two builds. Proven, not assumed: each of this lane's two commits was diffed
+  **against its own immediate parent** on exactly those six shots and every one
+  is under floor. `warp_strike` goes 5.530 -> **0.564** (commit 2 alone) and
+  **0.523** (commit 1 alone).
+- **`pnpm run check` 19/19.**
+- **`nanscan` 0 of 142.**
+- Cold capture of six shots: **zero console errors**. Looked at `hero_full` and
+  `vista_night` at 1:1 — atmosphere, CSM shadows, night emissives all present,
+  nothing unlit and nothing missing.
+- `progused.mts` on the fixed build: of **134 programs any frame binds, exactly
+  one is canvas flavour**, and it is the composer's own `renderToScreen` pass,
+  which `renderer.compile` does not build.
+- `pre-commit` build + both typechecks + 4 gates green on every commit.
+- **Both perf gates re-certify on a quiet tree.** `perf.mts` **PASS** — mean
+  **226.3 fps**, worst 152 (`regalia_drive`), **142/142 shots clear 60 by more
+  than their own noise**. `gameplay.mts` **PASS** — every segment over 60,
+  worst `streaming-traverse` 128.2 fps, `RULER_VALID: true`.
+- **Nothing moved from boot into play, and this is the measurement that says
+  so.** `progused.mts` reports `compiledDuringPoses` = **25 at all three
+  program counts — 271, 211 and 126** — and `boundTotal` = **134 at all three**.
+  The set of programs a frame binds is unchanged; only the dead ones went away
+  (`unusedOfHeld` 162 -> **17**). That is the `LightBudget` constraint met by
+  construction: no program key changes at runtime, the same keys are simply
+  built once each instead of two or three times.
+- `gameplay` still shows **two frames over 33 ms**, both `sprint+turn` (39.0 and
+  34.8 ms). Those are **pre-existing** — `STATUS.md` records three breaches, of
+  which "two are 1% of one segment" — and the `compiledDuringPoses` figure above
+  shows they are not a compile this lane introduced.
 
-## Left to do — the gate, then the rest of the workstream
+## Not done, and the honest reason
 
-1. **Full-corpus cold diff, 142 shots, `cc7a9b6` vs HEAD.** In flight at the
-   time of writing (`tmp/shots/corpus-a` and `-b`, `corpus.mts --build`).
-   **This is the revert gate.**
-2. `pnpm run check`, and **both perf gates re-certified on a quiet tree**
-   (`perf.mts`, `gameplay.mts`, `daemon.mts --wait quiet --for 900`).
-   `nanscan` 0.
-3. `pnpm run build:full`, then a fresh `bootprof` for an absolute number that
-   is not carrying two missing caches.
-4. **Not started: character LOD.** `probes/drawwhere.mts` on `town_forecourt`
-   still reports ~5.2 M triangles, a third of it skinned character mesh at
-   ~29k triangles per draw with no LOD. The cold capture above measures
-   8.2–10.7 M triangles per frame, so this has if anything grown. Untouched.
-5. **Not started: the 16/16 texture-unit warning**, still logged dozens of
-   times a frame in every probe run.
+- **Character LOD.** It was folded into this workstream because splitting it
+  would mean touching the same 127 material sites twice. **Nothing touched them
+  once**, so the coupling argument is spent and it is a clean separate lane.
+  Re-measured today, `probes/drawwhere.mts` on `town_forecourt`: **465 calls,
+  5 327 248 triangles, 272 buckets, 121 draws under 60 triangles**, and one
+  bucket — `SkinnedMesh` / `ShaderMaterial` — is **60 calls and 1 736 436
+  triangles, 28 940 per draw, a third of the frame with no LOD**. The frame
+  costs 6.0-7.2 ms against 16.7, so this is headroom, not a cost.
+- **The 16/16 texture-unit warning.** Still logged dozens of times a frame. It
+  was not on the path of either fix. The atmosphere patch alone adds three
+  samplers (`uSkyLut`, `uTransLut`, `uCloudShadowMap`) to every lit material, on
+  top of CSM's cascades, the PMREM env map and the material's own maps — that is
+  where to start.
+- **`pnpm run build:full` and a fresh absolute boot number.** Both `texc.bin.gz`
+  and `geo.bin.gz` were missing for this whole session, worth ~2.5 s and ~1.2 s,
+  which is why the absolute boot reads 8.15/7.20 s rather than the ~5.8 s the
+  `geometry-bake` lane last recorded. **The delta is sound; the absolute is
+  not.**
 
 ## Known-remaining program dedupe, and why it was not taken
 
