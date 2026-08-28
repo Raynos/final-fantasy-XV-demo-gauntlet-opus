@@ -16,6 +16,43 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *   - close-range parallax + detail normals, distance-faded.
  */
 
+/**
+ * Ground-albedo ablations, read at module scope because they are *compile-time*
+ * branches — the same reason `VegMaterial`'s `nogcontact` / `gcmax` are read
+ * there rather than passed as a uniform.
+ *
+ * These exist to price WS-2a, and specifically to answer a question a frame
+ * cannot: `imagestats`' `sh(R-B)` is the mean R-B over the darkest quartile,
+ * and the claim that outdoors that quartile is *ground* is the whole basis for
+ * filing the daylight shadow-warmth miss against terrain albedo rather than
+ * against the ambient. A weak reading from any albedo edit is ambiguous between
+ * "small effect" and "terrain is not what those pixels are", and only a
+ * positive control separates them.
+ *
+ *   `?post=gwhite` — terrain albedo forced to 1. Whatever `sh(R-B)` is left is
+ *                    lighting, not ground colour: the floor of this lever.
+ *   `?post=gwarm`  — a strong warm shift at *constant luma* (the multiplier's
+ *                    own Rec.709 luma is divided out), so it separates "warmer"
+ *                    from "brighter". The ceiling of the hue half of the lever.
+ *
+ *   `?post=nodry`  — the tier-D dry-cover term removed.
+ *   `?post=drymax` — the same term forced to full cover. It is a product of
+ *                    seven gates, so a weak reading is ambiguous between gentle
+ *                    endpoints and a conjunction that never fires; this
+ *                    separates them, and the gap between it and `nodry` is what
+ *                    reach is worth.
+ *
+ * The albedo pair go on `tfAlbedo` after every regional tint, so they price the
+ * surface a pixel actually shows rather than a layer recipe upstream of six
+ * multiplies. **This block has to stay above the shader template literals** —
+ * they interpolate it at module-evaluation time, and a `const` declared below
+ * them is in its temporal dead zone when they run.
+ */
+const ABLATE = typeof location !== 'undefined'
+  ? new Set((new URLSearchParams(location.search).get('post') || '')
+    .split(',').map((s) => s.trim().toLowerCase()))
+  : new Set<string>();
+
 const NOISE_GLSL = /* glsl */`
 vec3 tf_perm(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
 float tf_snoise(vec2 v) {
@@ -1540,6 +1577,15 @@ void tf_shade() {
                  // amounts of plant and the eye can still resolve the edge
                  // between them.
                  * (1.0 - 0.42 * midAt * (1.0 - midField));
+  // The ablation and its positive control, in the shape gcmax established.
+  // dryCover is a product of seven gates, so a weak reading is ambiguous
+  // between "the endpoints are too gentle" and "the conjunction never fires" --
+  // which is exactly the ambiguity the block above was left holding at
+  // 0.037 mean/255. Forcing it to 1 prices what FULL cover is worth on this
+  // ground in one capture, and the difference between that and the shipped
+  // number is how much of the gap is reach.
+  ${ABLATE.has('nodry') ? 'dryCover = 0.0;' : ''}
+  ${ABLATE.has('drymax') ? 'dryCover = 1.0;' : ''}
   // Built and applied in uniform control flow: tf_bump takes a screen-space
   // derivative, and a dFd* inside a divergent branch is undefined. This shader
   // has been bitten by that once already.
@@ -1664,33 +1710,6 @@ void tf_shade() {
   tfAO = clamp(ao, 0.0, 1.0);
 }
 `;
-
-/**
- * Ground-albedo ablations, read at module scope because they are *compile-time*
- * branches — the same reason `VegMaterial`'s `nogcontact` / `gcmax` are read
- * there rather than passed as a uniform.
- *
- * These exist to price WS-2a, and specifically to answer a question a frame
- * cannot: `imagestats`' `sh(R-B)` is the mean R-B over the darkest quartile,
- * and the claim that outdoors that quartile is *ground* is the whole basis for
- * filing the daylight shadow-warmth miss against terrain albedo rather than
- * against the ambient. A weak reading from any albedo edit is ambiguous between
- * "small effect" and "terrain is not what those pixels are", and only a
- * positive control separates them.
- *
- *   `?post=gwhite` — terrain albedo forced to 1. Whatever `sh(R-B)` is left is
- *                    lighting, not ground colour: the floor of this lever.
- *   `?post=gwarm`  — a strong warm shift at *constant luma* (the multiplier's
- *                    own Rec.709 luma is divided out), so it separates "warmer"
- *                    from "brighter". The ceiling of the hue half of the lever.
- *
- * Both go on `tfAlbedo` after every regional tint, so they price the surface a
- * pixel actually shows rather than a layer recipe upstream of six multiplies.
- */
-const ABLATE = typeof location !== 'undefined'
-  ? new Set((new URLSearchParams(location.search).get('post') || '')
-    .split(',').map((s) => s.trim().toLowerCase()))
-  : new Set<string>();
 
 const FRAG_MAP = /* glsl */`
 tf_shade();
