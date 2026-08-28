@@ -542,11 +542,27 @@ export const POIS: PoiSpec[] = [
   //
   // So `tmp/probes/poiseat.mts` gained the number that says it: `deep`, how far
   // the earthwork falls below its own deck, which is the only place the
-  // `cliff`-branch retaining wall shows up at all. At -1274 it is **26.0 m,
-  // gradePad's own cap**. Here it is **2.6 m** — an earthwork you would walk
-  // over without noticing — at hang +0.20 and relief 35. `greyshire`, the
-  // grotto this tomb is the far end of, is 64 m away and unmoved.
-  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1214, r: 60, lv: 30,
+  // `cliff`-branch retaining wall shows up at all.
+  //
+  // And then -1214, which `deep` liked best at 2.6 m, was looked at and had the
+  // OPPOSITE fault: the mausoleum sat in a notch with grass across its roofline.
+  // An apron is a mesh laid over the terrain, not an excavation — `_base`'s own
+  // docstring records `poi_costlemark_menace` growing a green mound in the
+  // middle of its own sealed court — so a hummock inside the footprint comes
+  // straight up through the building. That is a third number, `proud`: the
+  // highest drawn ground within the BUILDING's ten metres, above the deck.
+  // (Not within the pad's: on any hillside the pad's uphill rim is above its own
+  // deck by construction, and that is a cut face rather than a defect.)
+  //
+  // Three seats, all measured on the same lattice in the same run:
+  //
+  //     z = -1274   hang +0.27   deep  7.1   proud 1.7   relief 24
+  //     z = -1254   hang -0.15   deep  6.2   proud 0.9   relief 31
+  //     z = -1214   hang +0.20   deep  2.6   proud 5.4   relief 35
+  //
+  // -1254 is the only one that is good at all three. `greyshire`, the grotto
+  // this tomb is the far end of, is 44 m away and unmoved.
+  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1254, r: 60, lv: 30,
     does: 'Royal Arm: the Swords of the Wanderer.', gate: 'greyshire' },
   { id: 'greyshire_menace', name: 'Menace Beneath Greyshire', type: 'menace', zone: 'taelpar', x: -2518, z: -1312, r: 70, lv: 65,
     does: 'Post-game endless descent.', gate: 'menace' },
