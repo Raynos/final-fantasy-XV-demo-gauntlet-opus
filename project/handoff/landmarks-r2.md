@@ -103,10 +103,18 @@ the plinth is gone).
 - **`floatcheck` PASS** — `poiFloating` 0 / baseline 0, `poiBuried` 0 / 0, and
   both reported counts moved the right way: `instFloating` **327** against a
   baseline of 362, `instBuried` **821** against 861.
-- **`silhouette --set rocks`** returns VOID at the default `--seeds`; its floors
-  are recorded at `--seeds 24 --reseeds 5` and have to be run there. Nothing in
-  this lane touched `Rocks.ts`'s shape rules — the only `Rocks.ts` change is
-  `tintNorm`, which is colour and which the bench is explicitly blind to.
+- **`silhouette --set rocks --seeds 24 --reseeds 5` PASS** — no new collapsed
+  silhouettes across 128 meshes in 6 families and **all six family floors
+  held**: `rock:base` 8.0/8 variety 1.39 (floor 1.3), `rock:stack` 24.0/24 /
+  1.02 (0.8), `rock:tor:boss` 24.0/24 / 1.51 (1.0), `fin` 20.6/24 / 1.25 (1.0),
+  `hoodoo` 19.8/24 / 1.50 (1.4), `pinnacle` 19.0/24 / 1.40 (0.9). **At the
+  default `--seeds` it returns VOID** and says so — the floors are recorded at
+  24×5 and have to be run there, which is worth knowing before reading a VOID
+  as a failure.
+- **`pnpm run check` was still queued** behind other lanes' gates when this lane
+  stopped. Every commit here passed the pre-commit lane (build + both
+  typechecks + 4 cheap gates), and `floatcheck` and `silrocks` are the two the
+  brief named. **Run `check` before trusting the tree.**
 
 ### The haven shelf, before and after — **VERIFIED BY EYE**
 
