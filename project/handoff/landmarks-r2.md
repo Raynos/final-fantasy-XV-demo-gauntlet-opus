@@ -94,7 +94,29 @@ the plinth is gone).
 | `366e17d` | **the Meteor reads its own cavity bake**, rescaled to mean 1.0 (`rockGeometry`'s `tintNorm`, off by default; `M.stone` gets `vertexColors`) | **VERIFIED BY EYE** |
 | `b648b69` | a fishing camp's shack stands on the bank, not on the jetty; per-pile lengths | **MEASURED**, unverified by eye |
 | `08a2735` | the haven's columns get a crown step you can see and a lean of their own | in flight |
-| `72d2b3c` | per-column value on the haven shelf; basalt is darker than sandstone | in flight |
+| `72d2b3c` | per-column value on the haven shelf; basalt is darker than sandstone | **VERIFIED BY EYE** |
+| `985e2ce` | `probes/hullseat.mts` — the joint arithmetic is measured on a bounding box | **MEASURED** |
+| `099ff9d` | that number into the negatives table: `slab` **0.139**, ~0.55 m per joint | — |
+
+### Gates at HEAD
+
+- **`floatcheck` PASS** — `poiFloating` 0 / baseline 0, `poiBuried` 0 / 0, and
+  both reported counts moved the right way: `instFloating` **327** against a
+  baseline of 362, `instBuried` **821** against 861.
+- **`silhouette --set rocks`** returns VOID at the default `--seeds`; its floors
+  are recorded at `--seeds 24 --reseeds 5` and have to be run there. Nothing in
+  this lane touched `Rocks.ts`'s shape rules — the only `Rocks.ts` change is
+  `tintNorm`, which is colour and which the bench is explicitly blind to.
+
+### The haven shelf, before and after — **VERIFIED BY EYE**
+
+`tmp/shots/lr2-base/poi_haven.jpg` -> `tmp/shots/lr2-hav2/poi_haven.jpg`. Before:
+two concentric turned drums with a hard circular lip, glowing runes inside, a
+birthday cake. After: a stepped rim at four or five distinct heights, vertical
+shadow at every joint, a notch with its own fallen block below it on the near
+side, and a value that varies column to column. It is still on the blocky side —
+the prisms read as large cut stones rather than as one rock that split — but the
+cake stand is gone and the object now has a broken edge with debris under it.
 
 ### The Meteor, before and after — **VERIFIED BY EYE**
 
@@ -123,15 +145,29 @@ Draw calls unchanged: `zone_mencemoor` 320, `landmark_meteor` 632.
    (`tmp/shots/lr2-met-b/poi_haven.jpg`) killed the cake stand and left a ring of
    neat pale blocks at one height; both commits target exactly that and neither
    has been looked at. Before is `tmp/shots/lr2-base/poi_haven.jpg`.
-2. **`poi_imperial`'s levitating boulder is a SECOND one and it is still there.**
-   `tmp/shots/lr2-b1/poi_imperial.jpg` at (1310–1370, 335–370): a boulder over
-   a wide-capped pedestal, unchanged by `911f99d`. So the tomb's masonry
-   explains the tomb's and not this one. It has the profile of a `torPlan`
-   **hoodoo** — wide cap, narrow neck, wide base — under overcast light against
-   a bright sky, so the first thing to test is whether the neck is *there and
-   unreadable* rather than absent. Project the tor instance matrices into that
-   camera and match the screen position; do not assume a third mechanism until
-   the pedestal has been ruled in or out.
+2. **`poi_imperial`'s levitating boulder is a SECOND one, and it is diagnosed
+   but not fixed.** `tmp/shots/lr2-impp/rock.png` is the 5× crop: a three-course
+   tor with daylight all the way across its top joint, unchanged by `911f99d`.
+   `probes/hullseat.mts` says why. `hullExtents` is a `computeBoundingBox`, so
+   `ext[1]` is a block's greatest half-height **anywhere**, and `stackPlan`,
+   `torPlan` and `_genOutcrop` all author their overlap through it while the
+   contact is at the middle of the face. Shortfall as a fraction of the
+   half-height: `slab` **0.139**, `pebble` 0.120, `spire` 0.081, `cobble` 0.080,
+   `bedded` 0.052, granite/worn/talus 0.000. A joint pays both blocks, so a
+   slab-on-slab course at a 4.4 m long axis opens about **0.55 m**.
+
+   **`probes/stackjoint.mts`'s 0-of-1615 is not wrong and cannot see this**: it
+   composes the shipped plan through the shipped `placedScale`, deliberately,
+   and `placedScale` reads the same `ext`. It is the recipe measured against
+   itself — the exact rule `Seat.supportPoints` is written on, arriving at the
+   instrument built to catch this.
+
+   **The fix, not taken:** a second extents map — the surface height under the
+   axis, which `hullseat` already computes — threaded through the three plan
+   functions for the *joint* arithmetic, while `ext` keeps doing widths. Price
+   it against `silhouette --set rocks --seeds 24 --reseeds 5` **before**
+   committing: the last unclamped joint fix breached two of its floors and
+   clamping it to "only ever pull a course down" held all six.
 3. **`_genOutcrop`'s plan/seat split.** The *joint* half is already landed —
    `d3b4ba9`'s sunk-position rule is in the course loop, with the comment. What
    is left is the pure-function extraction (`outcropPlan(rng, rockS, ext)`,
