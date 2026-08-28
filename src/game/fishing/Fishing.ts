@@ -74,6 +74,8 @@ const _parentQ = new THREE.Quaternion();
 const SEARCH_R = 170;
 /** Metres inland of the waterline the player stands. */
 const STAND_BACK = 2.6;
+/** Metres of line one turn of the handle takes -- one click of the pawl. */
+const REEL_NOTCH = 0.34;
 /** Seconds the bite window stays open. */
 const BITE_WINDOW = 0.85;
 /** Tension above which the strain timer runs. Drawn as a tick on the gauge. */
@@ -118,6 +120,10 @@ export class Fishing {
   _handles: InteractableHandle[] = [];
   /** POI ids that have no water within `SEARCH_R`. Read by the probe. */
   dry: string[] = [];
+  /** Metres of line recovered since the last reel click. */
+  _reelPhase = 0;
+  /** Seconds until the next line-strain note. */
+  _whine = 0;
 
   /* ---- live cast state ---------------------------------------------- */
   /** Null when not fishing. */
@@ -322,6 +328,7 @@ export class Fishing {
     this.fish = null; this.kg = 0;
     this.tension = 0; this.strain = 0; this.line = 0; this.line0 = 0; this.stamina = 1;
     this.run = 0; this.tilt = 0; this.reeling = false;
+    this._reelPhase = 0; this._whine = 0;
     this.note = 'Hold E — release to cast';
     this._held = false;
 
@@ -536,14 +543,21 @@ export class Fishing {
     this._biteAt = 1.5 + this._rnd() * 5.2 - this.power * 1.6;
     this._enter('flight');
     this.note = '';
-    game.get('Audio')?.play?.('warp', spot.stand, { volume: 0.35 });
+    // The cast is two events in two places: the spool at the angler's hands,
+    // and the float landing thirty metres out. Borrowing `warp` for the first
+    // and `hit` for the second is what made the whole verb read as silent --
+    // `content-wire.md` §2.3 called the wait "1.5-5.2 s of a bobbing float with
+    // nothing to do" and named the cues as the reason.
+    game.get('Audio')?.play?.('cast', spot.stand, { volume: 0.8, scale: 0.85 + this.power * 0.4 });
   }
 
   _tickFlight(dt: number, game: Game) {
     if (this.t >= 0.62) {
       this._enter('wait');
       this.note = 'Wait for the bite — strike early and it spooks';
-      game.get('Audio')?.play?.('hit', this._bobTarget, { volume: 0.22 });
+      // Out there, not here: the splash is positional and it is what tells you
+      // the cast went somewhere.
+      game.get('Audio')?.play?.('splash', this._bobTarget, { volume: 0.55, hrtf: true });
     }
   }
 
@@ -680,8 +694,10 @@ export class Fishing {
     if (this._slack > 1.5) { this._lose(game, 'Slack line — it threw the hook.'); return; }
 
     // -- line -----------------------------------------------------------
+    const line0 = this.line;
     if (hold) this.line -= Math.max(0.25, 2.9 - pull * 1.55) * dt;
     else this.line += (running ? 0.85 : 0.3) * dt;
+    this._reelAudio(game, line0 - this.line, dt);
     if (this.line <= 0) { this._land(game); return; }
     if (this.line > this.line0 * 1.35 + 4) { this._lose(game, 'It spooled you.'); return; }
 
@@ -693,6 +709,49 @@ export class Fishing {
       : this.tension > SNAP_AT ? 'Give it line!'
         : running ? (counter ? 'Holding it — reel when it tires' : 'It is running — lean against it')
           : 'It is tiring — reel now';
+  }
+
+  /**
+   * The two sounds a fight is actually made of: the reel and the line.
+   *
+   * **A reel is a rate, not a loop.** The pawl clicks once per notch, so the
+   * sound is emitted per centimetre of line recovered rather than held and
+   * cross-faded -- which is the only way it speeds up when the retrieve does,
+   * and speeding up is the whole information it carries. `REEL_NOTCH` is the
+   * line one turn of the handle takes.
+   *
+   * The line sings when it is tight, and it sings *higher* the tighter it is.
+   * That matters because it is the one cue a player gets without looking at the
+   * gauge, and the gauge is on the other side of the screen from the fish.
+   * Gated at the tension where the strain timer starts to matter so it is a
+   * warning rather than a drone.
+   *
+   * @param recovered metres of line taken in this step, negative if given
+   */
+  _reelAudio(game: Game, recovered: number, dt: number) {
+    const audio = game.get('Audio');
+    if (!audio?.play) return;
+    if (recovered > 0) {
+      this._reelPhase += recovered;
+      while (this._reelPhase >= REEL_NOTCH) {
+        this._reelPhase -= REEL_NOTCH;
+        // Faster retrieve, brighter click, and quieter under load because the
+        // drag is slipping rather than the pawl turning cleanly.
+        audio.play('reel', null, {
+          volume: 0.30 + 0.2 * (1 - this.tension),
+          scale: 0.9 + Math.min(1, recovered / (dt || 1) / 3) * 0.35,
+          minGap: 0.02,
+        });
+      }
+    } else {
+      this._reelPhase = 0;
+    }
+    this._whine -= dt;
+    if (this.tension > 0.52 && this._whine <= 0) {
+      this._whine = 0.26;
+      const k = (this.tension - 0.52) / (1 - 0.52);
+      audio.play('line', null, { volume: 0.18 + 0.42 * k, scale: 0.86 + k * 0.5, minGap: 0.05 });
+    }
   }
 
   /* ------------------------------------------------------------------ */

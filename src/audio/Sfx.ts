@@ -496,6 +496,9 @@ export class Sfx {
       case 'item': return (t, o) => this.itemPickup(t, o);
       case 'materialise': return (t, o) => this.materialise(t, o);
       case 'splash': return (t, o) => this.splash(t, o);
+      case 'reel': return (t, o) => this.reelClick(t, o);
+      case 'line': return (t, o) => this.lineStrain(t, o);
+      case 'cast': return (t, o) => this.castWhirr(t, o);
       case 'howl': return (t, o) => this.daemonHowl(t, o);
       default: return null;
     }
@@ -924,6 +927,61 @@ export class Sfx {
         f0: 900 + this.rng() * 1800, f1: 2400 + this.rng() * 2000, dur: 0.07, gain: 0.12, type: 'sine',
       });
     }
+    return s.done();
+  }
+
+  /* -------------------------------------------------------------- fishing */
+
+  /**
+   * One click of a reel pawl. Called once per notch, not held.
+   *
+   * A reel is a ratchet: the sound is a *rate*, and the only honest way to
+   * build one is a single short click that the caller fires as fast as the
+   * spool is turning. A looped whirr sample would be the wrong shape -- it
+   * cannot speed up with the retrieve, which is the whole information the
+   * sound carries. `scale` shifts the pitch, so a fast retrieve is brighter.
+   */
+  reelClick(t: number, o: PlayOpts = {}) {
+    const s = new Shot(this, { send: 0.1, volume: o.volume ?? 0.5, ...o }, 'sfx', 4);
+    if (!s.ok) return false;
+    const k = o.scale ?? 1;
+    s.noise(t, { dur: 0.022, type: 'bandpass', Q: 3.2, f0: 2300 * k, f1: 1500 * k, gain: 0.30, attack: 0.001 });
+    s.tone(t, { f0: 5200 * k, dur: 0.012, gain: 0.10, type: 'square', filter: 'bandpass', filterF: 5200 * k });
+    return s.done();
+  }
+
+  /**
+   * Monofilament under load: the thin whine off a line being taken.
+   *
+   * Two detuned partials plus a breath of noise, gliding up with `scale` -- a
+   * line sings higher the tighter it is, which is the cue that tells a player
+   * to give some back before they can read the gauge. `dur` is short and the
+   * caller re-triggers, so tension changes are heard rather than crossfaded.
+   */
+  lineStrain(t: number, o: PlayOpts = {}) {
+    const s = new Shot(this, { send: 0.22, volume: o.volume ?? 0.5, ...o }, 'sfx', 3);
+    if (!s.ok) return false;
+    const k = o.scale ?? 1;
+    s.tone(t, { f0: 1180 * k, f1: 1320 * k, dur: 0.34, gain: 0.10, type: 'sine', attack: 0.08 });
+    s.tone(t + 0.01, { f0: 1187 * k, f1: 1333 * k, dur: 0.34, gain: 0.07, type: 'triangle', attack: 0.09 });
+    s.noise(t, { dur: 0.3, type: 'bandpass', Q: 6.0, f0: 2400 * k, f1: 3100 * k, gain: 0.05, attack: 0.1 });
+    return s.done();
+  }
+
+  /**
+   * The cast: line stripping off the spool, then nothing until it lands.
+   *
+   * A descending band of noise, because the spool slows through the flight.
+   * The splash at the far end is `splash`, fired separately at the float's own
+   * position -- two events, two places, which is what makes a cast read as
+   * having gone somewhere.
+   */
+  castWhirr(t: number, o: PlayOpts = {}) {
+    const s = new Shot(this, { send: 0.18, volume: o.volume ?? 0.7, ...o }, 'sfx', 2);
+    if (!s.ok) return false;
+    const k = o.scale ?? 1;
+    s.noise(t, { dur: 0.42, type: 'bandpass', Q: 1.6, f0: 3400 * k, f1: 1100 * k, gain: 0.24, attack: 0.012 });
+    s.tone(t, { f0: 620 * k, f1: 240 * k, dur: 0.3, gain: 0.07, type: 'sawtooth', filter: 'lowpass', filterF: 2600 });
     return s.done();
   }
 
