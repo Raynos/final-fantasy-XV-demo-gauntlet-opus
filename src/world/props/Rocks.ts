@@ -57,7 +57,7 @@ const ASPECT_MAX = 3.2;
 const SINK_FRAC = 0.12;
 
 /** Fallback extents for a kind that somehow has no measured hull. */
-const _EXT1: HullExt = [1, 1, 1, 1, 1];
+const _EXT1: HullExt = [1, 1, 1, 1, 1, 1, 1];
 
 /** Clamp an axis-jitter multiplier away from zero and from absurdity. */
 const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
@@ -1131,7 +1131,7 @@ export function stackPlan(
   const w0 = s0 * (ext.get(k) ?? _EXT1)[0];
   const cs = corestones(rng, n);
   const out: StackCourse[] = [];
-  let y = 0, hPrev = 0, wPrev = 0, sinkPrev = 0;
+  let y = 0, hUpPrev = 0, wPrev = 0, sinkPrev = 0;
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];
     const kind: StoneKind = i === 0 ? k
@@ -1149,7 +1149,19 @@ export function stackPlan(
     if (i > 0) wSelf = Math.min(wSelf, wPrev * 1.10);
     const s = wSelf / ex[0];                          // finished half-width / hull
     const sy = _sc(sy0 * c.sy);
-    const h = s * sy * ex[1];
+    /**
+     * **The joint is measured to the FACES, not to the bounding box.**
+     *
+     * `ex[1]` is `max(bb.max.y, -bb.min.y)` — one number for both faces of a
+     * hull that is not symmetric about its own origin. Seating on it puts every
+     * course too high by the amount the block's real surface falls short of its
+     * own box, on *both* blocks: 55 % of a half-height on `granite`'s topside,
+     * 60 % on `talus`'s. See {@link hullExtents} for the table and
+     * `probes/stackjoint.mts` for what it drew — 266 open joints of 5917, with
+     * eight metres of sky under a pinnacle's crown.
+     */
+    const hDown = s * sy * ex[3];
+    const hUp = s * sy * ex[4];
     /**
      * **The joint has to be planned against the SUNK position, not the
      * authored one, and this is the bug that made stacks levitate.**
@@ -1186,12 +1198,12 @@ export function stackPlan(
      */
     const sink = placedScale(ex, s, 1, sy, 1, i === 0 ? bury0 : 0).sink;
     if (i > 0) {
-      y += (hPrev + h) * (1 - (wSelf > wPrev ? Math.max(overlap, 0.52) : overlap))
+      y += (hUpPrev + hDown) * (1 - (wSelf > wPrev ? Math.max(overlap, 0.52) : overlap))
         + (sink - sinkPrev);
     }
     sinkPrev = sink;
     wPrev = wSelf;
-    hPrev = h;
+    hUpPrev = hUp;
     out.push({
       kind, dx: c.dx * s0, dy: y, dz: c.dz * s0, s, sy, yaw: c.yaw,
       // Held near level. A tilted block in a stack reads as a collapse, and the
@@ -1213,9 +1225,10 @@ export function stackPlan(
  * aspect rule, a taper and a cap-ratio rule are about. `[3]` and `[4]` are the
  * `down` and `up` **contact heights**: how far the surface actually reaches
  * below and above the mesh origin *on the axis*, which is what a joint is
- * about. They travel in one tuple deliberately — see {@link hullExtents}.
+ * about. `[5]` is the shoulder envelope for a joint whose axes do not line up.
+ * They travel in one tuple deliberately — see {@link hullExtents}.
  */
-export type HullExt = [number, number, number, number, number];
+export type HullExt = [number, number, number, number, number, number, number];
 
 /**
  * The half-extents of a built hull, and the height of its two contact faces.
@@ -1243,8 +1256,24 @@ export type HullExt = [number, number, number, number, number];
  * whatever the rest of the joint does — the min clearance over the contact is
  * at most the clearance on the axis, which is the overlap, which is negative.
  * A statistic over a disc would only be a bound. Two coincident axes are the
- * case the plans author; a course stepped far enough sideways to break it is
- * caught by the separate `clear` rule that already deepens those joints.
+ * case the plans author, and a tor's are not: `[5]` is what covers that.
+ *
+ * **`[5]` is the SHOULDER envelope, and it is measured, not modelled.** A
+ * course whose axis stands `f` of the block-below's half-width out to one side
+ * does not meet `up` — it meets whatever the topside has fallen to out there.
+ * `[5]` is the steepest `k` for which `top(f) <= up * (1 - k f)` holds at every
+ * sampled point of the hull, so `up * min(1, k f)` is a drop that closes the
+ * joint at any offset and any relative yaw. Modelling it as the ellipse
+ * (`1 - f^2`) left 6 joints of 5919 open at `f` 0.65-0.95: these hulls are cut
+ * by random half-spaces and `granite`'s shoulder is at 0.21 of its axial top at
+ * `f` 0.6 where the ellipse says 0.64. `k` runs 0.5 (`slab`, a flat lid) to
+ * 1.5 (`granite`, a cut face falling to its own equator).
+ *
+ * It is a max over azimuth and not a mean, deliberately. Two courses are yawed
+ * freely against each other and against the offset direction, so the drop at
+ * the contact is a draw over azimuth; a mean leaves half the joints open, and
+ * over-sinking reads as a block wedged into a shoulder where under-sinking
+ * reads as one hanging in the sky.
  *
  * **They are in the same tuple as the widths and not in a second map** because
  * a second map is a parameter a call site can forget, and forgetting it
@@ -1259,37 +1288,60 @@ export function hullExtents(geo: THREE.BufferGeometry): HullExt {
     Math.max(bb.max.x, -bb.min.x),
     Math.max(bb.max.y, -bb.min.y),
     Math.max(bb.max.z, -bb.min.z),
-    0, 0,
+    0, 0, 0, 0,
   ];
-  // Walk the triangles whose xz projection contains the origin and interpolate
-  // y at it. `rockGeometry` returns non-indexed, welded triangle soup, so a
-  // triple of consecutive vertices is a face; the guard reads `geo.index`
-  // anyway so a future indexed build does not silently measure nonsense.
+  // `rockGeometry` returns non-indexed, welded triangle soup, so a triple of
+  // consecutive vertices is a face; the walk reads `geo.index` anyway so a
+  // future indexed build does not silently measure nonsense.
   const p = geo.attributes.position;
   const idx = geo.index;
   const n = idx ? idx.count : p.count;
   const at = (i: number) => (idx ? idx.getX(i) : i);
-  let down = 0, up = 0;
-  for (let f = 0; f + 2 < n; f += 3) {
-    const a = at(f), b = at(f + 1), c = at(f + 2);
-    const ax = p.getX(a), az = p.getZ(a);
-    const bx = p.getX(b), bz = p.getZ(b);
-    const cx = p.getX(c), cz = p.getZ(c);
-    // Barycentric coordinates of (0, 0) in the projected triangle.
-    const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-    if (Math.abs(d) < 1e-12) continue;
-    const l0 = ((bz - cz) * -cx + (cx - bx) * -cz) / d;
-    const l1 = ((cz - az) * -cx + (ax - cx) * -cz) / d;
-    const l2 = 1 - l0 - l1;
-    if (l0 < 0 || l1 < 0 || l2 < 0) continue;
-    const y = l0 * p.getY(a) + l1 * p.getY(b) + l2 * p.getY(c);
-    if (y < down) down = y;
-    if (y > up) up = y;
-  }
+  /**
+   * The hull's two surfaces directly over (px, pz): every triangle whose xz
+   * projection contains the point, interpolated. `[Infinity, -Infinity]` where
+   * the footprint does not reach.
+   */
+  const surfaceAt = (px: number, pz: number): [number, number] => {
+    let lo = Infinity, hi = -Infinity;
+    for (let f = 0; f + 2 < n; f += 3) {
+      const a = at(f), b = at(f + 1), c = at(f + 2);
+      const ax = p.getX(a) - px, az = p.getZ(a) - pz;
+      const bx = p.getX(b) - px, bz = p.getZ(b) - pz;
+      const cx = p.getX(c) - px, cz = p.getZ(c) - pz;
+      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (Math.abs(d) < 1e-12) continue;
+      const l0 = ((bz - cz) * -cx + (cx - bx) * -cz) / d;
+      const l1 = ((cz - az) * -cx + (ax - cx) * -cz) / d;
+      const l2 = 1 - l0 - l1;
+      if (l0 < 0 || l1 < 0 || l2 < 0) continue;
+      const y = l0 * p.getY(a) + l1 * p.getY(b) + l2 * p.getY(c);
+      if (y < lo) lo = y;
+      if (y > hi) hi = y;
+    }
+    return [lo, hi];
+  };
+  const [down, up] = surfaceAt(0, 0);
   // A hull with no triangle over its own origin is not a rock; fall back to the
   // box rather than seating a course on zero.
   ex[3] = down < 0 ? -down : ex[1];
   ex[4] = up > 0 ? up : ex[1];
+  // The shoulder envelope. 4 radii x 8 azimuths against a 240-540 triangle soup
+  // is ~50 k point-in-triangle tests for the whole kind table, once, at init.
+  let kUp = 0, kDown = 0;
+  for (const f of [0.3, 0.5, 0.7, 0.9]) {
+    for (let a = 0; a < 16; a++) {
+      const th = (a / 16) * Math.PI * 2;
+      const [lo, hi] = surfaceAt(Math.cos(th) * f * ex[0], Math.sin(th) * f * ex[2]);
+      if (!Number.isFinite(hi)) continue;
+      kUp = Math.max(kUp, (ex[4] - hi) / ex[4] / (f * f));
+      kDown = Math.max(kDown, (ex[3] - -lo) / ex[3] / (f * f));
+    }
+  }
+  // Capped: `min(1, k f^2)` is the drop as a fraction of the axial face, and
+  // past the block's own equator there is nothing left to fall.
+  ex[5] = Math.min(3, kUp);
+  ex[6] = Math.min(3, kDown);
   return ex;
 }
 
@@ -1417,7 +1469,7 @@ export function torPlan(
   const courses: TorCourse[] = [];
   let y = 0;                                        // the buried foot of the stack
   let sinkPrev = 0;                                 // see the sink term below
-  let cx = 0, cz = 0, wPrev = 0, pcx = 0, pcz = 0;
+  let cx = 0, cz = 0, wPrev = 0, pcx = 0, pcz = 0, hUpPrev = 0, ovPrev = 0, exPrev = _EXT1;
   for (let i = 0; i < n; i++) {
     const kind: StoneKind = rng.next() < 0.58 ? dom
       : arch.kinds[Math.floor(rng.next() * arch.kinds.length)];
@@ -1462,7 +1514,14 @@ export function torPlan(
     const sx = 1;
     const sy = _sc(hz / (s * ex[1]));
     const sz = _sc(dz / (s * ex[2]));
-    const h = s * sy * ex[1];                       // finished half-height
+    // **The joint is measured to the FACES, not to the bounding box.** `ex[1]`
+    // is one number standing in for both faces of a hull that is not symmetric
+    // about its own origin — see {@link hullExtents}. `hz` stays stated against
+    // the box, because it is the number the aspect band and the archetype table
+    // are written in; only where the block *touches* another block does the box
+    // stop being the right measurement.
+    const hDown = s * sy * ex[3];                   // origin to the underside
+    const hUp = s * sy * ex[4];                     // origin to the topside
     // Progressive lean: plumb at the foot, `leanTop` at the crown. For the
     // angles this draws (under 0.22 rad) the small-angle image of +Y under
     // three's XYZ Euler is (-roll, 1, pitch), so a tilt toward azimuth `az` is
@@ -1509,8 +1568,87 @@ export function torPlan(
     const sink = placedScale(ex, s, sx, sy, sz, 0).sink;
     if (i > 0) y += Math.min(0, sink - sinkPrev);
     sinkPrev = sink;
+    /**
+     * **A course that stands off its own support is seated on the SHOULDER,
+     * not on the crown — and the amount is geometry, not a constant.**
+     *
+     * The face seat above guarantees contact *on the axis*, because the axis is
+     * a point on both surfaces. Two coincident axes are the case it covers, and
+     * a tor's are not coincident: the axis leans, and `arch.drift` steps each
+     * course by up to 0.70 of its own half-width. Under an axis `f` radii out,
+     * the block below is no longer `ex[4]` tall — its topside has fallen away
+     * toward its own equator, and the joint opens by exactly that.
+     *
+     * **Measured, and it is the whole of what is left.** With the faces seated
+     * and this term absent, `probes/stackjoint.mts` reports 51 open joints of
+     * 5916, all of them tors and **every one of them an offset case**: median
+     * `off / wPrev` among the open joints is **0.968**, i.e. the upper course's
+     * axis stands at the lower block's rim. Zero of them are stacks, whose
+     * courses are axially aligned. Widening is not among the causes — `wHi/wLow`
+     * runs 0.43 to 1.15 across the open set — which is why nothing here
+     * deepens for it: a wider course still touches on the axis.
+     *
+     * The drop is `ex[4] * min(1, ex[5] * f)` on the block below, with `ex[5]`
+     * its **measured** shoulder envelope — see {@link hullExtents}. Modelling
+     * it as the ellipse (`1 - f^2`) instead left 6 joints of 5919 open at `f`
+     * 0.65-0.95, because these hulls are cut by half-spaces and `granite`'s
+     * shoulder is at 0.21 of its axial top where the ellipse says 0.64.
+     *
+     * **This replaces an inverted rule.** The line here read
+     * `rise = 2 * h * (clear ? Math.max(lap, 0.58) : lap)` under a comment
+     * saying "an unsupported course has to sit DEEPER". But `lap` is a RISE
+     * fraction — `arch.lap` runs 0.24 to 0.64 and a course rises `2 * h * lap`
+     * above the one below — so `Math.max` LIFTED exactly the courses the
+     * comment wanted sunk, `boss` from 0.24 to 0.58 of its own height. It is
+     * `stackPlan`'s expression copied across to a variable with the opposite
+     * sense: there `overlap` really is an overlap and `Math.max` really does
+     * deepen. That is why the open joints are all offset cases.
+     */
+    if (i > 0 && wPrev0 > 0 && Number.isFinite(wPrev0) && wz > 0) {
+      /**
+       * **A course may step to the rim of the block below it, and not past.**
+       *
+       * Not a clamp on the step — that is the thing this family must not have,
+       * measured: clamping it cost the hoodoo row 20/24 -> 13/24 distinct. This
+       * only catches the tail where the step has taken a course's axis clean
+       * OFF its own support, and there is no seat for that at all: no amount of
+       * sinking closes a joint between two blocks that do not overlap, which is
+       * what the residual open joints were. `arch.drift` is a gaussian, so the
+       * tail is thin — the body of the distribution, which is the part that
+       * carries the silhouette, is untouched.
+       */
+      const cap = wPrev0 * 0.85, off0 = Math.hypot(cx - pcx, cz - pcz);
+      if (off0 > cap) {
+        const t = cap / off0;
+        cx = pcx + (cx - pcx) * t;
+        cz = pcz + (cz - pcz) * t;
+      }
+      const off = Math.hypot(cx - pcx, cz - pcz);
+      const fL = off / wPrev0, fU = off / wz;
+      // The block below's crown has fallen this far under the block above's
+      // axis...
+      const dropL = hUpPrev * Math.min(2, exPrev[5] * fL * fL);
+      // ...and the block above's keel has risen this far over the block below's
+      // axis. The two hulls first touch wherever the surfaces are closest, so
+      // the joint only has to be sunk by the SMALLER of the two: a wide block
+      // stepped half a radius off a narrow one still catches that one's crown
+      // under its own flank.
+      const dropU = hDown * Math.min(2, ex[6] * fU * fU);
+      // **Only the part the joint cannot already absorb.** `rise` buries this
+      // course `ovPrev` metres into the one below it — 36 to 76 % of that
+      // block's own height, because `arch.lap` is a rise fraction of 0.24 to
+      // 0.64 — and the shoulder eats that budget before it opens anything.
+      // Sinking by the whole drop instead cost 30 % of every tor's height to
+      // close the 0.9 % of joints that were actually open, which is the
+      // measurement-is-not-the-bar trap in one line: `pinnacle` fell from a
+      // 12.8 m median to 8.4 m and the family exists to break the horizon of a
+      // plain at sixteen to twenty-six.
+      y -= Math.max(0, Math.min(dropL, dropU) - ovPrev);
+    }
     courses.push({
-      kind, dx: cx, dy: y + h, dz: cz, s, sx, sy, sz,
+      // `y` is the buried foot of the course, so the mesh origin sits its own
+      // UNDERSIDE above it — asymmetrically, which is the whole point.
+      kind, dx: cx, dy: y + hDown, dz: cz, s, sx, sy, sz,
       yaw: fabric + twist * (n > 1 ? i / (n - 1) : 0) + rng.gauss(0, 0.14),
       // The jitter on top of the lean stays small. A block tilted independently
       // of the stack it is in reads as a collapse, and the per-instance jitter
@@ -1518,30 +1656,22 @@ export function torPlan(
       pitch: lean * leanC + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
       roll: -lean * leanS + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
     });
-    // **An unsupported course has to sit DEEPER in the one below it.**
-    //
-    // Two ways a course stops being supported: it is wider than the block it
-    // stands on (the bedding term is what puts a proud collar on a hoodoo, and
-    // unchecked it puts a table on a stalk), or it is displaced far enough
-    // sideways that its centre is off the block below (`boss` steps by 0.70 of
-    // its own half-width). Both render as a balanced rock — "the same mushroom
-    // rock" is the judge's phrase and `handoff/rocks.md` records the identical
-    // shape from `_genOutcrop` as `zone_ostium_gorge`'s four-in-one-frame
-    // defect. `tmp/crop/vr2/r4-a.png` and `r5-a.png` are one of each.
-    //
-    // Widening and stepping are both allowed — they are two of this family's
-    // strongest silhouette parameters, and clamping the step instead cost the
-    // hoodoo row 20/24 -> 13/24. Doing either *while standing clear* is not.
-    const off = Math.hypot(cx - pcx, cz - pcz);
-    const clear = i > 0 && (wz > wPrev0 || off > wPrev0 * 0.55);
     // **A dipped course has to sit deeper, and the amount is arithmetic.** Two
     // blocks tilted by `lean` meet along a plane, and the corner furthest from
     // the contact stands `w * sin(lean)` proud of the centre — so an overlap
     // authored for level beds leaves exactly that much daylight under the high
     // corner. `handoff/rocks.md` records what daylight between two courses
     // renders as: a black line, and a black line is a gap.
-    const rise = 2 * h * (clear ? Math.max(lap, 0.58) : lap) - wz * Math.abs(Math.sin(lean)) * 0.9;
+    //
+    // `hDown + hUp` is the block's DRAWN height; `2 * ex[1] * s * sy` is its
+    // BOX, and the two differ by up to 60% of a half-height on `talus`. The
+    // stepping term that used to be spliced into `lap` here has moved to the
+    // top of the next iteration, where the offset it is about is known — see
+    // the shoulder note above. Widening is not deepened at all any more, and
+    // the measurement for that is there too.
+    const rise = (hDown + hUp) * lap - wz * Math.abs(Math.sin(lean)) * 0.9;
     pcx = cx; pcz = cz;
+    hUpPrev = hUp; exPrev = ex; ovPrev = (hDown + hUp) - rise;
     y += rise;
     // The stack's axis follows the lean, so the courses stay stacked as it
     // tips; the gaussian on top is the step that keeps it from being a column
@@ -2164,7 +2294,11 @@ export class Rocks {
         it.s *= 0.90 / Math.max(0.55, ex[0]);
         const wSelf = it.s * it.sx * ex[0];
         if (under && wSelf > under.w * 0.82) it.s *= (under.w * 0.82) / wSelf;
-        const hSelf = it.s * it.sy * ex[1];
+        // The two contact faces, not the box — see {@link hullExtents}. A
+        // knot's courses are the third site that authored a joint through
+        // `ex[1]`, alongside `stackPlan` and `torPlan`.
+        const hDown = it.s * it.sy * ex[3];
+        const hUp = it.s * it.sy * ex[4];
         it.bury = kind.bury * rng.range(0.35, 0.8);
         // The shared dip, plus a much-reduced independent jitter: the blocks of
         // one bed agree with each other, they are not each tipped at random.
@@ -2188,7 +2322,7 @@ export class Rocks {
           // loses the difference. Same term as `stackPlan` and `torPlan`, same
           // reason, measured by `probes/stackjoint.mts` on those two: 123 open
           // joints of 6207 before, 0 after.
-          it.y = under.top - 2 * hSelf * 0.30 + hSelf
+          it.y = under.top - (hDown + hUp) * 0.30 + hDown
             - wSelf * Math.abs(Math.sin(dipM)) * 0.9
             + placedScale(ex, it.s, it.sx, it.sy, it.sz, 0).sink;
           it.pitch = it.pitch * 0.4 + dipM * dipC * 0.6;
@@ -2199,7 +2333,7 @@ export class Rocks {
         // authored.
         laid[course].push({
           x: px, z: pz, w: it.s * it.sx * ex[0],
-          top: it.y + hSelf - placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury).sink,
+          top: it.y + hUp - placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury).sink,
         });
         it.far = true;
         out.push(it);
