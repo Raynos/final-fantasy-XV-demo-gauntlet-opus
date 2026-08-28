@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, type Vec3 } from './PartBuilder.ts';
+import { bakedParts, matResolver, PartBuilder, type Vec3 } from './PartBuilder.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { isMesh } from '../../util/three-guards.ts';
 import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
@@ -470,6 +470,11 @@ export class PoiKits {
   eco!: Ecology;
   mats!: PoiMats;
   quality!: number;
+  /**
+   * Turns a baked part's stored material name back into a material.
+   * See {@link matResolver}.
+   */
+  _mat!: (n: string) => THREE.Material | undefined;
   root!: THREE.Group;
   scene!: THREE.Scene;
   sites!: PoiSite[];
@@ -490,6 +495,7 @@ export class PoiKits {
   build() {
     const M = this.mats = poiMaterials();
     for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `poi_${k}`;
+    this._mat = matResolver(Object.values(M));
 
     const kits: Record<string, KitFn> = {
       haven: this._haven, parking: this._parking, reststop: this._restStop,
@@ -2343,7 +2349,6 @@ export class PoiKits {
     const rng = new Rng(hashId(p.id));
     const dress = dressAt(p.x, p.z);
     const yaw = this._yaw(p, rng);
-    const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
     const cull = SEAT_BY_TYPE[p.type] || SEAT_R;
     // A kit with an apron is seated at its footprint's 88th percentile and the
@@ -2355,15 +2360,35 @@ export class PoiKits {
     const base = seatsBare(p)
       ? seatY(this.eco, p.x, p.z, 2.4, BARE_SEAT_R)
       : this._base(p.x, p.z, probe, 2.2, cull);
-    // Published before the kit runs, so `_apron` can grade against the real
-    // ground without every kit having to carry the coordinates itself.
-    this._padCtx = { x: p.x, z: p.z, base, cull };
-    this._padStats = null;
-    const res = site.fn.call(this, B, site, { rng, dress, yaw, base }) || {};
     const g = new THREE.Group();
     g.name = `poi_${p.type}_${p.id}`;
     g.position.set(p.x, base, p.z);
-    B.build(g, { cast: false, receive: true, name: p.type });
+    /**
+     * The kit itself, served from the geometry bake when one is resident.
+     *
+     * The eight compounds boot prebuilds are **3.70 M vertices and 417 ms**,
+     * and `src/tools/probes/geosplit.mts` says where that goes: 2 ms in
+     * `_base`, 1 ms in `WearField.sampleInto`, 79 ms in `_apron` and 23 ms in
+     * the merge — so about 335 ms of it is the kit function lofting primitives,
+     * and all of it is a pure function of the sources in `GEO_SOURCES` plus a
+     * seed derived from the POI's own id.
+     *
+     * `base` is deliberately still computed live rather than cached with the
+     * geometry: it is a quarter of a millisecond, and it keeps the compound
+     * seated against the ground this page actually rasterised. The geometry
+     * above it was graded against the same number, because the terrain is in
+     * `GEO_SOURCES` and a moved heightfield re-bakes.
+     *
+     * `KitResult` — `cast` and `r` — rides back through the cache's `meta`
+     * channel, so a hit resolves the same defaults a build does.
+     */
+    const { meta: res } = bakedParts<KitResult>(`poi/${p.id}`, g, this._mat, (B) => {
+      // Published before the kit runs, so `_apron` can grade against the real
+      // ground without every kit having to carry the coordinates itself.
+      this._padCtx = { x: p.x, z: p.z, base, cull };
+      this._padStats = null;
+      return site.fn.call(this, B, site, { rng, dress, yaw, base }) || {};
+    }, { cast: false, receive: true, name: p.type });
     // ONE merged caster per site, instead of one per material. A kit is merged
     // per material because it has that many surfaces, not that many objects,
     // and a depth pass reads a material only for an alpha cutout -- so the

@@ -1,5 +1,5 @@
 import { bake } from './bake.mts';
-import { texBake, pruneStaleCanvasBake, TEX_SOURCES } from './texbake.mts';
+import { texBake, pruneStaleCanvasBake, pruneStaleGeoBake, TEX_SOURCES } from './texbake.mts';
 
 /**
  * Make sure the baked world artifacts exist before anything is served or built.
@@ -45,6 +45,15 @@ export function bakePlugin(): import('vite').Plugin {
         pruneStaleCanvasBake().then((pruned) => {
           if (pruned) console.warn('[texbake] dropped a stale painted-face cache — '
             + 're-bake it with `node src/tools/texbake.mts --canvas`');
+        }).catch(() => {}),
+        // And the geometry cache, for the same reason and with a sharper edge:
+        // geometry restored from a stale artifact is *well-formed* geometry of
+        // a previous world — a viaduct standing in the air over a heightfield
+        // that moved — and no gate in this repo can see that. Deleting it costs
+        // the ~1.2 s of boot it was saving and nothing else.
+        pruneStaleGeoBake().then((pruned) => {
+          if (pruned) console.warn('[texbake] dropped a stale geometry cache — '
+            + 're-bake it with `node src/tools/texbake.mts --geo`');
         }).catch(() => {}),
       ]).then(() => undefined);
       await done;

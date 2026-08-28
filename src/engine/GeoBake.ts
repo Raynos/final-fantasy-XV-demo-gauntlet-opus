@@ -112,6 +112,22 @@ const CTORS: Record<string, new (n: ArrayBufferLike | number, o?: number, l?: nu
   Uint16Array, Int16Array, Uint8Array, Int8Array, Uint8ClampedArray,
 } as never;
 
+/**
+ * Key prefix for the render quality tier, because geometry can depend on it.
+ *
+ * `PoiKits._base` seats a compound against `Terrain.drawnHeightAt(x, z,
+ * clipmap.cell0)` — the *rasterised* clipmap — and the apron is then graded
+ * against that number. Nothing guarantees the clipmap is configured the same
+ * way at `q=low` as at `q=ultra`, and the bake runs at ultra, so a `q=low`
+ * page reading ultra's vertices would be the stale-cache failure with no
+ * symptom, in a gate (`combatloop`, `integration`) that nobody photographs.
+ *
+ * Prefixing the key makes that a clean miss instead. Derived exactly as
+ * `Renderer` derives its own tier, so the two cannot disagree.
+ */
+const VARIANT = typeof location !== 'undefined'
+  ? (new URLSearchParams(location.search).get('q') || 'high') : 'high';
+
 let store: { index: Map<string, GeoEntry>, body: Uint8Array, base: number } | null = null;
 let recorder: Map<string, { parts: Array<{ mat: string, geo: THREE.BufferGeometry }>, meta: unknown }> | null = null;
 let loading: Promise<boolean> | null = null;
@@ -299,6 +315,7 @@ export function bakedGeo<M>(
   resolve: (name: string) => THREE.Material | undefined,
   build: () => { parts: GeoPart[], meta?: M },
 ): GeoResult<M> {
+  key = `${VARIANT}/${key}`;
   const hit = store && store.index.get(key);
   if (hit && store) {
     const parts: GeoPart[] = [];
@@ -339,6 +356,10 @@ export function bakedGeo<M>(
  * @param hash content hash of the generator sources, stamped into the header
  */
 export async function postGeoRecording(url: string, hash: string): Promise<number> {
+  // The key list, published for the bake tool: an artifact whose entries are
+  // empty is written exactly as happily as a full one, and "0 keys" in the
+  // stamp is the only thing that says so.
+  (window as unknown as { __GEO_KEYS: string[] }).__GEO_KEYS = [...(recorder ? recorder.keys() : [])];
   const raw = encodeGeoBake(hash);
   const gz = new Response(new Blob([raw as BlobPart]).stream().pipeThrough(new CompressionStream('gzip')));
   const body = await gz.arrayBuffer();

@@ -1,18 +1,19 @@
 import * as THREE from 'three';
 import type { Terrain } from './Terrain.ts';
-import { worldMap } from './map/WorldMap.ts';
 import {
   N as FIELD_N, HALF as FIELD_HALF, CELL as FIELD_CELL, BLEND_OUT as FIELD_BLEND_OUT,
   FAR_N as FIELD_FAR_N, FAR_HALF as FIELD_FAR_HALF, FAR_CELL as FIELD_FAR_CELL,
 } from './terrain/Field.ts';
 import { Noise } from '../util/Noise.ts';
 import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
+import { findTarns } from './water/Tarns.ts';
 import { buildShoreRibbon, type ShoreStats } from './water/Shore.ts';
 import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts';
 import { buildRivers, type RiverStats } from './water/River.ts';
 import { makeRiverWaterMaterial, makeRiverBankMaterial, type RiverUniforms } from './water/RiverMaterial.ts';
 import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
+import { bakedGeo, loadGeoBake } from '../engine/GeoBake.ts';
 
 /**
  * Lakes and pools.
@@ -184,6 +185,20 @@ export class Water {
     // with no message. `console.error` is the right loudness: `shoot.mts` exits
     // non-zero on any page error, so nothing can ship green, and the world still
     // boots so the defect can be photographed.
+    // The geometry bake, awaited here rather than at the top of `init`.
+    //
+    // `Water` is the THIRD system to boot, so unlike `TexBake` — whose first
+    // consumer is `Props`, the eighth — there is barely any head start to spend.
+    // Awaiting immediately before the first consumer gives the transfer all of
+    // Sky, Terrain and Water's own textures, reflection, bed, basins and
+    // surfaces, which is about 750 ms of overlap. Awaiting it at the top of
+    // `init` would spend that.
+    //
+    // And it IS awaited: `project/LANDMINES.md`, "a cache read before
+    // `Props.init()` misses on every boot" — a miss is indistinguishable from
+    // having no cache, and that silently made the cloud bake worth zero on its
+    // first measurement.
+    await bootPhase('Water.geobake', () => loadGeoBake());
     try { bootPhase('Water.shore', () => { if (this.enabled) this._buildShore(game, terrain); }); } catch (err) { console.error('[Water] shore ribbon:', err); }
     try { bootPhase('Water.rivers', () => this._buildRivers(game, terrain)); } catch (err) { console.error('[Water] rivers:', err); }
   }
@@ -234,11 +249,24 @@ export class Water {
    */
   _buildShore(game: Game, terrain: Terrain) {
     const specs = this.bodies.map((b) => ({ cx: b.cx, cz: b.cz, w: b.w, d: b.d, level: b.level, name: b.name }));
-    const built = buildShoreRibbon(terrain, specs);
-    this.shoreStats = built.stats;
-    if (!built.geometry) return;
-    this.shoreMat = makeShoreMaterial(this.shoreNoise);
-    const mesh = new THREE.Mesh(built.geometry, this.shoreMat);
+    // Built before the geometry, and named, because the bake stores a
+    // `material.name` per part and hands it back to `resolve`: a material's
+    // name is the only identity it has that survives a page load.
+    const mat = this.shoreMat = makeShoreMaterial(this.shoreNoise);
+    if (!mat.name) mat.name = 'water_shore';
+    // 0.13 M vertices of marching squares over the eroded field, 225-561 ms
+    // depending on how busy the box is, and a pure function of the terrain
+    // bake plus `this.bodies`. Both are in `GEO_SOURCES`.
+    const baked = bakedGeo<ShoreStats | null>('water/shore', (n) => (n === mat.name ? mat : undefined), () => {
+      const built = buildShoreRibbon(terrain, specs);
+      return {
+        parts: built.geometry ? [{ mat: mat.name, geo: built.geometry }] : [],
+        meta: built.stats,
+      };
+    });
+    this.shoreStats = baked.meta;
+    if (!baked.parts.length) return;
+    const mesh = new THREE.Mesh(baked.parts[0].geo, mat);
     mesh.name = 'shoreRibbon';
     // Before the water surface (renderOrder 5) so the submerged rows are
     // already in the buffer when the water reads the frame behind it.
@@ -404,64 +432,21 @@ export class Water {
    * run out of the basin, so the level drops to the rim. A tarn that leaks down
    * a hillside is worse than no tarn.
    *
+   * The arithmetic itself lives in `water/Tarns.ts`, because three separate
+   * files have now had the same one-global-level bug and the third of them —
+   * the world map's own chart raster — could not be fixed by copying it a
+   * fourth time. That module is the single copy; this is the game-side caller
+   * that binds it to the live `Terrain`.
+   *
    * @param exclude bodies already found, so a pin the sea reaches is skipped
    */
   _findTarns(terrain: Terrain, exclude: WaterBasin[]): WaterBasin[] {
-    const out: WaterBasin[] = [];
-    const covered = (x: number, z: number) => exclude.some((b) =>
-      Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5);
-
-    for (const poi of worldMap.poisOfType('fishing')) {
-      if (covered(poi.x, poi.z)) continue;
-      // Sea-adjacent pins have no business being a tarn even if the coarse
-      // basin scan missed them by a cell.
-      if (terrain.heightAt(poi.x, poi.z) < this.level + 4) continue;
-
-      const R = 105, N = 22;
-      const hs: number[] = [];
-      let rim = -Infinity;
-      for (let j = -N; j <= N; j++) {
-        for (let i = -N; i <= N; i++) {
-          const dx = (i / N) * R, dz = (j / N) * R;
-          const r = Math.hypot(dx, dz);
-          if (r > R) continue;
-          const h = terrain.heightAt(poi.x + dx, poi.z + dz);
-          hs.push(h);
-          if (r > R * 0.86) rim = Math.max(rim, -h);   // lowest point on the rim
-        }
-      }
-      if (hs.length < 64) continue;
-      hs.sort((a, b) => a - b);
-      // A quarter of the disc under water reads as a pond rather than a puddle.
-      const wanted = hs[Math.floor(hs.length * 0.26)];
-      const spill = -rim;                               // the rim's lowest height
-      const level = Math.min(wanted, spill - 0.35);
-      // Below the basin floor means there is no hollow here at all.
-      if (level <= hs[0] + 0.4) continue;
-
-      // Extent: how far the water actually reaches, not the sample disc.
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      for (let j = -N; j <= N; j++) {
-        for (let i = -N; i <= N; i++) {
-          const dx = (i / N) * R, dz = (j / N) * R;
-          if (Math.hypot(dx, dz) > R) continue;
-          if (terrain.heightAt(poi.x + dx, poi.z + dz) >= level) continue;
-          minX = Math.min(minX, dx); maxX = Math.max(maxX, dx);
-          minZ = Math.min(minZ, dz); maxZ = Math.max(maxZ, dz);
-        }
-      }
-      if (!(maxX > minX)) continue;
-      const pad = 8;
-      out.push({
-        cx: poi.x + (minX + maxX) / 2, cz: poi.z + (minZ + maxZ) / 2,
-        w: (maxX - minX) + pad, d: (maxZ - minZ) + pad,
-        level, name: poi.id,
-        // A third of the deepest point, so a shallow tarn gets a narrow rim
-        // rather than foaming from bank to bank.
-        foamBand: Math.max(0.12, Math.min(1.35, (level - hs[0]) * 0.34)),
-      });
-    }
-    return out;
+    return findTarns(
+      (x, z) => terrain.heightAt(x, z),
+      this.level,
+      (x, z) => exclude.some((b) =>
+        Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5),
+    );
   }
 
   _makeSurface(game: Game, b: WaterBasin) {

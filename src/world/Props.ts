@@ -14,6 +14,7 @@ import { Foraging } from './props/Foraging.ts';
 import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
 import { loadTexBake } from '../engine/TexBake.ts';
+import { loadGeoBake, releaseGeoBake } from '../engine/GeoBake.ts';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -49,6 +50,11 @@ export class Props {
     // baked texel cache has to be resident. The fetch started at module
     // evaluation, several systems ago, so this normally costs nothing.
     await bootPhase('Props.texbake', () => loadTexBake());
+    // Same contract for the geometry bake, and `Water` — third in the boot
+    // order — has normally already paid for it. Awaited, never assumed:
+    // `project/LANDMINES.md`, "a cache read before `Props.init()` misses on
+    // every boot".
+    await bootPhase('Props.geobake', () => loadGeoBake());
 
     const veg = game.get('Vegetation');
     this.ecology = (veg && veg.ecology) || new Ecology(game, game.seed ?? 1337);
@@ -107,6 +113,21 @@ export class Props {
     bootPhase('Props.poiPrebuild', () => this.poiKits.prebuildHeavy(game));
 
     bootPhase('Props.regalia', () => this._buildRegalia(game));
+    /*
+     * The last consumer on the boot path, so the container goes here.
+     *
+     * It is 165 MB inflated. Every entry a boot asks for has been taken by now
+     * and the index drops itself when it empties — but a kit whose site was
+     * excluded by a neighbour, or a quality tier that did not match, leaves an
+     * entry behind, and one entry is enough to hold the whole body alive for
+     * the session. In a process that is already 1.9 GB that is not a rounding
+     * error.
+     *
+     * It also means the 116 POI sites that stream in later do NOT get served
+     * from the cache. That is the trade: keeping them would keep all 165 MB
+     * resident forever to save work that is already spread over frames.
+     */
+    releaseGeoBake();
     this._camPos = new THREE.Vector3();
   }
 

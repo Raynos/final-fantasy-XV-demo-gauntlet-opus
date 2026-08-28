@@ -6,6 +6,7 @@
  *   node src/tools/texbake.mts --force     # always re-bake
  *   node src/tools/texbake.mts --check     # exit 0 if fresh, 1 if stale
  *   node src/tools/texbake.mts --canvas    # the browser bake (painted faces)
+ *   node src/tools/texbake.mts --geo       # the browser bake (geometry)
  *
  * The sibling of `src/tools/bake.mts`. That one caches the terrain field; this
  * one caches every keyed `DataTexture` the world dressing synthesises — see
@@ -36,6 +37,8 @@ const OUT = path.join(BAKE_DIR, 'tex.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'tex.json');
 const CANVAS_OUT = path.join(BAKE_DIR, 'texc.bin.gz');
 const CANVAS_STAMP = path.join(BAKE_DIR, 'texc.json');
+const GEO_OUT = path.join(BAKE_DIR, 'geo.bin.gz');
+const GEO_STAMP = path.join(BAKE_DIR, 'geo.json');
 
 /**
  * Everything whose contents can change the baked texels. A file that feeds a
@@ -90,12 +93,62 @@ const CANVAS_SOURCES = [
   'src/util/Rng.ts',
 ];
 
+/**
+ * Everything whose contents can change the baked **geometry**.
+ *
+ * The widest of the three lists, and it has to be: a POI compound is a
+ * function of its kit code, of the building blocks that code lofts, of the
+ * `Ecology` sampler that places it, of the terrain field it is seated and
+ * graded against, and of the map that says where it is. `src/engine/GeoBake.ts`
+ * is here because the container format and the quality-tier key prefix live in
+ * it; `PropMaterials.ts` is here because a part is stored against its
+ * `material.name`.
+ *
+ * `project/LANDMINES.md`: "a keyed generator whose file is not on that list is
+ * the whole bug". There is no runtime check that can catch a stale entry —
+ * geometry restored from the cache is well-formed geometry of the wrong world —
+ * so this errs wide and the vite plugin deletes rather than serves.
+ */
+const GEO_SOURCES = [
+  'src/engine/GeoBake.ts',
+  // the three consumers
+  'src/world/props/PoiKits.ts',
+  'src/world/props/Megastructures.ts',
+  'src/world/Water.ts',
+  // what they build with
+  'src/world/props/PartBuilder.ts',
+  'src/world/props/BuildKit.ts',
+  'src/world/props/Wear.ts',
+  'src/world/props/Seat.ts',
+  'src/world/props/Rocks.ts',
+  'src/world/props/ZoneDress.ts',
+  'src/world/props/PropMaterials.ts',
+  'src/world/water/Shore.ts',
+  'src/world/water/contour.ts',
+  'src/world/water/geo.ts',
+  // where they are placed, and on what
+  'src/world/veg/Ecology.ts',
+  'src/world/Terrain.ts',
+  'src/world/terrain/Clipmap.ts',
+  'src/world/terrain/Field.ts',
+  'src/world/terrain/FieldCodec.ts',
+  'src/world/terrain/Road.ts',
+  'src/world/terrain/Layers.ts',
+  'src/world/map/WorldMap.ts',
+  'src/world/map/RoadGraph.ts',
+  'src/util/Noise.ts',
+  'src/util/Rng.ts',
+];
+
 /** @returns content hash of a source list */
 async function hashOf(sources: string[]): Promise<string> {
   const hash = createHash('sha256');
   for (const rel of sources) {
     const p = path.join(ROOT, rel);
-    if (!existsSync(p)) continue;
+    // A path that does not exist contributes nothing, so a typo in one of these
+    // lists is a source that is never watched -- the exact shape of the
+    // stale-cache bug the lists exist to prevent. Say so rather than skip.
+    if (!existsSync(p)) { console.warn(`[texbake] source not found, NOT hashed: ${rel}`); continue; }
     hash.update(rel);
     hash.update(await readFile(p));
   }
@@ -128,6 +181,33 @@ export async function pruneStaleCanvasBake(): Promise<boolean> {
   if (!existsSync(CANVAS_OUT) || await canvasIsFresh()) return false;
   await rm(CANVAS_OUT, { force: true });
   await rm(CANVAS_STAMP, { force: true });
+  return true;
+}
+
+/** @returns true when the geometry artifact matches its sources */
+export async function geoIsFresh(): Promise<boolean> {
+  if (!existsSync(GEO_OUT) || !existsSync(GEO_STAMP)) return false;
+  try {
+    const stamp = JSON.parse(await readFile(GEO_STAMP, 'utf8'));
+    return stamp.hash === (await hashOf(GEO_SOURCES)) && (await stat(GEO_OUT)).size > 1024;
+  } catch { return false; }
+}
+
+/**
+ * Delete a stale geometry artifact.
+ *
+ * Same argument as {@link pruneStaleCanvasBake}: the runtime cannot hash the
+ * sources, so it cannot tell a stale cache from a fresh one, and geometry from
+ * a previous world is *well-formed* geometry — every gate stays green while the
+ * viaduct stands in the air. Removing it costs the boot time it used to cost
+ * and nothing else.
+ *
+ * @returns true if something was deleted
+ */
+export async function pruneStaleGeoBake(): Promise<boolean> {
+  if (!existsSync(GEO_OUT) || await geoIsFresh()) return false;
+  await rm(GEO_OUT, { force: true });
+  await rm(GEO_STAMP, { force: true });
   return true;
 }
 
@@ -364,10 +444,100 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
   }
 }
 
+/**
+ * The browser bake: generated geometry.
+ *
+ * A sibling of {@link texBakeCanvas} and, like it, a *browser* bake rather than
+ * a Node one — but for a different reason. The painted faces need a browser
+ * because they are drawn on a real 2D canvas. The geometry needs one because
+ * `PoiKits._base` seats every compound against `Terrain.drawnHeightAt`, which
+ * reads the **rasterised clipmap** — the renderer's own arithmetic, as
+ * `seatcheck.mts` proves. A Node bake would seat 124 compounds at subtly
+ * different heights and ship aprons graded against ground that is not the
+ * ground the player stands on: correct-looking geometry of the wrong world.
+ *
+ * So the page is booted with `?geobake=1`, which puts `GeoBake` into recording
+ * mode instead of reading, and every generator runs for real. What gets
+ * recorded is exactly what a boot builds — the eight prebuilt POI compounds,
+ * the five megastructures and the shore ribbon — because nothing else runs
+ * before `GAME.ready`.
+ *
+ * @returns true if it did work
+ */
+export async function geoBakeBrowser(opts: {force?: boolean, quiet?: boolean} = {}): Promise<boolean> {
+  if (!opts.force && await geoIsFresh()) return false;
+  const log = opts.quiet ? () => {} : (...a: unknown[]) => console.log('[texbake:geo]', ...a);
+  const t0 = Date.now();
+  const hash = await hashOf(GEO_SOURCES);
+
+  // THE LIVE TREE, always — the same argument as `texBakeCanvas`: this writes
+  // `src/public/baked/` for the checkout it is run from, and every materialised
+  // tree symlinks that directory, so baking some committed sha's geometry into
+  // the working tree's cache would re-shape everybody's world.
+  const { port: vitePort } = await buildServer({ build: resolveBuild(undefined) });
+
+  let resolveBody: (b: Buffer) => void = () => {};
+  const bodyPromise = new Promise<Buffer>((r) => { resolveBody = r; });
+  const sink = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-headers': '*',
+      }).end();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      res.writeHead(204, { 'access-control-allow-origin': '*' }).end();
+      resolveBody(Buffer.concat(chunks));
+    });
+  });
+  await new Promise<void>((r) => sink.listen(0, '127.0.0.1', () => r()));
+  const sinkPort = (sink.address() as net.AddressInfo).port;
+
+  // `q=ultra` deliberately: `GeoBake` prefixes every key with the quality tier,
+  // so this bakes the tier the 188 cold boots of a suite cycle actually use and
+  // a `q=low` gate takes a clean miss rather than somebody else's vertices.
+  const leased = await lease({ blank: true, w: 1600, h: 900, agent: 'texbake', lane: 'sweep' });
+  try {
+    const { page } = leased;
+    page.on('pageerror', (e) => log('PAGEERROR:', String(e).split('\n')[0]));
+    page.on('console', (m) => { if (m.type() === 'error') log('CONSOLE:', m.text().split('\n')[0]); });
+    log('booting the page with geometry recording on...');
+    await page.goto(`http://127.0.0.1:${vitePort}/?q=ultra&shoot=1&geobake=1`,
+      { waitUntil: 'domcontentloaded', timeout: 300000 });
+    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
+    const info = await page.evaluate(([url, h]: [string, string]) => {
+      const w = window as unknown as {
+        GEO_BAKE_POST: (u: string, h: string) => Promise<number>,
+        __GEO_KEYS?: string[],
+      };
+      return w.GEO_BAKE_POST(url, h).then((bytes) => ({ bytes, keys: w.__GEO_KEYS || [] }));
+    }, [`http://127.0.0.1:${sinkPort}/geo`, hash] as [string, string]);
+    const gz = await bodyPromise;
+    await mkdir(BAKE_DIR, { recursive: true });
+    await writeFile(GEO_OUT, gz);
+    await writeFile(GEO_STAMP, JSON.stringify({
+      hash, bytes: gz.length, keys: info.keys, at: new Date().toISOString(),
+    }, null, 2));
+    log(`${info.keys.length} keys, ${(gz.length / 1e6).toFixed(1)} MB gz `
+      + `(posted ${(info.bytes / 1e6).toFixed(1)} MB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    if (!info.keys.length) log('WARNING: nothing was recorded — the artifact is empty');
+    return true;
+  } finally {
+    await leased.release();
+    sink.close();
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const argv = process.argv.slice(2);
   if (argv.includes('--check')) {
-    process.exit((await texIsFresh()) && (await canvasIsFresh()) ? 0 : 1);
+    process.exit((await texIsFresh()) && (await canvasIsFresh()) && (await geoIsFresh()) ? 0 : 1);
+  } else if (argv.includes('--geo')) {
+    if (!(await geoBakeBrowser({ force: argv.includes('--force') }))) console.log('[texbake:geo] already fresh');
   } else if (argv.includes('--canvas')) {
     if (!(await texBakeCanvas({ force: argv.includes('--force') }))) console.log('[texbake:canvas] already fresh');
   } else if (!(await texBake({ force: argv.includes('--force') }))) {

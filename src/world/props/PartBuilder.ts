@@ -215,6 +215,32 @@ export function emitParts(parent: THREE.Object3D, parts: MergedPart[],
 }
 
 /**
+ * A `material.name` -> material lookup for {@link bakedParts}.
+ *
+ * A material's `name` is the only identity it has that survives a page load —
+ * `uuid` is regenerated — so that is what the bake stores per part. Which makes
+ * a name two *different* materials answer to poison: it would serve one
+ * structure's surface to another, silently. A colliding name is therefore
+ * dropped rather than resolved, which downgrades those entries from "cached
+ * wrong" to "not cached", and `bakedGeo` refuses to record an entry whose
+ * materials it cannot resolve.
+ *
+ * The collision is not hypothetical: `PropMaterials`' factories memoise on tint
+ * and roughness, so one object can appear under two keys of a kit's material
+ * table.
+ */
+export function matResolver(mats: Iterable<THREE.Material>): (n: string) => THREE.Material | undefined {
+  const by = new Map<string, THREE.Material | null>();
+  for (const m of mats) {
+    if (!m.name) continue;
+    const prev = by.get(m.name);
+    if (prev === undefined) by.set(m.name, m);
+    else if (prev !== m) by.set(m.name, null);
+  }
+  return (n) => by.get(n) || undefined;
+}
+
+/**
  * {@link PartBuilder.build}, served from the geometry bake.
  *
  * On a hit `fill` never runs: the kit function, every primitive it lofts and

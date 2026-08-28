@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
+import { bakedParts, matResolver, PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, curtainMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import { rockGeometry } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
@@ -328,6 +328,11 @@ export class Megastructures {
   movers!: Mover[];
   root!: THREE.Group;
   scene!: THREE.Scene;
+  /**
+   * Turns a baked part's stored material name back into a material.
+   * See {@link matResolver}.
+   */
+  _mat!: (n: string) => THREE.Material | undefined;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
@@ -340,6 +345,7 @@ export class Megastructures {
   build() {
     const M = this.mats = megaMaterials();
     for (const [k, m] of Object.entries(M)) m.name = `mega_${k}`;
+    this._mat = matResolver(Object.values(M));
 
     this._dreadnought();
     this._escort();
@@ -358,8 +364,24 @@ export class Megastructures {
    * looks north or west.
    */
   _dreadnought() {
+    const g = new THREE.Group();
+    bakedParts('mega/dreadnought', g, this._mat, (B) => this._dreadnoughtParts(B),
+      { cast: false, receive: false, name: 'dreadnought' });
+    g.position.set(-1240, 470, -1560);
+    g.rotation.y = 2.05;
+    g.rotation.z = 0.03;
+    this.root.add(g);
+    this.movers.push({ obj: g, base: g.position.clone(), drift: [0.42, 0, -0.16], bob: 9, rate: 0.021 });
+    this.dreadnought = g;
+  }
+
+  /**
+   * The hull itself, split out so the geometry bake can stand in for it.
+   * Nothing in here touches `this` except to read the material table, which
+   * is what makes it safe to skip entirely on a cache hit.
+   */
+  _dreadnoughtParts(B: PartBuilder) {
     const M = this.mats;
-    const B = new PartBuilder();
     const L = 640, W = 126, H = 88;
 
     // hull: a long asymmetric wedge, deepest a third of the way back
@@ -423,19 +445,24 @@ export class Megastructures {
       }
     }
 
-    const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'dreadnought' });
-    g.position.set(-1240, 470, -1560);
-    g.rotation.y = 2.05;
-    g.rotation.z = 0.03;
-    this.root.add(g);
-    this.movers.push({ obj: g, base: g.position.clone(), drift: [0.42, 0, -0.16], bob: 9, rate: 0.021 });
-    this.dreadnought = g;
   }
 
   /** Three magitek dropships running escort, closer and lower than the ship. */
   _escort() {
+    const g = new THREE.Group();
+    bakedParts('mega/escort', g, this._mat, (B) => this._escortParts(B),
+      { cast: false, receive: false, name: 'dropships' });
+    g.position.set(-820, 300, -980);
+    g.rotation.y = 2.05;
+    this.root.add(g);
+    this.movers.push({ obj: g, base: g.position.clone(), drift: [1.5, 0, -0.6], bob: 5, rate: 0.06 });
+  }
+
+  /**
+   * The three hulls. See {@link Megastructures._dreadnoughtParts}.
+   */
+  _escortParts(B: PartBuilder) {
     const M = this.mats;
-    const B = new PartBuilder();
     const rng = new Rng(3311);
     const body = [];
     for (const t of [-0.5, -0.3, 0.0, 0.28, 0.5]) {
@@ -456,11 +483,6 @@ export class Megastructures {
       put(M.beacon, new THREE.BoxGeometry(1.4, 1.4, 1.4), [-15, 3.5, 0]);
     }
 
-    const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'dropships' });
-    g.position.set(-820, 300, -980);
-    g.rotation.y = 2.05;
-    this.root.add(g);
-    this.movers.push({ obj: g, base: g.position.clone(), drift: [1.5, 0, -0.6], bob: 5, rate: 0.06 });
   }
 
   // ----------------------------------------------------------------- capital
@@ -715,8 +737,21 @@ export class Megastructures {
   }
 
   _capital() {
+    const g = new THREE.Group();
+    bakedParts('mega/capital', g, this._mat, (B) => this._capitalParts(B),
+      { cast: false, receive: false, name: 'capital' });
+    g.position.set(2560, 150, -3180);
+    g.rotation.y = -0.42;
+    this.root.add(g);
+    this.glows.push(this.mats.cityLit);
+  }
+
+  /**
+   * Plinth, curtain wall, tower cluster and spire. See
+   * {@link Megastructures._dreadnoughtParts}.
+   */
+  _capitalParts(B: PartBuilder) {
     const M = this.mats;
-    const B = new PartBuilder();
     const rng = new Rng(7702);
     const spread = 1500;
 
@@ -811,11 +846,6 @@ export class Megastructures {
       B.add(M.city, new THREE.CylinderGeometry(20, 30, 380, 6), mat4([-160 + sx * 120, 190, 420]));
     }
 
-    const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'capital' });
-    g.position.set(2560, 150, -3180);
-    g.rotation.y = -0.42;
-    this.root.add(g);
-    this.glows.push(M.cityLit);
   }
 
   // ------------------------------------------------------------------ meteor
@@ -826,8 +856,24 @@ export class Megastructures {
    * cool distance haze.
    */
   _meteor() {
+    const g = new THREE.Group();
+    // The placement comes back through the cache's `meta` channel: `gy` is
+    // `seatY` under the impact centre, computed inside the body a hit skips,
+    // and the geometry above it is graded against exactly that number.
+    const { meta } = bakedParts<{ x: number, gy: number, z: number, yaw: number }>(
+      'mega/meteor', g, this._mat, (B) => this._meteorParts(B),
+      { cast: false, receive: false, name: 'meteor' });
+    g.position.set(meta.x, meta.gy, meta.z);
+    g.rotation.y = meta.yaw;
+    this.root.add(g);
+  }
+
+  /**
+   * The masses, the crater rim and the shard field, plus where the group
+   * stands: `{ x, gy, z, yaw }` rides back through the bake as `meta`.
+   */
+  _meteorParts(B: PartBuilder) {
     const M = this.mats;
-    const B = new PartBuilder();
     const rng = new Rng(1919);
 
     // Centre of the `cauthess` zone in WorldMap.ts -- "a meteor the size of a
@@ -1016,10 +1062,7 @@ export class Megastructures {
           [rng.gauss(0.18, 0.16), out + Math.PI / 2 + rng.gauss(0, 0.35), rng.gauss(0, 0.22)]));
     }
 
-    const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'meteor' });
-    g.position.set(x, gy, z);
-    g.rotation.y = YAW;
-    this.root.add(g);
+    return { x, gy, z, yaw: YAW };
   }
 
   // ----------------------------------------------------------------- viaduct
@@ -1034,8 +1077,41 @@ export class Megastructures {
    * valleys instead of burying itself in the ridges between them.
    */
   _viaduct() {
+    bakedParts('mega/viaduct', this.root, this._mat, (B) => this._viaductParts(B),
+      { cast: false, receive: true, name: 'viaduct' });
+  }
+
+  // ------------------------------------------------------------------ update
+
+  /**
+   * Airborne hulls drift and breathe; the capital's windows come up at night.
+   * @param t seconds
+   * @param night 0 by day, 1 after dark
+   */
+  update(dt: number, t: number, night: number) {
+    for (const m of this.movers) {
+      m.obj.position.set(
+        m.base.x + m.drift[0] * t * 0.35,
+        m.base.y + Math.sin(t * m.rate * 6.0) * m.bob,
+        m.base.z + m.drift[2] * t * 0.35
+      );
+      m.obj.rotation.z = Math.sin(t * m.rate * 4.1) * 0.012;
+    }
+    for (const g of this.glows) g.emissiveIntensity = night * 1.6;
+    if (this.mats) {
+      this.mats.beacon.emissiveIntensity = 2.2 + 2.6 * (0.5 + 0.5 * Math.sin(t * 2.4));
+      this.mats.meteorGlow.emissiveIntensity = 1.6 + 1.4 * night;
+      this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
+    }
+  }
+
+  /**
+   * Piers, deck and rubble. Reads `seatY` off the terrain, which is in
+   * `GEO_SOURCES`, so a moved heightfield re-bakes this rather than leaving
+   * a viaduct standing in the air.
+   */
+  _viaductParts(B: PartBuilder) {
     const M = this.mats;
-    const B = new PartBuilder();
     const eco = this.eco;
     const rng = new Rng(5150);
     const a = { x: -1010, z: -740 }, b = { x: -790, z: 300 };
@@ -1110,30 +1186,5 @@ export class Megastructures {
         mat4([px, seatY(eco, px, pz, s, CULL) + s * 0.25, pz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
     }
 
-    B.build(this.root, { cast: false, receive: true, name: 'viaduct' });
-  }
-
-  // ------------------------------------------------------------------ update
-
-  /**
-   * Airborne hulls drift and breathe; the capital's windows come up at night.
-   * @param t seconds
-   * @param night 0 by day, 1 after dark
-   */
-  update(dt: number, t: number, night: number) {
-    for (const m of this.movers) {
-      m.obj.position.set(
-        m.base.x + m.drift[0] * t * 0.35,
-        m.base.y + Math.sin(t * m.rate * 6.0) * m.bob,
-        m.base.z + m.drift[2] * t * 0.35
-      );
-      m.obj.rotation.z = Math.sin(t * m.rate * 4.1) * 0.012;
-    }
-    for (const g of this.glows) g.emissiveIntensity = night * 1.6;
-    if (this.mats) {
-      this.mats.beacon.emissiveIntensity = 2.2 + 2.6 * (0.5 + 0.5 * Math.sin(t * 2.4));
-      this.mats.meteorGlow.emissiveIntensity = 1.6 + 1.4 * night;
-      this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
-    }
   }
 }
