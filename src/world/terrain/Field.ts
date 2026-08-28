@@ -49,6 +49,35 @@ export const FAR_CELL = (FAR_HALF * 2) / FAR_N;   // 32 m
 export const BLEND_OUT = 4020;
 const BLEND_IN = 3560;
 
+/**
+ * Heightfield ablation tokens — **the geometry half of `?post=`**.
+ *
+ * `TerrainMaterial`'s `?post=` set ablates the *shader*; this one ablates the
+ * *generator*, which is the only way to answer "is this fold shading or is it
+ * ground". Two consequences worth knowing before you use it:
+ *
+ * - The heightfield is baked, so a token here does nothing unless the field is
+ *   actually generated: pass **`--nobake`** alongside `--ablate`, on both sides
+ *   of the comparison. `shoot.mts` records both in `manifest.json`'s `variant`.
+ * - `Field` also runs under Node (`bake.mts`, `hydrocheck`, the probes), where
+ *   there is no `location`; there the same tokens come from **`FIELD_ABLATE`**,
+ *   comma-separated, so a term can be priced in metres without a browser.
+ *
+ * Tokens: `noterrace` (the macro pass's stratigraphic step quantiser),
+ * `nogullygeo` (`_addDetail`'s 139 m ridged incision), `nofarstep` (the frontier
+ * grid's 52-118 m step quantiser in `farHeight`), `nopeakband` (`_peak`'s two
+ * cliff bands).
+ */
+const FIELD_ABL: Set<string> = new Set(
+  ((typeof location !== 'undefined'
+    ? new URLSearchParams(location.search).get('post')
+    : (globalThis as { process?: { env?: Record<string, string | undefined> } })
+      .process?.env?.FIELD_ABLATE) || '')
+    .split(',').map((v: string) => v.trim()).filter(Boolean)
+);
+/** True when `?post=<tok>` (browser) or `FIELD_ABLATE=<tok>` (node) is set. */
+export function fieldAblate(tok: string) { return FIELD_ABL.has(tok); }
+
 const COARSE = 512;                             // macro pass resolution (16 m)
 const COARSE_CELL = (HALF * 2) / COARSE;
 const SEA = WORLD.seaLevel;
@@ -735,7 +764,8 @@ export class Field {
       const capH = 210 + 380 * (0.5 + 0.5 * n.fbm2(x * 0.0000975 - 13.1, z * 0.0000975 + 6.7, 2));
       if (h > capH) h -= (h - capH) * capAmt * 0.96;
     }
-    const stepAmt = smoothstep(0.24, 0.72, 1 - ch) * smoothstep(85, 200, h);
+    const stepAmt = FIELD_ABL.has('nofarstep') ? 0
+      : smoothstep(0.24, 0.72, 1 - ch) * smoothstep(85, 200, h);
     if (stepAmt > 0.002) {
       const stepH = 52 + 66 * (0.5 + 0.5 * n2.fbm2(x * 0.000116 + 27.7, z * 0.000116 - 5.5, 2));
       const t = h / stepH, fl = Math.floor(t), fr = t - fl;
@@ -909,7 +939,7 @@ export class Field {
         let v = h[idx];
         const tw = terr[Math.min(COARSE - 1, (j >> 2)) * COARSE + Math.min(COARSE - 1, (i >> 2))];
 
-        if (v > 26 && tw > 0.05) {
+        if (v > 26 && tw > 0.05 && !FIELD_ABL.has('noterrace')) {
           // Two pitches, not one. The 2.4 km field alone gives a whole massif a
           // single riser spacing, and one spacing repeated up a face is what
           // reads as corduroy rather than as bedrock; the 260 m field breaks it
@@ -952,7 +982,8 @@ export class Field {
         // These are *world-space* wavelengths — 140 m washes, 75 m rolls, 19 m
         // rubble — so they do not scale with the grid. Rescaling them for the
         // 4 m cell was what turned the badlands into dough.
-        const gully = n2.ridged2(x * 0.0072 + 2.2, z * 0.0072 - 4.4, 3, 2.1, 0.55);
+        const gully = FIELD_ABL.has('nogullygeo') ? 0
+          : n2.ridged2(x * 0.0072 + 2.2, z * 0.0072 - 4.4, 3, 2.1, 0.55);
         let d = -3.7 * Math.pow(Math.max(0, gully - 0.34) / 0.66, 1.5) * (0.4 + 0.9 * s);
         d += 2.9 * n2.fbm2(x * 0.0135, z * 0.0135, 3) * (0.6 + 0.95 * s);
         d += 1.45 * n3.fbm2(x * 0.038 + 4.1, z * 0.038 - 2.7, 3) * rough;
@@ -1084,6 +1115,11 @@ export class Field {
   _peak(cx: number, cz: number, radius: number, height: number) {
     const h = this.h, n3 = this.n3;
     const ff = formFrame(this.n3, cx, cz, 0.26);
+    // The dip direction of the cliff bands below. Per massif, not per cell:
+    // a bed has one attitude over the whole outcrop.
+    const bandDip = Math.atan2(cz, cx) + 1.7
+      + 3.1 * n3.fbm2(cx * 0.0021 + 41.7, cz * 0.0021 - 8.9, 2);
+    const bdx = Math.cos(bandDip), bdz = Math.sin(bandDip);
     const R = radius * 1.34;
     const box = this._box(cx, cz, R);
     for (let j = box.j0; j <= box.j1; j++) {
@@ -1115,9 +1151,26 @@ export class Field {
         // Two cliff bands in the upper third. `smax` rather than a hard step,
         // so the riser's top arris is weathered and the mesh does not draw a
         // crease along it.
-        for (const bandT of [0.46, 0.68]) {
+        //
+        // **A bench is a bed, so it has to dip.** `bandY` used to be
+        // `height * bandT^2.15` and nothing else: no azimuth, no position, no
+        // noise. Each band therefore closed round the massif at exactly ONE
+        // elevation -- 104 m and 212 m above the foot on Longwythe Peak -- and
+        // read as two horizontal lines ruled across a mountain. That is the
+        // "hard horizontal terracing" `poi_tomb` frames, and it is worth
+        // 5.07 mean/255 over 8.2% of that frame (`?post=nopeakband`, which
+        // deletes the bands and leaves a smooth cone -- the negative control,
+        // not the fix). `_mesa` has had the answer since it was written: a dip
+        // plane plus a wander, and bench widths cut by a gully field. This is
+        // the same three terms.
+        const bDip = (dx * bdx + dz * bdz) / radius;
+        const bWander = n3.fbm2(x * 0.0034 + 61.3, z * 0.0034 - 24.7, 3);
+        const bCut = 0.5 + 0.5 * n3.fbm2(x * 0.0069 - 12.4, z * 0.0069 + 30.2, 3);
+        for (const band0 of FIELD_ABL.has('nopeakband') ? [] : [0.46, 0.68]) {
+          const bandT = band0 * (1 + 0.13 * bDip + 0.13 * bWander);
           const bandY = height * Math.pow(bandT, 2.15);
-          const w = 1 - smoothstep(0, 0.085, Math.abs(t - bandT));
+          const w = (1 - smoothstep(0, 0.085, Math.abs(t - bandT)))
+            * (0.34 + 0.66 * smoothstep(0.30, 0.72, bCut));
           if (w > 0.002) v = smax(v, bandY + height * 0.055 * w, height * 0.012);
         }
 
