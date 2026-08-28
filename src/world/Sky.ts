@@ -631,6 +631,12 @@ export class Sky {
     this.fill = { color: new THREE.Color(0x9fc0ee), intensity: 0.18 };
 
     this.patch = new MaterialPatch(this.csm, this.u);
+    // Every `renderer.compile()` from here on scans first. `Game.init()`
+    // compiles the scene, and renders one warm frame, before `Warmup` gets to
+    // run a scan of its own -- so without this, every lit material visible at
+    // that moment builds a program with no CSM and no atmosphere, which the
+    // patch then immediately obsoletes. 60 dead programs, measured.
+    this.patch.guardCompile(renderer);
 
     this.pmrem = new THREE.PMREMGenerator(renderer);
     this.envScene = new THREE.Scene();

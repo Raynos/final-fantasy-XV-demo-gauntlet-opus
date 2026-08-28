@@ -23,6 +23,8 @@ export class MaterialPatch {
   count!: number;
   csm!: import('three/examples/jsm/csm/CSM.js').CSM;
   uniforms!: AtmosphereUniforms;
+  /** {@link guardCompile} installs its wrapper once. */
+  _guarded = false;
   /**
    * @param uniforms shared uniform objects (LUTs, fog, cloud shadow)
    */
@@ -32,8 +34,47 @@ export class MaterialPatch {
     this.count = 0;
   }
 
-  /** Walk the scene and patch anything new. Cheap enough to run every frame. */
-  scan(scene: THREE.Scene) {
+  /**
+   * Make every `renderer.compile()` on this renderer scan first.
+   *
+   * **This is worth 60 shader programs, measured.** `Game.init()` runs
+   * `renderer.compile(scene, camera)` and then one warm `post.render()` before
+   * `Warmup` — and therefore before `Warmup._patchAll()` — so every lit
+   * material visible at that moment compiled UNPATCHED. Then the patch landed,
+   * `needsUpdate` fired, and three compiled the same material again with the
+   * CSM defines and the `atmo1|` key. `src/tools/probes/progbare.mts` counts
+   * the survivors: 60 `physical` programs with neither, `usedTimes` 234, and
+   * `progused.mts` shows not one of them is bound by any frame in a
+   * twelve-shot spread of the corpus. They are compiled, held for the life of
+   * the page, and dead the instant they are born.
+   *
+   * The fix belongs here rather than in `Game.ts` — which is shared, and whose
+   * compile call is *correct*; it is only early. Wrapping the renderer makes
+   * the invariant "a compile is always preceded by a scan" true for every
+   * caller, including the two inside `Warmup`, instead of true for whoever
+   * remembered. Same shape as `BootProfile` wrapping `Game.add`.
+   *
+   * @param renderer the renderer whose `compile` should scan first
+   */
+  guardCompile(renderer: THREE.WebGLRenderer) {
+    if (this._guarded) return;
+    this._guarded = true;
+    const orig = renderer.compile.bind(renderer);
+    const self = this;
+    renderer.compile = function (scene, camera, targetScene) {
+      self.scan(scene);
+      return orig(scene, camera, targetScene);
+    };
+  }
+
+  /**
+   * Walk the scene and patch anything new. Cheap enough to run every frame.
+   *
+   * Takes an `Object3D` rather than a `Scene` because {@link guardCompile}
+   * hands it whatever `renderer.compile` was given, which three types as
+   * `Object3D`.
+   */
+  scan(scene: THREE.Object3D) {
     scene.traverse((o) => {
       if (!isMesh(o)) return;
       const m = o.material;
