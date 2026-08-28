@@ -68,6 +68,7 @@ import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import {
   downFacing, assertCardOrientation, tangentHandednessErrors, edgeConsistency,
+  assertAttributeContract,
 } from '../util/GeoAssert.ts';
 import type { GeoLike } from '../util/GeoAssert.ts';
 
@@ -235,6 +236,24 @@ const patched = sphere.clone();
 const sphereEdges = edgeConsistency(sphere as unknown as GeoLike);
 const patchedEdges = edgeConsistency(patched as unknown as GeoLike);
 
+/**
+ * The attribute-contract controls: the same quad, with and without a `uv`, put
+ * against a material that binds a map.
+ *
+ * `assertAttributeContract` was the one assert in `GeoAssert.ts` with no caller
+ * anywhere — not in a generator, not even here — which is the built-but-unwired
+ * disease `handoff/method.md` §9.4 names, applied to the library written to
+ * cure it. Both halves are controlled, because an assert that always throws and
+ * an assert that never throws are equally useless and look identical from a
+ * PASS.
+ */
+const noUv = quad();
+noUv.deleteAttribute('uv');
+const mapped = { map: {} };
+const contractCatches = thrown(() => assertAttributeContract(noUv as unknown as GeoLike, mapped, 'ctl'));
+const contractPasses = thrown(() => assertAttributeContract(ok as unknown as GeoLike, mapped, 'ctl'));
+const vcNoColor = thrown(() => assertAttributeContract(ok as unknown as GeoLike, { vertexColors: true }, 'ctl'));
+
 const controls: [string, string, boolean][] = [
   ['quad, correct', `${okDown} down-facing (expect 0)`, okDown === 0],
   ['quad, reversed', `${revDown} down-facing (expect 2)`, revDown === 2],
@@ -243,6 +262,9 @@ const controls: [string, string, boolean][] = [
   ['sphere / inside-out', `${(sphereOut * 100).toFixed(0)}% / ${(insideOut * 100).toFixed(0)}% outward (expect 100 / 0)`, sphereOut > 0.99 && insideOut < 0.01],
   ['sphere edge parity', `${sphereEdges.flipped} flipped over ${sphereEdges.interior} interior (expect 0)`, sphereEdges.flipped === 0],
   ['sphere, one tri flipped', `${patchedEdges.flipped} flipped (expect 3)`, patchedEdges.flipped === 3],
+  ['mapped quad, no uv', contractCatches, contractCatches === 'threw'],
+  ['mapped quad, with uv', contractPasses, contractPasses === 'did NOT throw'],
+  ['vertexColors, no color', vcNoColor, vcNoColor === 'threw'],
 ];
 let broken = 0;
 for (const [name, said, good] of controls) {
@@ -272,6 +294,19 @@ if (sets.includes('trees')) {
     if (t.leaves) rows.push(measure(`tree:${species}:leaves`, t.leaves));
   }
 }
+/**
+ * Every mesh whose geometry does not carry what its material binds.
+ *
+ * This is `assertAttributeContract` finally having a caller. §9.5 wrote it for
+ * the sibling's black megaliths — a UV-less mesh on a UV material — and it is
+ * the one assert here that needs a mesh and its MATERIAL together, which is why
+ * a geometry-only pass could never run it. The bestiary is the population this
+ * tool can build in bare Node that has both.
+ */
+const contract: string[] = [];
+/** How many material/mesh pairs were examined, and how many had anything to check. */
+let contractPairs = 0, contractBinding = 0;
+
 if (sets.includes('enemies')) {
   const { BESTIARY } = await import('../characters/enemies/Bestiary.ts');
   for (const [key, def] of Object.entries(BESTIARY)) {
@@ -281,7 +316,16 @@ if (sets.includes('enemies')) {
     proto.group.traverse((o: THREE.Object3D) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh || !m.geometry) return;
-      rows.push(measure(`enemy:${key}:${m.name || i++}`, m.geometry));
+      const label = `enemy:${key}:${m.name || i++}`;
+      rows.push(measure(label, m.geometry));
+      for (const mm of (Array.isArray(m.material) ? m.material : [m.material])) {
+        if (!mm) continue;
+        const md = mm as THREE.MeshStandardMaterial;
+        contractPairs++;
+        if (md.map || md.normalMap || md.aoMap || md.vertexColors) contractBinding++;
+        try { assertAttributeContract(m.geometry as unknown as GeoLike, md, label); }
+        catch (e) { contract.push(String((e as Error).message)); }
+      }
     });
   }
 }
@@ -297,6 +341,13 @@ console.log(`  tangent w disagreements   ${tanBad.length} geometries (${rows.fil
 for (const r of [...nan, ...badIdx, ...tanBad].slice(0, 20)) {
   console.log(`    ${r.name.padEnd(34)} nan ${r.nan}  badIndex ${r.badIndex}  tangent ${r.tangentBad}/${r.tangentTotal}`);
 }
+
+// The population is printed with the verdict, because a zero over a population
+// of zero is not a pass, it is a check that never ran — the failure mode this
+// tool's own controls exist to catch, one level up.
+console.log(`  material/mesh contract    ${contract.length} broken of ${contractPairs} mesh/material pairs, `
+  + `${contractBinding} of which bind a map, an aoMap, a normalMap or vertexColors (EXACT, and gated)`);
+for (const c of contract.slice(0, 20)) console.log(`    ${c}`);
 
 const flippedRows = rows.filter((r) => r.flipped > 0).sort((a, b) => b.flipped - a.flipped);
 console.log(`  edge-parity imbalance     ${flippedRows.length} geometries (RATCHETED, not gated — see below)`);
@@ -322,6 +373,8 @@ console.log('\nblind to: anything not buildable in bare Node (rocks, town, water
 console.log('          the asserts themselves have no such limit, call them from the');
 console.log('          generator); whether the winding matches the MATERIAL, since a');
 console.log('          DoubleSide material hides a flip; UV placement; shape; seating.');
+console.log('          The attribute contract sees PRESENCE and never correctness: a uv');
+console.log('          set of all zeroes, or the wrong uv set on the aoMap, passes it.');
 
 /* --------------------------------------------------------------- the ratchet */
 
@@ -356,9 +409,14 @@ if (setBaseline) {
   process.exit(0);
 }
 
-let fails = nan.length + badIdx.length;
+let fails = nan.length + badIdx.length + contract.length;
 if (nan.length) console.log(`\nFAIL — ${nan.length} geometries carry non-finite numbers.`);
 if (badIdx.length) console.log(`FAIL — ${badIdx.length} geometries index outside their own vertex range.`);
+// Gated, unlike the two ratcheted reads: it is exact, both of its controls are
+// verified above, and it is zero today. A missing `uv` under a bound map is a
+// flat colour and a missing `color` under `vertexColors` is black — both read
+// as a material decision, which is why nothing downstream ever reports them.
+if (contract.length) console.log(`FAIL — ${contract.length} meshes break their material's attribute contract.`);
 
 let base: Baseline | null = null;
 try { base = JSON.parse(await readFile(BASELINE, 'utf8')) as Baseline; } catch { base = null; }
@@ -387,4 +445,5 @@ if (!base) {
 }
 
 if (fails) process.exit(1);
-console.log(`\nPASS — 0 non-finite, 0 bad indices, 0 inside-out patches across ${rows.length} geometries.`);
+console.log(`\nPASS — 0 non-finite, 0 bad indices, 0 broken attribute contracts, 0 inside-out `
+  + `patches across ${rows.length} geometries.`);
