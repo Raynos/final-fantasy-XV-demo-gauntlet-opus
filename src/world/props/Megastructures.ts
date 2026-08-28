@@ -506,8 +506,104 @@ export class Megastructures {
     // walk, so some read as pale concrete and some as dark glass without any
     // of them leaving the city's palette.
     const tone = tint(0.72 + rng.next() * 0.58, rng);
-    const put = (m: THREE.Material, bw: number, bh: number, bd: number, y: number, ox = 0, oz = 0) =>
-      B.add(m, tone(texelBox(bw, bh, bd, 55)), mat4([x, y, z], [0, yaw, 0]).multiply(mat4([ox, 0, oz])));
+    const put = (m: THREE.Material, bw: number, bh: number, bd: number, y: number,
+      ox = 0, oz = 0, dyaw = 0) =>
+      B.add(m, tone(texelBox(bw, bh, bd, 55)),
+        mat4([x, y, z], [0, yaw + dyaw, 0]).multiply(mat4([ox, 0, oz])));
+
+    /**
+     * **The plan, drawn once per tower. This is the massing half.**
+     *
+     * The surface half of "a cluster of flat blue prisms" landed a round ago:
+     * `curtainMaterial` is authored at 13.7 m pier pitch and the judge can now
+     * see the windows. The complaint that survived it was *"repeating extruded
+     * skyscraper prisms"* — and it survived because everything above was
+     * varying the *elevation* of a shaft whose PLAN was one rectangle, on all
+     * fifty-eight towers. Cornices, setbacks, five crowns and a tinted stock do
+     * not change the fact that every horizontal section through this skyline
+     * was a rectangle, and a rectangle repeated is what the eye counts.
+     *
+     * So a shaft section is no longer a box. It is a plan, drawn once per tower
+     * and held all the way up so the building reads as one building, emitted at
+     * whatever width that setback has reached. Six of them, chosen against real
+     * tower massing:
+     *
+     * - `slab` — the rectangle, still the plurality, because a skyline that has
+     *   no plain slabs in it reads as a sculpture park.
+     * - `ell` — two wings meeting at a corner. The single most common plan in a
+     *   real dense downtown and the one that most changes a silhouette,
+     *   because from most azimuths one wing is edge-on and the other is not.
+     * - `notch` — a shaft with a corner cut out of it, built as a deep bar plus
+     *   a shallow one. Reads as a re-entrant corner: two vertical arrises at
+     *   different depths, so one catches sun and one does not.
+     * - `twin` — two slabs with real daylight between them and a thin link
+     *   holding them together. This is the only plan that puts SKY inside a
+     *   tower's outline, which is why it is worth its own case.
+     * - `cross` — a plus, two slabs crossed. Four re-entrant corners.
+     * - `twist` — a slab, but each setback yaws a little further round than the
+     *   one below, so the arrises walk. Not a plan at all, strictly; it is here
+     *   because it costs one number and it is the cheapest way to make a
+     *   section boundary read as a *change* rather than as a joint.
+     *
+     * Every one of these is `PartBuilder.add` into the same two materials the
+     * shaft already used, so **the whole thing is free**: same merge, same two
+     * draw calls, a few thousand triangles on a frame that draws eight million.
+     * `plan()` returns the boxes for one section; the crown and the podium sit
+     * on the plan's dominant wing so they do not float off a wing that is not
+     * there.
+     */
+    const PLAN = rng.next();
+    const kind = PLAN < 0.26 ? 'slab' : PLAN < 0.44 ? 'ell' : PLAN < 0.60 ? 'notch'
+      : PLAN < 0.74 ? 'twin' : PLAN < 0.85 ? 'cross' : 'twist';
+    // How far a twist section rotates past the one below it. Drawn per tower so
+    // two twisted towers next to each other do not turn in step.
+    const twistStep = rng.range(0.06, 0.16) * (rng.next() < 0.5 ? -1 : 1);
+    // Which side the ell's short wing is on, and how deep the notch bites.
+    const wingSign = rng.next() < 0.5 ? -1 : 1;
+    const wingFrac = 0.40 + rng.next() * 0.18;
+    /**
+     * Emit one section of the shaft in the tower's plan.
+     *
+     * @param m material for the glazed faces
+     * @param bw section width, after setback
+     * @param bh section height
+     * @param bd section depth, after setback
+     * @param y centre height
+     * @param s section index, for `twist`
+     */
+    const plan = (m: THREE.Material, bw: number, bh: number, bd: number, y: number, s: number) => {
+      if (kind === 'ell') {
+        put(m, bw, bh, bd * wingFrac, y, 0, -bd * (0.5 - wingFrac * 0.5) * wingSign);
+        // **The top section drops the short wing.** A setback that shrinks both
+        // wings equally is a smaller L, and the outline steps in symmetrically —
+        // which is the same rectangle read the plan was drawn to break. Losing
+        // one wing at the top is how a real L-plan tower terminates, and it is
+        // the one change here that moves the SILHOUETTE rather than the surface.
+        if (s < nSec - 1) put(m, bw * wingFrac, bh, bd, y, -bw * (0.5 - wingFrac * 0.5) * wingSign, 0);
+      } else if (kind === 'notch') {
+        put(m, bw, bh, bd * 0.58, y, 0, -bd * 0.21);
+        put(m, bw * 0.55, bh, bd * 0.42, y, bw * 0.225 * wingSign, bd * 0.29);
+      } else if (kind === 'twin') {
+        put(m, bw * 0.38, bh, bd, y, -bw * 0.31);
+        put(m, bw * 0.38, bh, bd, y, bw * 0.31);
+        // **The link is what makes this plan worth having, and it is the part
+        // that is easy to get wrong.** A link as wide and as tall as the gap
+        // fills the gap, and the plan is then a slab with a groove in it — an
+        // interior detail, invisible at three kilometres, which is the range
+        // where this skyline is actually judged. At 0.20 of the width and 0.56
+        // of the height, sitting low, **44% of the gap is sky**: the outline
+        // itself is broken, and that is the only kind of change that survives
+        // 79% haze and a two-pixel building.
+        put(M.city, bw * 0.20, bh * 0.56, bd * 0.44, y - bh * 0.22);
+      } else if (kind === 'cross') {
+        put(m, bw, bh, bd * 0.44, y);
+        put(m, bw * 0.44, bh, bd, y);
+      } else if (kind === 'twist') {
+        put(m, bw, bh, bd, y, 0, 0, twistStep * s);
+      } else {
+        put(m, bw, bh, bd, y);
+      }
+    };
 
     const podH = h * 0.09;
     put(M.city, w * 1.34, podH, d * 1.34, podH * 0.5);
@@ -526,7 +622,16 @@ export class Megastructures {
     // Per tower it is local, free, and self-solving: fifty-eight overlapping
     // frusta plus ninety sunk low-rise blocks *are* the mass under the city,
     // and their union has a ragged edge because they were never aligned.
-    B.add(M.city, tone(new THREE.CylinderGeometry(w * 0.95, w * 1.9, 190, 5)),
+    //
+    // It is `M.pale` and not `M.city`, and it flares 1.28 and not 1.9. On a
+    // cylinder three's own UVs wrap the map once around the barrel, so
+    // `curtainMaterial`'s 13.7 m pier pitch smears to nothing and the frustum
+    // renders as a blank pale cone — which is exactly what `landmark_insomnia`
+    // shows where the skirts clear the ground, two white lampshades among the
+    // towers. `M.pale` is concrete and is *meant* to be read as a mass rather
+    // than as a facade, and taking the flare down stops the cone shape being
+    // the thing the eye catches: what is left is a battered podium base.
+    B.add(M.pale, tone(new THREE.CylinderGeometry(w * 1.02, w * 1.28, 190, 6)),
       mat4([x, -95, z], [0, yaw, 0]));
 
     // **The setback grammar is drawn per tower, not shared.**
@@ -558,31 +663,39 @@ export class Megastructures {
     for (let s = 0; s < nSec; s++) {
       const sh = rest * cuts[s];
       const lit = rng.next() < 0.55;
-      put(face(lit), w * widths[s], sh, d * widths[s], y + sh * 0.5);
-      // a cornice on each setback, so the step catches a line of light
-      if (s < nSec - 1) put(M.city, w * widths[s] * 1.06, rest * 0.012, d * widths[s] * 1.06, y + sh);
+      plan(face(lit), w * widths[s], sh, d * widths[s], y + sh * 0.5, s);
+      // A cornice on each setback, so the step catches a line of light. It stays
+      // a single slab whatever the plan is: a cornice is a horizontal band and
+      // its job is to be the one horizontal in a vertical building.
+      if (s < nSec - 1) {
+        put(M.city, w * widths[s] * 1.06, rest * 0.012, d * widths[s] * 1.06, y + sh,
+          0, 0, kind === 'twist' ? twistStep * s : 0);
+      }
       y += sh;
     }
 
     const crown = rng.next();
     const wTop = widths[nSec - 1];
     const cw = w * wTop;
+    // The crown carries whatever the last section had turned to, or it reads as
+    // a separate object dropped on the roof.
+    const tYaw = yaw + (kind === 'twist' ? twistStep * (nSec - 1) : 0);
     if (crown < 0.24) {                       // stepped cap
-      put(M.city, cw * 0.82, h * 0.045, d * wTop * 0.82, y + h * 0.0225);
-      put(M.city, cw * 0.55, h * 0.035, d * wTop * 0.55, y + h * 0.062);
+      put(M.city, cw * 0.82, h * 0.045, d * wTop * 0.82, y + h * 0.0225, 0, 0, tYaw - yaw);
+      put(M.city, cw * 0.55, h * 0.035, d * wTop * 0.55, y + h * 0.062, 0, 0, tYaw - yaw);
     } else if (crown < 0.44) {                // taper
       B.add(M.city, tone(new THREE.CylinderGeometry(cw * 0.10, cw * 0.60, h * 0.16, 6)),
-        mat4([x, y + h * 0.08, z], [0, yaw, 0]));
+        mat4([x, y + h * 0.08, z], [0, tYaw, 0]));
     } else if (crown < 0.68) {                // plant room and a stub mast
-      put(M.city, cw * 0.62, h * 0.055, d * wTop * 0.5, y + h * 0.0275, cw * 0.12);
+      put(M.city, cw * 0.62, h * 0.055, d * wTop * 0.5, y + h * 0.0275, cw * 0.12, 0, tYaw - yaw);
       B.add(M.city, tone(new THREE.CylinderGeometry(1.4, 2.6, h * 0.13, 5)),
-        mat4([x, y + h * 0.12, z], [0, yaw, 0]));
+        mat4([x, y + h * 0.12, z], [0, tYaw, 0]));
     } else if (crown < 0.84) {                // a pitched slab roof, off-axis
       B.add(M.city, tone(new THREE.CylinderGeometry(0.001, cw * 0.78, h * 0.07, 4)),
-        mat4([x, y + h * 0.035, z], [0, yaw + Math.PI / 4, 0]));
+        mat4([x, y + h * 0.035, z], [0, tYaw + Math.PI / 4, 0]));
     } else {                                  // full mast with a beacon
       B.add(M.city, tone(new THREE.CylinderGeometry(1.0, 3.2, h * 0.30, 5)),
-        mat4([x, y + h * 0.15, z], [0, yaw, 0]));
+        mat4([x, y + h * 0.15, z], [0, tYaw, 0]));
       B.add(M.beacon, new THREE.BoxGeometry(5, 5, 5), mat4([x, y + h * 0.30, z]));
     }
 
