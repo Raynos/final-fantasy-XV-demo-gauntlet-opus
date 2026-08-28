@@ -11,6 +11,7 @@ import {
   container, membraneSag, tarpEnvelope, sandbagStack, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
 import { seatY } from './Seat.ts';
+import { findTarns, type TarnBasin } from '../water/Tarns.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial, rockMaterial,
@@ -128,9 +129,9 @@ const BARE_SEAT_R = 120;
  * deck it produces. So the two no-apron kits are named here, and the flag stays
  * where it is as the kit's own assertion of the same thing.
  *
- * `_fishing` is deliberately NOT in this list: its deck is set from the sea, not
- * from the ground (`max(1.4, seaLevel + 1.5 - base)`), and its piles run 3.4 m
- * below that, so it seats itself and a tighter base would only move the jetty.
+ * `_fishing` is deliberately NOT in this list: its deck is set from the *water*,
+ * not from the ground, and its piles run 3.4 m below that, so it seats itself
+ * and a tighter base would only move the jetty.
  */
 function seatsBare(p: Poi): boolean {
   return p.type === 'landmark' && !/lighthouse/.test(p.id);
@@ -468,6 +469,8 @@ export class PoiKits {
   /** Cut and fill the last pad measured, cubic metres. Read by `--debug`. */
   _padStats!: { fill: number; cut: number; toe: number } | null;
   eco!: Ecology;
+  /** Memoised inland water bodies; see {@link PoiKits._waterNear}. */
+  _tarns: TarnBasin[] | null = null;
   mats!: PoiMats;
   quality!: number;
   /**
@@ -1979,14 +1982,85 @@ export class PoiKits {
     return { cast: true, r: 26 };
   }
 
-  /** A fishing spot: a timber jetty on piles, a tackle shack and a boat. */
+  /**
+   * The nearest water surface to a point, and how far away it is.
+   *
+   * `WORLD.seaLevel` is not the answer to "how high is the water here" and has
+   * not been since `Water._findTarns` gave four fishing pins a body of their own
+   * at +36.9 to +80.5 m. `_fishing` asked exactly that question and got −6.5 m,
+   * with the consequences in that kit's own comment.
+   *
+   * Rings outward on a 6 m step to `R`, exactly the walk `tmp/water/near.mts`
+   * uses to report a pin's distance to water, so this and that instrument
+   * cannot disagree. The tarn list is computed once and kept: it is ten pins
+   * times two thousand height samples, which is nothing paid once and real if
+   * paid per kit.
+   *
+   * @param R how far out to look before calling the place dry
+   * @returns the surface height and the distance to it, or null for dry ground
+   */
+  _waterNear(x: number, z: number, R = 180): { level: number, dist: number } | null {
+    const t = this.eco.terrain;
+    if (!t) return null;
+    if (!this._tarns) this._tarns = findTarns((px, pz) => t.heightAt(px, pz), WORLD.seaLevel);
+    const surfaceAt = (px: number, pz: number) => {
+      for (const b of this._tarns!) {
+        if (Math.abs(px - b.cx) < b.w * 0.5 && Math.abs(pz - b.cz) < b.d * 0.5) return b.level;
+      }
+      return WORLD.seaLevel;
+    };
+    for (let r = 0; r <= R; r += 6) {
+      const n = r === 0 ? 1 : 72;
+      for (let k = 0; k < n; k++) {
+        const a = (k / 72) * Math.PI * 2;
+        const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        const lv = surfaceAt(px, pz);
+        if (t.heightAt(px, pz) < lv) return { level: lv, dist: r };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A fishing spot: a timber jetty on piles, a tackle shack and a boat.
+   *
+   * **Two of the ten pins have no water and this kit built them a jetty anyway.**
+   * The map stopped lying about them at `2b344e7` — they are drawn as
+   * unavailable — but the geometry went on standing: twenty-two metres of deck
+   * on ten pairs of piles, a moored rowboat and a handrail, on a hillside.
+   * `caem_shore` is 246 m from the nearest submerged ground and
+   * `rachsia_bridge` has none within 600 m (`tmp/water/near.mts`). So when
+   * there is no water within 180 m the place is not a waterside at all, and the
+   * kit builds what is actually there: the shack, the rod stands, the bench and
+   * the crate, with the boat hauled out on the ground beside them. A fishing
+   * camp that has lost its water reads as a place; a pier over dry grass reads
+   * as a bug, which is what it was.
+   *
+   * The threshold is 180 m and not the jetty's own 22 m length on purpose. Half
+   * the wet pins are already further from the water than the deck reaches —
+   * `galdin_pier` is 72 m out — and shortening or lengthening a jetty to meet a
+   * shoreline is a different job from deciding whether the place is a shore.
+   * (Galdin's shoreline in particular is a `Field.ts` sand shelf and belongs to
+   * the terrain lane; see `docs/plans/…the-standing-backlog.md` §WS-13.)
+   *
+   * **And the deck is set from the water that is actually there.** It used to be
+   * `max(1.4, WORLD.seaLevel + 1.5 - base)`, one global number, so at every
+   * inland tarn that expression collapsed to its own 1.4 m floor — and 1.4 m
+   * above the bank of a pond whose surface is 3 m above the bank puts the deck,
+   * the shack, the rod stands and the rowboat **under water**. Measured before
+   * the fix: 1.6 m under at Crestholm, 2.1 at Swainsmere, 2.1 at Archaean's
+   * Mirror, 1.5 at Maidenwater. All four of those bodies are three days old;
+   * this kit predates them.
+   */
   _fishing(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const water = this._waterNear(s.poi.x, s.poi.z);
     // the deck has to clear the water, whatever the ground is doing
-    const deck = Math.max(1.4, WORLD.seaLevel + 1.5 - ctx.base);
+    const deck = water ? Math.max(1.4, water.level + 1.5 - ctx.base) : 0.9;
     const L = 22;
+    if (!water) return this._fishingDry(B, world, put, ctx, deck);
     for (let i = 0; i < 10; i++) {
       const pz = -2 + (i / 9) * L;
       for (const sx of [-1.5, 1.5]) {
@@ -2022,6 +2096,40 @@ export class PoiKits {
       [-3.4, deck - 0.85, 13], [0, 0.3, 0], [0.62, 0.5, 1.7]);
     put(M.plank, new THREE.BoxGeometry(1.5, 0.1, 0.4), [-3.4, deck - 0.7, 13], [0, 0.3, 0]);
     return { cast: true, r: 16, noApron: true };
+  }
+
+  /**
+   * The same place with no water in it: everything but the pier.
+   *
+   * Shares `_fishing`'s shack, rod stands, bench and crate verbatim, and hauls
+   * the rowboat out on the ground on its side rather than mooring it in air.
+   * No deck, no piles, no handrail — those are the three things that only make
+   * sense over water, and they were the whole of the lie.
+   */
+  _fishingDry(
+    this: PoiKits, B: PartBuilder, world: THREE.Matrix4,
+    put: (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => void,
+    ctx: KitCtx, deck: number,
+  ): KitResult {
+    const M = this.mats, { rng } = ctx;
+    void world;
+    // tackle shack
+    put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, deck + 1.2, -3.5]);
+    put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, deck + 2.7, -3.5], [0, 0, 0.09]);
+    put(M.void, new THREE.BoxGeometry(1.0, 2.0, 0.14), [2.6, deck + 0.8, -1.72]);
+    put(M.lamp, new THREE.BoxGeometry(0.4, 0.2, 0.12), [4.4, deck + 2.4, -1.75]);
+    // rod stands, leaning where the water used to be
+    for (let i = 0; i < 4; i++) {
+      const pz = 2 + i * 2.4;
+      put(M.plank, new THREE.CylinderGeometry(0.04, 0.04, 3.2, 5), [1.4, deck + 1.4, pz], [0.4, 0, 0]);
+    }
+    put(M.plank, new THREE.BoxGeometry(2.2, 0.12, 0.5), [-1.2, deck + 0.5, 3.4]);
+    put(M.plank, new THREE.BoxGeometry(0.9, 0.7, 0.7), [-1.0, deck + 0.4, 6.2], [0, rng.next(), 0]);
+    // the boat, hauled out and heeled over on the grass
+    put(M.plank, new THREE.SphereGeometry(1.5, 10, 6, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5),
+      [-3.4, deck + 0.55, 5.4], [0, 0.3, 0.42], [0.62, 0.5, 1.7]);
+    put(M.plank, new THREE.BoxGeometry(1.5, 0.1, 0.4), [-3.4, deck + 0.7, 5.4], [0, 0.3, 0.42]);
+    return { cast: true, r: 12, noApron: true };
   }
 
   /**
