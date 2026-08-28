@@ -84,7 +84,18 @@ scene.traverse((o) => {
     if (py < minY) minY = py; if (py > maxY) maxY = py;
     if (v.z < minZ) minZ = v.z;
   }
-  if (behind === 8) return;
+  /*
+   * **A box that straddles the near plane does not project to a rectangle.**
+   * Perspective divide flips the sign behind the eye, so one corner behind the
+   * camera throws the screen box out to +-200 000 px and the mesh matches every
+   * rect you could ask about. The first run of this probe on a distant landmark
+   * came back with six near-camera POI meshes and nothing else, all of them
+   * "overlapping" a rect they are nowhere near. So a partially-behind mesh is
+   * dropped by default, which is right for the question this probe is for —
+   * naming a thing you can see in the frame — and `__PO_STRADDLE=1` keeps them
+   * for the rarer case where the subject IS the object under the lens.
+   */
+  if (behind > (window.__PO_STRADDLE ? 7 : 0)) return;
   if (maxX < rx || minX > rx + rw || maxY < ry || minY > ry + rh) return;
   const m = Array.isArray(o.material) ? o.material[0] : o.material;
   const maps = m ? MAPS.filter((k) => m[k]) : [];
