@@ -394,6 +394,11 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
   pass's missing frustum cull**, and the next is the same shadow-proxy merge
   applied to the NPCs — see `shadowProxy` in `world/town/Hammerhead.ts` and
   `world/props/PoiKits.ts` (duplicated in both; it belongs on `PartBuilder`).
+- **A perf sign-off is owed on the menu scrim.** WS-9 made a full-screen 26 px
+  `backdrop-filter` blur render for the first time — it had never run — and it
+  now runs on every menu frame. `uxcheck` passes 93/93 with no page errors but
+  does not time frames, so BRIEF's 33 ms rule is unverified against it.
+  `gameplay.mts` on a quiet tree settles it.
 - **`tf_stoch` has never been measured.** `splat.md` calls this its
   highest-priority remaining item: 6 array fetches per active layer instead of 4,
   ~2 layers typically live, so roughly +4 fetches per pixel, and the fragment
@@ -437,40 +442,59 @@ From `content-wire.md`, ranked there:
 Review close-ups with `node src/tools/probe.mts tmp/water/look.mts --shot …` —
 every corpus shoreline is 250 m+ from camera and cannot show this.
 
-## WS-9 — Harness and method debt (cheap, and it unblocks others)
+## WS-9 — Harness and method debt — **CLOSED 2026-08-28, all eight**
 
-- **`--hide` in `shoot.mts` is broken and it silently corrupts cost ablations.**
-  An ablation frame renders with ~320 draws and 4.5 M triangles *less streamed
-  content* than its control, whatever is hidden — measured by hiding one 4-mesh,
-  1,334-triangle waymark and watching **301 draws** leave the frame. **An
-  `--hide` delta against a plain control is not a cost.** Workaround until
-  fixed: difference two ablations against each other so the offset cancels.
-- **`GeoAssert.ts` is a library nothing calls** — precisely the built-but-unwired
-  disease `method.md` §9.4 names. Four one-line call sites are listed there.
-  Related: every lane landing a generator must add its entry to
-  `project/must-run.json`.
-- **`--set rocks` is not wired into `check` and should not be** as it stands: the
-  ratchet records *named pairs* and a tor's name is its seed index, so any edit
-  to `torPlan`'s draw order renumbers every subject. **The right gate is a
-  family-level ratchet** — fail if `distinct/n` falls below a recorded floor
-  (fin 19/24, hoodoo 20/24, pinnacle 21/24, boss 24/24, stack 24/24, base 8/8).
-  That is the method lane's change, not a caller's.
-- **`check.mts` renders a VOID perf run as a plain FAIL**, so a coordinator
-  reading only the PASS/FAIL column mistakes a void run for a regression. A
-  `VOID` column is a five-line change.
-- **`window.GAME` is still `any`** in `src/globals.d.ts`. Typing it `Game` puts
-  every `page.evaluate` body in the harness under the checker at once — real
-  work, and the right next piece for whoever picks up the no-`any` lane. The one
-  remaining tools-side `any` is `browser.d.ts`'s URL wildcard, and closing it
-  needs a `tsconfig.tools.json` path mapping, not a typing change.
-- **Re-seat the 13 floating landmarks** (`floatcheck --worst 20` lists them),
-  then re-take the float baseline and **restore `poiFloating: 0` by hand** — it
-  is pinned deliberately and the tool will overwrite it.
-- **Retrofit blindness lines** onto `seatcheck`, `creaturecheck`, `edgestat`,
-  `imagestats`, `driftcheck`.
-- `MapScreen` is 22 lines and unexamined, while `menu_map` and `menu_map_wide`
-  now point at very different-quality screens; six other `menu_*` screens got the
-  type pass by inheritance but no layout attention.
+Four of the eight were **already done** and this document did not know; the
+other four landed. Kept here rather than deleted because half of this section
+was wrong, and *how* it was wrong is the reusable part.
+
+**`--hide` was never broken the way this section said.** The claim was that an
+ablation frame renders with ~320 draws of *less streamed content* than its
+control. It was **one frame of shadow-cascade phase**. `Sky._updateCascades`
+refreshes the three cascades on a stride of `[1, 2, 4]` keyed on
+`game.time.frame`, and `Clouds.renderShadow` on `frame & 3`; `applyShot` calls
+`resetClock()`, so a pose **always ends on frame 8** — the one phase where all
+three cascades *and* the cloud shadow are due, and the most expensive frame of
+the cycle. The hide pass then stepped one more frame, so the control sat on 8
+and the ablation on 9. Held at `town_forecourt` the cycle reads
+`791 612 690 612 791 …`. The fix spends the last settle frame on the ablation
+rather than adding one after it. A 4-mesh waymark now costs **5 draws** where it
+read −301, and `poi_kits` **33** where it read −349 — and 1188 − 1160 = 28,
+exactly what the difference-two-ablations workaround was reaching for. `da7bfe2`,
+`PROTOCOL` 14, probe `_probe/hidephase.mts`. **Cost ablations are trustworthy
+again.**
+
+- **`assertAttributeContract` has a caller** — `geocheck` asserts it over the
+  bestiary, 0 broken of 21 mesh/material pairs. `ebdc699`. **Two build-time call
+  sites remain and belong to live lanes:** `assertConsistentWinding` →
+  `water-content`, `assertAttributeContract` in a generator → `landmarks`. Each
+  must be `try`/`catch` + `console.error`; **a throw inside `init()` hangs the
+  boot.**
+- **17 generator entry points** added to `must-run.json`, 56/56 reached, and
+  `reachcheck` now separates **DEAD** (instrumented, never ran) from **GONE**
+  (never instrumented — a stale name *or* a class its wrapper walk never
+  reached). `4ecdb3f`.
+- **Blindness lines** on `creaturecheck`, `driftcheck`, `imagestats`,
+  `reachcheck`. And **`anycheck` was reporting `0 any across 0 files`** — a
+  scanner that walked nothing, which is what "zero `any`" was resting on. It now
+  prints `0 in 0 of 534 files scanned`. `41eed1d`, `f176f07`.
+- **`MapScreen` and the six unphotographed `menu_*` screens** — capturing them
+  found that **`.menu-scrim`'s `backdrop-filter: blur(26px)` has never
+  rendered**: it computes correctly and produces nothing, because it samples its
+  own compositing layer's backdrop and inside `#menus` that is empty. Six arms
+  tested; only re-homing into `uiRoot` works, at 0.51 MB against 3.08 MB for
+  `position:fixed`, `will-change`, `translateZ(0)` and promoting `#menus`.
+  Gradient re-tuned `.74/.93 → .52/.72` against the now-live `brightness(.54)`.
+  `884e8c8`, `256fe06`, `64b54c8`.
+
+**Closed as already-done, four rows this document had stale:** the `VOID` column
+exists in `check.mts` (`VOID = 3`, `BUSY = 4`, excluded from `failed`, own
+summary line); the family-level rocks ratchet exists *and* is wired as `silrocks`
+at `--seeds 24 --reseeds 5`, with per-family minima over five resamples — a
+correctly lower floor than this plan's single-sample numbers; `window.GAME` is
+already `Game` and `browser.d.ts`'s wildcard already closed by a tsconfig path
+mapping; the 13 floating landmarks are already re-seated, `poiFloating` 0 against
+the pinned 0, instance floats 362 → 355.
 
 ## WS-10 — Creatures
 
@@ -608,14 +632,17 @@ without opening the handoff it lived in.
 | `combatloop` and `integration` can take warm leases once the viewport matches | `integration` needs `audio=force` in the query and no pooled page has it; `combatloop` matching the pool key costs **+28 s (42 -> 70)** to save a 7.5 s boot |
 | Chromium's disk cache can hold the 181 shader programs | `gl` and `metal` both compile +181 on a warm load; the cost is ANGLE's in-process translation, which no disk cache stores |
 | Skipping the shader warm-up is worth its 1.71 s line | **0.53 s**: `warm=off` boots 6.01 s against 6.54 s, because `postfx+compile` pays for it either way |
+| `--hide` renders less streamed content than its control, so an `--hide` delta is not a cost | **wrong for two months.** It was one frame of shadow-cascade phase: `resetClock()` lands every pose on frame 8, where all three cascades and the cloud shadow are due, and the hide pass stepped one frame further. A 4-mesh waymark reads **5 draws**, not −301 |
+| "zero `any`" | rested on `anycheck` reporting `0 across 0 files` — a scanner that walked nothing. It walks 534 files now, and the answer happens to still be zero |
+| `.menu-scrim`'s `backdrop-filter: blur(26px)` | **had never rendered.** It computes correctly and produces nothing: it samples its own compositing layer's backdrop, and inside `#menus` that is empty. Only re-homing into `uiRoot` fixes it — `position:fixed`, `will-change`, `translateZ(0)` and promoting `#menus` all cost 6× the memory and still do not work |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 
 ## Order
 
 **WS-1 first and alone** — its own costing says nothing in the environment can
-buy a point while that frame exists. WS-9's `--hide` fix before any cost
-ablation in WS-3/5/6. WS-2c before WS-2d. Everything else is parallel and
+buy a point while that frame exists. **WS-9 is closed, so the `--hide` gate on
+WS-3/5/6's cost ablations is lifted** (`da7bfe2`). WS-2c before WS-2d. Everything else is parallel and
 collides nowhere; the directory map is in each section.
 
 ## WS-11 — What phase 4's four lanes left, 2026-08-27
