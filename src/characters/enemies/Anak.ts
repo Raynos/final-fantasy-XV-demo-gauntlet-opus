@@ -13,12 +13,12 @@ import { mixc } from './Palette.ts';
  * sun would otherwise flatten into one. Everything here is authored against
  * that: the saddle is a stop darker than the flank, the belly a stop and a
  * half lighter, and the stripe sits exactly on the seam between them. */
-const DUN = 0xb2946a;         // flank, the animal's base value
-const DUN_MID = 0x9a7d55;     // the ticking's other end
-const DUN_DEEP = 0x7d6440;    // saddle over the topline
+const DUN = 0xa88a5e;         // flank, the animal's base value
+const DUN_MID = 0x8e7149;     // the ticking's other end
+const DUN_DEEP = 0x5e4a2b;    // saddle over the topline
 const DUN_DARK = 0x4f3f28;    // nuchal crest, facial blaze, ear rim
 const BAND = 0x241b12;        // the lateral stripe and the tail tuft
-const CREAM = 0xe0d2b0;       // belly, throat, inner leg
+const CREAM = 0xe8dcbe;       // belly, throat, inner leg
 const CREAM_HI = 0xf2e9d0;    // rump patch and muzzle band
 const SOCK = 0x35291d;        // black points from the knee down
 const HORN = 0x796850;
@@ -155,9 +155,9 @@ function buildPrototype() {
     // dun meets cream, and the cream underside below it. The stripe sits ON
     // the boundary rather than beside it, so even where the ring can only
     // spare two segments for it the two values it separates still read.
-    let c = mixc(flank, DUN_DEEP, clamp01((b - 0.05) / 0.55) * 0.80);
-    c = mixc(c, CREAM, Math.pow(clamp01((-b - 0.16) / 0.40), 2) * 0.95);
-    c = mixc(c, BAND, Math.exp(-Math.pow((b + 0.26) / 0.24, 2)) * 0.92);
+    let c = mixc(flank, DUN_DEEP, clamp01((b - 0.02) / 0.50) * 0.90);
+    c = mixc(c, CREAM, Math.pow(clamp01((-b - 0.14) / 0.38), 2) * 0.96);
+    c = mixc(c, BAND, Math.exp(-Math.pow((b + 0.24) / 0.28, 2)) * 0.95);
     // and the pale rump the tail flags against
     return mixc(c, CREAM_HI, clamp01((0.11 - u) / 0.11) * 0.62);
   };
@@ -268,12 +268,12 @@ function buildPrototype() {
       // a pale wedge into a face
       const blaze = clamp01(1 - Math.abs(p.x) / 0.052) * clamp01((p.z - 0.700) / 0.09)
         * clamp01((1.010 - p.z) / 0.05) * clamp01((p.y - 2.740) / 0.03);
-      c = mixc(c, DUN_DARK, blaze * 0.85);
+      c = mixc(c, DUN_DARK, blaze * 0.95);
       // a dark lid ring, so the eye is set in something rather than printed on
       const lid = Math.exp(-(
-        Math.pow((Math.hypot((Math.abs(p.x) - 0.070) / 0.046, (p.y - 2.838) / 0.042) - 0.92) / 0.34, 2)
-        + Math.pow((p.z - 0.752) / 0.055, 2)));
-      c = mixc(c, GLAND, lid * 0.85);
+        Math.pow((Math.hypot((Math.abs(p.x) - 0.070) / 0.055, (p.y - 2.838) / 0.050) - 1.45) / 0.40, 2)
+        + Math.pow((p.z - 0.752) / 0.070, 2)));
+      c = mixc(c, GLAND, lid * 0.9);
       // the lip line
       c = mixc(c, DUN_DARK, clamp01((2.735 - p.y) / 0.014) * clamp01((p.z - 0.900) / 0.05) * 0.7);
       // a pale muzzle band behind the nose leather
@@ -299,6 +299,10 @@ function buildPrototype() {
     // The eye is this animal's whole character: a prey animal's is huge, dark,
     // set high and wide enough on the skull to see behind itself. Radiance is
     // low — a wet highlight, not the predator's lit iris.
+    // A painted lid ring cannot survive being mostly *under* the eye globe;
+    // this darkens the skull's own vertices in a sphere around the socket, so
+    // the eye is set into a shadow instead of printed on a lit cheek.
+    B.occlude(0.075 * s, 2.836, 0.748, 0.085, 0.55);
     B.glow(EYE_GLOW, 2.4);
     sculptBlob(B, {
       center: [0.0755 * s, 2.838, 0.754], scale: [0.034, 0.038, 0.030], segU: 14, segV: 10,
@@ -341,7 +345,7 @@ function buildPrototype() {
       // The ribs have to be a *shape*, not a shade: at 26 steps four cycles is
       // 6.5 samples each, which is the finest a ring this size can carry
       // without the rings turning into streaks (the garula-mane rule).
-      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 25)) * 0.26 * (1 - smooth((u - 0.62) / 0.30)),
+      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 25)) * 0.34 * (1 - smooth((u - 0.66) / 0.28)),
       colorAt: (th, u) => mixc(mixc(HORN_DARK, HORN, clamp01((u - 0.12) / 0.55)),
         HORN_DARK, Math.max(0, -Math.sin(u * 25)) * 0.42),
       matAt: () => M_HORN,
