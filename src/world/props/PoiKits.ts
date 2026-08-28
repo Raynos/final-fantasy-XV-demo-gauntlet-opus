@@ -2299,6 +2299,19 @@ export class PoiKits {
       if (gy > wl + 0.3) { shackZ = z; bank = gy; break; }
     }
     if (bank === -1e9) { shackZ = bestZ; bank = best; }
+    // A shack is 4.6 by 3.8 m and a bank is not flat, so the seat is the LOWER
+    // corner of its own footprint rather than the reading at its middle. At
+    // `archaeans_mirror` the shore falls 3.75 m within two metres of the shack's
+    // waterward corner and that was the last standing float in the ten camps;
+    // dropping to the low corner puts the 1.6 m sill into the slope instead of
+    // over it. Never below the water — a sunk shack is not an improvement.
+    {
+      let low = bank;
+      for (const dx of [-2.6, 2.6]) {
+        for (const dz of [-2.2, 2.2]) low = Math.min(low, groundAtLocal(3.6 + dx, shackZ + dz));
+      }
+      bank = Math.max(wl + 0.2, Math.min(bank, low + 0.6));
+    }
     /**
      * **Every pile is as long as the water under it is deep.**
      *
