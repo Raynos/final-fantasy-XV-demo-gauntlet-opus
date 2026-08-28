@@ -76,10 +76,10 @@ export interface SpawnPlacement {
  * `WildTerritories` that "a coeurl in Leide is a level 22 coeurl and the same
  * coeurl in Cleigne is a level 45 coeurl", were both cosmetic.
  *
- * The curve is **fitted to the bestiary's own table** rather than invented:
- * across the shipped species from Sabertusk (lv 6, 780 hp, 60 damage) to Red
- * Giant (lv 50, 22 000 hp, 520 damage) it comes out at ×1.085 per level for HP
- * and ×1.058 for damage.
+ * The curve is **fitted to the bestiary's own table** rather than invented: a
+ * log-linear fit of all 23 shipped species against their own listed levels —
+ * Goblin (lv 11, 420 hp) through Titan (lv 45, 180 000 hp) — comes out at
+ * ×1.087 per level for HP and ×1.048 for damage, and ships as ×1.085/×1.058.
  *
  * **The factor is exactly 1 at the species' own listed level**, which is what
  * makes this safe to land: every posed capture, every `creaturecheck` pose and
@@ -89,11 +89,34 @@ export interface SpawnPlacement {
  */
 const LEVEL_HP = 1.085;
 const LEVEL_DMG = 1.058;
+/**
+ * And **poise**, which was left behind when HP and damage were scaled.
+ *
+ * A log-linear fit over all 23 shipped species against their own listed levels
+ * gives x1.087 for HP, x1.053 for poise and x1.048 for damage — so the poise
+ * column of the bestiary rises with level exactly as the other two do, and
+ * nothing was reading it. That is not cosmetic the way an unread nameplate is:
+ * `hurt()` spends `maxPoise` and staggers at zero, so a den lifted to the
+ * party's level got 1.8x the HP and **the same poise it had at level 14**, and
+ * therefore staggered just as often while taking nearly twice as long to kill.
+ *
+ * `probes/fightshape.mts` measured the consequence on the tree that had HP
+ * scaling and not this: a sabertusk den spent **28% of its enemy-frames
+ * staggered** and opened **0.27 attacks per second** across seven animals,
+ * against 0.99/s for the imperial patrol that is not lifted at all. A creature
+ * that is stagger-locked cannot have a rhythm, and the rhythm is the thing the
+ * combat lane's approach beat, camera and telegraphs exist to serve.
+ */
+const LEVEL_POISE = 1.053;
 
-/** The HP and damage multipliers for `level` against a species' own. */
+/** The HP, poise and damage multipliers for `level` against a species' own. */
 export function levelScale(baseLevel: number, level: number) {
   const d = level - baseLevel;
-  return { hp: Math.pow(LEVEL_HP, d), damage: Math.pow(LEVEL_DMG, d) };
+  return {
+    hp: Math.pow(LEVEL_HP, d),
+    poise: Math.pow(LEVEL_POISE, d),
+    damage: Math.pow(LEVEL_DMG, d),
+  };
 }
 
 export class Enemies {
@@ -224,6 +247,8 @@ export class Enemies {
       e.maxHp = Math.max(1, Math.round(e.maxHp * k.hp));
       e.hp = e.maxHp;
       e.damage = Math.max(1, Math.round(e.damage * k.damage));
+      e.maxPoise = Math.max(1, Math.round(e.maxPoise * k.poise));
+      e.poise = e.maxPoise;
     }
 
     const terrain = this.game.get('Terrain');
