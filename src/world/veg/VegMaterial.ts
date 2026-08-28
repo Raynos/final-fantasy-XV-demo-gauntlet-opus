@@ -353,6 +353,24 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
     // toward zero and the ramp would close back into a binary test at exactly
     // the distance where each leaf is biggest on screen. 0.06 keeps about two
     // pixels of ramp there and, at the distances that matter, costs nothing.
+    // Vegetation-albedo ablations, the twin of `TerrainMaterial`'s
+    // `gwhite`/`gwarm` and read from the same compile-time set. `sh(R-B)` is
+    // the mean R-B of the darkest quartile, and the mask of that quartile on
+    // `zone_fallgrove` is mostly CANOPY, not ground — so pricing the ground
+    // half of the albedo lever without pricing the plant half answers half a
+    // question. `vwhite` forces every plant albedo to 1 (the floor); `vwarm`
+    // is a strong warm shift with its own Rec.709 luma divided back out, so it
+    // moves hue and not value (the ceiling of the hue half).
+    //
+    // Placed after `<map_fragment>` so it takes the card texture *and* the
+    // instance tint, which is where a plant's colour actually ends up.
+    if (ABLATE.has('vwhite') || ABLATE.has('vwarm')) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <alphatest_fragment>', /* glsl */`
+        ${ABLATE.has('vwhite') ? 'diffuseColor.rgb = vec3(1.0);' : ''}
+        ${ABLATE.has('vwarm') ? 'diffuseColor.rgb *= vec3(1.35, 1.0, 0.62) * 0.9552;' : ''}
+        #include <alphatest_fragment>`);
+    }
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <alphatest_fragment>', /* glsl */`
       #ifdef USE_ALPHATEST
