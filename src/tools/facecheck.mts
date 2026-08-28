@@ -155,6 +155,16 @@ const LIMITS = {
  * stubble — so both candidate controls land on it and score 224 of 255. No
  * measurement of a mouth is possible under that, by this gate or by an eye.
  * Fix the beard and he stops being VOID.
+ *
+ * **Re-derived once the head stopped being inside out, and 60 survives.** The
+ * worry was that a face with real form has no blank patch left — the malar
+ * carries a cheekbone and the chin a mentolabial sulcus, and Noctis' control
+ * went 29.9 → 111.0 in the same commit that gave him a mouth. It is not that.
+ * Ignis reads **58.4** and Prompto **49.9** on the same frame with the same
+ * boxes, so a cheek with form still fits under 60. What puts Noctis over is a
+ * hard-edged **fringe shadow** cutting diagonally across his lit cheek, and
+ * Gladiolus is still his beard. Both are defects in the picture, which is what
+ * a VOID is supposed to mean.
  */
 const CONTROL_CEILING = 60;
 
@@ -585,6 +595,18 @@ return {
         // The two blank patches the control is the *blanker* of. See the note
         // at their use.
         chinL: screen([-0.012, FACE.mouth[1] - 0.030, 0.077]), chinR: screen([0.012, FACE.mouth[1] - 0.030, 0.077]),
+        // A third candidate on the masseter -- outboard of the mouth corner,
+        // above the jawline, the one large patch of an adult male face that is
+        // featureless at this range -- was tried at (42, -73, 58) and
+        // (38, -86.5, 52) once the head stopped being inside out, and won
+        // neither time: Noctis' control stayed at 110.9-111.4 of range. It is
+        // not that the controls are badly placed. It is that the fringe
+        // throws a hard-edged black stripe diagonally across his lit cheek,
+        // (look at tmp/shots/p5-ctl/noctis_facecheck.png), and a 17 x 14 mm
+        // box cannot dodge it anywhere on that half of that face. Ignis 58.4
+        // and Prompto 49.9 -- the two with no fringe over the cheek -- say
+        // CONTROL_CEILING = 60 is still the right number for a face that has
+        // form. Fix the fringe shadow, not the control.
         sideL: screen([-0.038, -0.0450, 0.066]), sideR: screen([0.038, -0.0450, 0.066]) },
   pxPerMm,
   noseLeadMm: mm(prn - chinZ),
