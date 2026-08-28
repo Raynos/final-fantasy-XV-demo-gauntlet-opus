@@ -84,6 +84,47 @@ function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
  * rather than keeping a second one is the plan's own thesis -- archetype
  * families out of one recipe, not a second, worse recipe per scale.
  */
+/**
+ * **Texture scale on the megastructure rock is stated in METRES PER TILE, not
+ * in tiles per object.**
+ *
+ * `uvScale` is the constant {@link splitNormals} bakes into the per-face
+ * triplanar UVs, and because it is applied *after* `rockGeometry` normalises
+ * the blank to `size`, its units are **tiles per world metre**. `rockMaterial`
+ * lays its Worley joint network at frequency 7 inside one tile, so
+ *
+ *     joint cell (m) = 1 / (7 * uvScale)
+ *
+ * The old value was `22 / (r * 1.95)` -- *twenty-two tiles across the mass
+ * whatever its size*. That is object-referenced, and it has two consequences,
+ * both visible in a capture:
+ *
+ * - **The five Meteor masses did not agree with each other.** `r` runs 300 down
+ *   to 165, so `uvScale` ran 0.0376 up to 0.0684 -- a 1.8x step in tile size
+ *   between masses that interpenetrate. Two halves of one landmark carried the
+ *   same rock at two scales, which is the one thing a shared material is for.
+ * - **The joint network landed at 3.8 m on the largest mass.** `zone_mencemoor`
+ *   stands 1 714 m out at fov 42 over 900 px, so a pixel there is **1.39 m**:
+ *   a 3.8 m cell is 2.7 px. Below about six pixels a joint network does not
+ *   read as jointing -- it mips to a uniform grey and the mass renders as one
+ *   flat value, which is what `tmp/shots/lm-base/zone_mencemoor.jpg` shows.
+ *
+ * So both numbers below are metres, chosen against that 1.39 m/px:
+ *
+ * - `MASS_M_PER_TILE = 70` puts the joint cell at **10 m -- 7.2 px** at
+ *   `zone_mencemoor`, and it is the same 10 m on all five masses.
+ * - `EJECTA_M_PER_TILE = 14` gives the ejecta and rim blocks a **2 m** cell.
+ *   Those are 20-150 m stones standing on the Disc, so they are the pieces a
+ *   player can walk up to; at 3-5 km they are 20-50 px and mip to a value,
+ *   which is correct.
+ *
+ * The boulder default (`rockGeometry`'s `uvScale = 0.62`) is 1.61 m per tile
+ * and a 0.23 m joint -- the same rule at the range a boulder is read from.
+ */
+const MASS_M_PER_TILE = 70;
+/** @see MASS_M_PER_TILE */
+const EJECTA_M_PER_TILE = 14;
+
 function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
   // A 330 m mass and a 5 m lump of rubble cannot carry the same triangle count.
   // `IcosahedronGeometry`'s `detail` subdivides each of the twenty faces into
@@ -113,13 +154,11 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
     // rock material's normal map is sub-pixel and the mesh is the whole read.
     // Gullies put relief back at a frequency the eye can resolve at that range.
     gully: r > 120 ? 0.3 : r > 40 ? 0.18 : 0, gullyFreq: 3.6,
-    // Twenty-two tiles across the mass, not three hundred and not six. The rock map's default
-    // 0.62 tiles/m is authored for a boulder you walk up to; on a 500 m mass
-    // seen from 1.5 km every tile is a fraction of a pixel and the whole thing
-    // renders as one flat grey. Relief has to sit at a frequency the eye can
-    // actually resolve at the range the object is seen from -- the same Nyquist
-    // argument the plan makes about displacement octaves, from the other end.
-    uvScale: 22 / (r * 1.7),
+    // One tile per 14 world metres, the same on every shard whatever its size.
+    // This was `22 / (r * 1.7)` -- twenty-two tiles across the shard -- so a
+    // 20 m stone got a 1.5 m tile and a 74 m one a 5.7 m tile out of the same
+    // material, standing side by side. See {@link MASS_M_PER_TILE}.
+    uvScale: 1 / EJECTA_M_PER_TILE,
   });
 }
 
@@ -200,7 +239,7 @@ function meteorMass(seed: number, r: number, stretch: number[]) {
     // fraction of the radius a cut *leaves*, so more of them and slightly
     // deeper is what turns a sphere into a polyhedron rather than a dented ball.
     bite: 0.74, bedding: 0, chips: 18, round: 0.02, crease: 26, weather: 0.06,
-    size: r * 1.95, gully: 0.20, gullyFreq: 3.0, uvScale: 22 / (r * 1.95),
+    size: r * 1.95, gully: 0.20, gullyFreq: 3.0, uvScale: 1 / MASS_M_PER_TILE,
   });
 }
 
