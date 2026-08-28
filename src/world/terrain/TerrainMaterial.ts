@@ -1646,8 +1646,37 @@ void tf_shade() {
 }
 `;
 
+/**
+ * Ground-albedo ablations, read at module scope because they are *compile-time*
+ * branches — the same reason `VegMaterial`'s `nogcontact` / `gcmax` are read
+ * there rather than passed as a uniform.
+ *
+ * These exist to price WS-2a, and specifically to answer a question a frame
+ * cannot: `imagestats`' `sh(R-B)` is the mean R-B over the darkest quartile,
+ * and the claim that outdoors that quartile is *ground* is the whole basis for
+ * filing the daylight shadow-warmth miss against terrain albedo rather than
+ * against the ambient. A weak reading from any albedo edit is ambiguous between
+ * "small effect" and "terrain is not what those pixels are", and only a
+ * positive control separates them.
+ *
+ *   `?post=gwhite` — terrain albedo forced to 1. Whatever `sh(R-B)` is left is
+ *                    lighting, not ground colour: the floor of this lever.
+ *   `?post=gwarm`  — a strong warm shift at *constant luma* (the multiplier's
+ *                    own Rec.709 luma is divided out), so it separates "warmer"
+ *                    from "brighter". The ceiling of the hue half of the lever.
+ *
+ * Both go on `tfAlbedo` after every regional tint, so they price the surface a
+ * pixel actually shows rather than a layer recipe upstream of six multiplies.
+ */
+const ABLATE = typeof location !== 'undefined'
+  ? new Set((new URLSearchParams(location.search).get('post') || '')
+    .split(',').map((s) => s.trim().toLowerCase()))
+  : new Set<string>();
+
 const FRAG_MAP = /* glsl */`
 tf_shade();
+${ABLATE.has('gwhite') ? 'tfAlbedo = vec3(1.0);' : ''}
+${ABLATE.has('gwarm') ? 'tfAlbedo *= vec3(1.35, 1.0, 0.62) * 0.9552;' : ''}
 diffuseColor.rgb *= tfAlbedo;
 `;
 
