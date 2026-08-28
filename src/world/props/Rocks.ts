@@ -2563,7 +2563,15 @@ export class Rocks {
     for (const k of KINDS) {
       const [nearCap, farCap] = CAP[k.key];
       const nearMax = Math.max(8, Math.round(nearCap * q));
-      const geo = rockGeometry(k.seed, k.opts);
+      /*
+       * **EXPERIMENT — WS-13's open question, being priced.** `366e17d` added
+       * `tintNorm` and left it off here on purpose, so the Meteor's before and
+       * after would be readable. The row it left open is whether the instanced
+       * field wants it too. This arm turns it on; the corpus diff against the
+       * parent commit is the answer, and the message on whichever commit
+       * follows this one carries the number.
+       */
+      const geo = rockGeometry(k.seed, { ...k.opts, tintNorm: true });
       const ex = hullExtents(geo);
       this.hy.set(k.key, ex[1]);
       this.ext.set(k.key, ex);
