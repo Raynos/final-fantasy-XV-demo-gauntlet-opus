@@ -137,6 +137,12 @@ const GEO_SOURCES = [
   'src/world/water/Tarns.ts',
   'src/world/water/contour.ts',
   'src/world/water/geo.ts',
+  // Every plant, boulder and forage point now asks `Water.mask` where the water
+  // surface is, and the mask is the river sheet's own triangles — so the file
+  // that emits them decides where a bush may stand, and a POI compound graded
+  // against `Ecology` moves with it.
+  'src/world/water/River.ts',
+  'src/world/water/WaterMask.ts',
   // where they are placed, and on what
   'src/world/veg/Ecology.ts',
   'src/world/Terrain.ts',

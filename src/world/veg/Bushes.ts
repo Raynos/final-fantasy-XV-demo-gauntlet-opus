@@ -3,7 +3,6 @@ import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { hashU } from './Cluster.ts';
 import { hash3 } from './Ecology.ts';
-import { WORLD } from '../map/WorldMap.ts';
 import { pickFrom } from './Biomes.ts';
 import type { TreeSpec } from './TreeBuilder.ts';
 import { buildTree } from './TreeBuilder.ts';
@@ -757,7 +756,10 @@ export class Bushes {
           // open water: lily pads, floating on the plane itself
           if (roll > b.lilyD * 0.34 * Math.min(1, depth * 0.5)) continue;
           kind = 'lily';
-          y = WORLD.seaLevel;
+          // The surface it floats on, not the sea plane. `waterDepth` now
+          // answers for rivers and tarns too, so without this a lily pad in a
+          // tarn at +53 m was placed at −6.5 and fell sixty metres.
+          y = eco.waterLevel(x, z);
         } else if (depth > -1.1 && depth < 0.5 && b.reedD > 0) {
           // the water line — a band about a metre and a half wide
           if (roll > b.reedD * 0.72) continue;

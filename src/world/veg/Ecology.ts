@@ -11,6 +11,7 @@ import type { ErosionSample } from '../terrain/Field.ts';
 import { beachMask } from '../terrain/Field.ts';
 import { maternScatter } from './Cluster.ts';
 import { PAD_R } from '../props/PoiKits.ts';
+import type { WaterMask } from '../water/WaterMask.ts';
 import type { ClusterPoint } from './Cluster.ts';
 
 // `hash3` moved down to `Cluster.ts` — this file is the layer above it — and is
@@ -111,6 +112,8 @@ export class Ecology {
   worldRadius!: number;
   /** Reused erosion sample. `erosionAt` writes into it and returns it. */
   _ero!: ErosionSample;
+  /** `Water.mask`, resolved on first use; `undefined` until then. See {@link _mask}. */
+  _wmask?: WaterMask | null;
   /**
    * @param game the Game instance (needs .get('Terrain'))
    * @param seed master seed
@@ -351,10 +354,52 @@ export class Ecology {
   veg(x: number, z: number): VegBiome { return vegAt(x, z); }
 
   /**
+   * The water surface over this point — **not** `WORLD.seaLevel`.
+   *
+   * This was `WORLD.seaLevel` for the whole life of the file, and it is the
+   * fourth time that one assumption has produced a bug: `Fishing._survey`
+   * called four tarns dry with water six metres from the pin, `rasterChart`
+   * painted no blue under any of them, `PoiKits._fishing` built a jetty on dry
+   * rock — and here, every population grew straight up through the rivers and
+   * the tarns, because a reach at +180 m is not within two hundred metres of
+   * the sea plane and so `waterDepth` came back at −190.
+   *
+   * `Water.mask` is the single answer, derived from the sheet that is actually
+   * drawn (`water/WaterMask.ts`). Floored at the sea plane, so ground no body
+   * and no river covers behaves exactly as it did — which is the property that
+   * keeps the Vesperpool a drowned forest. Its floor is 20 m *below* the sea
+   * plane, so it is already sea, already covered by the floor, and this change
+   * cannot move a single tree in it: the level here only ever goes UP.
+   */
+  waterLevel(x: number, z: number) {
+    const m = this._mask();
+    if (!m) return WORLD.seaLevel;
+    const lv = m.levelAt(x, z);
+    return lv > WORLD.seaLevel ? lv : WORLD.seaLevel;
+  }
+
+  /**
+   * `Water.mask`, or null when there is no `Water` — the scatter probes build
+   * an `Ecology` over a bare `Terrain`, and the samplers must still answer.
+   *
+   * Resolved lazily and once. `Vegetation` and `Props` both initialise after
+   * `Water`, so the first call is always after the mask exists; asking in the
+   * constructor would cache the null.
+   */
+  _mask(): WaterMask | null {
+    if (this._wmask !== undefined) return this._wmask;
+    const w = this.game && typeof this.game.get === 'function'
+      ? (this.game.get('Water') as { mask?: WaterMask } | null) : null;
+    const m = w && w.mask;
+    this._wmask = m && typeof m.levelAt === 'function' ? m : null;
+    return this._wmask;
+  }
+
+  /**
    * Metres of water over this point, negative on dry land. Reeds want the
    * 0..1.2 m band, lily pads want > 0.4 m of standing water.
    */
-  waterDepth(x: number, z: number) { return WORLD.seaLevel - this.height(x, z); }
+  waterDepth(x: number, z: number) { return this.waterLevel(x, z) - this.height(x, z); }
 
   /**
    * How far onto a **strandline** this point is: 1 at the waterline, 0 by

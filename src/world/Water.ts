@@ -10,6 +10,7 @@ import { findTarns } from './water/Tarns.ts';
 import { buildShoreRibbon, type ShoreStats } from './water/Shore.ts';
 import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts';
 import { buildRivers, type RiverStats } from './water/River.ts';
+import { WaterMask } from './water/WaterMask.ts';
 import { makeRiverWaterMaterial, makeRiverBankMaterial, type RiverUniforms } from './water/RiverMaterial.ts';
 import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
@@ -137,6 +138,15 @@ export class Water {
   riverBank!: THREE.Mesh | null;
   riverMats!: THREE.ShaderMaterial[];
   riverStats!: RiverStats | null;
+  /**
+   * Where the water surface is, per point — the answer `Ecology` asks for.
+   *
+   * Built last, because it reads what everything above it produced: the bodies
+   * the basin scan and `_findTarns` found, and the river sheet `_buildRivers`
+   * actually emitted. See `water/WaterMask.ts` for why it is derived from the
+   * drawn geometry rather than re-derived from the hydrology.
+   */
+  mask!: WaterMask | null;
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
@@ -157,6 +167,7 @@ export class Water {
     this.riverBank = null;
     this.riverMats = [];
     this.riverStats = null;
+    this.mask = null;
   }
 
   async init(game: Game) {
@@ -201,6 +212,11 @@ export class Water {
     await bootPhase('Water.geobake', () => loadGeoBake());
     try { bootPhase('Water.shore', () => { if (this.enabled) this._buildShore(game, terrain); }); } catch (err) { console.error('[Water] shore ribbon:', err); }
     try { bootPhase('Water.rivers', () => this._buildRivers(game, terrain)); } catch (err) { console.error('[Water] rivers:', err); }
+    // Last: it reads both of the two above. `Vegetation` is the next system to
+    // boot and the first thing it asks is where the water is.
+    bootPhase('Water.mask', () => {
+      this.mask = new WaterMask(this.bodies, this.riverWater ? this.riverWater.geometry : null);
+    });
   }
 
   /**
