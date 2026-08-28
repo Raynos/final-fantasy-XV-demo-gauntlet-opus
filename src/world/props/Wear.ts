@@ -449,6 +449,18 @@ export function gradePad(o: PadOpts): PadResult {
    */
   const SCARP = 0.45;
   /**
+   * The deepest this pad's fill will ever reach, in metres below the deck.
+   *
+   * Not an engineering number — a fill can be built to any depth — but a
+   * compositional one. `1:3 over capOut` could only ever descend `capOut / 3`,
+   * which is 7 m on a thirteen-metre pad; letting the solved slope descend
+   * without a limit instead put 46 m of smooth pale fill across a red cliff
+   * face at three of the Keycatrich sites, and that is a bigger lie than the
+   * saucer it replaced. Ten metres on a small pad and eighteen on a town's is
+   * a spur; past it the pad is on a brink and takes the kerb.
+   */
+  const FILL_MAX = Math.min(18, Math.max(10, r * 0.5));
+  /**
    * How far under the ground the earthwork buries itself once it has met it.
    *
    * Not a constant, and that is the difference between a toe and an outline. A
@@ -564,15 +576,34 @@ export function gradePad(o: PadOpts): PadResult {
      * there genuinely is no embankment and the kerb is right — which is
      * `nebula_parking`, and it still gets one.
      */
-    let need = 0, anyDrop = false;
+    let need = 0, anyDrop = false, deepest = 0;
     for (let k = 1; k <= 6; k++) {
       const run = (k / 6) * capOut;
-      const drop = -groundLo(x + ct * (e + run), z + st * (e + run));
+      const raw = -groundLo(x + ct * (e + run), z + st * (e + run));
+      if (raw > deepest) deepest = raw;
+      const drop = Math.min(FILL_MAX, raw);
       if (drop > 0.05) { anyDrop = true; need = Math.max(need, run / drop); }
     }
     // `Infinity` means "this bearing is uphill or level and unconstrained".
     const catchSlope = anyDrop ? need : Infinity;
-    const cliff = anyDrop && catchSlope < SCARP && groundLo(x + ct * e, z + st * e) < 0;
+    /*
+     * The kerb, and now it has two reasons rather than one.
+     *
+     * `catchSlope < SCARP` is the wall — the ground goes down faster than fill
+     * stands, so there is nothing to embank against. `deepest > FILL_MAX` is
+     * the other end, and it is a **composition** limit rather than an
+     * engineering one: the first cut of this fix let the batter chase the
+     * ground however far it fell, and `tmp/shots/lr2-a1j/tomb_320.jpg` is what
+     * that draws — three smooth tan cones up to 46 m tall pasted across a red
+     * cliff face, with the temple in front of one of them. The measurement was
+     * better (mean toe +1.13 -> -0.92 m) and the frame was worse, and the frame
+     * is the bar. A pad on the lip of a forty-metre drop cannot be fixed by
+     * making the pad bigger; the pin is on a brink and the earthwork should say
+     * so and stop.
+     */
+    const cliff = anyDrop
+      && (catchSlope < SCARP || deepest > FILL_MAX * 1.35)
+      && groundLo(x + ct * e, z + st * e) < 0;
     // The ramp. A truck has to get onto the pad, so one sector is graded at
     // 1:9 instead of 1:3 and pushed further out; the transition is smooth in
     // angle or the ramp reads as a wedge glued on.
@@ -605,6 +636,9 @@ export function gradePad(o: PadOpts): PadResult {
       const gk = groundLo(x + ct * (e + (k / 4) * capOut), z + st * (e + (k / 4) * capOut));
       if (gk < hEdge) hEdge = gk;
     }
+    // Clamped to the same limit the slope was solved against, or the reach
+    // comes back sized for a drop the batter is not allowed to make.
+    hEdge = Math.max(hEdge, -FILL_MAX);
     // Capped, and the cap is a composition decision rather than an engineering
     // one: a pad on a real hillside wants forty metres of 1:3 embankment, and
     // forty metres of bare fill is then the largest thing in the frame. Beyond
@@ -627,7 +661,7 @@ export function gradePad(o: PadOpts): PadResult {
      * down a gorge is the largest object in the frame and belongs to the
      * terrain, not to the pad.
      */
-    const reachDown = Math.min(46, Math.max(deckPlunge, -hEdge + 1.2));
+    const reachDown = Math.min(FILL_MAX, Math.max(6, -hEdge + 1.2));
     let crestY = 0, crestS = e;
     // This bearing's place in the rill field, drawn once for the whole radial.
     const rillRaw = nz2.simplex2(ct * rillK, st * rillK) * 0.70
@@ -655,11 +689,30 @@ export function gradePad(o: PadOpts): PadResult {
         if (gh < 0) fillV += -gh * area;
         else cutV += gh * area;
       } else if (cliff) {
-        // The kerb. Straight down the chamfer, no reach for a ground that is
-        // twenty metres below, no plunge clamp to hang it off.
+        /*
+         * The kerb, and then a **retaining wall** rather than nothing.
+         *
+         * The kerb alone was a 0.9 m chamfer that stopped, on the theory that
+         * the terrain is the cliff and holds the pad up. Where it really is a
+         * cliff that is true and where it is not the pad is a saucer, which is
+         * what `catchSlope` above now separates. But even at a genuine brink
+         * the chamfer leaves **daylight under the rim** — read
+         * `tmp/shots/lr2-a2/float.png`, sky under the Tomb of the Conqueror's
+         * plinth with a spoil block hanging beside it.
+         *
+         * A wall costs nothing horizontally, so it cannot become the dune the
+         * `FILL_MAX` note is about, and it is what an engineer actually builds
+         * at a brink. Chamfer for the first third of the kerb, then straight
+         * down to the ground the bearing measured, capped — past 26 m it is a
+         * cliff face and the terrain owns it.
+         */
         const run = s - e;
-        y = -0.9 * (run / 1.6);
-        c = C_BATTER;
+        const u = run / 1.6;
+        const wall = -Math.min(26, Math.max(0.9, deepest + 1.2));
+        y = u <= 0.34
+          ? -0.9 * (u / 0.34)
+          : -0.9 + (wall + 0.9) * ((u - 0.34) / 0.66);
+        c = mix3(C_BATTER, C_SCARP, Math.min(1, u * 1.3));
       } else {
         const g = groundLo(wx, wz);
         const run = s - e;

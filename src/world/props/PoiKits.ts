@@ -8,7 +8,7 @@ import { dressAt, type Dress, type StoneKind } from './ZoneDress.ts';
 import {
   bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
-  container, membraneSag, tarpEnvelope, sandbagStack, STOREY, CILL, type Opening,
+  container, membraneSag, tarpEnvelope, sandbagStack, basaltColumns, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
 import { seatY } from './Seat.ts';
 import { findTarns, type TarnBasin } from '../water/Tarns.ts';
@@ -743,6 +743,24 @@ export class PoiKits {
    *   one top; this has a wobbled plan, a battered flank, a chamfered nosing
    *   where the rune plate meets it, and a scatter of blocks that are *part of*
    *   the shelf rather than a garnish round it.
+   *
+   *   That first pass wrote the wobble as **two sines on a
+   *   `CylinderGeometry`** — 5.5% and 3.5% of the radius on a seventeen-segment
+   *   drum — and a 5% wobble on a lathe is still a lathe. `tmp/shots/lm-hv2` and
+   *   `tmp/shots/lr2-base/poi_haven.jpg` both read it as a cake stand, and the
+   *   backlog blamed the apron for it; `gradePad` had already fixed the apron
+   *   and this was the object in the frame. The rim is what gives it away: one
+   *   continuous smooth circle at one height, all the way round, is a **turned**
+   *   edge and nothing in a landscape has one.
+   *
+   *   So the shelf is not a solid of revolution at all now. It is a ring of
+   *   {@link basaltColumns} — nine to thirteen prisms, each with its own plan
+   *   width, its own outward batter, its own crown height and two of them
+   *   dropped out entirely to leave a notch — standing round a plain deck slab.
+   *   That gives the rim a step every few metres, real vertical shadow between
+   *   the columns, and a broken corner where the fallen block below it came
+   *   from. Columnar jointing is also what a haven *is* in FFXV: a basalt
+   *   outcrop somebody put a rune on.
    * - **The tent is solved, not authored** ({@link membraneSag}): a ridge line
    *   and four guy points, Jacobi-relaxed twice and rescaled so the sag is the
    *   number asked for. That is what puts a cusp at every peg and a swag
@@ -765,27 +783,41 @@ export class PoiKits {
       wear: [[-r * 0.42, r * 0.3, 0.6], [r * 0.7, -r * 0.35, 0.5]],
     });
 
-    // The shelf. Two courses of wobbled plate with a batter between them, so
-    // the edge is a *nosing over a shadow* rather than one extruded rim.
-    const shelf = (rad: number, h: number, y: number, wob: number) => {
-      const g = new THREE.CylinderGeometry(rad, rad * 1.06, h, 17, 1);
-      const p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const a = Math.atan2(p.getZ(i), p.getX(i));
-        const k = 1 + Math.sin(a * 3.0 + 1.1) * wob + Math.sin(a * 7.0 - 0.4) * wob * 0.45;
-        p.setX(i, p.getX(i) * k);
-        p.setZ(i, p.getZ(i) * k);
-      }
-      g.computeVertexNormals();
-      // Darker than the ground it stands on, not paler: a haven is a slab of
-      // weathered basalt with light in the glyphs, and a shelf lighter than its
-      // own apron reads as a sandpit.
-      bakeTone(g, { y0: y - h, y1: y + h, grime: 0.52, bleach: 0.78, jitter: 1, streak: 0.14 });
-      B.add(M.stone, g, mat4([0, y, 0]));
-    };
-    shelf(r * 1.03, 1.15, lift - 0.7, 0.055);
-    shelf(r * 0.94, 0.5, lift - 0.02, 0.035);
+    // The shelf: a plain deck slab, and a ring of columns that is the whole
+    // read. `basaltColumns` returns the fallen blocks the notches produced, so
+    // the talus at the foot is *this* shelf's stone and lands where the gap is.
     const deck = lift + 0.24;
+    {
+      const b = bag();
+      // The core the columns lean on. Never on the silhouette — every column
+      // stands proud of it — so it can be a plain chamfered drum.
+      b.shell.push(xform(new THREE.CylinderGeometry(r * 0.90, r * 0.96, deck + 2.6, 13, 1),
+        { y: deck - (deck + 2.6) / 2 }));
+      const fallen = basaltColumns(b.shell, {
+        r: r * 1.02, top: deck, depth: 2.4, n: 11, rng,
+      });
+      // Through `mergeBag`, not `mergeGeometries`: `box()` returns an indexed
+      // chamfer above the arris gate and a bare `BoxGeometry` below it, and
+      // `mergeGeometries` refuses a list that mixes the two. `normalize` inside
+      // `mergeBag` is what reconciles them, and skipping it cost one page error
+      // per haven.
+      const g = mergeBag(b).shell;
+      if (g) {
+        // Darker than the ground it stands on, not paler: a haven is a slab of
+        // weathered basalt with light in the glyphs, and a shelf lighter than
+        // its own apron reads as a sandpit.
+        bakeTone(g, { y0: deck - 2.4, y1: deck + 0.3, grime: 0.52, bleach: 0.78, jitter: 1, streak: 0.14 });
+        B.add(M.stone, g, mat4([0, 0, 0]));
+      }
+      // The block that came out of each notch, lying at its foot.
+      for (const f of fallen) {
+        const fk = kitRock(rng, f[2]);
+        B.add(M.rock, fk.geo,
+          mat4([f[0], -f[2] * 0.35, f[1]],
+            [rng.gauss(0, 0.35), rng.next() * 6, rng.gauss(0, 0.35)],
+            [fk.s, fk.s * rng.range(0.55, 0.9), fk.s]));
+      }
+    }
 
     // glyph ring, flat on the deck
     const ring = new THREE.RingGeometry(r * 0.42, r * 0.84, 44);
@@ -1565,17 +1597,29 @@ export class PoiKits {
     }
     // Fallen blocks: dressed masonry, so they read as *this* building's stone
     // rather than as boulders that happen to be nearby.
+    //
+    // **Inside the deck, and the radius is arithmetic.** `world` scales this kit
+    // by 1.4, so `d` of 8.5–13 lands the debris at **11.9–18.2 world metres**
+    // against an apron whose deck is 13 m and which retreats to 9.75 on a
+    // bearing that meets a drop. On a knoll that put a block a clear metre out
+    // over the void — the "unexplained levitating boulder, pixel-identical
+    // across all three joint fixes" the last round could not place, in
+    // `poi_imperial` and again in `tmp/shots/lr2-a2/float.png`. It is not a
+    // corestone stack, a tor or an outcrop because it is not a rock at all; it
+    // is this building's own masonry, seated on the deck plane and thrown past
+    // the deck. A collapsed temple sheds its blocks onto its own stylobate.
     for (let i = 0; i < 9; i++) {
-      const a = rng.next() * 6.28, d = rng.range(8.5, 13);
+      const a = rng.next() * 6.28, d = rng.range(6.0, 8.8);
       const bw = rng.range(0.7, 1.9);
       const g = box(bw, rng.range(0.45, 1.0), bw * rng.range(0.6, 1.1), { arris: 0.06 });
       bakeTone(g, { y0: -0.5, y1: 1.0, grime: 0.62, bleach: 0.9, jitter: tv.jitter });
       put(M.stone, g, [Math.cos(a) * d, 0.35, Math.sin(a) * d],
         [rng.gauss(0, 0.22), rng.next() * 3, rng.gauss(0, 0.22)]);
     }
-    // A drum off a fallen column, lying where it rolled.
+    // A drum off a fallen column, lying where it rolled — and stopping on the
+    // deck, for the reason written on the blocks above.
     for (let i = 0; i < 3; i++) {
-      const a = rng.range(0, 6.28), d = rng.range(7, 11);
+      const a = rng.range(0, 6.28), d = rng.range(5.0, 8.4);
       put(M.stone, new THREE.CylinderGeometry(colR * 0.95, colR, rng.range(0.8, 1.5), 12),
         [Math.cos(a) * d, 0.6, Math.sin(a) * d], [Math.PI / 2, rng.next() * 3, rng.gauss(0, 0.3)]);
     }
