@@ -163,12 +163,33 @@ ridge in the frame is a ~130 m pitch. **The blast radius is every hill in the
 world** — Longwythe Peak reads *well* off the same term — so this needs its own
 before/after over the corpus, not a tune.
 
-**The framing half.** The sky lane closed the atmosphere (434 m at a 10% blend,
-exactly on spec) and the landmarks lane fixed the Meteor; what is left is that
-the frame has no foreground. `probes/framedepth.mts` is the instrument — the
-ground distance along the ray through the *bottom* of frame against the one
-through its centre — and the recommendation is in that probe's numbers rather
-than in an edit, because `Shots.ts` is shared.
+**The framing half, measured — and the pose is not standing where its own
+comment says it is.** `probes/framedepth.mts` marches the ray through the
+bottom of frame and the one through its centre until each goes under the
+ground, and prints the camera's height above its own terrain:
+
+    shot              camY   above its own ground   centre-hit   bottom-hit
+    zone_mencemoor   286.4                  242.7           --          569
+    zone_longwythe    46.9                   33.9          502           79
+    zone_galdin       24.4                   10.3          162           22
+    zone_vannath      49.2                   22.9          454           51
+
+**`zone_mencemoor` stands 242.7 m above its own ground and the nearest terrain
+in frame is 569 m away** — an order of magnitude out on both axes against every
+other establishing shot in the corpus, and its centre ray never meets the
+ground at all. The pose's own comment says it *"sits on a rim spur, high enough
+to clear the ridge"*; the terrain under it reads **44 m** and rises to only
+129 m at 600 m out along the view axis. It is not on a spur, it is a helicopter
+hovering 240 m over a basin floor, which is exactly "the frame has no
+foreground" stated in metres.
+
+**Recommendation, for whoever owns `Shots.ts`:** the camera has to stand on
+ground within ~25 m of its own altitude, which is what the other three shots do
+and what puts something inside 80 m at the bottom of frame. Either drop it onto
+the 44 m floor and accept a lower horizon, or walk it out along its own view
+axis until the rim has risen to meet it — the ground is still climbing at
+129 m/600 m where this probe stops. `framedepth.mts` is how to check a
+candidate pose in one run; do not re-frame it by eye.
 
 ---
 

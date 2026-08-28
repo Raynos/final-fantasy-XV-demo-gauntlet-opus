@@ -1038,8 +1038,15 @@ directory boundary it did not own.
   field — see the negatives table — so it is heightfield geometry and the named
   candidate is `Field._addDetail`'s 139 m ridged `gully`, which costs a re-bake
   and a corpus diff because every hill in the world rides it. The no-foreground
-  half has an instrument now, `probes/framedepth.mts`, and is a `Shots.ts`
-  question.
+  half is now **measured**, by the new `probes/framedepth.mts`: the camera
+  stands **242.7 m above its own ground** with the nearest terrain in frame at
+  **569 m** and its centre ray never meeting the ground at all, against 33.9 m
+  / 79 m on `zone_longwythe`, 10.3 / 22 on `zone_galdin` and 22.9 / 51 on
+  `zone_vannath`. The pose's own comment says it sits on a rim spur; the terrain
+  under it reads 44 m and is still only 129 m six hundred metres out. It is a
+  helicopter over a basin floor. **`Shots.ts` is the coordinator's** — the
+  camera needs to stand on ground within ~25 m of its own altitude, and
+  `framedepth.mts` checks a candidate pose in one run.
 - **WS-2d was never reached.** It was gated on 2c, and 2c turned out to be
   already landed — so the gate is lifted and the item is simply untouched.
   **CLOSED for terrain, which already does it**: `TerrainMaterial`'s `FRAG_AO`
