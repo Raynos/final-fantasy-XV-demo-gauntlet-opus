@@ -215,6 +215,22 @@ a post pass, and it cannot darken direct light. What it had never had is a
 price, so `?post=noiao` / `iaomax` are the pair, in the shape `gcmax`
 established.
 
+**Priced, `--raw` both sides, control taken in the same run:**
+
+    zone_longwythe   ?post=noiao  1.657 mean/255 over 0.587%   floor 1.23
+                     ?post=iaomax 4.536            over 19.58%
+    zone_vannath     ?post=noiao  1.187            over 0.448%  floor 2.00
+                     ?post=iaomax 3.298            over 20.29%
+
+Two readings, and the second is the one that closes the item. The **shipped**
+term is worth 1.19-1.66/255 — over the floor on `zone_longwythe` and *under* it
+on `zone_vannath`, i.e. barely distinguishable from boot-to-boot noise. And the
+**ceiling** — every terrain pixel's indirect diffuse occluded completely, which
+is physically absurd — is **3.30-4.54/255**. So the entire remaining headroom
+for in-material indirect occlusion *on terrain* is about 2-3 levels of 255,
+against `gcmax`'s 5.634 for the vegetation ramp on the same shot. **WS-2d's
+value is on vegetation and rocks; on terrain it is already spent.**
+
 The band that is genuinely open is **1-64 m**: the detail maps own everything
 under a metre and the horizon bake is swept at a 64 m texel, so nothing
 occludes at the scale of a swale. The tier-C term above puts an AO modulation
