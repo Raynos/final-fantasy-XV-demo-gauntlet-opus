@@ -1,57 +1,120 @@
 /*
- * Where does a fishing camp's deck sit, against its water AND against its bank?
+ * Does a fishing camp stand on the ground and the water it is built over?
  *
  *   node src/tools/probe.mts src/tools/probes/fishdeck.mts
  *
- * `_fishing` sets `deck = max(1.4, water.level + 1.5 - base)` — one number that
- * has to satisfy two different things. The jetty has to clear the water; the
- * shack, the rod stands, the bench and the crate stand on the **bank**, and
- * they are placed off the same `deck`. When the two disagree the camp is lifted
- * bodily into the air, which is what `floatcheck`'s per-mesh diagnostic reports
- * at `archaeans_mirror`, `maidenwater`, `malacchi_pond` and `vesperpool_dock`:
- * 3 of 5 meshes floating, worst 6.4–7.6 m. Its own gate cannot fail on it,
- * because the jetty piles run 3.4 m below the deck and one of them still
- * reaches the ground.
+ * **This measures the geometry that was built, not the arithmetic that built
+ * it.** The first cut of this probe re-derived `_fishing`'s own
+ * `deck = max(1.4, water.level + 1.5 - base)` and reported a `bankAir` off it,
+ * which was right until `b648b69` split the bank out of the deck — after which
+ * the probe went on printing 4.6-5.3 m of shack float that no longer existed.
+ * An instrument that models the code cannot notice the code changing.
  *
- * This prints, per pin: the seat, the water it found and how far away, the deck
- * that falls out, and the drawn ground under the shack and under the far end of
- * the jetty. `bankAir` is the number that matters — how far the shack's sill
- * stands above the ground it is supposedly sitting on.
+ * So: every vertex of the kit is dropped into a 2 m cell, the lowest one in
+ * each cell is taken, and that is compared against the surface that cell
+ * actually has. `Water` has no single global level (`_waterNear` is the fourth
+ * bug that assumption caused), so the surface is asked for locally and the cell
+ * is classified by it:
+ *
+ *   - **dry cell** — drawn ground above the local water. Something standing
+ *     here has to reach the ground. `bankAir` is the worst gap, and it is the
+ *     shack, the sill, the ramp and the shore piles.
+ *   - **wet cell** — drawn ground below it. Something standing here has to
+ *     reach at least the *water*: a pile may run down through it, and a moored
+ *     boat may float on it, but neither may hang in the air over it.
+ *     `waterAir` is the worst gap.
+ *
+ * A jetty deck 1.5 m proud of its water is correct and reads as 0 here,
+ * because the piles under it are what the cell is measured by.
+ *
+ * `shore` is the nearest point whose ground is within a metre of the local
+ * water surface, and its bearing against the yaw the jetty was actually built
+ * on. A jetty is built down `_yaw`, which is the nearest ROAD's bearing: where
+ * those two disagree the pier runs inland whatever the arithmetic says.
  */
 const g = window.GAME;
 const props = g.get('Props');
 const terrain = g.get('Terrain');
 const cell0 = terrain.clipmap ? terrain.clipmap.cell0 : 1.5;
 const pk = props.poiKits;
+const CELL = 2.0;
 
 for (const s of pk.sites) {
   if (s.group) continue;
   try { pk._make(s, g); } catch (e) { void e; }
 }
 
+const V = Object.getPrototypeOf(g.camera.position).constructor;
+const v = new V();
 const rows = [];
 for (const b of pk.built) {
   if (b.poi.type !== 'fishing') continue;
   const p = b.poi;
   const base = b.group.position.y;
   const w = pk._waterNear(p.x, p.z);
-  const deck = w ? Math.max(1.4, w.level + 1.5 - base) : 0.9;
-  // The shack sits at local (3.6, deck + 1.2, -3.5) before the site yaw; the
-  // radius is what matters here, not the bearing, so sample a ring at it.
-  const ringLow = (rad) => {
-    let lo = 1e9;
-    for (let k = 0; k < 12; k++) {
-      const a = (k / 12) * Math.PI * 2;
-      lo = Math.min(lo, terrain.drawnHeightAt(p.x + Math.cos(a) * rad, p.z + Math.sin(a) * rad, cell0));
+  const level = w ? w.level : -1e9;
+
+  // The lowest vertex the kit puts over each 2 m cell of ground.
+  b.group.updateMatrixWorld(true);
+  const low = new Map();
+  b.group.traverse((o) => {
+    if (!o.isMesh || !o.geometry || /_shadow$/.test(String(o.name || ''))) return;
+    const a = o.geometry.attributes.position;
+    for (let i = 0; i < a.count; i++) {
+      v.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld);
+      const k = `${Math.round(v.x / CELL)},${Math.round(v.z / CELL)}`;
+      const cur = low.get(k);
+      if (!cur || v.y < cur.y) low.set(k, { y: v.y, x: v.x, z: v.z });
     }
-    return lo;
+  });
+
+  let bankAir = -1e9, bankAt = null, wetAir = -1e9, wetAt = null, nDry = 0, nWet = 0;
+  for (const c of low.values()) {
+    const gy = terrain.drawnHeightAt(c.x, c.z, cell0);
+    if (gy >= level) {
+      nDry++;
+      if (c.y - gy > bankAir) { bankAir = c.y - gy; bankAt = c; }
+    } else {
+      nWet++;
+      if (c.y - level > wetAir) { wetAir = c.y - level; wetAt = c; }
+    }
+  }
+
+  // Where the water's edge actually is, and whether the jetty points at it.
+  let shoreD = null, shoreA = null;
+  if (w) {
+    for (let r = 2; r <= 200 && shoreD === null; r += 2) {
+      for (let k = 0; k < 48; k++) {
+        const a = (k / 48) * Math.PI * 2;
+        const px = p.x + Math.cos(a) * r, pz = p.z + Math.sin(a) * r;
+        const h = terrain.drawnHeightAt(px, pz, cell0);
+        if (h < level + 0.5 && h > level - 2.5) { shoreD = r; shoreA = a; break; }
+      }
+    }
+  }
+  // `_fishing` lays the jetty down local +z, and the group is yawed by `_yaw`.
+  const yaw = pk._yaw(p, { next: () => 0 });
+  const jetty = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+  // local +z maps to world (sin(yaw), cos(yaw)) -> bearing atan2(z, x)
+  const jettyA = Math.atan2(Math.cos(yaw), Math.sin(yaw));
+  let dA = shoreA === null ? null : shoreA - jettyA;
+  if (dA !== null) { while (dA > Math.PI) dA -= Math.PI * 2; while (dA < -Math.PI) dA += Math.PI * 2; }
+  void jetty;
+
+  // The worst cell, in the kit's own local frame, so the number names a piece:
+  // the shack sits at (3.6, -3.5), the jetty runs +z to 22, the boat is at
+  // (-3.4, 13) and the ramp at (0, -2 - run).
+  const local = (c) => {
+    if (!c) return '-';
+    const dx = c.x - p.x, dz = c.z - p.z;
+    const cs = Math.cos(-yaw), sn = Math.sin(-yaw);
+    return `${Math.round(dx * cs + dz * sn)},${Math.round(-dx * sn + dz * cs)}`;
   };
-  const shackGround = ringLow(5.0);
-  const tipGround = ringLow(20.0);
-  rows.push(`${(p.id + '                    ').slice(0, 20)} `
-    + `base=${base.toFixed(1)} water=${w ? w.level.toFixed(1) : 'none'} `
-    + `dist=${w ? w.dist : '-'} deck=${deck.toFixed(2)} `
-    + `shackGround=${shackGround.toFixed(1)} bankAir=${(base + deck - 0.5 - shackGround).toFixed(2)} `
-    + `tipGround=${tipGround.toFixed(1)} pileAir=${(base + deck - 3.4 - tipGround).toFixed(2)}`);
+  const pad = (s, n) => (String(s) + '                    ').slice(0, n);
+  rows.push(`${pad(p.id, 20)} base=${pad(base.toFixed(1), 7)} water=${pad(w ? w.level.toFixed(1) : 'none', 7)} `
+    + `dist=${pad(w ? w.dist : '-', 4)} bankAir=${pad(nDry ? bankAir.toFixed(2) : '-', 7)}@${pad(local(bankAt), 9)} `
+    + `waterAir=${pad(nWet ? wetAir.toFixed(2) : '-', 7)}@${pad(local(wetAt), 9)} `
+    + `cells=${pad(nDry + '/' + nWet, 8)} shore=${pad(shoreD === null ? 'none' : shoreD + 'm', 6)} `
+    + `offBearing=${dA === null ? '-' : Math.round(dA * 180 / Math.PI) + 'deg'}`);
 }
 return rows;

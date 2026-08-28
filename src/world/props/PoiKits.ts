@@ -2123,6 +2123,61 @@ export class PoiKits {
   }
 
   /**
+   * The waterline nearest a pin: which way it lies, and how far.
+   *
+   * {@link _waterNear} answers "is there water near here and how high is it",
+   * which is what the *deck* needs. It is not what the **camp** needs. A camp
+   * has a bank and a pier, and those are two sides of one line — so the kit has
+   * to know where that line is and which side of it the pin fell on.
+   *
+   * Measured, before this existed (`probes/fishdeck.mts`, every vertex of the
+   * built kit dropped into a 2 m cell against the surface that cell actually
+   * has): **all four tarn pins stand entirely over their own water** — 44 to 48
+   * wet cells and not one dry one — so the tackle shack, which the kit had just
+   * been taught to put on the bank, was standing on a bank that is 3.5 m under
+   * the surface. And the four sea-and-river pins stand entirely over land, with
+   * the jetty running out down `_yaw`, which is the nearest ROAD's bearing:
+   * `alstor_dock`'s pier ends 4.7 m in the air 23 degrees off its own water,
+   * and `vesperpool_dock`'s ends **13.9 m** up a bluff.
+   *
+   * So: walk 48 bearings out to `LIM` and find the nearest radius at which the
+   * ground crosses the surface. That crossing is the shoreline, its bearing is
+   * where the pier belongs, and its distance is how far the kit has to slide to
+   * put its own origin on the beach. Signed, because the pin may be on either
+   * side of it: `s` is measured along `yaw`, which always points AT the water.
+   *
+   * `LIM` is 30 m and it is a definition rather than a tolerance. A waterside
+   * is a place you can stand and reach the water from; past thirty metres the
+   * pin is not one, whatever a 180 m ring walk found, and the camp is dry.
+   *
+   * @returns the heading whose local +z faces the water and the signed slide
+   *          from the pin to the waterline, or null for nothing in reach
+   */
+  _waterLine(x: number, z: number, level: number, LIM = 30): { yaw: number, s: number } | null {
+    const t = this.eco.terrain;
+    const cs = t && t.clipmap ? t.clipmap.cell0 : 1.5;
+    const h = (px: number, pz: number) => (t && typeof t.drawnHeightAt === 'function'
+      ? t.drawnHeightAt(px, pz, cs) : this.eco.height(px, pz));
+    const wet0 = h(x, z) < level;
+    let bestR = Infinity, bestA = 0;
+    for (let k = 0; k < 48; k++) {
+      const a = (k / 48) * Math.PI * 2;
+      const dx = Math.cos(a), dz = Math.sin(a);
+      for (let r = 1.5; r <= LIM + 1e-6 && r < bestR; r += 1.5) {
+        if ((h(x + dx * r, z + dz * r) < level) !== wet0) { bestR = r; bestA = a; break; }
+      }
+    }
+    if (!isFinite(bestR)) return null;
+    // The crossing is the way to the water when we are dry and the way to the
+    // shore when we are already in it; `yaw` names the first of those two.
+    const toWater = wet0 ? bestA + Math.PI : bestA;
+    // Local +z maps to world (sin yaw, cos yaw), so a world bearing `a` is the
+    // yaw `atan2(cos a, sin a)`. One conversion here rather than a second
+    // convention in the kit.
+    return { yaw: Math.atan2(Math.cos(toWater), Math.sin(toWater)), s: wet0 ? -bestR : bestR };
+  }
+
+  /**
    * A fishing spot: a timber jetty on piles, a tackle shack and a boat.
    *
    * **Two of the ten pins have no water and this kit built them a jetty anyway.**
@@ -2137,12 +2192,14 @@ export class PoiKits {
    * camp that has lost its water reads as a place; a pier over dry grass reads
    * as a bug, which is what it was.
    *
-   * The threshold is 180 m and not the jetty's own 22 m length on purpose. Half
-   * the wet pins are already further from the water than the deck reaches —
-   * `galdin_pier` is 72 m out — and shortening or lengthening a jetty to meet a
-   * shoreline is a different job from deciding whether the place is a shore.
-   * (Galdin's shoreline in particular is a `Field.ts` sand shelf and belongs to
-   * the terrain lane; see `docs/plans/…the-standing-backlog.md` §WS-13.)
+   * That 180 m threshold was written as "not the jetty's own 22 m length on
+   * purpose", because shortening a jetty to meet a shoreline looked like a
+   * different job from deciding whether the place is a shore. It is not: a pier
+   * that does not reach its water is the same lie as a pier with no water, and
+   * measuring it found four more of them. {@link _waterLine} now answers the
+   * second question directly — is the water's edge within thirty metres, and
+   * which way — and the camp slides onto it, so 180 m is only the range at
+   * which `_waterNear` is still willing to look for a surface height.
    *
    * **And the deck is set from the water that is actually there.** It used to be
    * `max(1.4, WORLD.seaLevel + 1.5 - base)`, one global number, so at every
@@ -2154,32 +2211,75 @@ export class PoiKits {
    * this kit predates them.
    */
   _fishing(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
-    const M = this.mats, { rng, yaw } = ctx;
-    const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const M = this.mats, { rng } = ctx;
     const water = this._waterNear(s.poi.x, s.poi.z);
-    // the deck has to clear the water, whatever the ground is doing
-    const deck = water ? Math.max(1.4, water.level + 1.5 - ctx.base) : 0.9;
+    /**
+     * **The camp is laid out from the waterline, not from the pin.**
+     *
+     * A pin is a point on a map and a fishing camp is a bank and a pier: it has
+     * a side that is dry and a side that is wet, and it only reads as one place
+     * if the line between them runs through it. The kit used to build down
+     * {@link _yaw} — the nearest ROAD's bearing — from wherever the pin landed,
+     * and `probes/fishdeck.mts` says what that produced. Every one of the four
+     * tarn pins stood **entirely over its own water** (44–48 wet cells, zero
+     * dry), so the shack `b648b69` had just moved onto the bank was on a bank
+     * 3.5 m under the surface. Every one of the four sea-and-river pins stood
+     * **entirely over land**, with the pier ending in the air: `alstor_dock`
+     * 4.74 m at 23 degrees off its own water, `galdin_pier` 2.72, and
+     * `vesperpool_dock` **13.94 m**, its jetty running off a bluff.
+     *
+     * So {@link _waterLine} finds the shoreline, the kit faces it, and it
+     * slides itself onto it. After that local `z = 0` **is** the water's edge
+     * for every pin: the pier runs out from it and the shack sits back from it,
+     * and neither has to be told which one this place is.
+     */
+    const shore = water ? this._waterLine(s.poi.x, s.poi.z, water.level) : null;
+    const yaw = shore ? shore.yaw : ctx.yaw;
+    const ox = shore ? Math.sin(yaw) * shore.s : 0;
+    const oz = shore ? Math.cos(yaw) * shore.s : 0;
+    const world = new THREE.Matrix4().makeTranslation(ox, 0, oz).multiply(mat4([0, 0, 0], [0, yaw, 0]));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const t = this.eco.terrain;
+    const cs = t && t.clipmap ? t.clipmap.cell0 : 1.5;
+    /** The drawn ground under a point of the kit, in the group's own frame. */
+    const groundAtLocal = (lx: number, lz: number) => {
+      const c = Math.cos(yaw), sn = Math.sin(yaw);
+      const wx = s.poi.x + ox + lx * c + lz * sn, wz = s.poi.z + oz - lx * sn + lz * c;
+      const h = t && typeof t.drawnHeightAt === 'function'
+        ? t.drawnHeightAt(wx, wz, cs) : this.eco.height(wx, wz);
+      return h - ctx.base;
+    };
+    // No water, or none a person standing here could reach: there is no
+    // waterside at this pin and the kit builds what is actually there.
+    if (!water || !shore) return this._fishingDry(B, world, put, ctx, groundAtLocal);
+    // The deck clears the water, and now it is only ever asked to do that: the
+    // 1.4 m floor it used to carry was standing in for "the water is somewhere
+    // else", which is the case `_waterLine` has just taken away.
+    const deck = water.level + 1.5 - ctx.base;
     const L = 22;
-    if (!water) return this._fishingDry(B, world, put, ctx, deck);
     /**
      * **The bank is not the deck, and one number cannot be both.**
      *
-     * `deck` is set from the water and that is right for the jetty. It was then
-     * also carrying the shack, the rod stands, the bench and the crate, and
-     * those stand on the *bank*. At the four tarn pins the bank is 3.5–4.0 m
-     * under the surface, so the whole camp went up with the deck: measured by
-     * `probes/fishdeck.mts`, the shack sill stood **4.77–5.61 m** above the
-     * ground at `maidenwater`, `archaeans_mirror`, `crestholm_reservoir` and
-     * `swainsmere`, and **9.77 m** at `vesperpool_dock`. `floatcheck` reported
-     * it — 3 of 5 meshes, worst 7.6 m — and could not fail on it, because a
-     * jetty pile still reaches the ground and gate 1 is a `min` over meshes.
+     * `deck` is set from the water and that is right for the jetty. It was also
+     * carrying the shack, the rod stands, the bench and the crate, and those
+     * stand on the *bank* — `b648b69` split them off onto a `seatY` read at the
+     * pin, which was right in kind and read the lake bed at the four pins whose
+     * pin is in the lake.
      *
-     * The fix is one line of arithmetic and a ramp: the shack sits on the ground
-     * under it, and the jetty's shore end climbs from there to the deck.
+     * With the camp laid out from the waterline the bank is simply the ground
+     * under the shack, so this walks back from the water's edge until it finds
+     * ground that is actually out of the water and puts the shack there. It
+     * cannot fail into a float: the sill under the shack reaches 1.3 m below
+     * whatever it lands on.
      */
-    const bank = Math.min(deck, Math.max(-1.2,
-      seatY(this.eco, s.poi.x, s.poi.z, 2.0, 24) - ctx.base + 0.5));
+    const wl = water.level - ctx.base;
+    let shackZ = -5, bank = -1e9;
+    for (let k = 0; k < 7; k++) {
+      const z = -5 - k * 2;
+      const gy = groundAtLocal(3.6, z);
+      if (gy > bank) { shackZ = z; bank = gy; }
+      if (gy > wl + 0.3) break;
+    }
     /**
      * **Every pile is as long as the water under it is deep.**
      *
@@ -2190,15 +2290,6 @@ export class PoiKits {
      * capped: past twelve metres this is a viaduct rather than a jetty, and the
      * pin is on a bluff.
      */
-    const t = this.eco.terrain;
-    const cs = t && t.clipmap ? t.clipmap.cell0 : 1.5;
-    const groundAtLocal = (lx: number, lz: number) => {
-      const c = Math.cos(yaw), sn = Math.sin(yaw);
-      const wx = s.poi.x + lx * c + lz * sn, wz = s.poi.z - lx * sn + lz * c;
-      const h = t && typeof t.drawnHeightAt === 'function'
-        ? t.drawnHeightAt(wx, wz, cs) : this.eco.height(wx, wz);
-      return h - ctx.base;
-    };
     for (let i = 0; i < 10; i++) {
       const pz = -2 + (i / 9) * L;
       for (const sx of [-1.5, 1.5]) {
@@ -2218,21 +2309,24 @@ export class PoiKits {
         }
       }
     }
-    // Tackle shack on the bank — at `bank`, which is where the bank is.
-    put(M.plank, new THREE.BoxGeometry(4.6, 1.6, 3.8), [3.6, bank - 0.5, -3.5]);
-    put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, bank + 1.2, -3.5]);
-    put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, bank + 2.7, -3.5], [0, 0, 0.09]);
-    put(M.void, new THREE.BoxGeometry(1.0, 2.0, 0.14), [2.6, bank + 0.8, -1.72]);
-    put(M.lamp, new THREE.BoxGeometry(0.4, 0.2, 0.12), [4.4, bank + 2.4, -1.75]);
+    // Tackle shack on the bank — at `bank`, which is the ground under it.
+    put(M.plank, new THREE.BoxGeometry(4.6, 1.6, 3.8), [3.6, bank - 0.5, shackZ]);
+    put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, bank + 1.2, shackZ]);
+    put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, bank + 2.7, shackZ], [0, 0, 0.09]);
+    put(M.void, new THREE.BoxGeometry(1.0, 2.0, 0.14), [2.6, bank + 0.8, shackZ + 1.78]);
+    put(M.lamp, new THREE.BoxGeometry(0.4, 0.2, 0.12), [4.4, bank + 2.4, shackZ + 1.75]);
     // The ramp up off the bank onto the jetty. Without it the deck starts in
     // the air over its own shore end, which is the same lie one object along.
-    if (deck - bank > 0.35) {
-      const rise = deck - bank, run = Math.max(2.0, rise * 2.2);
+    // It spans the gap the shack's own seat left rather than a run derived from
+    // the rise, which could and did overrun the shack it starts beside.
+    const rampTop = -2.0, rampBot = shackZ + 1.8;
+    if (deck - bank > 0.35 && rampTop - rampBot > 1.2) {
+      const rise = deck - bank, run = rampTop - rampBot;
       put(M.plank, new THREE.BoxGeometry(2.6, 0.14, Math.hypot(run, rise)),
-        [0, (deck + bank) / 2, -2 - run / 2], [Math.atan2(rise, run), 0, 0]);
+        [0, (deck + bank) / 2, (rampTop + rampBot) / 2], [Math.atan2(rise, run), 0, 0]);
       for (const sx of [-1.2, 1.2]) {
         put(M.plank, new THREE.CylinderGeometry(0.1, 0.11, rise + 1.4, 5),
-          [sx, bank + rise / 2 - 0.6, -2 - run * 0.5]);
+          [sx, bank + rise / 2 - 0.6, (rampTop + rampBot) / 2]);
       }
     }
     // rod stands, a bench, a crate
@@ -2252,18 +2346,33 @@ export class PoiKits {
   /**
    * The same place with no water in it: everything but the pier.
    *
-   * Shares `_fishing`'s shack, rod stands, bench and crate verbatim, and hauls
-   * the rowboat out on the ground on its side rather than mooring it in air.
-   * No deck, no piles, no handrail — those are the three things that only make
+   * Shares `_fishing`'s shack, rod stands, bench and crate, and hauls the
+   * rowboat out on the ground on its side rather than mooring it in air. No
+   * deck, no piles, no handrail — those are the three things that only make
    * sense over water, and they were the whole of the lie.
+   *
+   * Not "verbatim" any more: each piece is seated on the ground under itself
+   * rather than on one shared plane. See the note on `deck` below.
    */
   _fishingDry(
     this: PoiKits, B: PartBuilder, world: THREE.Matrix4,
     put: (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => void,
-    ctx: KitCtx, deck: number,
+    ctx: KitCtx, ground: (lx: number, lz: number) => number,
   ): KitResult {
     const M = this.mats, { rng } = ctx;
     void world;
+    /*
+     * **Every piece stands on the ground under that piece.**
+     *
+     * This kit used to lay everything on one plane 0.9 m over the group origin,
+     * which is a plane over a hillside: `probes/fishdeck.mts`, per 2 m cell
+     * against the drawn ground, read **3.81 m** of air under the downhill edge
+     * at `caem_shore` and **3.60 m** at `rachsia_bridge`. There is no apron
+     * here to cover that — `_fishing` returns `noApron` — so the plane was the
+     * whole of the seat, and a camp of six loose objects has no business
+     * needing one. Each of them asks for its own.
+     */
+    const deck = ground(3.6, -3.5);
     /*
      * A sunk sill under the shack, and it is not decoration.
      *
@@ -2290,14 +2399,16 @@ export class PoiKits {
     // rod stands, leaning where the water used to be
     for (let i = 0; i < 4; i++) {
       const pz = 2 + i * 2.4;
-      put(M.plank, new THREE.CylinderGeometry(0.04, 0.04, 3.2, 5), [1.4, deck + 1.4, pz], [0.4, 0, 0]);
+      const gy = ground(1.4, pz);
+      put(M.plank, new THREE.CylinderGeometry(0.04, 0.04, 3.2, 5), [1.4, gy + 1.4, pz], [0.4, 0, 0]);
     }
-    put(M.plank, new THREE.BoxGeometry(2.2, 0.12, 0.5), [-1.2, deck + 0.5, 3.4]);
-    put(M.plank, new THREE.BoxGeometry(0.9, 0.7, 0.7), [-1.0, deck + 0.4, 6.2], [0, rng.next(), 0]);
+    put(M.plank, new THREE.BoxGeometry(2.2, 0.12, 0.5), [-1.2, ground(-1.2, 3.4) + 0.5, 3.4]);
+    put(M.plank, new THREE.BoxGeometry(0.9, 0.7, 0.7), [-1.0, ground(-1.0, 6.2) + 0.4, 6.2], [0, rng.next(), 0]);
     // the boat, hauled out and heeled over on the grass
+    const bg = ground(-3.4, 5.4);
     put(M.plank, new THREE.SphereGeometry(1.5, 10, 6, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5),
-      [-3.4, deck + 0.55, 5.4], [0, 0.3, 0.42], [0.62, 0.5, 1.7]);
-    put(M.plank, new THREE.BoxGeometry(1.5, 0.1, 0.4), [-3.4, deck + 0.7, 5.4], [0, 0.3, 0.42]);
+      [-3.4, bg + 0.55, 5.4], [0, 0.3, 0.42], [0.62, 0.5, 1.7]);
+    put(M.plank, new THREE.BoxGeometry(1.5, 0.1, 0.4), [-3.4, bg + 0.7, 5.4], [0, 0.3, 0.42]);
     return { cast: true, r: 12, noApron: true };
   }
 
