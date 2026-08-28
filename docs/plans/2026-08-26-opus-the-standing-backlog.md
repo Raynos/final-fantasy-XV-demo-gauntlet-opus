@@ -858,9 +858,29 @@ level 14 and 780 hp — the curve was live. Two things were still wrong:
   poise it had at level 14 — it staggered just as often while taking twice as
   long to kill, and the extra HP was spent lying on the ground. The control is
   in the same run: the imperial patrol is an authored roamer whose level is not
-  lifted, its poise still matches its HP, and it is the only one of the three
-  with a rhythm (**0.99 attacks/s against 0.27 and 0.59**) and the only one
-  past fourteen seconds. `e5bc53d`.
+  lifted, its poise still matches its HP, and it was the only one of the three
+  with a rhythm. `e5bc53d`.
+
+**Both measured end to end, against the tree this lane inherited:**
+
+| | before | after |
+|---|---|---|
+| sabertusk den | 6.3 s, Noctis pays **1.3%**, 0.31 attacks/s | 8.3 s, **5.1%**, 0.36/s |
+| voretooth den | 6.8 s, **0.0%**, 0.44 attacks/s | 11.3 s, **1.6%**, 0.62/s |
+| imperial patrol *(control, not lifted)* | 16.7 s, 0.99/s | 15.9 s, 0.88/s |
+
+**The headline is the HP cost, not the clock**: a den now costs Noctis nearly
+four times what it did, which is a fight that can be lost over a few
+encounters. `combatloop` **31/31** afterwards, which turns "the factor is
+exactly 1 at a species' listed level so `combatloop` cannot move" from an
+argument into a measurement.
+
+**One prediction was wrong.** Poise scaling was expected to *lower* stagger
+occupancy; on the sabertusk den it went **28% -> 40%**, because the animal now
+survives long enough to be staggered several times instead of dying inside the
+first one. `attacks opened` rose anyway. If stagger occupancy itself is the
+target, the knob is the *threshold* in `hurt()`: the incoming `o.poise` is a
+flat per-attack constant and is scaled by nothing.
 
 **The bound, so nobody re-derives it.** The party puts **660-730 hp/s** into a
 wild den. A thirty-second field encounter needs ~21 000 hp of den — five
