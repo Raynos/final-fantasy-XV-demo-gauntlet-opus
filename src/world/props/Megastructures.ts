@@ -166,6 +166,10 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
     // 20 m stone got a 1.5 m tile and a 74 m one a 5.7 m tile out of the same
     // material, standing side by side. See {@link MASS_M_PER_TILE}.
     uvScale: 1 / EJECTA_M_PER_TILE,
+    // Every geometry on `M.stone` normalises its tint, or the ones that do not
+    // render a sixth darker than the ones that do, side by side in the same
+    // crater. See `megaMaterials().stone`.
+    tintNorm: true,
   });
 }
 
@@ -247,6 +251,9 @@ function meteorMass(seed: number, r: number, stretch: number[]) {
     // deeper is what turns a sphere into a polyhedron rather than a dented ball.
     bite: 0.74, bedding: 0, chips: 18, round: 0.02, crease: 26, weather: 0.06,
     size: r * 1.95, gully: 0.20, gullyFreq: 3.0, uvScale: 1 / MASS_M_PER_TILE,
+    // The cavity/dust bake, rescaled to mean 1.0 so `stone` can read it — see
+    // `megaMaterials().stone`.
+    tintNorm: true,
   });
 }
 
@@ -259,11 +266,32 @@ export function megaMaterials() {
   return {
     hull: magitekMaterial(0x2a2f37),
     hullDark: magitekMaterial(0x171a20),
-    // `instanceTint` stays OFF. The rock generator bakes a cavity/dust vertex
-    // colour whose mean is about 0.55, which is right when it multiplies a
-    // material calibrated for it and halves the value of one that is not --
-    // measured: it rendered the meteor near-black.
-    stone: rockMaterial(0x8b7f6d, 0.95, false),
+    /**
+     * `instanceTint` is ON, and the note it replaces was right about the sign
+     * and stale about the number.
+     *
+     * It said the bake's mean was "about 0.55 ... it rendered the meteor
+     * near-black", which was true of the expression that multiplied albedo by
+     * 0.31–0.90 with nothing reaching 1. That was rewritten — dust is a
+     * *lightening* and lives above 1, the AO is the only thing that darkens —
+     * and the mean is now around 0.84. Still not 1, so switching the attribute
+     * on unchanged would still have cost the Meteor a sixth of its value; but
+     * a sixth is a rescale, not a fact about the rock. `rockGeometry`'s
+     * `tintNorm` divides the mean out, and what is left is what this material
+     * was always missing: **large-scale albedo variation across a 585 m mass**.
+     *
+     * This is WS-13's named untried lever for "one dark monolith rather than a
+     * cluster of angular peaks, low in chroma against a bright sky". The
+     * cleave planes give the Meteor genuinely flat faces (that is the closed
+     * negative, and it is not a texture problem); a per-vertex tint that
+     * follows the cavity graph is the one term that varies *across* a face
+     * rather than within a tile of its map.
+     *
+     * Every geometry that reaches this material is a `rockGeometry`, so the
+     * "vertexColors with no color attribute draws BLACK" trap cannot fire —
+     * and `PartBuilder.assertAttributeContract` is watching it either way.
+     */
+    stone: Object.assign(rockMaterial(0x8b7f6d, 0.95, false).clone(), { vertexColors: true }),
     pale: concreteMaterial(0x8e8779, 0.94),
     /**
      * Insomnia's stock, and it reads vertex colours.

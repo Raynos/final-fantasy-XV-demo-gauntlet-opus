@@ -275,7 +275,8 @@ export function rockGeometry(seed: number, {
   bite = 0.78, bedding = 0, beds = 5, ledge = 0.30, chips = 3, round = 0.06, crease = 30,
   flat = 0, weather = 0.16, upBias = 0.55, joints = true, size = 1, gully = 0,
   gullyFreq = 2.4, uvScale = 0.62, relief = 0, reliefFreq = 4, reliefSteps = 3,
-}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, ledge?: number, chips?: number, round?: number, crease?: number, flat?: number, weather?: number, upBias?: number, joints?: boolean, size?: number, gully?: number, gullyFreq?: number, uvScale?: number, relief?: number, reliefFreq?: number, reliefSteps?: number } = {}) {
+  tintNorm = false,
+}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, ledge?: number, chips?: number, round?: number, crease?: number, flat?: number, weather?: number, upBias?: number, joints?: boolean, size?: number, gully?: number, gullyFreq?: number, uvScale?: number, relief?: number, reliefFreq?: number, reliefSteps?: number, tintNorm?: boolean } = {}) {
   // PolyhedronGeometry is non-indexed and its UV seam duplicates a whole
   // column of vertices; weld on position alone so the crease walk below sees
   // a real adjacency graph.
@@ -820,6 +821,27 @@ export function rockGeometry(seed: number, {
       seed, mean: kSum / count, min: kMin, max: kMax, p90: aoP90,
       ao: [0.1, 0.5, 0.9, 0.99].map((f) => q[Math.min(count - 1, Math.floor(count * f))]),
     });
+  }
+  /**
+   * **Rescale the bake so its mean is exactly 1.0.**
+   *
+   * The bake is a *variation* — cavity down, dust up — and it is only ever a
+   * variation when its mean is one. It is not: `k = dust * (1 - 0.42 * ao)`
+   * with `ao` normalised to its own p90 comes out around 0.84, so a material
+   * that starts reading the attribute loses a sixth of its value along with
+   * everything it gains. That is why `Megastructures.megaMaterials` keeps
+   * `instanceTint` off for `stone` ("it rendered the meteor near-black" — that
+   * note is from before this bake was rewritten and its 0.55 is stale, but its
+   * *sign* was right).
+   *
+   * Off by default, because the instanced rock field in this file is the one
+   * material that already reads the attribute and it was calibrated with the
+   * mean in it. Turning it on for one caller changes exactly that caller,
+   * which is what makes the Meteor's before/after readable.
+   */
+  if (tintNorm) {
+    const inv = kSum > 1e-4 ? count / kSum : 1;
+    for (let i = 0; i < col.length; i++) col[i] *= inv;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
