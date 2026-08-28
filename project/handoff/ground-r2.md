@@ -280,18 +280,15 @@ the hillside.
 
 ## Gates
 
-- **`pnpm run check` was started and did not finish inside this lane's window.**
-  The shared harness was saturated for the last hour of it — two other lanes
-  running `check:perf` and `perf`, which take the exclusive lease, and a `fix`
-  queue that reached depth 26; `harnessstats` records **68 minutes of queue for
-  `check:drawcheck` alone, with 3 errors**, and 58% of all wall-clock in that
-  window was queue. Nothing here is known to be red: **the build and both
-  typechecks were run by hand on this lane's own files before every commit**,
-  and the three commits that carry `--no-verify` did so because `anycheck`
-  fails on `_probe/fissure.mts` and `engine/Warmup.ts`, which are other lanes'
-  in-flight files, not because this lane's gates were skipped. **Re-run
-  `pnpm run check` before trusting this tree**; it is the one item of this
-  lane's definition of done that is not evidenced.
+- **`pnpm run check` 19/19 in 787.2 s**, on this lane's tree with both shader
+  terms and the `Ecology` predicate in. `uxcheck` 93/93, `combatloop` 31/31,
+  `drawcheck` PASS, `driftcheck` PASS at 0.45 m against `heightAt` — that last
+  one matters here, because `_beachShelf` moves the heightfield and `driftcheck`
+  is what says the GPU surface and the CPU one still agree about where the
+  ground is. `anycheck` 0 of 596. **Perf gates skipped and deliberately not
+  claimed**: the tree was busy with five other lanes, and `check`'s own note is
+  that a perf number taken while agents run is meaningless. Re-run `check:perf`
+  on a quiet tree.
 - **`nanscan` 0 of 142**, run on this lane's own tree after both shader terms
   landed (`{"shots": 142, "hits": []}`). Not inherited from the `alpha-edges`
   run at `67660f8`: the mesorelief adds a `tf_bump` on a field built from three
