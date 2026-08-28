@@ -947,6 +947,7 @@ without opening the handoff it lived in.
 | TAA's clamp is why leaf edges alias | measured false — TAA reaches them and softens them, it is just not enough |
 | `compileAsync` for shader warm | **3% slower** here, six pairs |
 | **WS-11: the arm whips beside a boulder, so it is `CameraRig._armDistance`'s sphere sweep, not the framing** | **the sweep is innocent.** `probes/armwhip.mts` records the lens's own kinematics in a real den fight, decomposed into focus translation / arm length / orbit: **zero frames at the `minDistance` clamp** in the fight and in the walking control, and **14.45 of the 14.86 m/s p95 lens speed is the ORBIT term**. It is the combat **framing block**, which steered `yawTarget` at the bearing from the *player* — the one unstable quantity in a melee, a sabertusk two metres away swings it 90 degrees in a third of a second while barely moving on screen — with no deadzone and no rate limit, while `restDistance = targetDistance + flat * 0.22` ran the arm out to 7.9 m so every degree of it was 40% more lens travel. Rewritten: `e218f5b`. The **boulder** is a separate defect and is still open — see below |
+| **WS-11: the boulder in the near corner is the camera having no prop collision** | **built, measured at 0.00%, reverted (`90aeb6a` / `93f900b`).** `probes/rockcam.mts` walks 9 240 frames of sprinting across Longwythe with the camera turning at 0.3 rad/s and asks whether a stone crosses the segment from the lens to the player: **zero, before and after** the sweep, and zero lens-inside-stone. It cost 2.14% -> 3.55% of frames a shortened arm for that. A **sphere** version of the same test says 1.24% and is wrong in the way that matters — a median-axis radius makes a ten-metre tor a ten-metre ball, so a player standing three metres from one reads as inside it — and it is also what broke the first sweep, which cleared 2 of the 107 frames it flagged. **The boulder in `tmp/shots/cb1/f-engage.jpg` is beside the lens, not between it and the player**, so no arm length removes it: shortening the arm moves the camera *toward* the player. Re-opening it means measuring the screen area a prop within a few metres of the lens covers, and the fix for that is a lateral dodge or a soft fade |
 | **WS-11: `PartyAI.ROLES`' motion values are the knob for "Noctis does 14% of the damage in his own fight"** | **they are not.** `probes/dpsshare.mts` runs every attacker's real blow through `rpg.damage` with that attacker's own stats and cadence: at **full uptime Noctis already has 64%** of the party's output (781 dps to gladio 203, ignis 131, prompto 112). The entire gap is **uptime**, which `ROLES` cannot reach — and most of the measured 14% was the probe, whose melee policy stood at `t.radius + 3.4` (4.4 m for a sabertusk) with a 2.05 m blade and swung at air; one round went **0% -> 27%** on that line alone. What was left was a missing **attack step-in** and a flat warp-strike multiplier. `ea87e16`, `77e5c51` |
 | Raising a cost cap in the ground layer | no budget bug exists there; the limit is `Ecology.scrubDensity` at 0.09–0.34, which is authored ecology |
 | `GrassField`'s 155 m outer ring is a fictional budget constant | it is justified on quality and the justification is good |
@@ -1030,14 +1031,12 @@ table). `e218f5b` the camera whip and the combat framing · `10c2688` +
 damage-number lanes · `ea87e16` + `77e5c51` the damage share. Handoff:
 `project/archive/handoff/combat.md`. Two things it reports rather than fixes:
 
-- **The boulder in the near corner is prop occlusion, and there has never been
-  a prop sweep.** `CameraRig._armDistance` sweeps **terrain only**; its own
-  comment says `Props` would have to publish an opt-in `cameraColliders`, and
-  nothing does. `tmp/shots/cb1/f-engage.jpg` is a rock filling the top-right
-  quadrant a metre from the lens, and it happens walking as much as fighting.
-  Needs `Rocks` (`src/world/props/Rocks.ts`, a `TileStream` of instances) to
-  publish the nearby instances' centres and radii; `_armDistance` is where the
-  sweep goes and is written to take one.
+- **The boulder in the near corner is not a collision problem at all.** Built,
+  measured at **0.00%** and reverted — see the negatives table. The stone in
+  `tmp/shots/cb1/f-engage.jpg` is *beside* the lens, not between it and the
+  player, and shortening the arm moves the camera toward the player rather
+  than away from the rock. `probes/rockcam.mts` is the instrument and carries
+  the arithmetic.
 - **A wild enemy's max HP is one Noctis combo**, which is why field encounters
   last **6-7 s** against FFXV's 30-90. A level 21 sabertusk is 1381 hp; a full
   Engine Blade combo is 1375 over 1.76 s and the party's full-uptime output is

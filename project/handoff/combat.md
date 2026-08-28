@@ -14,6 +14,9 @@ numbers, the victory card). Brief: `docs/plans/2026-08-26-opus-the-standing-back
 | `6a00b0f` | a victory card, a readable call-out, four damage-number lanes |
 | `ea87e16` | "Noctis does 14%" was the probe standing 1.5 m outside its own reach |
 | `77e5c51` | the attack step-in, and a warp-strike that scales with distance |
+| `e729bb8` | the shards are cyan-blue and the warp's ground rings are light |
+| `d081b13` | WS-11's combat half closed in the plan, both negatives recorded |
+| `93f900b` | the camera's prop collision, built and reverted at 0.00% |
 
 ### 1. The whipping arm — **closed, and the stated cause is a measured negative**
 
@@ -122,14 +125,19 @@ Two real causes, both now fixed:
 
 ## Open / reported, not fixed
 
-- **The boulder in the near corner is prop occlusion, not the arm.**
-  `_armDistance` sweeps **terrain only** — there has never been a prop sweep,
-  and its own comment says `Props` would have to publish an opt-in
-  `cameraColliders`. `tmp/shots/cb1/f-engage.jpg` is a rock filling the
-  top-right quadrant a metre from the lens. Fixing it needs `Rocks` (a
-  `TileStream` of instances, `src/world/props/Rocks.ts`) to publish the
-  nearby instances' centres and radii; `CameraRig._armDistance` is where the
-  sweep would go and is written to take one.
+- **The boulder in the near corner: built, measured at 0.00%, reverted**
+  (`90aeb6a` / `93f900b`). `probes/rockcam.mts` (new) walks 9 240 frames of
+  sprinting across Longwythe with the camera turning at 0.3 rad/s and asks
+  whether a stone crosses the segment from the lens to the player: **zero,
+  before and after**, for 2.14% -> 3.55% of frames with a shortened arm. A
+  sphere version of the test says 1.24% and is wrong the way that matters — a
+  median-axis radius makes a ten-metre tor a ten-metre ball — and is also what
+  broke the first sweep, which cleared 2 of the 107 frames it flagged. **The
+  stone in `tmp/shots/cb1/f-engage.jpg` is beside the lens, not between it and
+  the player**: shortening the arm moves the camera *toward* the player, so no
+  arm length removes it. Re-opening it means measuring the screen area a prop
+  within a few metres of the lens covers, and the fix is a lateral dodge or a
+  soft fade, not a spring arm.
 - **A wild enemy's max HP is one Noctis combo.** Sabertusk lv 21 = 1381 hp;
   a full Engine Blade combo is 1375 over 1.76 s and the party's full-uptime
   output is 1227 dps. That is why field encounters last **6-7 s** against
@@ -151,6 +159,8 @@ New, all under `src/tools/probes/`:
   at full uptime, plus what a warp-strike is worth at 3 / 12 / 24 m.
 - `endbeat.mts` — the two UI beats no authored shot reaches: the call-out
   over a bright sky, the victory card, and four numbers at one world point.
+- `rockcam.mts` — whether a stone stands between the lens and the player, over
+  a fixed sprint with the camera turning. The one that closed the boulder.
 
 Corrected: `fightshape.mts` — lens-relative `bearingOff`, a rate-limited
 aim, a standoff read off the drawn weapon's reach, and **blows landed per
