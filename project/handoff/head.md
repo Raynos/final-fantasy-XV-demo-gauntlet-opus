@@ -71,14 +71,14 @@ which is how a hole under the jaw got closed by making the cap inside out too.
 Limits are 14 and 3. Both "lit half clipped" VOIDs are gone. The **lit half
 swapped sides on every head**, which is the same fact seen from the shading.
 
-**`facecheck`'s control window now needs recalibrating and this is the top item
-for the next pass.** It scores every feature against "the same box slid 40 mm
-sideways onto the cheek, which is skin and nothing else". On a face that has
-form that is no longer true — Noctis' control carries 111.0 of range (a
-cheekbone and a nasolabial fold), so he VOIDs for `CONTROL_CEILING` where he
-used to VOID for clipping. The control was written against a face that had no
-cheek. Candidates: move the control to the forehead, or raise
-`CONTROL_CEILING`, or score the ratio rather than the difference.
+`facecheck`'s control window was re-derived against the fixed face (`9f5a937`)
+and **`CONTROL_CEILING = 60` survives**. The worry was that a face with form has
+no blank patch left — Noctis' control went 29.9 -> 111.0 in the same commit that
+gave him a mouth. It is not that: Ignis reads 58.3 and Prompto 50.0 on the same
+frame with the same boxes. What puts Noctis over is a **hard-edged fringe shadow
+across his lit cheek**, and Gladiolus is still his beard. A third control on the
+masseter was tried at two positions and won neither. Both VOIDs are now honest
+statements about the picture.
 
 ---
 
@@ -166,11 +166,13 @@ face, not another round of hunting a missing one.
 
 ## 4. Next, in order
 
-1. **Recalibrate `facecheck`'s control window** (§1). Two heads VOID for the
-   good reason now and the gate cannot see its own best result.
-2. **`hero_portrait`'s fringe throws hard black stripes across the face** —
-   they read as scratches, and at this range they are the loudest thing left on
-   the judged frame. `Hair.ts` + whatever casts them.
+1. **The fringe throws hard-edged black stripes across the face.** They read as
+   scratches on `hero_portrait`, they are the loudest thing left on the judged
+   frame, and they are also what keeps `facecheck` from asserting Noctis'
+   `mouthRange` of 100.7 against a limit of 14 — no 17 x 14 mm box on his lit
+   half can dodge the stripe, so the control VOIDs. `Hair.ts` plus whatever
+   casts them; a softer/attenuated fringe shadow fixes the picture and the gate
+   at once. **Start here.**
 3. **Re-judge every open head item against the fixed shell.** Most of the
    backlog was written about a frame that did not contain the face:
    - the **ear's 16 mm** — still a flat scoop standing off the head, visible in
