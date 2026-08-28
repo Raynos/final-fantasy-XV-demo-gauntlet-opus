@@ -143,10 +143,13 @@ Neither shot had one; both were on `DEFAULT_LIMIT = 2.0`. Measured from two
 
 ## check
 
-`pnpm run check`: **18/19 gates pass in 86.4 s**. The one failure is
-`facecheck`, and it is not this lane's: it fails identically at HEAD~2, before
-this fix, on all four heads (`transverseDropMm`, `jawWidthErr`, and no mouth on
-three of them). That is WS-1's gate and WS-1 is live in `src/characters/**`.
+`pnpm run check`: **19/19 gates pass**, both fixes in.
+
+It read 18/19 on the first run, failing `facecheck`, and that was not this
+lane's: it failed identically at HEAD~2, before any of this, on all four heads.
+WS-1 landed its fix while this lane was running and it is green now. Worth
+knowing as a habit — on a shared trunk a red gate is not yours until you have
+run it against a build from before your change.
 
 
 ## If you are picking this up
