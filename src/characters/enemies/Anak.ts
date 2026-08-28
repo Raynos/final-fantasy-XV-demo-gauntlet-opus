@@ -155,9 +155,9 @@ function buildPrototype() {
     // dun meets cream, and the cream underside below it. The stripe sits ON
     // the boundary rather than beside it, so even where the ring can only
     // spare two segments for it the two values it separates still read.
-    let c = mixc(flank, DUN_DEEP, clamp01((b - 0.12) / 0.62) * 0.78);
-    c = mixc(c, CREAM, Math.pow(clamp01((-b - 0.30) / 0.34), 2) * 0.94);
-    c = mixc(c, BAND, Math.exp(-Math.pow((b + 0.44) / 0.26, 2)) * 0.85);
+    let c = mixc(flank, DUN_DEEP, clamp01((b - 0.05) / 0.55) * 0.80);
+    c = mixc(c, CREAM, Math.pow(clamp01((-b - 0.16) / 0.40), 2) * 0.95);
+    c = mixc(c, BAND, Math.exp(-Math.pow((b + 0.26) / 0.24, 2)) * 0.92);
     // and the pale rump the tail flags against
     return mixc(c, CREAM_HI, clamp01((0.11 - u) / 0.11) * 0.62);
   };
@@ -247,7 +247,9 @@ function buildPrototype() {
     brushes: [
       { p: [0, 2.855, 0.625], r: [0.09, 0.075, 0.09], amt: 0.015, dir: [0, 1, -0.25] },      // braincase
       { p: [0, 2.858, 0.705], r: [0.10, 0.042, 0.065], amt: 0.020, dir: [0, 1, 0.18] },      // brow shelf
-      { p: [0.070, 2.836, 0.738], r: [0.042, 0.040, 0.048], amt: -0.016, dir: 'normal', mirror: true }, // eye socket
+      { p: [0.070, 2.836, 0.740], r: [0.048, 0.046, 0.055], amt: -0.026, dir: 'normal', mirror: true }, // eye socket
+      { p: [0.070, 2.858, 0.742], r: [0.038, 0.020, 0.040], amt: 0.011, dir: [0.3, 1, 0.1], mirror: true }, // upper lid
+      { p: [0.030, 2.746, 1.016], r: [0.020, 0.020, 0.026], amt: -0.010, dir: 'normal', mirror: true },  // nostril
       { p: [0.070, 2.786, 0.706], r: [0.042, 0.050, 0.062], amt: 0.014, dir: [1, -0.15, 0], mirror: true }, // cheek arch
       { p: [0, 2.752, 0.985], r: [0.10, 0.10, 0.14], amt: -0.044, dir: 'normal' },           // muzzle taper
       { p: [0, 2.742, 1.032], r: [0.09, 0.09, 0.09], amt: -0.020, dir: 'normal' },           // and again at the tip
@@ -255,14 +257,25 @@ function buildPrototype() {
       { p: [0, 2.722, 0.995], r: [0.05, 0.04, 0.06], amt: 0.010, dir: [0, -1, 0.3] },        // upper lip
     ],
     colorAt: (u, v, p) => {
-      const under = clamp01((2.778 - p.y) / 0.062);
-      const cheek = clamp01(1 - Math.abs(Math.abs(p.x) - 0.055) / 0.052) * clamp01((2.822 - p.y) / 0.072);
-      let c = mixc(DUN, CREAM, Math.max(under * 0.85, cheek * 0.5));
+      // The face is dun with cream *under* it, not cream with dun on top: the
+      // first pass had `under` and `cheek` reaching so far up the skull that
+      // the whole head came back near-white and the blaze had nothing to sit
+      // against.
+      const under = clamp01((2.762 - p.y) / 0.050);
+      const cheek = clamp01(1 - Math.abs(Math.abs(p.x) - 0.058) / 0.038) * clamp01((2.800 - p.y) / 0.048);
+      let c = mixc(DUN, CREAM, Math.max(under * 0.85, cheek * 0.42));
       // the facial blaze: a dark stripe down the bridge, the thing that turns
       // a pale wedge into a face
-      const blaze = clamp01(1 - Math.abs(p.x) / 0.046) * clamp01((p.z - 0.720) / 0.10)
-        * clamp01((1.005 - p.z) / 0.06);
-      c = mixc(c, DUN_DARK, blaze * 0.78);
+      const blaze = clamp01(1 - Math.abs(p.x) / 0.052) * clamp01((p.z - 0.700) / 0.09)
+        * clamp01((1.010 - p.z) / 0.05) * clamp01((p.y - 2.740) / 0.03);
+      c = mixc(c, DUN_DARK, blaze * 0.85);
+      // a dark lid ring, so the eye is set in something rather than printed on
+      const lid = Math.exp(-(
+        Math.pow((Math.hypot((Math.abs(p.x) - 0.070) / 0.046, (p.y - 2.838) / 0.042) - 0.92) / 0.34, 2)
+        + Math.pow((p.z - 0.752) / 0.055, 2)));
+      c = mixc(c, GLAND, lid * 0.85);
+      // the lip line
+      c = mixc(c, DUN_DARK, clamp01((2.735 - p.y) / 0.014) * clamp01((p.z - 0.900) / 0.05) * 0.7);
       // a pale muzzle band behind the nose leather
       c = mixc(c, CREAM_HI, clamp01((p.z - 0.955) / 0.045) * 0.80);
       // and the preorbital gland, a dark slit below the eye
@@ -276,7 +289,7 @@ function buildPrototype() {
   });
   // nose leather
   sculptBlob(B, {
-    center: [0, 2.726, 1.036], scale: [0.040, 0.031, 0.026], segU: 12, segV: 8,
+    center: [0, 2.728, 1.034], scale: [0.046, 0.036, 0.030], segU: 14, segV: 9,
     brushes: [
       { p: [0.022, 2.732, 1.052], r: [0.016, 0.020, 0.024], amt: -0.008, dir: 'normal', mirror: true },
     ],
@@ -286,22 +299,26 @@ function buildPrototype() {
     // The eye is this animal's whole character: a prey animal's is huge, dark,
     // set high and wide enough on the skull to see behind itself. Radiance is
     // low — a wet highlight, not the predator's lit iris.
-    B.glow(EYE_GLOW, 1.3);
+    B.glow(EYE_GLOW, 2.4);
     sculptBlob(B, {
-      center: [0.0765 * s, 2.838, 0.756], scale: [0.032, 0.035, 0.028], segU: 12, segV: 9,
+      center: [0.0755 * s, 2.838, 0.754], scale: [0.034, 0.038, 0.030], segU: 14, segV: 10,
       colorAt: () => EYE_DARK, matAt: () => M_WET,
     });
     B.glow(null);
     // ear: a tall leaf, thin front-to-back, pale inside with a dark rim
     sweep(B, {
+      // Splayed sideways, not upward: the first version rose *inside* the
+      // horns' arc and the two read as four blades from the front.
       nodes: [
-        { p: [0.068 * s, 2.872, 0.598], rx: 0.030, rz: 0.019 },
-        { p: [0.116 * s, 2.952, 0.545], rx: 0.052, rz: 0.017 },
-        { p: [0.161 * s, 3.028, 0.486], rx: 0.045, rz: 0.014 },
-        { p: [0.194 * s, 3.082, 0.438], rx: 0.015, rz: 0.008 },
+        { p: [0.078 * s, 2.840, 0.622], rx: 0.030, rz: 0.020 },
+        { p: [0.148 * s, 2.900, 0.560], rx: 0.058, rz: 0.018 },
+        { p: [0.216 * s, 2.952, 0.484], rx: 0.052, rz: 0.015 },
+        { p: [0.262 * s, 2.980, 0.428], rx: 0.017, rz: 0.008 },
       ],
       steps: 10, seg: 12, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.5,
-      shape: (th, u) => 1 + Math.max(0, Math.cos(th)) * 0.16 * smooth((u - 0.1) / 0.4),
+      // cupped forward — the inside of the ear is a dish, and the dish is what
+      // stops it reading as a leaf stuck to the skull
+      shape: (th, u) => 1 + Math.max(0, Math.cos(th)) * 0.28 * smooth((u - 0.08) / 0.42),
       colorAt: (th, u) => {
         const inner = clamp01((Math.cos(th) - 0.05) / 0.7);
         const rim = clamp01((Math.abs(Math.sin(th)) - 0.72) / 0.28);
@@ -313,15 +330,18 @@ function buildPrototype() {
     // five loose rings stacked beside it
     sweep(B, {
       nodes: [
-        { p: [0.050 * s, 2.884, 0.646], rx: 0.036, rz: 0.032 },
-        { p: [0.072 * s, 2.990, 0.576], rx: 0.030, rz: 0.027 },
-        { p: [0.093 * s, 3.074, 0.456], rx: 0.024, rz: 0.021 },
-        { p: [0.104 * s, 3.124, 0.306], rx: 0.017, rz: 0.015 },
-        { p: [0.101 * s, 3.136, 0.156], rx: 0.009, rz: 0.008 },
-        { p: [0.092 * s, 3.116, 0.056], rx: 0.004, rz: 0.0035 },
+        { p: [0.048 * s, 2.880, 0.652], rx: 0.046, rz: 0.038 },
+        { p: [0.071 * s, 2.988, 0.578], rx: 0.038, rz: 0.031 },
+        { p: [0.093 * s, 3.074, 0.456], rx: 0.030, rz: 0.025 },
+        { p: [0.105 * s, 3.126, 0.306], rx: 0.021, rz: 0.017 },
+        { p: [0.102 * s, 3.138, 0.156], rx: 0.011, rz: 0.009 },
+        { p: [0.092 * s, 3.116, 0.052], rx: 0.004, rz: 0.0035 },
       ],
       steps: 26, seg: 10, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.6,
-      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 25)) * 0.17 * (1 - smooth((u - 0.58) / 0.34)),
+      // The ribs have to be a *shape*, not a shade: at 26 steps four cycles is
+      // 6.5 samples each, which is the finest a ring this size can carry
+      // without the rings turning into streaks (the garula-mane rule).
+      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 25)) * 0.26 * (1 - smooth((u - 0.62) / 0.30)),
       colorAt: (th, u) => mixc(mixc(HORN_DARK, HORN, clamp01((u - 0.12) / 0.55)),
         HORN_DARK, Math.max(0, -Math.sin(u * 25)) * 0.42),
       matAt: () => M_HORN,
@@ -371,17 +391,22 @@ function buildPrototype() {
     B.group(5);
     sweep(B, {
       nodes: [
-        { p: [0.200 * s, 2.20, 0.235], rx: 0.098, rz: 0.108 },   // scapula, inside the shoulder
-        { p: [0.220 * s, 1.92, 0.276], rx: 0.082, rz: 0.092 },   // upper arm
+        // Node 0 is deliberately small and buried inside the barrel. At its
+        // first size the sweep's start cap broke the torso surface and read as
+        // a cut cylinder end stuck on the shoulder — visible even at eight
+        // metres. The shoulder mass is the *second* node, which is a swell in
+        // a continuous sweep and has no cap in it.
+        { p: [0.130 * s, 2.16, 0.250], rx: 0.052, rz: 0.058 },   // buried scapula
+        { p: [0.208 * s, 1.94, 0.272], rx: 0.090, rz: 0.100 },   // shoulder / upper arm
         { p: [0.234 * s, 1.62, 0.320], rx: 0.058, rz: 0.065 },   // forearm belly
         { p: [0.241 * s, 1.36, 0.340], rx: 0.038, rz: 0.044 },   // carpus — the pinch
         { p: [0.246 * s, 1.06, 0.300], rx: 0.030, rz: 0.034 },   // cannon
         { p: [0.249 * s, 0.74, 0.250], rx: 0.027, rz: 0.031 },
-        { p: [0.250 * s, 0.60, 0.220], rx: 0.035, rz: 0.039 },   // fetlock
+        { p: [0.250 * s, 0.605, 0.220], rx: 0.043, rz: 0.048 },  // fetlock — a real joint, not a bump
         { p: [0.250 * s, 0.44, 0.236], rx: 0.024, rz: 0.028 },   // pastern
         { p: [0.250 * s, 0.245, 0.264], rx: 0.021, rz: 0.025 },  // coronet
       ],
-      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: 0.25,
+      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 1.0, capEnd: 0.25,
       shape: legShape(0.20), colorAt: legColour(s), matAt: () => M_HIDE,
     });
     P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fkn${n}`, `fca${n}`, `fho${n}`]] });
@@ -395,17 +420,17 @@ function buildPrototype() {
     B.group(5);
     sweep(B, {
       nodes: [
-        { p: [0.182 * s, 2.16, -0.34], rx: 0.106, rz: 0.116 },   // pelvis, inside the haunch
-        { p: [0.203 * s, 1.86, -0.425], rx: 0.098, rz: 0.108 },  // thigh
+        { p: [0.120 * s, 2.12, -0.36], rx: 0.055, rz: 0.060 },   // buried pelvis — see the foreleg
+        { p: [0.200 * s, 1.88, -0.425], rx: 0.104, rz: 0.114 },  // thigh
         { p: [0.221 * s, 1.58, -0.500], rx: 0.070, rz: 0.078 },  // gaskin, the drive muscle
         { p: [0.231 * s, 1.30, -0.545], rx: 0.039, rz: 0.045 },  // stifle — the pinch
         { p: [0.237 * s, 0.98, -0.455], rx: 0.031, rz: 0.035 },  // cannon
         { p: [0.240 * s, 0.74, -0.375], rx: 0.027, rz: 0.031 },
-        { p: [0.240 * s, 0.60, -0.320], rx: 0.035, rz: 0.039 },  // hock fetlock
+        { p: [0.240 * s, 0.605, -0.320], rx: 0.043, rz: 0.048 }, // fetlock
         { p: [0.240 * s, 0.44, -0.296], rx: 0.024, rz: 0.028 },
         { p: [0.240 * s, 0.245, -0.270], rx: 0.021, rz: 0.025 },
       ],
-      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: 0.25,
+      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 1.0, capEnd: 0.25,
       shape: legShape(0.27), colorAt: legColour(s), matAt: () => M_HIDE,
     });
     P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bst${n}`, `bhk${n}`, `bho${n}`]] });
@@ -472,13 +497,13 @@ function buildPrototype() {
  */
 function hoof(B: CBuilder, x: number, z: number) {
   for (const t of [-1, 1]) {
-    const ox = x + t * 0.0165;
+    const ox = x + t * 0.020;
     sweep(B, {
       nodes: [
-        { p: [ox, 0.250, z - 0.014], rx: 0.024, rz: 0.030 },              // coronet, swallowing the leg's end
-        { p: [ox + t * 0.002, 0.170, z + 0.002], rx: 0.024, rz: 0.033 },  // wall
-        { p: [ox + t * 0.003, 0.070, z + 0.028], rx: 0.020, rz: 0.031 },  // toe
-        { p: [ox + t * 0.003, 0.020, z + 0.058], rx: 0.008, rz: 0.013 },  // point
+        { p: [ox, 0.255, z - 0.016], rx: 0.028, rz: 0.034 },              // coronet, swallowing the leg's end
+        { p: [ox + t * 0.003, 0.165, z + 0.004], rx: 0.031, rz: 0.040 },  // wall — the hoof's widest point
+        { p: [ox + t * 0.004, 0.065, z + 0.034], rx: 0.026, rz: 0.038 },  // toe
+        { p: [ox + t * 0.004, 0.018, z + 0.066], rx: 0.010, rz: 0.016 },  // point
       ],
       steps: 9, seg: 10, ref: [0, 0, 1], capStart: false, capEnd: 0.35,
       // the sole: flatten the underside so the foot meets the ground on a
