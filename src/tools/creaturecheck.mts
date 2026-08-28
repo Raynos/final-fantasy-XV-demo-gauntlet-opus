@@ -31,20 +31,32 @@
  *   node src/tools/creaturecheck.mts --hold 240     # frames to hold each pose
  *   node src/tools/creaturecheck.mts --tol 0.25     # fail above this |foot|, metres
  *   node src/tools/creaturecheck.mts --json out.json
+ *   node src/tools/creaturecheck.mts --species anak --dirty   # your own edit
  *
  * Exits non-zero if any pose drifts, or if any pose leaves the model further
  * off the ground than `--tol` (airborne poses — a pounce, a leap — are exempt
  * by name, because being off the ground is the point of them).
  */
 import { writeFile } from 'node:fs/promises';
-import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, HARNESS_FLAGS } from './harness.mts';
 
 
+/**
+ * Throwing on an unknown flag is worth keeping — a typo in `--species` that
+ * silently ran the whole roster would waste four minutes and look like a pass.
+ * But the harness's own flags are not this tool's business, and until they were
+ * skipped here `creaturecheck --dirty` died on `unknown flag --dirty`, so the
+ * one gate that proves a sculpt change has not re-buried anything could only
+ * ever be run against `HEAD` — i.e. never on the edit you are making. That is
+ * the same trap `framecam.mts` records six handoffs hitting.
+ */
 function parseArgs(argv: string[]) {
   const o: { hold: number, tol: number, driftTol: number, species: string[] | null, json: string | null, quiet: boolean } =
     { hold: 240, tol: 0.25, driftTol: 0.002, species: null, json: null, quiet: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    const words = HARNESS_FLAGS.get(a);
+    if (words !== undefined) { i += words; continue; }
     if (a === '--hold') o.hold = Number(argv[++i]);
     else if (a === '--tol') o.tol = Number(argv[++i]);
     else if (a === '--drift-tol') o.driftTol = Number(argv[++i]);
