@@ -9,9 +9,9 @@ Update the number, keep the date, delete a row that stops being true.
 | **Startup**, first visit, empty HTTP cache | **7.1 s** to `GAME.ready` on localhost · **85.5 MB on the wire** in 5 requests, 199.9 MB decoded. The wire is the number that travels: 0.3 s here, **~14 s on a 50 Mbit line** | `coldload --prod --n 2` | 08-28 |
 | **Startup**, screen responsive during it | **No, and now measurably.** 77 frames in 7.3 s (**10.6 fps**; responsive is ~437), **92% of the load with no paint and no input**, worst single block **1.2 s**. Was **one unbroken 7961 ms task** before `Game.init()` learned to yield | `coldload --prod`, gate `bootblock` | 08-28 |
 | **RAM** | **1.25 GB** the tab (renderer) · **2.23 GB** whole process tree, prod play. Was **1.61 / 2.60** this morning; −362 MB off the tab | `bootprof --mem --play --prod` | 08-28 |
-| **CPU**, idle page | **~16.5 ms of CPU per rendered frame** = **96–105% of one core at 60 Hz**, ~200% at 120 Hz, **113% at Retina pixel scale**. It is the rAF render loop, all of it: `stop()` takes the page to **0.5–2.4%** | `idlecpu --q high --dpr 1.5` | 08-28 |
-| **FPS** | mean **226–229**; 142/142 shots clear 60 by more than their own noise | `perf.mts`, `RULER_VALID: true` | 08-28 |
-| **Worst frame** | **no frame over 33 ms**, 0 hitches; worst gameplay segment 133.3 fps | `gameplay.mts`, `RULER_VALID: true` | 08-28 |
+| **CPU**, idle page | **~16.5 ms of CPU per rendered frame**, and the loop is now **capped at 60 fps** (`Game.maxFps`), so that is **~99–110% of one core on any display**. Was 189–203% of a core headless at 117 fps and **~200% on a 120 Hz panel**; **a 60 Hz panel is unchanged, because it was already drawing 60**. `stop()` still takes the page to **0.6–2.0%** | `idlecpu --q high --dpr 1.5` | 08-28 |
+| **FPS** | mean **218.7**, worst shot 134; 142/142 clear 60 by more than their own noise. This is the cost of a frame the harness asks for, not a rate — the loop that free-runs is capped at 60, see the CPU row | `perf.mts`, `RULER_VALID: true` | 08-28 |
+| **Worst frame** | **no frame over 33 ms**, **0 hitches**; worst gameplay segment 127.4 fps (`streaming-traverse`) | `gameplay.mts`, `RULER_VALID: true` | 08-28 |
 | **Draw calls** | **786** of a budget of 800 | `drawcheck.mts` | 08-28 |
 
 ## Why those three rows were blank, and what filled them
@@ -39,45 +39,74 @@ question before it is asked) and watches the load from before the app's first
 line runs. Its `--gate` mode is the **`bootblock`** gate in `check --perf`, which
 is the only gate in the suite that watches the load rather than a frame.
 
-## Idle CPU: it is the render loop, all of it
+That asymmetry is now load-bearing in the other direction too. Because `idlecpu`
+is the only gate that ever runs the loop, it is **the only place the 60 fps cap
+can be asserted at all** — a commit that deleted `Game.maxFps` would pass all
+nineteen gates, both perf gates and all 142 shots. Its third check reads the cap
+off the page and asserts the loop honours it.
 
-`idlecpu --q high --dpr 1.5`, A/B/A, 15 s per arm:
+## Idle CPU: it was the render loop, all of it, and now it is capped
 
-| arm | GPU | browser | network | renderer | **total** | fps | CPU ms/frame | at 60 Hz | at 120 Hz |
+`idlecpu --q high --dpr 1.5`, A/B/A, 15 s per arm, both runs back to back on the
+same box. `rAF Hz` is what the host **offered** and `fps` what the loop **drew** —
+before the cap those were the same number by construction:
+
+| | arm | GPU | browser | network | renderer | **total** | rAF Hz | **fps** | CPU ms/frame |
 |---|---|---|---|---|---|---|---|---|---|
-| running | 73.5% | 16.0% | 2.7% | 75.8% | **168%** | 102.0 | 16.47 | **98.8%** | 197.7% |
-| **stopped** | 0.2% | 0.7% | 0.0% | 1.5% | **2.4%** | 0 | — | — | — |
-| running2 | 85.1% | 16.0% | 2.7% | 77.2% | **181%** | 103.3 | 17.53 | **105.2%** | 210.3% |
-| dpr 1.5 | 62.4% | 10.7% | 1.9% | 50.7% | **126%** | 66.9 | 18.80 | **112.8%** | 225.6% |
+| **before** | running | 83.6% | 17.9% | 2.9% | 84.8% | **189%** | — | 117.5 | 16.10 |
+| | **stopped** | 0.1% | 0.4% | 0.0% | 1.6% | **2.2%** | — | 0 | — |
+| | running2 | 95.0% | 17.5% | 2.7% | 87.8% | **203%** | — | 116.3 | 17.45 |
+| | dpr 1.5 | 76.6% | 14.5% | 2.3% | 66.3% | **160%** | — | 77.8 | 20.51 |
+| **after** | running | 43.4% | 9.6% | 1.6% | 48.0% | **103%** | 119.2 | **62.2** | 16.49 |
+| | **stopped** | 0.0% | 0.6% | 0.0% | 1.4% | **2.0%** | 0 | 0 | — |
+| | running2 | 50.7% | 9.5% | 1.5% | 50.9% | **113%** | 120.0 | **61.7** | 18.26 |
+| | dpr 1.5 | 54.3% | 9.3% | 1.5% | 51.8% | **117%** | 120.0 | **60.0** | 19.48 |
 
 **Read the `stopped` row first.** `Game.stop()` cancels the rAF loop and nothing
 else — the page, the world, the GL context and every timer survive — and the
-whole cost of an idle tab goes to 2.4%. There is **no timer, no microtask storm,
+whole cost of an idle tab goes to 2%. There is **no timer, no microtask storm,
 and no unconverged streaming loop**; `Vegetation.update` even falls from 0.37 to
 0.23 ms between the two running arms, so the converge does finish. `grep` agrees:
 outside the dev suite the game contains exactly one `requestAnimationFrame` and
 no `setInterval`.
 
-So the cause is named, and it is not a bug. **`Game.start()` runs `rAF` forever
-and `Game.frame()` draws a full post-processed frame every tick, unconditionally,
-whether or not anything in the world moved.** There is no frame-rate cap and no
-idle path. Headless does not vsync, which is why the raw percentage is 168–181%
-at ~102 fps: that is what the loop costs when *nothing* caps it. A real tab's rAF
-is locked to the display, so the honest figure is per-frame CPU × refresh — 96–105%
-of a core at 60 Hz, which is exactly what the human saw.
+So the cause was named, and it was not a bug. **`Game.start()` ran `rAF` forever
+and `Game.frame()` drew a full post-processed frame every tick, unconditionally,
+whether or not anything in the world moved.** Idle CPU is `frame cost × frame
+rate` and only the first factor had ever been bounded — by `perf` and `gameplay`,
+which step frames by hand and cannot see the second at all.
 
-Inside the 5.8 ms of main thread, `post.render` is **74–77%** and every system put
+**`Game.maxFps` is now 60**, `BRIEF.md` rule 3's own target, and the third row of
+each block is the proof: the host still offers 120 rAF callbacks a second and the
+loop draws 60 of them. Headless does not vsync, so the offer itself moves with
+the box — it has been seen at 90 Hz, where the cap correctly does *not* bite (see
+below) — which is why the tool counts the offer as well as the draw.
+
+**Read the last column before celebrating.** `CPU ms/frame` did not move: 16.5–19.5
+either side. **The cap does not make a frame cheaper, it draws fewer of them**, so:
+
+- **on a 60 Hz panel nothing changes at all.** It was already drawing 60 a second,
+  and it still costs ~99–110% of a core. If the tab a person reported at 96–105%
+  was on a 60 Hz display, **this change does not fix it** and `post.render` is the
+  only remaining lever.
+- **on a 120 Hz / ProMotion panel it halves**, ~200% → ~100%, and that is most of
+  the Macs this would run on.
+- **between 61 and 119 Hz it deliberately does nothing.** The cap is a vsync
+  divisor and it *floors* rather than rounds: on a 100 Hz panel the only rates
+  either side of 60 are 100 and 50, and picking 50 would put the game under rule
+  3's floor to save power. See `Game.start()` for the table.
+
+Inside the 6.2 ms of main thread, `post.render` is **74–77%** and every system put
 together is under 1.5 ms. The `dpr 1.5` arm is why a headless percentage
-*understates* this: headless reports `devicePixelRatio` 1 and draws 1600×900 =
-1.44 Mpx, while a Retina panel reports 2 and `Renderer.ts` asks for `min(dpr, 1.5)`
-at `q=high` — 2400×1350, **2.25× the pixels**. That arm cannot reach 120 fps at
-all (66.9), so on a ProMotion display the loop takes every frame it is offered and
-still costs ~126% of a core.
+*understates* all of this: headless reports `devicePixelRatio` 1 and draws
+1600×900 = 1.44 Mpx, while a Retina panel reports 2 and `Renderer.ts` asks for
+`min(dpr, 1.5)` at `q=high` — 2400×1350, **2.25× the pixels**. Uncapped that arm
+could not reach 120 fps at all (77.8) and still cost 160% of a core; capped it
+holds 60.0 at 117%, and the frame behind it costs 19.5 ms.
 
-**Nothing here is free to remove.** The world is never static — the day cycle, the
-water, the wind and TAA all animate — so render-on-demand is not available without
-changing how the game looks. What *is* available is a frame-rate cap, and it is a
-product decision rather than a bug fix: see the note at the end of this file.
+**Nothing else here is free to remove.** The world is never static — the day cycle,
+the water, the wind and TAA all animate — so render-on-demand is not available
+without changing how the game looks, and the cap is the whole of the other lever.
 
 ## The first visit: 85.5 MB, and localhost hides all of it
 
@@ -181,12 +210,14 @@ bake is already typed arrays, transferable to a worker without a copy.
 
 Neither of these is queued anywhere. They are decisions, not tasks.
 
-- **A frame-rate cap.** 96–105% of a core while idle is the price of drawing an
-  animated open world every vsync, and it will not come down without either
-  capping the loop (say 30 or 60 fps regardless of display) or making the frame
-  cheaper — `post.render` is three quarters of it. A cap is a look-and-feel
-  decision the `BRIEF.md` FPS rule does not currently have an opinion about, and
-  it is one small change in `Game.start()` once somebody decides.
+- **`post.render`, which is now the only lever left on idle CPU.** The cap
+  (taken, see above) removed the refresh-rate multiplier and nothing else. At
+  60 fps the tab still costs ~17–19 ms of whole-browser CPU per frame — about
+  one core — and **74–77% of that one frame is `post.render`**; every system in
+  the game put together is under 1.5 ms. So the next 30% has to come out of the
+  post chain or out of the pixels it runs over, and both are look-and-feel
+  decisions rather than optimisations. Dropping the cap to 30 is the other lever
+  and it is one character (`Game.maxFps`).
 - **The 85.5 MB first visit.** Invisible on localhost, ~14 s on a real line, and
   three files are all of it. Streaming the bake progressively, or shipping a
   lower-resolution first-paint tier, is real work and nobody should start it
