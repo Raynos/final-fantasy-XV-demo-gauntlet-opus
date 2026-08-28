@@ -27,6 +27,23 @@ mouth geometry or mouth texture on the mouth's location."* Its costed advice was
 while that frame exists."* Worth **3.0 -> 4.0** — more than everything else in
 this document combined.
 
+> **Pass 5 (2026-08-28) — resolved, and the trap was not a sculpt trap.**
+> `buildHead`'s skull grid was **wound inside out** — `(b-a) x (c-a) = -z_hat`
+> for every quad — and the face material is `FrontSide`, so the near surface was
+> culled on every frame this repo has ever captured and what drew was the
+> **inside of the far side of the skull**. The judge's three sentences are then
+> literal: an inside-out occiput *is* an egg, the eyes are separate geometry in
+> front of it, the mouth is on the culled surface, and the lowest forward point
+> of the inside of a braincase *is* the chin. It is also why the profile always
+> read (a silhouette is the same surface either way round) and why every sculpt
+> change measured on the position buffer and moved the frame by ~1 of 255.
+> `src/tools/probes/facewind.mts` is the instrument — signed volume per mesh and
+> the geometric normal of the front-most triangles — and it went 0.0% -> 100.0%
+> outward. `facecheck`'s `mouthRange` went 2.9 -> 101.3 on Noctis and -18.9 ->
+> 189.0 on Prompto against a limit of 14. `d866db7`; the section-level nose and
+> vault work that preceded it is `7b2d4ce`. See `project/handoff/head.md` and
+> the negatives table in `2026-08-26-opus-the-standing-backlog.md`.
+
 **The trap, and it has caught three agents.** `muzzleMm` went 22.44 -> 6.46,
 which is inside the adult-male norm, and the frame got worse: pulling the
 mid-face back put the chin ahead of the nose. **No bench in this repo asserts

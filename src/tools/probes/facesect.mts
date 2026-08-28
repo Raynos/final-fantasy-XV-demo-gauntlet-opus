@@ -124,7 +124,10 @@ for (const [name, cy] of [['eye', -0.006], ['noseTip', -0.033], ['mouth', -0.064
   const rows = [];
   for (let i = 0; i < pos.count; i++) {
     if (Math.abs(uv.getY(i) - v) > 0.004) continue;
-    if (nrmA.getZ(i) < 0.2) continue;               // front surface only
+    // FRONT surface only — and it must be selected by *position*, not by the
+    // normal's own sign, which is how pass 5 first read this table off the back
+    // of the skull and briefly believed the normals were inverted.
+    if (MM(pos.getZ(i) - zC) < 20) continue;
     const x = MM(pos.getX(i));
     if (Math.abs(x) > 34) continue;
     rows.push([x, nrmA.getX(i), nrmA.getY(i), nrmA.getZ(i)]);

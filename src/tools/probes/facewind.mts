@@ -3,6 +3,12 @@
  *
  *   node src/tools/probe.mts src/tools/probes/facewind.mts --dirty
  *
+ * Also prints the **signed volume** of every mesh on the character,
+ * `sum dot(a, b x c) / 6`. For a closed mesh that is positive when the winding
+ * is outward and negative when it is inward, with no convexity assumption and
+ * no centroid — which is the cheapest corpus-wide sweep for the defect this
+ * probe found on the head shell (`buildHead`'s grid, fixed in d866db7).
+ *
  * Decided from the index buffer, not from a centroid: a centroid on this mesh
  * is useless because `thetaWarp` / `phiWarp` put 2.1x the columns on the front
  * and 1.55x the rows on the face band, so the mean vertex sits ~30 mm in front
@@ -44,6 +50,23 @@ for (const fm of meshes) {
     + `normal attribute +z on ${(100 * nAttrOut / front).toFixed(1)}%`);
   if (fm.material === ch.faceMat || (Array.isArray(fm.material) && fm.material.includes(ch.faceMat))) L.push(...ex);
 }
+L.push('');
+L.push('signed volume (positive = outward-wound, for a closed mesh):');
+for (const m of meshes) {
+  const p2 = m.geometry.attributes.position, ix = m.geometry.index;
+  if (!p2) continue;
+  let vol = 0;
+  const n3 = ix ? ix.count : p2.count;
+  for (let t = 0; t + 2 < n3; t += 3) {
+    const a = ix ? ix.getX(t) : t, b = ix ? ix.getX(t + 1) : t + 1, c = ix ? ix.getX(t + 2) : t + 2;
+    const ax = p2.getX(a), ay = p2.getY(a), az = p2.getZ(a);
+    const bx = p2.getX(b), by = p2.getY(b), bz = p2.getZ(b);
+    const cx2 = p2.getX(c), cy2 = p2.getY(c), cz = p2.getZ(c);
+    vol += ax * (by * cz - bz * cy2) + ay * (bz * cx2 - bx * cz) + az * (bx * cy2 - by * cx2);
+  }
+  L.push(`  ${String(m.name || '-').padEnd(18)} tris ${String(Math.round(n3 / 3)).padStart(7)}  vol ${(vol / 6).toExponential(3)}`);
+}
+
 const fm2 = meshes.find((m) => m.material === ch.faceMat);
 const mt = fm2 && fm2.material;
 if (mt) L.push(`faceMat side=${mt.side} (0 Front, 1 Back, 2 Double)  flatShading=${mt.flatShading}`);
