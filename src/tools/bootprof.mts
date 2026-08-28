@@ -133,8 +133,35 @@ const MEM_PROBE = `(() => {
   };
 })()`;
 
+/**
+ * macOS physical footprint of one process, in bytes, or 0 when it cannot be had.
+ *
+ * **`ps` RSS counts a shared page once per process that maps it**, and a
+ * chromium tree is five processes mapping the same ~80 MB framework — so the
+ * summed RSS overstates unique memory, which `project/LANDMINES.md` already
+ * warns about and nothing here has ever corrected for. `phys_footprint` is the
+ * kernel's own answer to "what is this process actually costing": dirty and
+ * compressed pages plus its IOKit allocations, with clean shared file-backed
+ * pages excluded. It is the number Activity Monitor shows.
+ *
+ * It moves in both directions, which is why it is worth printing beside RSS
+ * rather than instead of it. Measured on this box: browser process 104 MB RSS
+ * / **23 MB** footprint and network utility 59 / **14.5** (shared framework,
+ * counted five times), against gpu-process 312 / **591.5** (GPU allocations
+ * that are not resident pages at all).
+ */
+function footprint(pid: number): number {
+  try {
+    const out = execFileSync('vmmap', ['-summary', String(pid)], { encoding: 'utf8', timeout: 20000 });
+    const m = /Physical footprint:\s+([0-9.]+)([KMG])/.exec(out);
+    if (!m) return 0;
+    const mult = m[2] === 'G' ? 1e9 : m[2] === 'M' ? 1e6 : 1e3;
+    return Number(m[1]) * mult;
+  } catch { return 0; }
+}
+
 /** Resident set of the browser's whole process tree, in bytes. */
-function treeRss(pid: number): { total: number, rows: string[] } {
+function treeRss(pid: number, withFootprint = false): { total: number, rows: string[], foot: number } {
   try {
     const ps = execFileSync('ps', ['-Ao', 'pid=,ppid=,rss=,args='], { encoding: 'utf8' });
     const byPid = new Map<number, { ppid: number, rss: number, comm: string }>();
@@ -157,15 +184,20 @@ function treeRss(pid: number): { total: number, rows: string[] } {
     for (let pass = 0; pass < 6; pass++) {
       for (const [p, v] of byPid) if (want.has(v.ppid)) want.add(p);
     }
-    let total = 0; const rows: string[] = [];
+    let total = 0, foot = 0; const rows: string[] = [];
     for (const p of want) {
       const v = byPid.get(p);
       if (!v) continue;
       total += v.rss;
-      if (v.rss > 40e6) rows.push(`    ${(v.rss / 1e6).toFixed(0).padStart(5)} MB  ${v.comm}`);
+      const f = withFootprint ? footprint(p) : 0;
+      foot += f;
+      if (v.rss > 40e6) {
+        rows.push(`    ${(v.rss / 1e6).toFixed(0).padStart(5)} MB  ${v.comm}`
+          + (f ? `   (footprint ${(f / 1e6).toFixed(0)} MB)` : ''));
+      }
     }
-    return { total, rows };
-  } catch { return { total: 0, rows: [] }; }
+    return { total, rows, foot };
+  } catch { return { total: 0, rows: [], foot: 0 }; }
 }
 
 /**
@@ -238,7 +270,7 @@ async function main() {
     const only = play ? MEM_VARIANTS.filter((v) => !v.query.includes('shoot')) : MEM_VARIANTS;
     console.log(`\n[bootprof --mem] serving a ${kind} build`
       + (ha.prod ? ' (prod: minified, class names mangled)' : ' (dev: unbundled ES modules)'));
-    try { await reportMemory(PORT, nobake, only); } finally { tail(busy); }
+    try { await reportMemory(PORT, nobake, only, ha.q); } finally { tail(busy); }
     return;
   }
   // Its OWN browser, on purpose, and the daemon's exclusive lease is what makes
@@ -306,7 +338,7 @@ async function main() {
  * carries the play-mode pair, which is the only pair where the flag does
  * anything at all.
  */
-async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[]) {
+async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[], q = 'ultra') {
   // Playwright does not type `browser.process()`, so the browser is found the
   // same way its helpers are: as this process's own descendant.
   const base = treeRss(process.pid).total;
@@ -334,7 +366,12 @@ async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[
     // headless builds (see `_probe/gcwatch.mts`) and reads a constant. When the
     // two disagree the in-page one is the liar.
     const cdp = await page.context().newCDPSession(page);
-    await page.goto(`http://127.0.0.1:${PORT}/${v.query}${nobake ? (v.query.includes('?') ? '&nobake=1' : '?nobake=1') : ''}`,
+    // `--q low` is a discriminator, not a preference: it is the one page that
+    // shrinks the render targets, drops the shadow cascades and halves the
+    // pixel ratio without changing a byte of content, so what it does *not*
+    // move is content and what it does move is the frame buffer chain.
+    const query = v.query.replace('q=ultra', `q=${q}`);
+    await page.goto(`http://127.0.0.1:${PORT}/${query}${nobake ? (query.includes('?') ? '&nobake=1' : '?nobake=1') : ''}`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
     // Four seconds of settle, so streaming and the first shadow refresh are
@@ -347,7 +384,7 @@ async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[
       shadowCount: number, info: { geometries: number, textures: number }, programs: number,
       gl: string,
     };
-    const rss = treeRss(process.pid);
+    const rss = treeRss(process.pid, true);
     const cdpHeap = await cdp.send('Runtime.getHeapUsage').catch(() => null) as
       { usedSize: number, totalSize: number } | null;
     // Force a full GC and re-read both: it separates *live* heap from garbage
@@ -358,13 +395,17 @@ async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[
     await page.waitForTimeout(1500);
     const gcHeap = await cdp.send('Runtime.getHeapUsage').catch(() => null) as
       { usedSize: number, totalSize: number } | null;
-    const gcRss = treeRss(process.pid);
+    const gcRss = treeRss(process.pid, true);
 
     const gpuTex = m.gpuTexels + m.rtBytes + m.shadowBytes;
     const gpu = gpuTex + m.attrBytes + m.idxBytes;
     console.log(`\n=== ${v.name}   [${m.gl}]`);
     console.log(`  browser at rest       ${MB(idle - base)}   <- Chromium's floor, before a single line of ours`);
     console.log(`  with the game loaded  ${MB(rss.total - base)}   (+${MB(rss.total - idle)} for the world)`);
+    if (rss.foot) {
+      console.log(`  physical footprint    ${MB(rss.foot)}   <- unique memory, shared framework pages NOT`);
+      console.log('                        counted once per process. This is Activity Monitor\'s number.');
+    }
     for (const r of rss.rows) console.log(r);
     console.log(`  JS heap used          ${MB(m.heapUsed)}  of ${MB(m.heapTotal)} allocated`
       + (cdpHeap ? `   [CDP says ${MB(cdpHeap.usedSize)} of ${MB(cdpHeap.totalSize)}]` : ''));
@@ -374,6 +415,7 @@ async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[
     if (gcHeap) {
       console.log(`  after a forced GC     heap ${MB(gcHeap.usedSize)}  (${MB((cdpHeap?.usedSize ?? 0) - gcHeap.usedSize)} was garbage)`);
       console.log(`                        RSS  ${MB(gcRss.total - base)}  (${MB(rss.total - gcRss.total)} returned to the OS)`);
+      if (gcRss.foot) console.log(`                        footprint ${MB(gcRss.foot)}`);
     }
     console.log(`  GPU-side estimate     ${MB(gpu)}`);
     console.log(`    scene textures      ${MB(m.gpuTexels)}  over ${m.gpuTexCount} textures`);
