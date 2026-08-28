@@ -35,6 +35,13 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *                    own Rec.709 luma is divided out), so it separates "warmer"
  *                    from "brighter". The ceiling of the hue half of the lever.
  *
+ *   `?post=nostoch` — the Heitz-Neyret triangle-grid sampler cut from three
+ *                    taps to one. The two extra taps are 4 array fetches per
+ *                    active layer (albedo + surface), and `splat.md` filed the
+ *                    fragment cost as never measured; this is the price tag.
+ *                    Visually it is the lattice coming back, so it is an
+ *                    ablation and never a shipping mode.
+ *
  *   `?post=nodry`  — the tier-D dry-cover term removed.
  *   `?post=drymax` — the same term forced to full cover. It is a product of
  *                    seven gates, so a weak reading is ambiguous between gentle
@@ -468,6 +475,13 @@ void tf_stoch(vec2 uv, float layer, vec2 ddx, vec2 ddy,
   }
 
   vec4 a1, a2, a3, s1, s2, s3;
+  ${ABLATE.has('nostoch') ? `
+  // ?post=nostoch — one tap instead of three, for pricing the sampler.
+  // Visually wrong on purpose: the lattice comes back with hard cell edges.
+  // See the block comment above ABLATE.
+  tf_tap(uv, g1, layer, ddx, ddy, albOut, srfOut);
+  return;
+  ` : ''}
   tf_tap(uv, g1, layer, ddx, ddy, a1, s1);
   tf_tap(uv, g2, layer, ddx, ddy, a2, s2);
   tf_tap(uv, g3, layer, ddx, ddy, a3, s3);
