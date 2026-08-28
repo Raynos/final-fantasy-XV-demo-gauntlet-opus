@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { marchSquares, chainSegments, resampleAndSnap, type HeightFn } from './contour.ts';
 import { assertCardOrientation, assertAttributes } from './geo.ts';
-import { assertUpward, downFacing } from '../../util/GeoAssert.ts';
+import { assertUpward, downFacing, assertConsistentWinding } from '../../util/GeoAssert.ts';
 
 /**
  * Shoreline contour ribbon — plan §6.1.
@@ -614,6 +614,21 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
   stats.downFacing = downFacing(geo).downFacing;
   stats.flippedChains = flipped;
   assertUpward(geo, 'shore ribbon');
+  // And the half-edge test, which catches what neither of the two above can: a
+  // *patch* wound inside out relative to its neighbours. `assertUpward` is a
+  // per-triangle predicate against world up and passes happily on a region that
+  // is consistently wrong in the same direction as the ground it lies on; the
+  // emit-time fold counter runs before the drops and merges. This one reads the
+  // final index buffer as a half-edge graph and asks whether any interior edge
+  // is traversed twice the same way.
+  //
+  // Caught here rather than thrown, and `Water.init` catches too. A throw on an
+  // `init()` path never sets GAME.ready and every browser-backed tool on the
+  // machine then returns a bare waitForFunction timeout with no message -- it
+  // cost a lane most of an hour the day GeoAssert.ts landed. console.error is
+  // still red: shoot.mts exits non-zero on any page error, so nothing ships
+  // green past one of these, and the world boots so it can be photographed.
+  try { assertConsistentWinding(geo, 'shore ribbon'); } catch (err) { console.error('[Shore]', err); }
   stats.vertices = pos.length / 3;
   stats.triangles = idx.length / 3;
   snapDists.sort((a, b) => a - b);

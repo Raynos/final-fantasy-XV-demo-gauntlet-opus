@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assertAttributes } from './geo.ts';
-import { assertUpward, downFacing } from '../../util/GeoAssert.ts';
+import { assertUpward, downFacing, assertConsistentWinding } from '../../util/GeoAssert.ts';
 import type { ErosionSample } from '../terrain/Field.ts';
 
 /**
@@ -595,6 +595,12 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     assertAttributes(what, g, ['position', ...attrs.map((a) => a[0])]);
     // On the final float32 buffer, after every clamp and rejection above.
     assertUpward(g, what);
+    // The half-edge test: a patch wound inside out relative to its neighbours,
+    // which a per-triangle world-up predicate cannot see and the emit-time fold
+    // counter runs too early to see. Caught, never thrown -- a throw on an
+    // init() path never sets GAME.ready and every tool on the machine then
+    // times out with no message. console.error is still red.
+    try { assertConsistentWinding(g, what); } catch (err) { console.error('[River]', err); }
     return g;
   }
 }
