@@ -334,6 +334,42 @@ export function kitRock(rng: Rng, size: number): { geo: THREE.BufferGeometry, s:
   return { geo: list[Math.floor(rng.next() * list.length) % list.length], s: size / ROCK_BANDS[bi] };
 }
 
+/**
+ * **The graded radius of each kit's apron, in metres, published.**
+ *
+ * These twelve numbers are the `r` argument at the twelve `_apron(B, r, …)`
+ * call sites in this file, and until now they existed only there. That matters
+ * because the vegetation layer needs them and cannot see them.
+ *
+ * The measured problem — and the WS-5 bullet that named `_exclusions` had the
+ * premise wrong, so this is worth stating precisely. `PoiKits._exclusions` is a
+ * POI-versus-POI *placement* ban list (dungeon mouths at 130 m, `sameOnly`) and
+ * has never had anything to do with vegetation; `Ecology.ts` says so in its own
+ * docstring. What actually puts grass through an apron is that
+ * `Ecology._layoutClearings` authors each clearing as a **linear cone** whose
+ * zero is at the settlement's *catchment* radius, so at the pad itself the
+ * clearing value is nowhere near 1 — and grass is the one population with no
+ * hard reject, only a density multiply and a `d < 0.02` cut. Measured over
+ * 4 000 uniform samples per pad: every other population is rejected on 100% of
+ * the pad and **grass passes its gate on 97–99% of it**, standing up to 0.57 m
+ * proud of the kit's own top surface.
+ *
+ * The fix is a plateau-plus-skirt in `Ecology.poiClear` and it belongs to the
+ * vegetation lane. What that lane needs from this one is the **pad radius**,
+ * and a copied table would drift the first time a kit is retuned. So it is
+ * exported here, next to the call sites it is read off, as a plain const:
+ * `Ecology` is constructed by `Vegetation.init` before `Props.init`, so a live
+ * `PoiKits` instance is unreachable from it, but a static table is not.
+ *
+ * `haven` is `r + 3` where the kit's own `r` is 9.6. `landmark` is the waymark
+ * variant that grades at all — `BARE_SEAT_R` says why the stele does not.
+ */
+export const PAD_R: Record<string, number> = {
+  town: 52, imperial: 34, chocobo: 22, reststop: 19, fishing: 19,
+  haven: 12.6, outpost: 14, parking: 13.5, tomb: 13, menace: 12,
+  dungeon: 11, landmark: 8,
+};
+
 export function poiMaterials() {
   return {
     // Anything bigger than a couple of metres gets a *plain* material.

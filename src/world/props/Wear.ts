@@ -324,6 +324,11 @@ export interface PadResult {
  * Vertex colours carry the material story — deck, batter, spoil — so one
  * material draws the whole earthwork in one call.
  */
+/** Linear blend of two RGB triples. */
+function mix3(a: number[], b: number[], t: number): number[] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
 export function gradePad(o: PadOpts): PadResult {
   const {
     eco, x, z, base, r, seed, cull = 400, rampYaw = null,
@@ -366,7 +371,28 @@ export function gradePad(o: PadOpts): PadResult {
   // Deck, batter and spoil colours. Multiplied into one flat ground material,
   // so this is where "poured surface / raw fill / cast-up spoil" is decided.
   const C_DECK = [1.0, 1.0, 1.0];
+  /**
+   * **Three values down the batter, not one.**
+   *
+   * The batter was a single flat `C_BATTER` from the deck edge to the toe. That
+   * is the second half of the cake stand and it survived the whole earthwork
+   * rewrite: `gradePad` gave the pad a wobbled outline, a measured cut and fill,
+   * a 1:9 ramp and a buried toe, and then painted the entire embankment one
+   * colour and ran it down a straight 1:3 line. A ruled surface in one value is
+   * a cone whatever its outline does, and a cone at 30 m across is what
+   * `tmp/shots/lm-hv/pad.png` shows.
+   *
+   * A real fill weathers into three bands within a season. The crest is scoured
+   * — raw material, the palest thing on the pad. The face is the mean. The toe
+   * is where every fine that washes off the face ends up, plus the first grass:
+   * darker and slightly greener. So the value ramps `CREST -> BATTER -> TOE`
+   * with `u`, the fraction of the way down the batter, and the rill field
+   * modulates it, because a gully is a wash channel and its floor carries more
+   * fines than the interfluve beside it.
+   */
+  const C_CREST = [0.94, 0.905, 0.855];
   const C_BATTER = [0.86, 0.825, 0.78];
+  const C_TOE = [0.70, 0.685, 0.655];
   const C_SPOIL = [0.74, 0.70, 0.65];
 
   const groundAt = (wx: number, wz: number) => coverY(eco, wx, wz, r * 0.35, cull) - base;
@@ -385,6 +411,33 @@ export function gradePad(o: PadOpts): PadResult {
   const bury = (wx: number, wz: number) => 0.16
     - 0.30 * nz2.fbm2(wx * 0.13, wz * 0.13, 2)
     - 0.10 * nz2.fbm2(wx * 0.41 + 31, wz * 0.41 - 17, 2);
+
+  /**
+   * **Rills: the reason a smooth batter reads as a cake stand.**
+   *
+   * Everything else on this pad is right and the face is still a ruled surface.
+   * Wobbling the *outline* does nothing about that — the outline is what
+   * `edgeAt` already fixed, and the coordinator still read the result as a
+   * poker chip — because what says "turned on a lathe" is a constant slope with
+   * no cross-section, not a circular plan. Water does not run off an embankment
+   * evenly; it collects into shallow gullies every few metres and the ground
+   * between them stands up as an interfluve.
+   *
+   * The frequency is **world-referenced, and it has to be**. A rill every 5 m
+   * of rim is what an embankment looks like; a fixed number of rills round the
+   * circle would give a 52 m town pad gullies eleven metres apart and an 8 m
+   * waymark gullies at the resolution of its own facets. `k` converts a wanted
+   * rill spacing into the radius at which to sample a 2-D noise on the unit
+   * circle — `simplex2` has about one feature per unit, so a circle of radius
+   * `k` carries `2*pi*k` of them — and it is capped at `seg/14` so the field is
+   * always oversampled by the geometry rather than aliased into a scallop,
+   * which is the same Nyquist argument `edgeAt`'s segment floor is written on.
+   *
+   * `max(0, …)` and not the raw field: a rill is a CUT. Letting it go both ways
+   * would build ribs standing off the batter, which is a corduroy roof, not an
+   * embankment.
+   */
+  const rillK = Math.max(1.0, Math.min(seg / 14, (2 * Math.PI * r / 5.0) / (2 * Math.PI)));
 
   /**
    * How far below the deck this bearing's fill may be asked to reach before the
@@ -480,6 +533,14 @@ export function gradePad(o: PadOpts): PadResult {
       Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0),
     );
     let crestY = 0, crestS = e;
+    // This bearing's place in the rill field, drawn once for the whole radial.
+    const rillRaw = nz2.simplex2(ct * rillK, st * rillK) * 0.70
+      + nz2.simplex2(ct * rillK * 2.4 + 13, st * rillK * 2.4 - 9) * 0.30;
+    const rill = Math.max(0, rillRaw);
+    // Depth scales with how far the batter actually falls: a 0.4 m kerb has no
+    // rills and a six-metre embankment has real ones. Capped, because past
+    // about a metre a gully stops being erosion and starts being a canyon.
+    const rillAmp = Math.min(1.05, 0.20 * Math.abs(hEdge)) * rill;
 
     for (let i = 0; i < rings.length; i++) {
       const t = rings[i];
@@ -532,7 +593,22 @@ export function gradePad(o: PadOpts): PadResult {
         // the limit it is a retaining wall, and the other three sides of the
         // pad are what keep the compound on the ground.
         if (last) y = Math.max(g - bury(wx, wz), -plunge);
+        // Cut the rill in, but only where the batter is standing ABOVE the
+        // ground it crosses. Below that the surface is already buried and
+        // deepening it is invisible geometry; worse, it would pull the last
+        // ring further down and widen the very outline `bury` exists to hide.
+        if (rillAmp > 0.01 && y > g + 0.05) {
+          const u = Math.min(1, run / Math.max(1e-3, reachOut));
+          y = Math.max(g + 0.02, y - rillAmp * Math.sin(Math.PI * u));
+        }
         if (Math.abs(y - g) < 0.14) toe = Math.max(toe, s);
+        // The value ramp down the face, deepened in the gullies.
+        const u2 = Math.min(1, run / Math.max(1e-3, reachOut));
+        const w2 = u2 * u2 * (3 - 2 * u2);
+        const wash = Math.min(1, w2 * (0.75 + 0.5 * rill));
+        c = wash < 0.5
+          ? mix3(C_CREST, C_BATTER, wash * 2)
+          : mix3(C_BATTER, C_TOE, (wash - 0.5) * 2);
       }
       pos.push(ct * s, y, st * s);
       col.push(c[0], c[1], c[2]);
