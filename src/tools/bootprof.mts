@@ -5,6 +5,8 @@
  *   node src/tools/bootprof.mts            # one cold + one warm load, per-system breakdown
  *   node src/tools/bootprof.mts --n 3      # 3 loads, report each
  *   node src/tools/bootprof.mts --mem      # attribute the resident memory instead
+ *   node src/tools/bootprof.mts --mem --play    # only the two pages a person opens
+ *   node src/tools/bootprof.mts --mem --prod    # the same, against a minified build
  *   node src/tools/bootprof.mts --warm-ab  # A/B the shader warm-up, sync vs compileAsync
  *   node src/tools/bootprof.mts --play     # boot as a PLAYER, not as the harness
  *
@@ -64,13 +66,60 @@ const MEM_PROBE = `(() => {
     if (Array.isArray(m)) m.forEach(addMat); else addMat(m);
   });
   addTex(g.scene.environment); addTex(g.scene.background);
+
+  // Render targets and shadow maps are GPU bytes that no scene-graph walk can
+  // reach: they hang off PostFX, the renderer's shadow map and the material
+  // generators, never off a mesh. They were the whole of the old
+  // "unattributed" row's texture half, so they get counted rather than guessed.
+  // Breadth-first from the handles that own them, bounded, visited-set guarded.
+  let rtBytes = 0, rtCount = 0, shadowBytes = 0, shadowCount = 0;
+  const rtSeen = new Set();
+  const sizeOfRt = (rt) => {
+    const t = rt.texture; const w = rt.width || (t && t.image && t.image.width) || 0;
+    const h = rt.height || (t && t.image && t.image.height) || 0;
+    if (!w || !h) return 0;
+    // Bytes per texel from the three type enum: HalfFloat 1016, Float 1015.
+    const ty = t ? t.type : 1009;
+    const bpc = ty === 1015 ? 4 : ty === 1016 ? 2 : 1;
+    const chan = 4;
+    const n = (rt.textures && rt.textures.length) || 1;
+    const depth = rt.depth || 1;
+    return w * h * chan * bpc * n * depth * (rt.depthBuffer ? 1.25 : 1);
+  };
+  const walkRt = (root) => {
+    const seen = new Set(); const q = [[root, 0]];
+    while (q.length) {
+      const [o, d] = q.shift();
+      if (!o || typeof o !== 'object' || seen.has(o) || d > 4) continue;
+      seen.add(o);
+      if (seen.size > 6000) break;
+      if (o.isRenderTarget || (o.isWebGLRenderTarget)) {
+        if (!rtSeen.has(o)) { rtSeen.add(o); rtBytes += sizeOfRt(o); rtCount++; }
+        continue;
+      }
+      if (Array.isArray(o)) { for (const v of o) q.push([v, d + 1]); continue; }
+      if (o.isTexture || o.isMaterial || o.isBufferGeometry) continue;
+      for (const k in o) {
+        if (k === 'parent' || k === 'children' || k === 'scene' || k === 'renderer') continue;
+        try { const v = o[k]; if (v && typeof v === 'object') q.push([v, d + 1]); } catch {}
+      }
+    }
+  };
+  try { walkRt(g.post); } catch {}
+  try { walkRt(g.rnd); } catch {}
+  try { walkRt(g.renderer.shadowMap); } catch {}
+  g.scene.traverse((o) => {
+    const sm = o.shadow && o.shadow.map;
+    if (sm && !rtSeen.has(sm)) { rtSeen.add(sm); shadowBytes += sizeOfRt(sm); shadowCount++; }
+  });
+
   const mem = performance.memory || null;
   return {
     heapUsed: mem ? mem.usedJSHeapSize : 0,
     heapTotal: mem ? mem.totalJSHeapSize : 0,
     precise: !!(mem && mem.usedJSHeapSize % 1024 !== 0),
     cpuTexels, cpuTexCount, gpuTexels, gpuTexCount,
-    attrBytes, idxBytes, geoCount,
+    attrBytes, idxBytes, geoCount, rtBytes, rtCount, shadowBytes, shadowCount,
     info: JSON.parse(JSON.stringify(g.renderer.info.memory)),
     programs: g.renderer.info.programs ? g.renderer.info.programs.length : 0,
     dpr: g.renderer.getPixelRatio(),
@@ -182,9 +231,14 @@ async function main() {
   // can attach to a co-agent's tree by accident.
   const ha = harnessArgs(process.argv.slice(2));
   announceBuild(ha);
-  const { port: PORT } = await buildServer({ build: ha.build });
+  const { port: PORT, kind } = await buildServer({ build: ha.build, prod: ha.prod });
   if (mem) {
-    try { await reportMemory(PORT, nobake); } finally { tail(busy); }
+    // `--play`/`--shoot` narrow the matrix to one arm; bare `--mem` runs all
+    // four, which is a four-browser-launch report and takes a few minutes.
+    const only = play ? MEM_VARIANTS.filter((v) => !v.query.includes('shoot')) : MEM_VARIANTS;
+    console.log(`\n[bootprof --mem] serving a ${kind} build`
+      + (ha.prod ? ' (prod: minified, class names mangled)' : ' (dev: unbundled ES modules)'));
+    try { await reportMemory(PORT, nobake, only); } finally { tail(busy); }
     return;
   }
   // Its OWN browser, on purpose, and the daemon's exclusive lease is what makes
@@ -241,10 +295,18 @@ async function main() {
  *
  * The TODO this answers reads "it uses 1.4 GB of RAM in ?debug and maybe in
  * prod mode too". Both halves of that need separating before anything is
- * optimised, because a JS heap and a resident set are not the same quantity
- * and the dev suite turns out not to be the expensive one.
+ * optimised, because a JS heap and a resident set are not the same quantity.
+ *
+ * **The first version of this report could not answer its own question.** It
+ * booted `?q=ultra&shoot=1` and `?q=ultra&shoot=1&debug=1`, and `main.ts:37`
+ * gates the dev suite on `qs.has('debug') && !qs.has('shoot')` — so *both* arms
+ * were the same page with the suite not loaded, and the resulting "`?debug=1`
+ * costs 4 MB" (`project/archive/handoff/boot-memory.md`) is a measurement of
+ * boot-to-boot noise between two identical configurations. `MEM_VARIANTS` now
+ * carries the play-mode pair, which is the only pair where the flag does
+ * anything at all.
  */
-async function reportMemory(PORT: number, nobake: boolean) {
+async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[]) {
   // Playwright does not type `browser.process()`, so the browser is found the
   // same way its helpers are: as this process's own descendant.
   const base = treeRss(process.pid).total;
@@ -253,18 +315,26 @@ async function reportMemory(PORT: number, nobake: boolean) {
     + 'free the first world, and comparing prod against ?debug in one tab is how you\n'
     + 'conclude the dev suite costs 400 MB when it costs 20.');
 
-  for (const q of ['', '&debug=1']) {
+  const summary: string[] = [];
+  for (const v of variants) {
     const { ctx } = await launchPersistent({ width: 1600, height: 900 }, 0, {
       // `performance.memory` is rounded to a 100 kB bucket without this, which
       // is coarse enough to hide the thing being measured.
-      extraArgs: [...ARGS_BOOTPROF, '--enable-precise-memory-info'],
+      extraArgs: [...ARGS_BOOTPROF, '--enable-precise-memory-info', '--js-flags=--expose-gc'],
       persistent: false,
     });
     const browser = ctx;
     const page = await browser.newPage();
     await page.setViewportSize({ width: 1600, height: 900 });
+    // The floor this variant's world is measured against: a launched browser
+    // with one blank tab in it and no game. Everything above this line is
+    // Chromium's, not ours, and it is most of the number in `project/TODO.md`.
     const idle = treeRss(process.pid).total;
-    await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}${q}`,
+    // A second CDP oracle, because `performance.memory` is frozen on some
+    // headless builds (see `_probe/gcwatch.mts`) and reads a constant. When the
+    // two disagree the in-page one is the liar.
+    const cdp = await page.context().newCDPSession(page);
+    await page.goto(`http://127.0.0.1:${PORT}/${v.query}${nobake ? (v.query.includes('?') ? '&nobake=1' : '?nobake=1') : ''}`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
     // Four seconds of settle, so streaming and the first shadow refresh are
@@ -273,29 +343,72 @@ async function reportMemory(PORT: number, nobake: boolean) {
     const m = await page.evaluate(MEM_PROBE) as {
       heapUsed: number, heapTotal: number, cpuTexels: number, cpuTexCount: number,
       gpuTexels: number, gpuTexCount: number, attrBytes: number, idxBytes: number,
-      geoCount: number, info: { geometries: number, textures: number }, programs: number,
+      geoCount: number, rtBytes: number, rtCount: number, shadowBytes: number,
+      shadowCount: number, info: { geometries: number, textures: number }, programs: number,
       gl: string,
     };
     const rss = treeRss(process.pid);
-    const gpu = m.gpuTexels + m.attrBytes + m.idxBytes;
-    console.log(`\n=== ${q ? '?debug=1' : 'plain page'}   [${m.gl}]`);
-    console.log(`  browser at rest       ${MB(idle - base)}`);
+    const cdpHeap = await cdp.send('Runtime.getHeapUsage').catch(() => null) as
+      { usedSize: number, totalSize: number } | null;
+    // Force a full GC and re-read both: it separates *live* heap from garbage
+    // the boot allocated and nobody has collected yet. A large drop here is a
+    // free win nobody has to write code for; no drop closes the question.
+    await cdp.send('HeapProfiler.enable').catch(() => {});
+    await cdp.send('HeapProfiler.collectGarbage').catch(() => {});
+    await page.waitForTimeout(1500);
+    const gcHeap = await cdp.send('Runtime.getHeapUsage').catch(() => null) as
+      { usedSize: number, totalSize: number } | null;
+    const gcRss = treeRss(process.pid);
+
+    const gpuTex = m.gpuTexels + m.rtBytes + m.shadowBytes;
+    const gpu = gpuTex + m.attrBytes + m.idxBytes;
+    console.log(`\n=== ${v.name}   [${m.gl}]`);
+    console.log(`  browser at rest       ${MB(idle - base)}   <- Chromium's floor, before a single line of ours`);
     console.log(`  with the game loaded  ${MB(rss.total - base)}   (+${MB(rss.total - idle)} for the world)`);
     for (const r of rss.rows) console.log(r);
-    console.log(`  JS heap used          ${MB(m.heapUsed)}  of ${MB(m.heapTotal)} allocated`);
-    console.log(`    CPU texel arrays    ${MB(m.cpuTexels)}  over ${m.cpuTexCount} DataTextures`);
-    console.log(`    geometry attributes ${MB(m.attrBytes)} + ${MB(m.idxBytes)} index, ${m.geoCount} geometries`);
+    console.log(`  JS heap used          ${MB(m.heapUsed)}  of ${MB(m.heapTotal)} allocated`
+      + (cdpHeap ? `   [CDP says ${MB(cdpHeap.usedSize)} of ${MB(cdpHeap.totalSize)}]` : ''));
+    console.log(`    CPU texel arrays    ${MB(m.cpuTexels)}  over ${m.cpuTexCount} DataTextures  (dead after upload)`);
+    console.log(`    geometry attributes ${MB(m.attrBytes)} + ${MB(m.idxBytes)} index, ${m.geoCount} geometries  (NOT disposable)`);
     console.log(`    everything else     ${MB(m.heapUsed - m.cpuTexels - m.attrBytes - m.idxBytes)}`);
+    if (gcHeap) {
+      console.log(`  after a forced GC     heap ${MB(gcHeap.usedSize)}  (${MB((cdpHeap?.usedSize ?? 0) - gcHeap.usedSize)} was garbage)`);
+      console.log(`                        RSS  ${MB(gcRss.total - base)}  (${MB(rss.total - gcRss.total)} returned to the OS)`);
+    }
     console.log(`  GPU-side estimate     ${MB(gpu)}`);
-    console.log(`    textures + mips     ${MB(m.gpuTexels)}  over ${m.gpuTexCount} textures`);
-    console.log(`    vertex + index      ${MB(m.attrBytes + m.idxBytes)}`);
+    console.log(`    scene textures      ${MB(m.gpuTexels)}  over ${m.gpuTexCount} textures`);
+    console.log(`    render targets      ${MB(m.rtBytes)}  over ${m.rtCount} targets  (PostFX chain, generators)`);
+    console.log(`    shadow maps         ${MB(m.shadowBytes)}  over ${m.shadowCount} maps`);
+    console.log(`    vertex + index      ${MB(m.attrBytes + m.idxBytes)}   (uploaded copy of the arrays above)`);
     console.log(`  three.js says         ${JSON.stringify(m.info)}, ${m.programs} programs`);
     console.log(`  unattributed          ${MB(rss.total - idle - m.heapUsed - gpu)}`
-      + '   (process overhead, render targets, shader binaries, and under a software\n'
+      + '   (process overhead, shader binaries, and under a software\n'
       + '                        rasteriser a host-memory copy of every GPU resource)');
+    summary.push(`  ${v.name.padEnd(22)} ${MB(rss.total).padStart(10)} total · ${MB(idle - base).padStart(9)} browser floor · `
+      + `${MB(rss.total - idle).padStart(9)} the world · ${MB(m.heapUsed).padStart(9)} JS heap`);
     await browser.close();
   }
+  console.log('\n=== the whole number, per variant (RSS of the browser process tree)');
+  for (const s of summary) console.log(s);
 }
+
+/** One page the memory report boots, in its own browser. */
+interface MemVariant { name: string, query: string }
+
+/**
+ * The four pages worth measuring, and why they are four.
+ *
+ * `?shoot=1` is the harness's page and every memory number this repo has ever
+ * recorded is one — but `project/TODO.md` is about the page a *person* opens,
+ * which free-runs, arms the encounter director and loads the dev suite. Boot
+ * time already learned this lesson (`--play`); the memory report had not.
+ */
+const MEM_VARIANTS: MemVariant[] = [
+  { name: 'shoot (harness)', query: '?q=ultra&shoot=1' },
+  { name: 'shoot + ?debug=1', query: '?q=ultra&shoot=1&debug=1' },
+  { name: 'play (a person)', query: '?q=ultra' },
+  { name: 'play + ?debug=1', query: '?q=ultra&debug=1' },
+];
 
 /**
  * The quiet lane, for the same reason `perf.mts` takes it: this measures boot,
