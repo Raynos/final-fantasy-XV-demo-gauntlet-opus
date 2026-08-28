@@ -191,9 +191,22 @@ Three things the pictures decided, not the code:
    0.75 and let bloom do it.
 3. **`DEPOSITS[i].pos[1]` is hard-coded 0.** Everything asks `terrain.heightAt`.
 
-Frames: `tmp/shots/dep3/`, `dep4/` — `dep_ice_dep_galdin` is the one to look at.
-**Not yet done:** no deposit has an entry in `src/game/Shots.ts` (coordinator's
-file), so none is in the corpus. `probes/depositlook.mts` is the stopgap.
+Frames: `tmp/shots/dep3/`, `dep4/` — `dep_ice_dep_galdin` is the one to look at;
+pale shards on dark ground is where the design works hardest.
+
+**Three honest residuals, looked at and left:**
+
+1. **The socket disappears on pale ground.** At `dep_hammerhead` the rubble is
+   `0x8a7a68` against the outpost's sand apron and does nothing; at
+   `dep_galdin` against dark ground it reads exactly as intended. It wants to be
+   tinted from `terrain.groundColorAt` and darkened, not given a fixed colour.
+2. **`siteNear`'s 14–34 m ring is not always enough.** Hammerhead's apron is
+   wider than that, so that deposit still stands on graded asphalt/sand rather
+   than open ground. Widen the ring, or reject on `terrain.sampleMaterial`'s
+   road/pad terms rather than only on `roadDistance`.
+3. **No deposit has an entry in `src/game/Shots.ts`** (the coordinator's file),
+   so none is in the corpus and none is in a contact sheet.
+   `probes/depositlook.mts` is the stopgap.
 
 ### Fociaugh: CLOSED as a measured negative (`e5557e5`)
 
