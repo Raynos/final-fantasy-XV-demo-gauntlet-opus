@@ -90,6 +90,17 @@ under it, so a posed page never free-runs. That is also why a posed page here
 burns *zero* idle CPU, and why this pool — unlike `../game-scaffold`'s — does not
 park pages.
 
+**It is also a blindfold, and two tools exist because of it.** A page that never
+free-runs cannot be asked what it costs while nobody is touching it, and a page
+the daemon already booted cannot be asked what a first visit costs. `idlecpu`
+takes a `play: true` lease and reads CPU per browser process over a window of
+real idle (**96–105% of one core at 60 Hz**, and `Game.stop()` takes the same page
+to 2.4%); `coldload` launches its own browser, clears the HTTP cache and watches
+the load from before the app's first line (**85.5 MB on the wire**, and the boot
+used to arrive as *two* long tasks). `docs/BOOT_PERF.md` carries both numbers, and
+`coldload --gate` is the `bootblock` gate — the only one in the suite that watches
+the load rather than a frame.
+
 `reset()` is checked, not trusted. `checkResetDrift` poses `party_walk` (a
 `follow` shot: all 47 of those are order-dependent) on a page driven through a
 dungeon interior and reset, and byte-compares it against the fresh-boot frame,
@@ -267,9 +278,9 @@ do not look the same to an agent reading an exit code.
 | tier | tools |
 |---|---|
 | frames | `shoot` `corpus` `mapshoot` `ui-shoot` `dresscam` `chartshoot` `sheet` `framecam` `creaturecheck` `attrib` `seatcheck` `heightcheck` `probe` |
-| leased page | `gameplay` `combatloop` `integration` `uxcheck` `driftcheck` `reachcheck` `mapview` |
+| leased page | `gameplay` `combatloop` `integration` `uxcheck` `driftcheck` `reachcheck` `mapview` `idlecpu` |
 | blank browser | `sheet` `corpus` `compare` `imagestats` `reliefstat` `shrink` |
-| owns a browser, under the quiet lane | `bench` `bootprof` — they *measure* browsers |
+| owns a browser, under the quiet lane | `bench` `bootprof` `coldload` — they *measure* browsers |
 | no browser at all | `imgdiff` `crop` `bake` `orphans` `agentstats` `harnessstats` `anycheck` `cleanup` `identity` `gitlock` |
 
 `grep -ln 'chromium.launch(' src/tools/*.mts` returns **`chromium.mts`** and
