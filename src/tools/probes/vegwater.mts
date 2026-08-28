@@ -100,16 +100,20 @@ for (const b of w.bodies) {
 {
   const cx = -3020, cz = -2360, R = 640, N = 90;
   const rows = [];
-  let above = 0;
+  let above = 0, raised = 0;
   for (let j = -N; j <= N; j++) {
     for (let i = -N; i <= N; i++) {
       const x = cx + (i / N) * R, z = cz + (j / N) * R;
       if (Math.hypot(x - cx, z - cz) > R) continue;
       rows.push(pops(x, z));
       if (t.heightAt(x, z) > SEA) above++;
+      // The pool itself is sea and cannot be raised. Anything counted here is a
+      // traced reach crossing the 640 m disc on its way down to the sea plane,
+      // and it is the whole of the difference the control shows.
+      if (waterLevel(x, z) > SEA + 1e-6) raised++;
     }
   }
-  out.vesperpool = { ...tally(rows), aboveSea: above };
+  out.vesperpool = { ...tally(rows), aboveSea: above, raised };
 }
 
 // ----------------------------------------------------- the world, the control
