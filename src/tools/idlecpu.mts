@@ -131,17 +131,19 @@ const INSTALL = `(() => {
   // The whole frame, so "everything the table does not name" is derivable
   // rather than assumed to be zero.
   wrap(g, 'frame', '__frame');
-  w.__idlecpu = { acc, t0: now(), f0: g.time.frame, ticks: 0 };
-  // Count the host's rAF callbacks INDEPENDENTLY of the game's loop.
+  // k0 is the rAF OFFER, against f0's frames DRAWN.
   //
-  // Game.start() caps itself by SKIPPING rAF callbacks, so g.time.frame counts
-  // frames DRAWN and says nothing about how many the host offered. This second
-  // chain counts the offer, and the gap between the two is the cap doing its
-  // job. Without it a headless rate of 90 fps is indistinguishable from an
-  // uncapped loop on a 90 Hz display -- which is exactly the ambiguity the gate
-  // has to resolve. One increment per vsync; it costs nothing measurable.
-  const tick = () => { w.__idlecpu.ticks++; requestAnimationFrame(tick); };
-  requestAnimationFrame(tick);
+  // Game.start() caps itself by SKIPPING rAF callbacks, so g.time.frame cannot
+  // tell a capped loop on a fast display from an uncapped one on a slow display
+  // -- and the gate has to resolve exactly that. Game._rafTicks counts the
+  // offer from inside the callback that already exists.
+  //
+  // This was a second rAF chain installed here, which was wrong: rAF callbacks
+  // make the compositor schedule BeginFrames, and the chain's own scheduling
+  // read as ~2% of a core in the *stopped* arm -- doubling the one number in
+  // this tool that is supposed to be near zero, and it is the load-bearing
+  // assertion. An instrument may not spend in the arm it is ablating.
+  w.__idlecpu = { acc, t0: now(), f0: g.time.frame, k0: g._rafTicks };
   return 'installed';
 })()`;
 
@@ -155,7 +157,7 @@ const READ = `(() => {
   return {
     frames: g.time.frame - w.f0,
     // rAF callbacks the host offered over the window, drawn or skipped.
-    ticks: w.ticks,
+    ticks: g._rafTicks - w.k0,
     wallMs: performance.now() - w.t0,
     rows, frameMs,
     visibility: document.visibilityState,
@@ -177,7 +179,7 @@ const READ = `(() => {
 const ZERO = `(() => {
   const w = window.__idlecpu;
   for (const k of Object.keys(w.acc)) delete w.acc[k];
-  w.t0 = performance.now(); w.f0 = window.GAME.time.frame; w.ticks = 0;
+  w.t0 = performance.now(); w.f0 = window.GAME.time.frame; w.k0 = window.GAME._rafTicks;
   return true;
 })()`;
 
@@ -231,6 +233,11 @@ function report(arms: Arm[]) {
      * number before the cap existed, which is why this column is new — and
      * headless chromium does not vsync, so its offer moves with the box and
      * neither column can be inferred from the other.
+     *
+     * Both are counted inside `Game.start()`'s own callback, so the `stopped`
+     * arm reads 0 for both: that loop is cancelled and there is nothing left
+     * to offer it. rAF itself keeps firing there — see the header — this just
+     * refuses to spend a BeginFrame proving it.
      */
     console.log(`  ${a.name.padEnd(12)}${cells.join('')}${p1(pct(total, a.wallMs)).padStart(11)}`
       + `${(a.prof ? per(a.prof.ticks).toFixed(1) : '—').padStart(9)}`
@@ -328,11 +335,12 @@ function report(arms: Arm[]) {
  * right thing — a gate that flakes by punishing correct behaviour, which is
  * worse than no gate.
  *
- * So count the offer as well as the draw: `INSTALL` runs a second, independent
- * rAF chain whose only job is to count callbacks. Above `2 x cap` the cap must
- * bite and the drawn rate is asserted; below it, only that the cap is
- * configured and that the loop is not drawing more often than it is called.
- * Both branches print the rAF rate, so the row says which one ran.
+ * So count the offer as well as the draw: `Game._rafTicks` counts callbacks
+ * from inside the loop's own callback, against `time.frame`'s draws. Above
+ * `2 x cap` the cap must bite and the drawn rate is asserted; below it, only
+ * that the cap is configured and that the loop is not drawing more often than
+ * it is called. Both branches print the rAF rate, so the row says which one
+ * ran.
  *
  * The slack is not a tolerance for noise — the cap can only ever *skip* a
  * frame, so contention pushes the drawn rate down and never up, and a busy box

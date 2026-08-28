@@ -152,6 +152,17 @@ export class Game {
   debug!: boolean;
   input!: Input;
   /**
+   * rAF callbacks `start()`'s loop has been OFFERED, against `time.frame`
+   * frames it chose to draw. The gap between the two is the cap; without it a
+   * loop drawing 90 a second on a 90 Hz display is indistinguishable from an
+   * uncapped one, and `time.frame` structurally cannot tell them apart because
+   * the cap works by skipping. Read by `src/tools/idlecpu.mts`, which counted
+   * it with a second rAF chain of its own until that chain's own BeginFrames
+   * showed up as ~2% of a core in the ablation arm that is supposed to cost
+   * nothing.
+   */
+  _rafTicks!: number;
+  /**
    * Frames per second `start()`'s loop may draw; `0` free-runs at the display's
    * refresh rate, as this loop did before the cap. Live — set it on
    * `window.GAME` and the very next vsync obeys it. See `start()`.
@@ -176,6 +187,7 @@ export class Game {
     this.systems = [];
     this._registry = new Map();
     this.paused = false;
+    this._rafTicks = 0;
     this.state = 'boot';           // boot | field | combat | menu | cutscene
     const qs = new URLSearchParams(location.search);
     this.debug = qs.has('debug');
@@ -399,6 +411,7 @@ export class Game {
     let ticks = 0;
     const loop = () => {
       this._raf = requestAnimationFrame(loop);
+      this._rafTicks++;
       const now = performance.now();
       if (prevTick) {
         const d = now - prevTick;
