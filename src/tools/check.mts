@@ -244,6 +244,24 @@ const GATES: Gate[] = [
   },
   { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true, kind: 'browser', cost: 780 },
   { name: 'gameplay', script: 'gameplay.mts', expect: '60 fps under real input', perf: true, kind: 'browser', cost: 360 },
+  /**
+   * The only gate that watches the LOAD rather than a frame.
+   *
+   * Every other gate here starts from a page that has already booted, so the
+   * eight seconds before `GAME.ready` were unobserved by all nineteen of them.
+   * Measured (`docs/BOOT_PERF.md`): that load used to arrive as **two** long
+   * tasks, the worst 7961 ms, with 96% of it unable to paint or take a click —
+   * a completely frozen tab, invisible to the whole suite.
+   *
+   * `perf: true` because it launches its own browser under the exclusive lease
+   * (the navigation *is* the measurement, exactly as for `bootprof`), so it
+   * must not run beside the pooled browser gates.
+   */
+  {
+    name: 'bootblock', pixelBlind: true, perf: true, kind: 'browser', cost: 90,
+    args: [path.join(HERE, 'coldload.mts'), '--prod', '--gate'],
+    expect: 'the boot yields; no multi-second freeze; first visit inside its transfer budget',
+  },
 ];
 
 function parse(argv: string[]) {

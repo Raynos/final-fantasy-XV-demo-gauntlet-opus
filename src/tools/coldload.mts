@@ -5,6 +5,7 @@
  *   node src/tools/coldload.mts --prod          # what a person who has never been here pays
  *   node src/tools/coldload.mts                 # the same against the dev server
  *   node src/tools/coldload.mts --prod --n 2    # add a warm-HTTP-cache reload for the A/B
+ *   node src/tools/coldload.mts --prod --gate   # the `bootblock` gate, as `check --perf` runs it
  *
  * **Two of the three blank rows in `docs/BOOT_PERF.md` are the same page load
  * looked at from two sides**, so they are measured by one tool.
@@ -181,8 +182,58 @@ function report(name: string, r: ColdRead, wallMs: number, readyMs: number) {
   }
 }
 
+/**
+ * The gate, and what it is actually guarding.
+ *
+ * Three budgets, and only one of them is a timing number.
+ *
+ * `BLOCKS_MIN` is the structural one and the reason this gate exists. Before
+ * `Game.init()` yielded a real task, the entire 8 s boot arrived as **two**
+ * long tasks; it is now fourteen. Any change that puts a microtask-only
+ * `await` back — or moves the phase loop somewhere that does not yield — takes
+ * that count straight back to one or two, and nothing else in the suite would
+ * notice. It is a count, so contention cannot move it.
+ *
+ * `BLOCK_MS_MAX` is deliberately loose. The worst block measured is 1325 ms
+ * (`Vegetation`), and this is not trying to ratchet that down a hundred
+ * milliseconds at a time — it is trying to catch a phase that has grown into a
+ * multi-second freeze. A tight budget here would be a timing assertion on a
+ * shared laptop, which is how gates get disabled.
+ *
+ * `TRANSFER_MAX` guards the first visit. 85.5 MB on the wire today; the failure
+ * this catches is somebody adding an artifact that doubles it, which localhost
+ * makes completely invisible — 85 MB arrives here in a quarter of a second and
+ * on a 50 Mbit connection in fourteen.
+ */
+const BLOCKS_MIN = 8;
+const BLOCK_MS_MAX = 3500;
+const TRANSFER_MAX = 120e6;
+
+function gate(r: ColdRead, readyMs: number): boolean {
+  const gaps: number[] = [];
+  for (let i = 1; i < r.raf.length; i++) if (r.raf[i - 1] <= readyMs) gaps.push(r.raf[i] - r.raf[i - 1]);
+  const blocked = gaps.filter((g) => g > 50);
+  const worst = Math.max(0, ...gaps);
+  const checks: [string, boolean, string][] = [
+    ['boot is split into tasks the browser can paint between',
+      blocked.length >= BLOCKS_MIN, `${blocked.length} blocks over 50 ms, need >= ${BLOCKS_MIN}`],
+    ['no single main-thread block is a multi-second freeze',
+      worst <= BLOCK_MS_MAX, `worst ${worst.toFixed(0)} ms, budget ${BLOCK_MS_MAX} ms`],
+    ['a first visit stays inside its transfer budget',
+      r.transfer <= TRANSFER_MAX, `${MB(r.transfer)} on the wire, budget ${MB(TRANSFER_MAX)}`],
+  ];
+  let ok = true;
+  for (const [what, pass, detail] of checks) {
+    console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${what} — ${detail}`);
+    if (!pass) ok = false;
+  }
+  console.log(`\nbootblock: ${ok ? 'PASS' : 'FAIL'} — ${blocked.length} blocks, worst ${worst.toFixed(0)} ms, ${MB(r.transfer)} on the wire`);
+  return ok;
+}
+
 async function main() {
   const N = num('--n', 1);
+  const GATE = flag('--gate');
   const PLAY = !flag('--shoot');
   printContention();
   const pw = powerWarning();
@@ -203,6 +254,7 @@ async function main() {
   // answers the question before it is asked.
   const { ctx } = await launchPersistent({ width: 1600, height: 900 }, 0,
     { extraArgs: ARGS_COLD, persistent: false });
+  let failed = false;
   try {
     const page = await ctx.newPage();
     await page.setViewportSize({ width: 1600, height: 900 });
@@ -223,6 +275,7 @@ async function main() {
       const readyMs = await page.evaluate('performance.now() - window.__cold.t0') as number;
       const r = await page.evaluate(READ) as ColdRead;
       report(i === 0 ? 'FIRST VISIT — empty HTTP cache' : `reload ${i} — warm HTTP cache`, r, wall, readyMs);
+      if (GATE && i === 0) failed = !gate(r, readyMs);
     }
   } finally {
     await ctx.close();
@@ -232,6 +285,7 @@ async function main() {
         + `${after.trees.length ? `, live worktrees: ${after.trees.join(', ')}` : ''}. Not a baseline.`);
     }
   }
+  if (failed) process.exit(1);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
