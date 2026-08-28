@@ -722,8 +722,21 @@ export class Water {
           // is the part a stamped contour can never get right. Fresnel keeps
           // grazing angles reflective however shallow they are, and foam is
           // opaque because it is scattering, not absorption.
+          //
+          // **And a floor, ramped in over the first metre of depth**, because
+          // absorption alone cannot carry shallow water. uSigma.b is 0.045/m,
+          // so at the four tarns' median depth of 1.4 m the extinction alpha is
+          // 1 - exp(-0.045 * 1.4) = 0.061: the surface is SIX PER CENT opaque
+          // over its own bed, and the sky in it, the glint and the foam were
+          // all being multiplied by that. Those ponds read as flooded ground.
+          // Identical finding to the river lane's at b237dc6, identical answer;
+          // the ramp is what keeps the swash line honest, so the first few
+          // centimetres are still see-through and the beach reads under them.
+          // (bodyRamp, not body: 'body' is the vec3 body colour above, and
+          // redeclaring it is what broke every cold boot for a day.)
           float alpha = 1.0 - max(max(T.r, T.g), T.b);
-          alpha = clamp(max(max(alpha, fres * 0.92), foam * 0.9), 0.0, 1.0);
+          float bodyRamp = smoothstep(0.04, 0.85, dropDown);
+          alpha = clamp(max(max(max(alpha, fres * 0.92), foam * 0.9), 0.30 * bodyRamp), 0.0, 1.0);
 
           gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>
