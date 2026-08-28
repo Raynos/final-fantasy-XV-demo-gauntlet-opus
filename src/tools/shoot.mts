@@ -183,7 +183,23 @@ async function main() {
     manifest({ ...out, variant } as typeof out & { variant: string }));
   if (out.errors.length) {
     console.error(`\n${out.errors.length} page error(s):`);
-    for (const e of [...new Set<string>(out.errors)].slice(0, 20)) console.error('  ' + e.split('\n')[0]);
+    // First line, then the lines that carry the diagnosis. A shader link
+    // failure arrives as one console.error whose first line is the useless
+    // half -- `THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false` --
+    // and whose later lines name the material and the offending GLSL line.
+    // Printing only `split('\n')[0]` threw the answer away and cost a bisect
+    // plus an in-page relink probe to get back. Bounded: the tail of such a
+    // message is a numbered source dump, so keep only the lines that say
+    // something and cap them.
+    for (const e of [...new Set<string>(out.errors)].slice(0, 20)) {
+      const lines = e.split('\n');
+      console.error('  ' + lines[0]);
+      const detail = lines.slice(1)
+        .map((l) => l.trim())
+        .filter((l) => l && (/^(ERROR|WARNING):/.test(l) || /^(Material Name|Material Type|Program Info Log):/.test(l)));
+      for (const d of detail.slice(0, 8)) console.error('    ' + d);
+      if (detail.length > 8) console.error(`    ... ${detail.length - 8} more`);
+    }
     process.exit(1);
   }
   console.log(`\n${out.results.length} shots -> ${path.relative(ROOT, outDir)}`);

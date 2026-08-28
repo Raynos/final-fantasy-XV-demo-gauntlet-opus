@@ -220,8 +220,11 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         // foam) was being multiplied by that. Real shallow water is not
         // transparent to look at: it carries a surface. The floor rises with
         // depth so a puddle at the strip's own margin still fades out.
-        float body = smoothstep(0.02, 0.55, depth);
-        alpha = clamp(max(max(max(alpha, fres * 0.9), foam * 0.95), 0.34 * body), 0.0, 1.0);
+        // (Named bodyRamp, not body: 'body' is the vec3 body colour thirty
+        // lines up, in this same scope. GLSL rejects the redefinition and the
+        // program never links -- see the note above makeRiverWaterMaterial.)
+        float bodyRamp = smoothstep(0.02, 0.55, depth);
+        alpha = clamp(max(max(max(alpha, fres * 0.9), foam * 0.95), 0.34 * bodyRamp), 0.0, 1.0);
         // Fade the last few centimetres into the bank so the strip has no rim.
         alpha *= smoothstep(0.0, 0.06, edge);
 
