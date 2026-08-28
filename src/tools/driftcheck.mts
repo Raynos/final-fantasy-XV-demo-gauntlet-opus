@@ -378,6 +378,18 @@ const bins = Object.keys(out.hist).map(Number).sort((a, b) => a - b);
 if (bins.length > 1) console.log(`drift histogram  ${bins.map((b) => `${b.toFixed(1)}:${out.hist[String(b)]}`).join('  ')}`);
 if (errors.length) console.log(`\npage errors:\n  ${errors.slice(0, 8).join('\n  ')}`);
 
+// Plan section 9.3: the blind spots belong in the output, beside the verdict.
+console.log('\nblind to: everything outside ONE probe rect. The tour is thousands of metres');
+console.log('          and the comparison is a single span-metre square, so a surface that');
+console.log('          moved only where the camera stopped is invisible here.');
+console.log('          Also blind to: anything that is not the terrain -- water, roads,');
+console.log('          props and every seated object ride the drift and are not read;');
+console.log('          drift that RECOVERS, since the probe is before-and-after and not');
+console.log('          continuous, so a surface that climbed and came back reads zero;');
+console.log('          the shading of the ground, which is `heightcheck` and a capture;');
+console.log('          and drift below the 1.5 m tessellation floor the `--tol-cpu`');
+console.log('          headroom already concedes.');
+
 const bad = Math.abs(out.driftWorst) > opts.tol || Math.abs(out.cpuWorstAfter) > opts.tolCpu;
 console.log(`\n${bad ? 'FAIL' : 'PASS'}  (tolerance ${opts.tol} m drift, ${opts.tolCpu} m vs heightAt)`);
 process.exit(bad || errors.length ? 1 : 0);

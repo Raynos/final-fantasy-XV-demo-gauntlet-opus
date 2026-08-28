@@ -295,4 +295,17 @@ if (bad.length) {
   for (const b of bad) console.error(`  ${b}`);
 }
 console.log(`\n${rows.length} pose(s) probed across ${byKey.size} species · ${bad.length} failure(s)`);
+
+// Plan section 9.3: every check declares what it cannot see, in its own output
+// rather than in a docstring nobody reads next to the number.
+console.log('\nblind to: the GROUND. `foot` is measured against the root, and the root is');
+console.log('          assumed to be on the terrain -- a creature standing correctly on a');
+console.log('          root that is itself a metre underground reads 0.00 here.');
+console.log('          `seatcheck` and `floatcheck` are the pair that see that.');
+console.log('          Also blind to: shape, proportion and whether the pose LOOKS like');
+console.log('          anything (a folded-in-half creature with its feet on the floor');
+console.log('          passes -- `silhouette` and a capture are the paired half); every');
+console.log('          pose not in the roster, and every frame between two poses, since');
+console.log('          only held poses are probed; and anything driven by real combat,');
+console.log('          because these are frozen through `Enemy.freeze`.');
 process.exit(bad.length || pageErrors.length ? 1 : 0);

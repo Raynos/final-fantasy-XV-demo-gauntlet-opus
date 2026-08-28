@@ -339,6 +339,19 @@ async function main(): Promise<void> {
     console.log(verdict(med, ref.median));
   }
 
+  // Plan section 9.3. This one matters more than most: these twelve numbers are
+  // the closest thing the repo has to a verdict on how a frame LOOKS, and they
+  // are all global histogram statistics.
+  console.log('\nblind to: WHERE any of it is. Every column is a whole-frame statistic, so a');
+  console.log('          frame with a teal sky and warm ground and a frame with the split-');
+  console.log('          tone correctly on luma are the same row. Composition, structure,');
+  console.log('          sharpness, aliasing, noise and every spatial defect are outside it.');
+  console.log('          Also blind to: the SUBJECT -- a corpus median over a mixed set of');
+  console.log('          shots is compared against a corpus median over shipped plates that');
+  console.log('          framed different things, and the split-tone survives that while');
+  console.log('          exposure does not; and to anything a JPEG\'s chroma subsampling');
+  console.log('          removed before the decoder saw it.');
+
   if (arg('json')) await writeFile(path.resolve(arg('json')!), JSON.stringify({ label, rows, median: med }, null, 2));
   if (argv.includes('--save')) {
     let corpus: Record<string, Corpus> = {};
