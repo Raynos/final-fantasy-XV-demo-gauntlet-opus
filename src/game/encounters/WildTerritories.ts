@@ -186,13 +186,39 @@ const IMPERIAL: SpawnLine[] = [
  * across three animals, and the identical shape every time.
  *
  * So a wild den is placed between its zone's own floor and the party, and
- * never below the floor: Longwythe at party 27 comes out around level 20 — a
- * real fight at 3.2x the HP and 2.2x the damage of the listed species — while
+ * never below the floor: Longwythe at party 27 comes out at the party's own
+ * level — 2.9x the HP and 1.9x the damage of the listed species — while
  * Ravatogh's `[48, 60]` band clamps at 48 and stays lethal, because pulling
  * *down* to the party would delete the danger gradient this table exists to
  * express.
  */
-const LEVEL_LIFT = 0.7;
+/*
+ * 0.7 -> 1.0, and the number now has a measurement under it rather than a
+ * first guess. `probes/fightshape.mts` on the tree that shipped 0.7, three
+ * dens, the same scripted policy the original claim was measured with:
+ *
+ *     sabertusk x3  lv 21, 1381 hp each   4 143 hp of den    6.3 s
+ *     voretooth x4  lv 19, 1229 hp each   4 916 hp of den    6.8 s
+ *     imperial  x9  lv 18,  753 hp each   ~6 000 hp         16.7 s
+ *
+ * so the party is putting out **660-730 hp/s** into a wild den, and 0.7 buys a
+ * six-second fight. At 1.0 a Longwythe den lands at the party's own level
+ * rather than seven under it — a sabertusk at 27 against a listed 14 is
+ * 1.085^13 = 2.85x, so 1 381 -> 2 223 hp — and the same den runs 10-17 s
+ * depending on whether its `count` draws 3 or 5.
+ *
+ * **1.0 is the ceiling on this lever, and it does not reach 30 s.** Going
+ * further means putting the anonymous country *above* the party, which is what
+ * the paragraph above says a hunt mark is for. The arithmetic is worth writing
+ * down because it keeps being re-derived: at 700 hp/s a 30-second field
+ * encounter needs ~21 000 hp of den, which is five sabertusks at level 38, and
+ * the bestiary's own top species — Red Giant, level 50 — is 22 000 hp all by
+ * itself. A three-animal trash den is not a 30-second fight at any level that
+ * is not absurd; what this lever buys is the difference between a fight with
+ * no room in it and one with room for a rhythm. The rest of the gap is pack
+ * composition and party throughput, neither of which lives in this file.
+ */
+const LEVEL_LIFT = 1.0;
 
 /**
  * A wild den's level: the zone's band, lifted toward the party.
