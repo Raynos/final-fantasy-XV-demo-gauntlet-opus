@@ -806,7 +806,19 @@ export class PoiKits {
         // Darker than the ground it stands on, not paler: a haven is a slab of
         // weathered basalt with light in the glyphs, and a shelf lighter than
         // its own apron reads as a sandpit.
-        bakeTone(g, { y0: deck - 2.4, y1: deck + 0.3, grime: 0.52, bleach: 0.78, jitter: 1, streak: 0.14 });
+        bakeTone(g, { y0: deck - 2.4, y1: deck + 0.3, grime: 0.42, bleach: 0.64, jitter: 1, streak: 0.14 });
+        // **Per-column value, on top of the height gradient.** `bakeTone` writes
+        // one ramp in `y` over the whole merged shelf, so every column comes out
+        // the same value at the same height — and a ring of equal-valued blocks
+        // reads as laid masonry however irregular their plan is. Keyed on
+        // azimuth, which is what a column is here; it varies within a column as
+        // well as between them, which is also true of a real cleaved face.
+        const cA = g.attributes.color, pA = g.attributes.position;
+        for (let i = 0; i < cA.count; i++) {
+          const a = Math.atan2(pA.getZ(i), pA.getX(i));
+          const v = 1 + Math.sin(a * 5.3 + 1.7) * 0.11 + Math.sin(a * 11.1 - 0.6) * 0.07;
+          cA.setXYZ(i, cA.getX(i) * v, cA.getY(i) * v, cA.getZ(i) * v);
+        }
         B.add(M.stone, g, mat4([0, 0, 0]));
       }
       // The block that came out of each notch, lying at its foot.
