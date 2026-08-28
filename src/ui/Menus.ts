@@ -179,7 +179,16 @@ export class Menus {
     this.scrim = el('div.menu-scrim');
     this.grain = el('div.menu-grain');
     this.wrap = el('div.menu-wrap');
-    this.root.appendChild(this.scrim);
+    // The scrim goes in `uiRoot`, NOT in `#menus`. Its `backdrop-filter` can
+    // only sample the backdrop of its own compositing layer, and inside
+    // `#menus` that backdrop is empty -- so the blur this menu has always
+    // declared has never rendered. See the block on `.menu-scrim` in `ui.css`
+    // for the six-arm measurement; nothing but re-homing moves it.
+    game.uiRoot.insertBefore(this.scrim, this.root);
+    // Hidden from the first frame. `lateUpdate` sets this every frame, but it
+    // has not run yet at the end of `init()`, and a full-screen scrim over the
+    // game for one frame is exactly the kind of thing a capture would find.
+    this.scrim.style.display = 'none';
     this.root.appendChild(this.grain);
     this.root.appendChild(this.wrap);
 
@@ -395,6 +404,10 @@ export class Menus {
     this.open = this.a > 0.004;
     if (!this.open && !this.pending) this._hideShown();
     this.root.style.display = this.open ? '' : 'none';
+    // The scrim is outside `this.root` now (see `init`), so it does not inherit
+    // that hide and has to be told separately. Without this line a closed menu
+    // leaves a full-screen blur over the game.
+    this.scrim.style.display = this.open ? '' : 'none';
     this.root.classList.toggle('on', this.a > 0.5);
     const hud = game.get?.('HUD');
     if (hud?.setMenuOpen) hud.setMenuOpen(this.a > 0.12);

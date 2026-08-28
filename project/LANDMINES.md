@@ -1294,3 +1294,54 @@ same order-dependence `converge()`'s own comment describes. Converging to
 the profile: 610 ms, obviously redundant on the reasoning, and wrong. If it is
 retried, `hero_full` is the shot that catches it, and it must be a PNG diff
 against the per-shot floor — the four shots that pass tell you nothing.
+
+## A CSS effect that computes correctly and renders nothing, for a year
+
+`Menus.lateUpdate` has written `backdrop-filter: blur(26px) saturate(.58)
+brightness(.54)` onto `.menu-scrim` since the menus were built. `getComputedStyle`
+returns exactly that string. **It has never rendered.** Every menu capture this
+repo has ever taken shows the world sharp behind the reading column — the party
+walking crisply through the middle of the Elemancy screen — and it was read six
+times as "the menu screens have no scrim", which is a layout problem and would
+have been fixed by adding panels the design does not want.
+
+`backdrop-filter` samples the backdrop of the element's **own compositing
+layer**. `.menu-scrim` sits inside `#menus` (`position: absolute; z-index: 2`);
+its backdrop is whatever `#menus` painted beneath it, which is nothing, while
+the game canvas is a different layer entirely. The filter runs against an empty
+backdrop and produces nothing, with no warning anywhere.
+
+Six arms at one held pose, blur only with the gradient removed, PNG bytes as the
+proxy for how much detail survives (`src/tools/_probe/scrimfix2.mts`):
+
+| arm | PNG |
+|---|---:|
+| as shipped (`position: absolute` inside `#menus`) | 3.08 MB |
+| scrim `position: fixed` | 3.08 MB |
+| scrim `will-change: backdrop-filter` | 3.08 MB |
+| scrim `transform: translateZ(0)` | 3.08 MB |
+| `#menus` `position: fixed` | 3.08 MB |
+| **scrim re-homed into `uiRoot`** | **0.51 MB** |
+
+Only re-homing works. Promoting the element does not, and neither does promoting
+its parent — so this is about which layer's backdrop the filter can reach, not
+about whether the scrim is composited.
+
+**Three things generalise.**
+
+1. **A computed style is not a rendered pixel.** `getComputedStyle` said the
+   blur was on, every time it was asked, for as long as the bug existed. The
+   only instrument that could see the truth was a screenshot with a control
+   beside it: the same declaration on an element in a different parent.
+2. **A silent visual no-op reads as a design decision.** Five screens looked
+   under-designed and one (`controls`, which draws real dark cards) looked
+   finished. The obvious reading — "the other five need panels" — was wrong and
+   would have shipped panels over a blur that was already specified.
+3. **`window.__shot` in a probe is async and must be awaited.** Called without
+   `await`, the body runs on and every shot is taken after it returns, so all
+   the arms photograph the same frame. That artifact produced two confident
+   wrong conclusions here — "the scrim does not paint at all" (it was painting;
+   the red test was photographed after the red was removed) and "the grain's
+   `mix-blend-mode` isolates it" — before anyone noticed the frames were
+   identical. An A/B whose arms are byte-identical is not a null result, it is a
+   broken harness.

@@ -11,7 +11,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts, runTool } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, runTool, isHarnessFlag } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -116,6 +116,12 @@ async function main() {
     if (a === '--out') opts.out = argv[++i];
     else if (a === '--w') opts.w = Number(argv[++i]);
     else if (a === '--h') opts.h = Number(argv[++i]);
+    // The shared --build/--dirty/--lane/... flags belong to `harnessArgs`, which
+    // has already read them. Swallowing them as scene names printed `unknown
+    // scene --dirty` on every dirty run and, with a value flag, would have eaten
+    // the value as a second one. Same fix as `framecam` took in 6a14da5.
+    else if (isHarnessFlag(a) === 'value') i++;
+    else if (isHarnessFlag(a) === 'switch') { /* handled by harnessArgs */ }
     else opts.names.push(a);
   }
   const names = opts.names.length ? opts.names : Object.keys(SCENES);

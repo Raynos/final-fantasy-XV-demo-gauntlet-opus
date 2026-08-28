@@ -464,7 +464,44 @@
    its type — the world behind stayed legible enough to compete with a 9px
    label. Deeper in the middle, same falloff, so the frame is still readable as
    the place the player paused rather than a black plate. */
-.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.74), rgba(2,4,8,.93)); }
+/* THE SCRIM IS A SIBLING OF `#menus`, NOT A CHILD OF IT, AND THAT IS THE WHOLE
+   DIFFERENCE BETWEEN A BLURRED PAUSE MENU AND A SHARP ONE.
+
+   `Menus.lateUpdate` has always written
+   `backdrop-filter: blur(26px) saturate(.58) brightness(.54)` here; it has
+   always computed to exactly that; and no capture of any menu screen has ever
+   shown a blurred world. The party walked crisply through the reading column of
+   every one of them, which is why five of the six screens read as type floating
+   on terrain.
+
+   `backdrop-filter` samples the backdrop of the element's own compositing
+   layer. Inside `#menus` (`position: absolute; z-index: 2`) the scrim's
+   backdrop is whatever `#menus` painted beneath it -- nothing -- while the game
+   canvas is a different layer entirely. The filter ran against an empty
+   backdrop and produced nothing, silently, which is the worst way for a visual
+   effect to fail.
+
+   Six arms, one held `elemancy` pose, blur only with the gradient removed, PNG
+   bytes as the proxy for how much detail survives
+   (`src/tools/_probe/scrimfix2.mts`):
+
+     as shipped, absolute       3.08 MB      menu-root position:fixed  3.08 MB
+     scrim position:fixed       3.08 MB      scrim in uiRoot           0.51 MB
+     scrim will-change          3.08 MB
+     scrim transform:translateZ 3.08 MB
+
+   Only re-homing works. Promotion of the scrim itself does not, and neither
+   does promoting `#menus` -- so this is about which layer's backdrop the filter
+   can reach, not about whether the scrim is composited. */
+/* AND THE GRADIENT IS LIGHTER THAN IT WAS, because it used to be doing all of
+   the dimming by itself. `.74 -> .93` over a live `brightness(.54)
+   saturate(.58)` leaves nothing of the world at all -- a black rectangle with
+   type on it, which is not what FFXV's pause menu is. Five arms at the same
+   pose (`src/tools/_probe/scrimtone.mts`): `.74/.93` black, `.52/.72` reads as
+   a cool blurred field with the sky still glowing top-left, `.38/.60` a touch
+   warm in the lower left, `.26/.48` and none too busy under the dimmer labels.
+   `.52/.72`. */
+.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.52), rgba(2,4,8,.72)); }
 .menu-grain { position: absolute; inset: 0; opacity: .5;
   background-image: linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px);
   background-size: 100% 3px; mix-blend-mode: overlay; }
