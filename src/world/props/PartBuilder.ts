@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { assertAttributeContract } from '../../util/GeoAssert.ts';
 
 /**
  * A position / rotation / scale triple, written as an array literal at every
@@ -10,6 +11,21 @@ export type Vec3 = number[];
 
 /** One cross-section of a {@link loft}: a station at `x`, and its ring of `[y,z]`. */
 export interface LoftSection { x: number; pts: number[][] }
+
+/**
+ * The population {@link PartBuilder.build}'s attribute-contract check has seen.
+ *
+ * **A zero over a population of zero is a check that never ran**, which is the
+ * lesson `geocheck` learned when it gated `assertAttributeContract` over the
+ * bestiary and had to print the pair count next to the verdict. `broken` alone
+ * is not evidence of anything; `checked` and `binding` are what make it
+ * evidence. `binding` counts the pairs where the material actually asks for an
+ * attribute — a map, an aoMap, a normalMap or `vertexColors` — because a
+ * contract check over materials that bind nothing is vacuous.
+ *
+ * Read by `src/tools/probes/attrcontract.mts`.
+ */
+export const ATTR_CONTRACT = { checked: 0, binding: 0, broken: 0 };
 
 /**
  * Accumulates transformed geometry per material and emits one merged mesh per
@@ -90,6 +106,41 @@ export class PartBuilder {
         continue;
       }
       merged.computeBoundingSphere();
+      /**
+       * **The attribute contract, checked on the shipped mesh.**
+       *
+       * `assertAttributeContract` was the one assert in `GeoAssert.ts` with no
+       * caller in the game at all — `geocheck` gates it over the bestiary, which
+       * is the only population it can build in bare Node, and nothing in
+       * `src/world/` had ever run it. This is the call site the harness lane
+       * handed over, and `build()` is the right one because it is where the
+       * geometry and the material finally meet: every prop kit, all 124 POIs,
+       * the megastructures, the outposts and the road furniture come through
+       * here, so one call covers the whole prop layer.
+       *
+       * The failure it is looking for is silent by construction. An undeclared
+       * attribute binds to a constant of zero, so a missing UV samples texel
+       * (0,0) of every map — which is a colour, so it reads as a material
+       * choice — and `vertexColors` with no `color` attribute draws BLACK. This
+       * class of bug has shipped here more than once: it is the reason the loop
+       * above synthesises white, and it is the reason `Megastructures.M.stone`
+       * carries a paragraph about `instanceTint`.
+       *
+       * **`try`/`catch` + `console.error`, never a bare throw.** A throw from
+       * anything on an `init()` path means `GAME.ready` is never set, and every
+       * browser-backed tool on the machine then returns a bare
+       * `waitForFunction` timeout with no message — indistinguishable from a
+       * slow boot, a broken build or a restarting daemon, all of which can be
+       * true at once. That cost an agent most of an hour the day
+       * `GeoAssert.ts` landed. Catching and logging is still red — `shoot.mts`
+       * exits non-zero on any console error — and the page still boots, so you
+       * can look at the thing the assert is complaining about.
+       */
+      ATTR_CONTRACT.checked++;
+      const mm = mat as THREE.Material & { map?: unknown, normalMap?: unknown, aoMap?: unknown };
+      if (mm.map || mm.normalMap || mm.aoMap || mm.vertexColors) ATTR_CONTRACT.binding++;
+      try { assertAttributeContract(merged, mm, `PartBuilder.build ${name}/${mat.name || mat.type}`); }
+      catch (e) { ATTR_CONTRACT.broken++; console.error(e); }
       const mesh = new THREE.Mesh(merged, mat);
       mesh.castShadow = cast;
       mesh.receiveShadow = receive;
