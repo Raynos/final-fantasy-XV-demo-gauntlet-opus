@@ -91,24 +91,47 @@ the plinth is gone).
 | `911f99d` | `FILL_MAX`; the kerb's retaining wall; the tomb's masonry pulled inside the deck | **MEASURED** + **VERIFIED BY EYE** |
 | `b119dd3` | `basaltColumns` — the haven's shelf stops being a lathe. **Also repairs `911f99d`, which committed the call site without the callee** | UNVERIFIED by eye |
 | `1d95705` | the two negatives and four new rows into the plan; `probes/fishdeck.mts`, `probes/rocktint.mts` | — |
+| `366e17d` | **the Meteor reads its own cavity bake**, rescaled to mean 1.0 (`rockGeometry`'s `tintNorm`, off by default; `M.stone` gets `vertexColors`) | **VERIFIED BY EYE** |
+| `b648b69` | a fishing camp's shack stands on the bank, not on the jetty; per-pile lengths | **MEASURED**, unverified by eye |
+| `08a2735` | the haven's columns get a crown step you can see and a lean of their own | in flight |
+| `72d2b3c` | per-column value on the haven shelf; basalt is darker than sandstone | in flight |
+
+### The Meteor, before and after — **VERIFIED BY EYE**
+
+`probes/rocktint.mts` on the shipped settings: the Meteor mass's own bake means
+**0.8352** (min 0.555, max 1.157), and the eight shipped kinds run 0.911–0.924,
+**mean of means 0.9062**. So `megaMaterials().stone`'s note — "mean is about
+0.55" — was reading the **floor**, not the mean, and the cost of switching the
+attribute on unchanged was a sixth of the value rather than a half. Normalised,
+the attribute is a ±35 % albedo variation about 1.0.
+
+`tmp/shots/lr2-base/zone_mencemoor.jpg` -> `tmp/shots/lr2-met-b/zone_mencemoor.jpg`:
+the mass was a flat blue-grey cut-out and now carries a warmer, lighter crown
+and right shoulder against darker flanks, with the crevices reading. The
+silhouette is byte-for-byte the same shape, which is what a colour-only lever
+should do. `tmp/shots/lr2-met-b/landmark_meteor.jpg` is the closer read and it is
+the stronger one: the crown resolves into a **cluster of angular spires**, which
+is the words WS-13 used for what was missing.
+
+Draw calls unchanged: `zone_mencemoor` 320, `landmark_meteor` 632.
 
 ---
 
 ## Open, in the order I would take them
 
-1. **Look at `poi_haven` and confirm `basaltColumns`.** Written and building;
-   the frame was still queued behind another lane's `check:perf` when this was
-   written. `tmp/shots/lr2-base/poi_haven.jpg` is the before — a grey disc with
-   a hard circular lip and a smaller one on top, glowing runes inside.
-2. **The Meteor's vertex-colour lever, in the working tree and uncommitted.**
-   `rockGeometry` gains `tintNorm` (default **off**, so the instanced rock field
-   this file calibrated is untouched); `meteorMass` and `shard` pass it; and
-   `megaMaterials().stone` turns `vertexColors` on. The old note on that
-   material — "mean about 0.55 ... rendered the meteor near-black" — was right
-   about the sign and stale about the number: the bake was rewritten so dust is
-   a lightening above 1, and `k = dust * (1 - 0.42 * ao)` now means about 0.84.
-   `probes/rocktint.mts` measures it. **Needs its own before/after on
-   `zone_mencemoor` and `landmark_meteor` and has not had one.**
+1. **Confirm the haven shelf after `08a2735` + `72d2b3c`.** The first capture
+   (`tmp/shots/lr2-met-b/poi_haven.jpg`) killed the cake stand and left a ring of
+   neat pale blocks at one height; both commits target exactly that and neither
+   has been looked at. Before is `tmp/shots/lr2-base/poi_haven.jpg`.
+2. **`poi_imperial`'s levitating boulder is a SECOND one and it is still there.**
+   `tmp/shots/lr2-b1/poi_imperial.jpg` at (1310–1370, 335–370): a boulder over
+   a wide-capped pedestal, unchanged by `911f99d`. So the tomb's masonry
+   explains the tomb's and not this one. It has the profile of a `torPlan`
+   **hoodoo** — wide cap, narrow neck, wide base — under overcast light against
+   a bright sky, so the first thing to test is whether the neck is *there and
+   unreadable* rather than absent. Project the tor instance matrices into that
+   camera and match the screen position; do not assume a third mechanism until
+   the pedestal has been ruled in or out.
 3. **`_genOutcrop`'s plan/seat split.** The *joint* half is already landed —
    `d3b4ba9`'s sunk-position rule is in the course loop, with the comment. What
    is left is the pure-function extraction (`outcropPlan(rng, rockS, ext)`,
