@@ -1005,6 +1005,18 @@ directory boundary it did not own.
 
 ### Ground and vegetation (from `ground-light`, `water-content`, `landmarks`)
 
+> **Worked 2026-08-28 by the `ground-r2` lane — read
+> `project/handoff/ground-r2.md` before picking any of this up.** One line
+> each: **the 4–30 m hole is filled** by a tier-C mesorelief term in
+> `TerrainMaterial`, `reliefstat` median `tot` 31.2 → **38.0** of 49.0 with d4
+> at 91% and d8 at 83% of the reference *and d1 still under it*, which is the
+> whole difference between this and `drymax`; **Galdin Quay is a beach**, run-out
+> p50 14 m → 78 m, with the `Ecology` half of that item handed to
+> `alpha-edges`; **`zone_mencemoor`'s corduroy is not the shader** and the
+> negative is below, leaving a named `Field.ts` candidate and a re-bake; **WS-2d
+> is already shipped for terrain** and now has its own ablation pair, leaving
+> vegetation and rocks. The tarn leftover is a fourth measured negative.
+
 - **The "Leide is bare" hole is 4–30 m features, and nothing occupies that
   band.** Tier-D's ceiling is priced: `?post=drymax` buys `zone_longwythe`
   29.0 → 40.4 of 49.0, but lands d1 **16.4** / d2 **23.3** against a reference of
@@ -1013,12 +1025,40 @@ directory boundary it did not own.
 - **Galdin Quay is not a beach and the water lane cannot make it one.** 698 of
   6 280 shore points have a run-out gentler than 4 m. It needs a **`Field.ts`
   sand shelf plus `Ecology` grass suppression** — the land behind a now-correct
-  foam lace is grass to the waterline.
+  foam lace is grass to the waterline. **`Field.ts` half DONE (`e5ef1a3`)**:
+  `Field._beachShelf` plus a strandline band in the splat, run-out p50 **14 m →
+  78 m** and 0.9% → 100% of the quay strand gentler than 40 m, measured by the
+  new `probes/beachrun.mts`. **The `Ecology` half is open and is
+  `alpha-edges`'**, and it is now trees rather than grass: with the bluff gone,
+  `treeDensity`'s only water reject is `waterDepth > 0.3`, so the tree line
+  stands in the swash. All three populations want a **strandline reject** —
+  nothing woody below `seaLevel + 1.5`, grass thinned to dune tussock below +3.
 - **`zone_mencemoor` renders as a bare corrugated massif that nobody owns.**
+  **Half closed.** The corduroy is *not* the shader's erosion-channel relief
+  field — see the negatives table — so it is heightfield geometry and the named
+  candidate is `Field._addDetail`'s 139 m ridged `gully`, which costs a re-bake
+  and a corpus diff because every hill in the world rides it. The no-foreground
+  half has an instrument now, `probes/framedepth.mts`, and is a `Shots.ts`
+  question.
 - **WS-2d was never reached.** It was gated on 2c, and 2c turned out to be
   already landed — so the gate is lifted and the item is simply untouched.
-  Occluding indirect diffuse in-material is still open, and `?post=gcmax` (5.634
-  mean/255 on `zone_vannath`) still bounds it.
+  **CLOSED for terrain, which already does it**: `TerrainMaterial`'s `FRAG_AO`
+  runs at `<aomap_fragment>` and multiplies `reflectedLight.indirectDiffuse` by
+  a material AO *and* the swept horizon sky-visibility bake, in-material, on
+  indirect only. `?post=noiao` / `iaomax` price it. What is left is
+  **vegetation** (`aoBoost` in `VegMaterial.patchVeg` reaches grass and nothing
+  else, so trees and bushes carry no base occlusion — `alpha-edges`') and
+  **rocks** (`props/`), plus the **1–64 m band** on terrain, between the detail
+  maps and the 64 m horizon texel, which nothing occludes at.
+- **DONE: the 4–30 m hole is filled** (`c699150`, `73baa9a`). A tier-C
+  mesorelief term in `tf_shade`, on the octaves the dry-cover block had already
+  computed and was spending on *amount* rather than on shape. `reliefstat`
+  ground ROI, median of four: `tot` 31.17 → **38.02** of 49.00, d4 to 91% of the
+  reference, d8 to 83%, d16 to 72% — with **d1 at 11.83 against 11.32**, where
+  `drymax`'s ceiling put it at 16.4. Priced against its own `?post=mesomax`
+  control, which also says *which half*: `mesoAmt` is already 1.0 over open
+  ground, so the control's colour endpoints were identical and every point came
+  from the **height**, not the stain. `?post=nomeso` / `mesomax`.
 
 ### The map and the two dry pins (from `water-content`)
 
@@ -1104,6 +1144,9 @@ without opening the handoff it lived in.
 | The six `RECIPES` in `Layers.ts` have mean lumas spanning only 0.35–0.47 | **that is `LAYER_AVG`, not the recipes.** The recipes' real mean *linear* lumas run **0.091–0.361, a 3.98× spread**. `LAYER_AVG` was their sRGB numbers used as linear light and was painting the far LOD 2.2–4.0× too bright; fixed at `14c49f3`. Nothing is wrong with the recipes' value contrast |
 | WS-2c's fraction-of-object contact ramp "has never rendered" | **`207a399` is an ancestor of `main`** and the ramp has been live since 2026-08-23. Ablated: `?post=nogcontact` moves `zone_vannath` **4.228 mean/255 over 11.9%** of pixels against a 2.00 floor, with `gcmax` at 5.634 — the shipped term is at 75% of its own ceiling, and an order of magnitude past the metre-scale version's 0.438/0.059% |
 | Tier-D dry cover can close the `reliefstat` gap if its reach is widened | **only a fifth of the way, and into the wrong bands.** `?post=drymax` prices full cover on `zone_longwythe` at tot 29.0 → **40.4** against a reference of 49.0 — but it lands as d1 **16.4** and d2 **23.3** where the reference is 11.3 and 15.5 (we would be 45–50% *over*), while d8/d16/d32 stay at 12.2/11.3/11.2 against 18.4/21.2/21.8. The hole is 4–30 m features and the term's octaves are 0.74 m and 1.9 m |
+| **WS-13: `zone_mencemoor`'s corduroy is the shader's erosion-channel relief field** | **it is not.** `?post=nogully` zeroes all three octaves of `gully`, including the dominant `3.20 * tf_lodW(59.0) * (0.32 - tf_sabs(gy1))` whose `gy1` runs at 59 m across the ground and 455 m in world Y and is therefore a constant-pitch comb raked down any steep face — the obvious suspect, and innocent. The frame comes back with **the same folds in the same places**, only harder-edged, because what the bump was doing was softening them. The parallel ridge-and-gully is **heightfield geometry**. Named candidate: `Field._addDetail`'s `ridged2(x * 0.0072, …, 3, 2.1, 0.55)` — a 139 m base wavelength incising up to 4.8 m and amplified by `(0.4 + 0.9 * slope)`, i.e. hardest on exactly the flanks that read as corduroy, ten folds across 1 200 m of ridge in the frame. **Blast radius is every hill in the world** and it costs a re-bake. `handoff/ground-r2.md` |
+| **WS-13: the tarns' emergent bed is a `Field._tarnBasins` bowl-shape problem** | **it is not, and it is worse than the fifth that was estimated: `probes/tarnbed.mts` reads 64–69% of each hollow dry**, a 26–51 m ring around each pond. Three geometries, none of which moved it — shipped 68.7% / mean ring 36.5 m, a 56 m bowl with a `1 - t^2.6` flat floor and banked rim 64.9% / 36.3 m, and that plus levelling the apron in full rather than to 0.985 67.0% / 39.8 m. The arithmetic is in **`water/Tarns.ts`**: `findTarns` takes the 26th percentile of its own 105 m disc, so the wet area is pinned at `pi * 105^2 * 0.26` = 9 000 m² whatever this pass digs, and `_tarnBasins` levels a 43 700 m² apron above it by construction. The dry annulus is the ratio of those two radii. The lever is a quantile over the body's own hollow, or a shelf radius derived from the level |
+| **WS-2d: "terrain and rocks carry no base occlusion at all"** | **false for terrain, and it has been for a while.** `TerrainMaterial`'s `FRAG_AO` runs at `<aomap_fragment>` and does exactly what 2d asks: `reflectedLight.indirectDiffuse *= mix(1.0, tfAO * tfSkyAo, 0.85)` — a material AO *and* the swept horizon sky-visibility bake, in-material, applied to indirect diffuse specifically and unable to touch direct light. `?post=noiao` / `iaomax` are its ablation pair. The genuinely open band is **1–64 m**, between the detail maps and the horizon bake's 64 m texel. Rocks and non-grass vegetation are still open and are other lanes' |
 | Skipping `Vegetation`'s origin prime under `?shoot`, since `converge()` re-streams at the shot camera | 610 ms and **wrong**: `hero_full` moves **13.359/255** against a 2.25 floor. Sixty budgeted `update()` calls are not the same resident set as "stream until finished" |
 | `combatloop` and `integration` can take warm leases once the viewport matches | `integration` needs `audio=force` in the query and no pooled page has it; `combatloop` matching the pool key costs **+28 s (42 -> 70)** to save a 7.5 s boot |
 | Chromium's disk cache can hold the 181 shader programs | `gl` and `metal` both compile +181 on a warm load; the cost is ANGLE's in-process translation, which no disk cache stores |
