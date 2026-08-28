@@ -1961,7 +1961,7 @@ export class Field {
        * hollow instead of over a fixed 105 m disc, or a shelf radius derived
        * from the level rather than authored at 118. Both are `Tarns.ts`.
        */
-      const bowl = 78, flat = 118, R = 232;
+      const bowl = 82, flat = 118, R = 232;
       let sum = 0;
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2;
@@ -1989,9 +1989,26 @@ export class Field {
           if (k > 0.002) h[idx] += (shelf - h[idx]) * k * 0.985;
           // 2. dish the middle of it, with a mottled floor so the water plane
           //    does not sit on a machined cone
-          if (d < bowl) {
-            const t = d / bowl;
-            const dish = (1 - t * t) * (1 - t * t);
+          // **The shoreline must not be a circle.** Once the pond fills its
+          // own bowl the bowl's plan IS the waterline, and a 78 m disc reads
+          // as a quarry from any bank. Warped per azimuth and per position,
+          // and kept inside 89 m so `findTarns`' 90-105 m spill ring never
+          // falls in the dish -- if it did, the sill would drop into the bowl
+          // and the level with it.
+          const ang = Math.atan2(z - p.z, x - p.x);
+          const lobe = 1 + 0.098 * this.n3.fbm2(
+            Math.cos(ang) * 2.4 + p.x * 0.011, Math.sin(ang) * 2.4 + p.z * 0.011, 3);
+          const bowlR = bowl * lobe;
+          if (d < bowlR) {
+            const t = d / bowlR;
+            // **A tarn is a flat-floored pond behind a sill, not a cone.**
+            // `(1 - t^2)^2` is 0.56 at half-radius and 0.08 at 0.85 -- the
+            // outer half of the bowl sat within a metre of the levelled shelf,
+            // so it was dry apron wearing the name of a basin. This profile
+            // holds 95% of the cut at half-radius and 51% at 0.9, and still
+            // returns to the shelf at the rim so `findTarns`' 90-105 m spill
+            // ring is untouched.
+            const dish = Math.pow(1 - Math.pow(t, 3.4), 0.55);
             const mottle = 0.86 + 0.14 * this.n2.fbm2(x * 0.021 + 7.3, z * 0.021 - 4.9, 3);
             h[idx] -= depth * dish * mottle * keep;
           }

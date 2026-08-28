@@ -101,9 +101,41 @@ export function findTarns(
     }
     if (hs.length < 64) continue;
     hs.sort((a, b) => a - b);
-    // A quarter of the disc under water reads as a pond rather than a puddle.
-    const wanted = hs[Math.floor(hs.length * 0.26)];
     const spill = -rim;                               // the rim's lowest height
+    /*
+     * **The quantile is over the HOLLOW, not over the sample disc, and that is
+     * the whole tarn-bed row.**
+     *
+     * It used to be `hs[0.26 * hs.length]` -- a fixed fraction of a fixed
+     * 105 m circle -- so the wet area was pinned at `pi * 105^2 * 0.26` =
+     * 9 000 m^2 whatever the terrain offered, while `Field._tarnBasins` levels
+     * an apron out to 118 m (43 700 m^2) whose height is above that surface by
+     * construction. The dry annulus was the ratio of two authored radii.
+     * `probes/tarnbed.mts` read it as **66.6% of every hollow emergent** — a
+     * 27-44 m ring of obvious lake floor round each pond — and three bowl
+     * geometries were tried in `Field._tarnBasins` without moving it, because
+     * neither radius is in that file. That negative is written into
+     * `_tarnBasins`' own docstring.
+     *
+     * `spill` is the lowest point of the rim ring, so every sample under it is
+     * inside the hollow; the samples are a uniform lattice over the disc, so a
+     * quantile of *them* is a fraction of the hollow's own AREA — which is
+     * exactly the unit the defect is measured in.
+     *
+     * **And the headroom is small, which is the number that matters here.**
+     * Measured per body (`tmp/t3-river/tarnlevel.mts`), the old 0.26 quantile
+     * sat **0.44-0.59 m** under `spill - 0.35`, and only **37-43%** of the
+     * 105 m disc is under the spill at all. So a tarn fills to its own
+     * outlet-minus-35 cm and that is the ceiling, full stop: no quantile can
+     * buy more than half a metre, and the wet area it buys is bounded by the
+     * hollow the terrain offers. Filling to the spillway is also the physics —
+     * a tarn is a pond behind a sill — so this now asks for 92% of the
+     * hollow's area and lets the sill decide, instead of asking for a quarter
+     * of a circle and never reaching the sill at all.
+     */
+    let inHollow = 0;
+    while (inHollow < hs.length && hs[inHollow] < spill) inHollow++;
+    const wanted = hs[Math.min(hs.length - 1, Math.floor(inHollow * 0.92))];
     const level = Math.min(wanted, spill - 0.35);
     // Below the basin floor means there is no hollow here at all.
     if (level <= hs[0] + 0.4) continue;
