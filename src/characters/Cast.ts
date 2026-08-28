@@ -95,13 +95,26 @@ export const CAST = {
       lashColor: 0x0b0910,
       fringeShadow: 0.34,
       stubble: 0.030, stubbleColor: '#453a4a',
-      brows: { color: 0x2b2935, len: 0.0135, width: 0.0058 },
+      brows: { color: 0x302b26, len: 0.0135, width: 0.0058 },
       // Roughly three times the strand count of the first pass at half the
       // width. Wide ribbons are what make procedural hair read as a moulded
       // helmet; the silhouette only comes alive once individual clumps are
       // narrow enough to leave gaps between them.
       hair: {
-        color: 0x252834, tipColor: 0x5f6675, rough: 0.36, shell: 0.0125, volume: 0.92,
+        // **Was 0x252834 / 0x5f6675, and both were blue.** (37,40,52) and
+        // (95,102,117) are blue-dominant by 15 of 255, which at this
+        // saturation is not a cool black — it is slate. The plan's note is
+        // one line and it is right: near-black *with warmth*, against which
+        // this cast reads as painted metal.
+        //
+        // Luminance is held to within one level on both ends — 40.3 -> 40.5 on
+        // the base and 101.5 -> 102.0 on the tip — so this is a hue change and
+        // nothing else. `deab013` made the hair specular a *hue*, taken from a
+        // luminance-normalised albedo rather than a brightness multiplier, so
+        // the highlight now follows this number instead of overriding it: the
+        // blue was reaching the specular as well and that is most of why the
+        // groom read as slate rather than as black hair in a blue-ish key.
+        color: 0x2c2823, tipColor: 0x6c655e, rough: 0.36, shell: 0.0125, volume: 0.92,
         // Noctis carries a long fringe, so he is the one character the lower global
         // hairline actually hurt: it dropped the fringe roots 11 mm and the locks
         // ended up over both eyes. He gets most of it back per-character.
@@ -211,8 +224,18 @@ export const CAST = {
       gloves: { color: srgb(0x232022), rough: 0.58, sides: ['L'], fingerless: 0.26 },
       headWidth: 1.04,
       // jaw was 1.35 and it made his head 192 mm across a 237 mm skull —
-      // widest at the mandible, which no human is (`headprop.mts`).
-      jaw: 0.85, cheek: -0.20, nose: 0.55, brow: 1.05,
+      // widest at the mandible, which no human is (`headprop.mts`). At 0.85 he
+      // was still the only hero whose half-width profile peaked *below the
+      // temple* — `facecheck.mts` read 0.884 / 0.816 at the gonion against an
+      // adult male's 0.82 / 0.70.
+      //
+      // `cheek` is the other half of that and it is not obvious: the profile is
+      // normalised by its own maximum, which lands at the zygomatic, so a
+      // hollow cheek shrinks the *denominator* and inflates every mandible
+      // sample under it. -0.20 was buying "gaunt veteran" by making his whole
+      // lower face read wide. He keeps the heavy jaw in the chin and the gonial
+      // corner, where a heavy jaw actually lives.
+      jaw: 0.55, cheek: 0.10, nose: 0.55, brow: 1.05,
       eyeOpen: 0.90,
       blush: 'rgba(162,92,74,0.18)',
       lip: 'rgba(140,80,68,0.48)',

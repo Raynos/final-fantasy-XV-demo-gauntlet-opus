@@ -323,28 +323,51 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0, -0.1010, 0.0700], r: [0.032, 0.0330, 0.045], amt: 0.0155 + 0.005 * jaw, dir: [0, 0.05, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
-  add({ p: [0.0165, -0.0975, 0.0690], r: [0.0135, 0.0180, 0.028], amt: 0.0080 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
+  add({ p: [0.0165, -0.0975, 0.0690], r: [0.0155, 0.0180, 0.028], amt: 0.0080 + 0.008 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
-  // The `jaw` coefficients here are *lateral* — these brushes push along the
-  // normal on the side of the head. At Gladiolus' 1.35 they were adding 35 mm
-  // of half-width and made his head 192 mm across a 237 mm skull, i.e. widest
-  // at the jaw, which no human is. 0.010 and 0.008.
-  add({ p: [0.064, -0.0450, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.010 * jaw, dir: 'normal', mirror: true });
+  //
+  // **The `jaw` coefficients here are *lateral*** — these brushes push along the
+  // normal on the side of the head, so they widen the skull rather than square
+  // the jaw. They have now been cut twice for the same reason and the second
+  // cut was not enough: at 0.010 / 0.008 they made Gladiolus 192 mm across a
+  // 237 mm skull, and at 0.006 / 0.008 `facecheck.mts` still measures his
+  // half-width profile **peaking at the mandible** (0.923 / 0.860 against an
+  // adult's 0.82 / 0.70), which is a shape no human has. 0.0025 / 0.003.
+  //
+  // A heavy jaw is a *squarer corner and a broader chin*, not a wider head, so
+  // what `jaw` buys back goes into the mental tubercles below.
+  add({ p: [0.064, -0.0450, -0.004], r: [0.028, 0.030, 0.052], amt: 0.0012 + 0.0025 * jaw, dir: 'normal', mirror: true });
   // gonial angle — the corner where the ramus turns forward into the body of
   // the mandible. Without it the lower face is a rounded egg and the character
   // reads as a child no matter what the rest of the sculpt does.
-  add({ p: [0.0605, -0.0660, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.0575, -0.0790, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.054, -0.0640, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0605, -0.0660, 0.0075], r: [0.0128, 0.0140, 0.0215], amt: 0.0108 + 0.003 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0575, -0.0790, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.003 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.054, -0.0640, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.003 * jaw, dir: 'normal', mirror: true });
   // Body of the mandible: the run from the gonial angle forward to the chin.
   // There was nothing here, so the lower face went straight from the jaw corner
   // to the chin point with a hollow between them and the profile lost its whole
   // lower third.
   add({ p: [0.0400, -0.0870, 0.0500], r: [0.0280, 0.0140, 0.0300], amt: 0.0105 + 0.008 * jaw, dir: 'normal', mirror: true });
-  // The undercut below the jawline. At r_z 0.062 centred on z = 0.030 it reached
-  // z = 0.092 — past the chin — and took the mandible body out with it; it now
-  // cuts behind and below the jaw only.
-  add({ p: [0.050, -0.1000, 0.0180], r: [0.046, 0.028, 0.0480], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
+  // The undercut below the jawline.
+  //
+  // **This brush was the chin.** At r_x 0.046 centred on x = 50 mm it reached
+  // x = 4 mm — the midline — and `facecheck.mts` measures what that did: it
+  // took **4.2 mm off the half-width at the mandible body and 6.6 mm off the
+  // chin**, which is the entire gap between this cast's width profile and an
+  // adult's on the two lowest samples (0.476 / 0.241 against 0.53 / 0.32). A
+  // lower face that stays wide at the gonion and is then shaved to a point is
+  // a cone, and a cone seen from below is a chin that leads the face — which is
+  // the round-14 judge's own sentence.
+  //
+  // A previous pass already caught the same brush reaching *forward* past the
+  // chin in z and fixed that axis. It reached just as far across in x and
+  // nobody measured it, because until `facecheck.mts` the width profile was
+  // printed and never gated.
+  //
+  // Narrow in x and set outboard, which is what an undercut is: it carves the
+  // edge where the jaw's side plane turns under, and has no business anywhere
+  // near the midline.
+  add({ p: [0.0575, -0.1010, 0.0120], r: [0.030, 0.025, 0.044], amt: -0.018 + 0.004 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.042, -0.0270, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
 
   // neck tie-in — tuck the underside so the jawline reads as an edge
@@ -403,11 +426,62 @@ function jawTaper(yn: number) {
   return 1 - 0.40 * t * t * (3 - 2 * t);
 }
 
+/**
+ * How much flatter across the front the transverse section is than an ellipse,
+ * as an addition to the superellipse exponent at theta = 0.
+ *
+ * **This is the number three lanes have described in words and none has been
+ * able to move.** `shellPoint` swept a pure ellipse in theta, so at every height
+ * the face's cross-section was an ellipse — 53 mm across and 87 deep at the
+ * mouth line — and the surface fell away from the midline as `cos(theta)`.
+ * Measured on the shipped mesh by `headprop.mts`'s `transverse.dropMm` and now
+ * by `facecheck.mts`: **18.6 mm of fall-back by x = 30 mm at the mouth line,
+ * where a head does about 7.** The face turned away from the front about three
+ * times too fast.
+ *
+ * That single number is what *"the cheek is a blank plane at every angle but
+ * profile"*, *"flat sockets"*, *"a wedge"* and the hard vertical terminator down
+ * the midline of every front view in this repo's history all are. A face is
+ * broad and nearly flat across the maxilla and then **turns** at the malar; an
+ * ellipse has no turn in it anywhere, so a key from either side splits the face
+ * instead of drawing it, and there is no cheek plane for a mouth corner or a
+ * nasolabial fold to sit on.
+ *
+ * A superellipse `|x/a|^n + |z/c|^n = 1` is exactly that shape: `n = 2` is the
+ * ellipse we had, and larger `n` is flatter across the front with a sharper
+ * corner. Parameterised in the same theta as before with **x untouched** —
+ * `x = w * jawTaper * sin(theta) * rx` is unchanged to the last bit — so
+ * eu-eu, zy-zy, go-go, the whole half-width profile and every landmark height
+ * are provably unmoved, and so is the midline: at theta = 0 the exponent is
+ * irrelevant and `z = w * rz` exactly as before. `muzzleMm`, `noseLeadMm` and
+ * the entire sagittal bench cannot move. What moves is only the mass between
+ * the midline and the silhouette, which is the thing that was missing.
+ *
+ * The exponent is blended to 2 by `max(0, cos theta)` so that the **back of the
+ * skull is untouched** — an occiput is round and a superellipse there would
+ * square it off — and the two halves meet continuously at theta = +/-90, where
+ * the exponent stops mattering because the section reaches its own width there
+ * whatever it is.
+ *
+ * 1.30 rather than the 1.46 that lands x = 30 exactly on 7 mm: the malar and
+ * canine-eminence brushes head-r3 added were *compensating* for the ellipse and
+ * are still there, so the shell does not have to arrive at the target alone.
+ */
+const FACE_FLAT = 1.30;
+
 /** Un-sculpted skull surface point for a spherical coordinate. */
 function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3) {
   const yn = Math.cos(phi);
   const w = profileW(yn);
-  return out.set(w * jawTaper(yn) * Math.sin(theta) * rr[0], yn * rr[1], w * Math.cos(theta) * rr[2]);
+  const st = Math.sin(theta), ct = Math.cos(theta);
+  const x = w * jawTaper(yn) * st * rr[0];
+  // The back half is an ellipse and takes the cheap path: two `Math.pow` per
+  // sample matters here because `skullPoint` calls this four times per grid
+  // vertex, on a 145 x 121 grid, for every character and every NPC at boot.
+  if (ct <= 0) return out.set(x, yn * rr[1], w * ct * rr[2]);
+  const n = 2 + FACE_FLAT * ct;
+  const zu = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(st), n)), 1 / n);
+  return out.set(x, yn * rr[1], w * zu * rr[2]);
 }
 
 const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3();
@@ -1535,7 +1609,7 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     shape([
       [cL, yC], [-0.0170, -0.05697], [0, -0.05758], [0.0170, -0.05697], [cR, yC],
       [0.0140, -0.06248], [0, -0.06329], [-0.0140, -0.06248],
-    ], 'rgba(58,26,30,0.58)', { mode: 'multiply', blur: 2 });
+    ], 'rgba(44,18,22,0.78)', { mode: 'multiply', blur: 0.8 });
     // vermilion border: a fine light line where lip meets skin
     stroke([[cL, yC - 0.0022], [-0.0160, -0.05636], [0, -0.0582], [0.0160, -0.05636], [cR, yC - 0.0022]],
       'rgba(255,226,208,0.24)', 0.0016, { blur: 2 });
@@ -1557,8 +1631,22 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     // hole. Warmer, lighter, softer, and no longer fully opaque; the value
     // break that makes a mouth is already carried by the upper lip's own
     // multiply shadow three lines above.
+    //
+    // **The width and the blur do different jobs and only the blur was wrong.**
+    // `facecheck.mts` scores a mouth window twice — `range`, is there any value
+    // here, and `edge`, the steepest step between adjacent rows of row-means —
+    // because head-r3 §5 measured the shipped mouth as *"an 18 px soft ramp
+    // down and back up with no edge, which is exactly a brown smudge on the
+    // texture"*. A ramp has range and no edge. `blur: 1.8` on a 3.4 mm stroke
+    // is what made it a ramp.
+    //
+    // The width stays. It is not slack: a stroke this wide is 4.6 texels on the
+    // 1024 map and about one at mip 2, and the brow above was deliberately
+    // *widened* for exactly that reason — a feature one texel wide at mip 4 is
+    // a feature that is gone. Narrowing this to sharpen it would trade the
+    // portrait for every frame past three metres.
     stroke([[cL, yC], [-0.0130, -0.06486], [0, -0.06329], [0.0130, -0.06486], [cR, yC]],
-      'rgba(78,42,44,0.72)', 0.0034, { blur: 1.8 });
+      'rgba(58,26,28,0.94)', 0.0032, { blur: 0.5 });
     // wet highlight on the lower lip
     soft([0, -0.07298, 0.084], 0.009, 0.0026, 'rgba(255,228,212,0.46)', 1);
     // corner shadows and the mentolabial crease
