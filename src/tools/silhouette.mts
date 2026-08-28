@@ -463,7 +463,7 @@ async function rockSubjects(seeds: number, reseed: number): Promise<Subject[]> {
   const { Rng } = await import('../util/Rng.ts');
   type Kind = import('../world/props/ZoneDress.ts').StoneKind;
   const geo = new Map<string, THREE.BufferGeometry>();
-  const ext = new Map<Kind, [number, number, number]>();
+  const ext = new Map<Kind, import('../world/props/Rocks.ts').HullExt>();
   for (const k of R.KINDS) {
     const g = R.rockGeometry(k.seed, k.opts);
     geo.set(k.key, g);

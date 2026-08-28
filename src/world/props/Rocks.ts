@@ -57,7 +57,7 @@ const ASPECT_MAX = 3.2;
 const SINK_FRAC = 0.12;
 
 /** Fallback extents for a kind that somehow has no measured hull. */
-const _EXT1: [number, number, number] = [1, 1, 1];
+const _EXT1: HullExt = [1, 1, 1, 1, 1];
 
 /** Clamp an axis-jitter multiplier away from zero and from absurdity. */
 const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
@@ -900,7 +900,7 @@ const _ps: PlacedScale = { jx: 1, jy: 1, jz: 1, sink: 0, corrected: false, ratio
  * @returns a shared singleton — read it before the next call, do not keep it
  */
 export function placedScale(
-  ex: readonly [number, number, number],
+  ex: readonly [number, number, number, ...number[]],
   s: number, sx: number, sy: number, sz: number, bury: number,
 ): PlacedScale {
   let jx = sx, jy = sy, jz = sz;
@@ -1124,7 +1124,7 @@ export interface StackCourse {
  */
 export function stackPlan(
   k: StoneKind, s0: number, sy0: number, rng: Rng,
-  ext: ReadonlyMap<StoneKind, [number, number, number]>, overlap = 0.38,
+  ext: ReadonlyMap<StoneKind, HullExt>, overlap = 0.38,
   bury0 = 0,
 ): StackCourse[] {
   const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
@@ -1207,22 +1207,90 @@ export function stackPlan(
 }
 
 /**
- * The half-extents of a built hull, in the units its instance scale is in.
+ * A built hull's measurements: **three half-extents and two face heights**.
+ *
+ * `[0..2]` are the bounding-box half-extents — the *widths*, which is what an
+ * aspect rule, a taper and a cap-ratio rule are about. `[3]` and `[4]` are the
+ * `down` and `up` **contact heights**: how far the surface actually reaches
+ * below and above the mesh origin *on the axis*, which is what a joint is
+ * about. They travel in one tuple deliberately — see {@link hullExtents}.
+ */
+export type HullExt = [number, number, number, number, number];
+
+/**
+ * The half-extents of a built hull, and the height of its two contact faces.
  *
  * `rockGeometry` normalises to the **bounding radius**, so `s` is the long axis
  * and nothing else; every rule in this file that stacks, tapers or laps one
  * block on another needs the other two numbers. Exported because the silhouette
  * bench needs the same numbers and a bench that recomputes the rule it measures
  * is how `2d91563` shipped a table that was eight months stale.
+ *
+ * **`[1]` is a bounding box and must never be used as a joint height.** It is
+ * `max(bb.max.y, -bb.min.y)` — one number standing in for both faces of a hull
+ * that is not symmetric about its own origin, because these meshes are cut by
+ * random half-spaces. `granite`'s box runs y ∈ [-0.657, +0.361] and its surface
+ * over the axis is at **+0.293**: a course seated on `ext[1]` is put 0.364 too
+ * high, **55 % of the block's own half-height**, and a joint pays it on both
+ * blocks. That is `poi_imperial`'s levitating boulder — a three-course tor with
+ * daylight all the way across its top joint — and `probes/hullseat.mts`
+ * measured the smaller, underside half of it (`slab` 0.139, ~0.55 m per joint)
+ * before this function could report either.
+ *
+ * **`[3]` and `[4]` are measured on the axis, and that is the guarantee.** The
+ * axis is a point on both surfaces, so seating the upper block's `down` onto
+ * the lower block's `up` less an overlap puts the two hulls in contact *there*,
+ * whatever the rest of the joint does — the min clearance over the contact is
+ * at most the clearance on the axis, which is the overlap, which is negative.
+ * A statistic over a disc would only be a bound. Two coincident axes are the
+ * case the plans author; a course stepped far enough sideways to break it is
+ * caught by the separate `clear` rule that already deepens those joints.
+ *
+ * **They are in the same tuple as the widths and not in a second map** because
+ * a second map is a parameter a call site can forget, and forgetting it
+ * reinstates exactly this bug, silently. `probes/stackjoint.mts` does not read
+ * either — it raycasts the placed triangles, so it stays independent of
+ * whatever this function decides.
  */
-export function hullExtents(geo: THREE.BufferGeometry): [number, number, number] {
+export function hullExtents(geo: THREE.BufferGeometry): HullExt {
   geo.computeBoundingBox();
   const bb = geo.boundingBox!;
-  return [
+  const ex: HullExt = [
     Math.max(bb.max.x, -bb.min.x),
     Math.max(bb.max.y, -bb.min.y),
     Math.max(bb.max.z, -bb.min.z),
+    0, 0,
   ];
+  // Walk the triangles whose xz projection contains the origin and interpolate
+  // y at it. `rockGeometry` returns non-indexed, welded triangle soup, so a
+  // triple of consecutive vertices is a face; the guard reads `geo.index`
+  // anyway so a future indexed build does not silently measure nonsense.
+  const p = geo.attributes.position;
+  const idx = geo.index;
+  const n = idx ? idx.count : p.count;
+  const at = (i: number) => (idx ? idx.getX(i) : i);
+  let down = 0, up = 0;
+  for (let f = 0; f + 2 < n; f += 3) {
+    const a = at(f), b = at(f + 1), c = at(f + 2);
+    const ax = p.getX(a), az = p.getZ(a);
+    const bx = p.getX(b), bz = p.getZ(b);
+    const cx = p.getX(c), cz = p.getZ(c);
+    // Barycentric coordinates of (0, 0) in the projected triangle.
+    const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+    if (Math.abs(d) < 1e-12) continue;
+    const l0 = ((bz - cz) * -cx + (cx - bx) * -cz) / d;
+    const l1 = ((cz - az) * -cx + (ax - cx) * -cz) / d;
+    const l2 = 1 - l0 - l1;
+    if (l0 < 0 || l1 < 0 || l2 < 0) continue;
+    const y = l0 * p.getY(a) + l1 * p.getY(b) + l2 * p.getY(c);
+    if (y < down) down = y;
+    if (y > up) up = y;
+  }
+  // A hull with no triangle over its own origin is not a rock; fall back to the
+  // box rather than seating a course on zero.
+  ex[3] = down < 0 ? -down : ex[1];
+  ex[4] = up > 0 ? up : ex[1];
+  return ex;
 }
 
 /**
@@ -1284,7 +1352,7 @@ export function hullExtents(geo: THREE.BufferGeometry): [number, number, number]
  * @param ext each kind's measured half-extents — see {@link hullExtents}
  */
 export function torPlan(
-  rng: Rng, rockS: number, ext: ReadonlyMap<StoneKind, [number, number, number]>,
+  rng: Rng, rockS: number, ext: ReadonlyMap<StoneKind, HullExt>,
 ): TorPlan {
   let pick = rng.next() * TORS.reduce((a, t) => a + t.w, 0);
   let arch = TORS[TORS.length - 1];
@@ -1709,7 +1777,7 @@ export class Rocks {
    * this table's `y` column and is kept separate only because the stacking code
    * reads it on a hot path.
    */
-  ext!: Map<StoneKind, [number, number, number]>;
+  ext!: Map<StoneKind, HullExt>;
   /**
    * How many instances the §3.5 guarantees corrected on the last update, and
    * the worst finished aspect ratio actually shipped.
