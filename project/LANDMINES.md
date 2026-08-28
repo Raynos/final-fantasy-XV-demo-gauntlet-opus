@@ -1604,3 +1604,34 @@ one) gives you a number with no way to tell. On a busy box that probe reported
 **Until `--wait` gets a distinct exit code, treat the printed reason as the
 result** — and prefer a tool that stamps its own verdict over one that does not.
 
+
+## An explicit pathspec commits the FILE, not your hunks — which is why shared documents still get swept
+
+`CLAUDE.md`'s rule is `git commit -- path/a path/b`, and it is the right rule: it
+stops `git add -A` snapshotting the shared index. **It does not stop you
+committing another lane's uncommitted changes to a file you both edit.** A
+pathspec selects paths, not diff hunks, so every unstaged change in that file
+goes in under your message.
+
+**Three lanes hit this on 2026-08-28**, in two different shapes:
+
+- **A shared document.** `7120d7f` carried 28 lines of another lane's complete
+  WS-6 rewrite of the backlog plan. Nothing was lost or half-written, but the
+  commit message describes none of it, and the attribution is wrong for good.
+  `docs/plans/*.md`, `project/LANDMINES.md` and `project/STATUS.md` are the files
+  every lane edits — **run `git diff <path>` before committing one.**
+- **A source file mid-refactor.** `0560b83` swept a lane's in-flight
+  `src/world/Water.ts`, and the resulting tree imports a file that did not exist
+  in it, **so that commit does not build** — while its pre-commit passed, because
+  the hook builds the *working tree*, not the tree the commit creates. On a
+  shared trunk those are different objects.
+
+And the same distinction from a third angle: **`git commit -- <pathspec>` is not
+a build gate on what you committed.** `911f99d` committed a call site without its
+callee and passed for exactly that reason.
+
+**The habit that works:** `git diff <path>` immediately before the commit, every
+time, on any file another lane could be in. If hunks you did not write are there,
+either name them in your message or wait. On a document, waiting is usually
+right — the other lane is seconds from committing it themselves.
+
