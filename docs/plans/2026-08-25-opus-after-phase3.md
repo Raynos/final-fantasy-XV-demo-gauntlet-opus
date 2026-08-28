@@ -1,6 +1,6 @@
 # After phase 3 — four independent pieces of work
 
-Status: IN-PROGRESS (2026-08-28, opus) — four workstreams, each independently
+Status: DONE (2026-08-28, opus) — four workstreams, each independently
 staffable. **Nothing here is locked.** WS-1 is the only one with an external
 argument for its priority; WS-2 and WS-3 are the boot work phase 3 deliberately
 did not take, sized against measurements rather than guesses; WS-4 is small and
@@ -17,7 +17,7 @@ geometry plus `src/tools/texbake.mts`, WS-4 is one shader or one material.
 
 ---
 
-## WS-1 — The head
+## WS-1 — The head — **CLOSED** (structural defect fixed; beauty bar not met)
 
 **The judge's own #1, and the reason round 14 scored 3.0.** Of the five changes
 it was asked to compare against round 13, four were BETTER or UNCHANGED and the
@@ -98,6 +98,65 @@ black instead of slate, both eyes read in `hero_portrait` where one was blank,
 the chin is no longer a point and the cheek has a plane — but the portrait is
 still a pale blown mask with no mouth, on a head pitched down under a camera
 looking up.
+
+### CLOSED 2026-08-28 — done by this section's own bar, short of `BRIEF.md`'s
+
+**Called by the human after six passes.** The distinction matters, so it is
+recorded rather than fudged:
+
+**This section's "done when" is met.** *"The portrait reads as a face at 1:1 — a
+mouth that exists, a nose that leads the profile — and a bench asserts both, so
+the next agent cannot regress it silently."* `src/tools/facecheck.mts` exists, is
+wired into `check`, and passes 4/4; `noseLeadMm` is a ratchet; Noctis'
+`mouthRange` went 2.9 → 102.2 against a limit of 14. The judge's literal sentence
+— *"the chin projects further forward than the nose... no mouth geometry or mouth
+texture on the mouth's location"* — is answered.
+
+**`BRIEF.md`'s bar is not met, and the frame is the evidence.** The coordinator
+looked at `hero_portrait` at pass 6: hard dark streaking across the mid-face that
+reads as smeared dirt, the fringe covering the far eye, a long thin neck, and a
+read that is gaunt rather than Noctis. Two party members blurred in the
+background of that same frame read better than the hero at eight times the size.
+**`facecheck` passes on it**, which is exactly the situation BRIEF's *"not
+structurally correct — beautiful"* exists to name.
+
+**What six passes bought, and it is not nothing.** The defect that beat five of
+them was structural and is fixed: `buildHead`'s skull grid was wound inside out,
+so with a `FrontSide` material the near surface was backface-culled in **every
+frame this repo has ever captured**. See `LANDMINES.md` — the transferable half is
+that *every bench here reads the position buffer*, so no metric could see it.
+
+**What is left, in the order it costs the frame** — for whoever picks this up:
+
+1. **The painted occlusion is the dominant defect now, not the sculpt.** Every
+   brush and every painted AO on this head was authored *during* the window in
+   which the face was culled — tuned against the inside of a skull. Pass 6
+   softened them 30–45% and damped `ao()` 0.80 → 0.52; looking at the frame, that
+   was **not nearly far enough**. Consider re-authoring rather than damping.
+2. **The hair.** It covers most of the far eye (`len`, not direction) and reads
+   as flat painted ribbons at 0.55 m. The pixel arithmetic in `characters.md`
+   §5.1.2 was never acted on: a 1.5 mm lock at 4 m in a 1600 px 50° frame is
+   **0.7 px**, and sub-pixel opaque geometry can only shimmer.
+3. A dark diagonal still crosses the shadow half of the mid-face — the same
+   eye-socket brush wall at a third of its former size.
+4. The lower face is heavy for a slim twenty-year-old: `euEu` **162.5 mm** against
+   a real **152**.
+5. **`facewind`'s negative signed volume on `Noctis_body`, `_hair`, `_outfit` and
+   both eye meshes is still unchecked.** Two passes estimated ten minutes and
+   neither spent them. Given that this exact class of bug is what beat five
+   passes, **check it first.**
+6. Ignis is untouched — still one black column, no hem line, no lapel thickness,
+   no collar break.
+7. **22 more shader programs are dedupable** in `src/characters/rig/`
+   (`char2-eye<N>`, where the eye `gloss` is a GLSL literal) — handed over by the
+   `materials` lane.
+
+**Measured negatives from six passes are in the backlog's negatives table** and
+are the most valuable artifact this lane produced. Do not re-open: the mouth
+line, the face material's `sheen`/`specular`, the eye-socket brush widths, the
+head pitch, the "fringe shadow" midline, mip selection, `SKIN_BASE`, the vault
+taper (it turns the head into a bullet — the cranium reads big because it is a
+featureless surface of revolution, and the fix is relief, not radius).
 
 **Done when** the portrait reads as a face at 1:1 — a mouth that exists, a nose
 that leads the profile — and a bench asserts both, so the next agent cannot
