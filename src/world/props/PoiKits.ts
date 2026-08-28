@@ -2105,10 +2105,48 @@ export class PoiKits {
     const deck = water ? Math.max(1.4, water.level + 1.5 - ctx.base) : 0.9;
     const L = 22;
     if (!water) return this._fishingDry(B, world, put, ctx, deck);
+    /**
+     * **The bank is not the deck, and one number cannot be both.**
+     *
+     * `deck` is set from the water and that is right for the jetty. It was then
+     * also carrying the shack, the rod stands, the bench and the crate, and
+     * those stand on the *bank*. At the four tarn pins the bank is 3.5–4.0 m
+     * under the surface, so the whole camp went up with the deck: measured by
+     * `probes/fishdeck.mts`, the shack sill stood **4.77–5.61 m** above the
+     * ground at `maidenwater`, `archaeans_mirror`, `crestholm_reservoir` and
+     * `swainsmere`, and **9.77 m** at `vesperpool_dock`. `floatcheck` reported
+     * it — 3 of 5 meshes, worst 7.6 m — and could not fail on it, because a
+     * jetty pile still reaches the ground and gate 1 is a `min` over meshes.
+     *
+     * The fix is one line of arithmetic and a ramp: the shack sits on the ground
+     * under it, and the jetty's shore end climbs from there to the deck.
+     */
+    const bank = Math.min(deck, Math.max(-1.2,
+      seatY(this.eco, s.poi.x, s.poi.z, 2.0, 24) - ctx.base + 0.5));
+    /**
+     * **Every pile is as long as the water under it is deep.**
+     *
+     * A fixed `deck + 3.4` is a pile that reaches 3.4 m below the walking
+     * surface wherever it stands, and `vesperpool_dock`'s jetty runs out over
+     * ground that falls **21 m** inside its own length — so its far piles ended
+     * in mid air by that much. Measured per pile against the drawn ground, and
+     * capped: past twelve metres this is a viaduct rather than a jetty, and the
+     * pin is on a bluff.
+     */
+    const t = this.eco.terrain;
+    const cs = t && t.clipmap ? t.clipmap.cell0 : 1.5;
+    const groundAtLocal = (lx: number, lz: number) => {
+      const c = Math.cos(yaw), sn = Math.sin(yaw);
+      const wx = s.poi.x + lx * c + lz * sn, wz = s.poi.z - lx * sn + lz * c;
+      const h = t && typeof t.drawnHeightAt === 'function'
+        ? t.drawnHeightAt(wx, wz, cs) : this.eco.height(wx, wz);
+      return h - ctx.base;
+    };
     for (let i = 0; i < 10; i++) {
       const pz = -2 + (i / 9) * L;
       for (const sx of [-1.5, 1.5]) {
-        put(M.plank, new THREE.CylinderGeometry(0.16, 0.18, deck + 3.4, 7), [sx, deck - 1.4, pz]);
+        const len = THREE.MathUtils.clamp(deck - groundAtLocal(sx, pz) + 0.8, 3.4, 12);
+        put(M.plank, new THREE.CylinderGeometry(0.16, 0.18, len, 7), [sx, deck - len / 2 + 0.1, pz]);
       }
     }
     put(M.plank, new THREE.BoxGeometry(3.6, 0.16, L + 3), [0, deck, L * 0.5 - 1]);
@@ -2123,11 +2161,23 @@ export class PoiKits {
         }
       }
     }
-    // tackle shack on the bank
-    put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, deck + 1.2, -3.5]);
-    put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, deck + 2.7, -3.5], [0, 0, 0.09]);
-    put(M.void, new THREE.BoxGeometry(1.0, 2.0, 0.14), [2.6, deck + 0.8, -1.72]);
-    put(M.lamp, new THREE.BoxGeometry(0.4, 0.2, 0.12), [4.4, deck + 2.4, -1.75]);
+    // Tackle shack on the bank — at `bank`, which is where the bank is.
+    put(M.plank, new THREE.BoxGeometry(4.6, 1.6, 3.8), [3.6, bank - 0.5, -3.5]);
+    put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, bank + 1.2, -3.5]);
+    put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, bank + 2.7, -3.5], [0, 0, 0.09]);
+    put(M.void, new THREE.BoxGeometry(1.0, 2.0, 0.14), [2.6, bank + 0.8, -1.72]);
+    put(M.lamp, new THREE.BoxGeometry(0.4, 0.2, 0.12), [4.4, bank + 2.4, -1.75]);
+    // The ramp up off the bank onto the jetty. Without it the deck starts in
+    // the air over its own shore end, which is the same lie one object along.
+    if (deck - bank > 0.35) {
+      const rise = deck - bank, run = Math.max(2.0, rise * 2.2);
+      put(M.plank, new THREE.BoxGeometry(2.6, 0.14, Math.hypot(run, rise)),
+        [0, (deck + bank) / 2, -2 - run / 2], [Math.atan2(rise, run), 0, 0]);
+      for (const sx of [-1.2, 1.2]) {
+        put(M.plank, new THREE.CylinderGeometry(0.1, 0.11, rise + 1.4, 5),
+          [sx, bank + rise / 2 - 0.6, -2 - run * 0.5]);
+      }
+    }
     // rod stands, a bench, a crate
     for (let i = 0; i < 4; i++) {
       const pz = 4 + i * 4.2;
