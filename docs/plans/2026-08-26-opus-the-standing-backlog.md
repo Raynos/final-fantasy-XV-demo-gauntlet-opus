@@ -824,6 +824,38 @@ mean 208 fps against a 60 fps target. This is bought for boot and for headroom.
 are real and latent, and splitting them from the bucket work would mean touching
 the same 127 sites twice.
 
+#### WS-12b result, 2026-08-28 (`materials` lane) — **programs DONE; character LOD NOT started, and no longer coupled**
+
+**271 shader programs -> 126** and `postfx+compile+warmup` **1776 ms -> 989 ms**
+(mean of three loads each), cold boot wall 8.15 -> 7.20 s. Full account in
+`docs/plans/2026-08-25-opus-after-phase3.md` §WS-2 and
+`project/handoff/materials.md`.
+
+**The premise of this section is false and that is worth more than the fix.**
+The bucket count is not the source of the programs. Not one of the 132 material
+construction sites was touched; the keys they write are honest. What multiplied
+the set was `renderer.compile()` building programs no frame binds — once because
+`Game.init()` compiles before `MaterialPatch.scan` has run (60 programs), and
+once because it compiles with **no render target bound**, which flips both
+`outputColorSpace` and `toneMapping` in three's cache key while every scene
+pixel in this game goes through `EffectComposer` (85 programs).
+`probes/progused.mts` hooks `gl.useProgram`: of 134 programs a twelve-shot
+spread ever binds, **one** is canvas flavour, and it is the composer's own
+final pass.
+
+**Character LOD is untouched, and the reason to fold it in has gone.** It was
+folded in because splitting it would mean touching the same 127 sites twice.
+Nothing touched them once, so that argument is spent and this is now a clean
+separate lane. The number, re-measured today (`probes/drawwhere.mts`,
+`town_forecourt`): **465 calls, 5 327 248 triangles, 272 buckets, 121 draws
+under 60 triangles**, and one bucket — `SkinnedMesh` / `ShaderMaterial` —
+is **60 calls and 1 736 436 triangles, 28 940 per draw, a third of the frame
+with no LOD**. Frame cost 6.0-7.2 ms against a 16.7 ms budget, so it is
+headroom, not a cost.
+
+**Also untouched: the 16/16 texture-unit warning**, still logged dozens of times
+a frame. It was not on the path of either fix.
+
 ## WS-13 — What the 2026-08-28 wave handed back
 
 Five lanes closed on 08-28. **This section exists because their open work would
@@ -969,6 +1001,11 @@ without opening the handoff it lived in.
 | **WS-8: raising the half-width cap to `2.5 + 14 q` is what the rivers need** | Mean width 3.49 -> **5.17 m**, mean depth 0.39 -> 0.47, max width 20.0 -> **29.9**. The p50 reach (4.1 m) **still reads as a damp streak on a pasture** — that site is a pan with no incised channel — and at p99 the cap truncates the sheet over still-submerged ground into a hard polygonal cliff, which a wider cap makes worse. The levers that moved it were opacity (a 0.34 alpha floor) and the sky gain (1.15 -> 2.9). Landed, but **unverified as an improvement** |
 | **WS-7: `setPiece` must be added to `Shots.ts` and `Game.applyShot`** | **Already there** under a different name: `ScenarioName` carries `setpiece_astral` / `setpiece_field`, `Director._setPieceScenario` routes them through the same `startSetPiece` the hunt runtime calls, and `setpiece_deadeye` is a live boss fight in the corpus today |
 | Titan cannot be framed because the Disc of Cauthess fills the frame | **The camera never moved.** `boss_astral` is a `follow:` shot, so `applyShot` sets `CameraRig.followShot` and the rig re-derives pos/target every frame, silently overwriting `setShot`. Ten vantages at six azimuths came back **byte-identical** — a contact sheet of ten copies of one frame. Clear `rig.followShot` and the sweep works first try. He is legible at az 300°, r 95 m, +34 m, fov 46; the shot still does not go in because he renders as an **unlit black silhouette** and sits 3 m under `Terrain.heightAt`. `374f5c9` |
+| **The 288 object/material buckets and the 132 material construction sites are the source of the 181 shader programs** (WS-2 and WS-12b's shared premise) | **no, and nothing in either list needed touching.** The keys this repo writes are honest: `VegMaterial.ts:520`'s eleven numbers and `rig/Materials.ts:430`'s eye `gloss` are GLSL *literals*, so those are genuinely different shaders. The multiplier was `renderer.compile()` building programs no frame ever binds — **60** because `Game.init()` compiles before `MaterialPatch.scan` has patched anything, and **85** because it compiles with no render target bound, which flips `outputColorSpace` *and* `toneMapping` in three's cache key while every scene pixel goes through `EffectComposer`. **271 -> 126 programs, `postfx+compile+warmup` 1776 -> 989 ms**, one wrapper in `engine/CompileGuard.ts` and one line of `Sky.ts`. `probes/progused.mts` |
+| A shader-program inventory can be read one cache-key field at a time | **it cannot, and this is why WS-2 survived three plans.** Held constant on its own, `outputColorSpace` collapses **4** programs and `toneMapping` **1**. Held together — they are two readings of one condition, "was a render target bound" — they collapse **85 of 211**. `probes/progrt.mts` exists to hold a pair |
+| three's program `cacheKey` can be parsed from the end, since its tail is fixed-length | **44 of 271 rows misparse into nonsense.** three's *default* `customProgramCacheKey` is `this.onBeforeCompile.toString()`, and a stringified function is full of commas. The misparse produces a confident phantom — "srgb splits every material, 103 against 124" — that survives being cross-tabbed. Anchor **forward** on the GLSL precision qualifier |
+| The atmosphere patch's `customProgramCacheKey` is the program multiplier | **the coordinator's own static pass called this right**: the key it prepends is the constant `'atmo1|'` and `uActorHaze` is a uniform, so it splits nothing. But the patch *is* implicated, from the other side: 60 lit materials compiled **before** it reached them and each of those programs is dead the moment it does |
+
 
 ## Order
 

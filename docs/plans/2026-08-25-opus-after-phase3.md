@@ -105,7 +105,7 @@ regress it silently.
 
 ---
 
-## WS-2 — Fewer shader programs
+## WS-2 — Fewer shader programs — **DONE**
 
 **1.83 s of a 6.6 s cold boot, the largest single item on the profile**, and the
 only one phase 3 could not touch from inside a boot lane.
@@ -135,6 +135,64 @@ a boot task, and that is why it is its own workstream:
 number moves with it, and `pnpm run check` plus a full-corpus cold diff show the
 frames unchanged. **Budget several days.** This one is genuinely risky: it
 touches how everything in the game is shaded.
+
+### DONE 2026-08-28 (`materials` lane) — 271 programs -> 126, and not one of the 132 material sites was touched
+
+**Everything above about *where* the programs come from is wrong, and that is
+the finding.** The keys this repo writes are honest: `VegMaterial` and
+`rig/Materials` compile their tuning values into the GLSL as literals, so those
+really are different shaders. There was no binary variant set on half the
+world. What there was, twice over, is `renderer.compile()` **building programs
+that no frame ever binds**.
+
+| | `cc7a9b6` | `ea90e0b` |
+|---|---|---|
+| programs held after boot | **271** | **126** |
+| `postfx+compile+warmup`, 3 loads | 1826 / 1706 / 1797 ms | **979 / 988 / 1000 ms** |
+| the warm-up's own report | 1759 ms, +181 programs | ~910 ms, **+38** |
+| its `scene` step | 1309 ms, 135 programs | ~640 ms, **12** |
+| cold boot wall | 8.15 s | **7.20 s** |
+
+1. **Unpatched, 60 programs.** `Game.init()` runs `renderer.compile(scene,
+   camera)` and one warm `post.render()` **before** `PostFX.precompile()` builds
+   `Warmup`, and `Warmup._patchAll()` is where `MaterialPatch.scan` runs. Every
+   lit material visible then compiled with no CSM defines and no `atmo1|` key;
+   the patch landed, `needsUpdate` fired, three compiled it again. `usedTimes`
+   234 on programs the graph no longer has an owner for.
+2. **Canvas flavour, 85 programs.** three keys **two** fields on
+   `_currentRenderTarget === null` — `outputColorSpace` and `toneMapping` — and
+   both are in the cache key. Every scene pixel goes through `EffectComposer`,
+   which owns a target, so a compile with no target bound builds the canvas twin
+   of every material in the scene. 60 of the 85 are the expensive patched
+   `physical` ones.
+
+`src/engine/CompileGuard.ts` wraps `renderer.compile` so it scans first and runs
+with a target bound — **a compile sees what a frame sees** — installed from one
+line of `Sky.ts`. Wrapping the renderer rather than the four call sites, because
+`Game.ts` is shared and its compile is not wrong: it is early, and it is to the
+canvas. **`LightBudget`'s constraint is respected**: nothing changes a program
+key at runtime; the keys are the same, they are simply built once each.
+
+**Correctness.** `progused.mts` hooks `gl.useProgram` and poses twelve shots
+across the corpus: of **134 programs bound, exactly one is canvas flavour** —
+the composer's own `renderToScreen` pass, which `compile` does not build.
+Full-corpus cold diff `cc7a9b6` -> `ea90e0b`, **142 shots: 136 under floor**,
+and the six that were not are all combat VFX and all belong to **`10c2688`**,
+another lane's deliberate warp-shard blending change that landed between the
+two. Both of this lane's commits were then diffed **against their own immediate
+parents** on those six shots and every one is under floor (`warp_strike` 5.530
+-> 0.564 and 0.523). `nanscan` **0 of 142**. Six cold captures, zero console
+errors, `hero_full` and `vista_night` read at 1:1.
+
+**What is left, and it is small.** `progkeys`'s `instanceIds` equivalence says
+22 more programs collapse if per-instance ids come out of cache keys — almost
+all of it `char2-eye<N>` in `characters/rig/Materials.ts`, where the eye's
+`gloss` is a GLSL literal. That directory was the live `head` lane's and was not
+touched. `props/Wear.ts:717` keys on `tex.uuid` for byte-identical GLSL
+(`uWear` is a sampler uniform, not a define) — wrong, and worth 1-2 programs
+today. `VegMaterial.ts:520`'s eleven-number key is **honest** and collapsing it
+means making eleven literals into uniforms on the most-drawn geometry in the
+game: ~24 programs, and not judged worth it.
 
 ---
 
