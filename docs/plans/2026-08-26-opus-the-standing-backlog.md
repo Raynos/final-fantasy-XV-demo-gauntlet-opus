@@ -639,6 +639,10 @@ without opening the handoff it lived in.
 | Sharpening the mouth line (blur 1.8 → 0.5), and darkening it further | moved the rendered mouth **0.5 of 255** each. `head-r3` §7's own next action, and it is nothing |
 | Face material `sheen` 0.17 → 0, `specularIntensity` 0.35 → 0.10 | moved **nothing** |
 | The transverse section is why the profile is wrong | it is a real defect and it landed (18.6 → 7.2 mm), but `x` is untouched by construction: `noseLeadMm` moved **<0.1 mm**. Two separate bugs |
+| The Nebulawood black patch is `GTAOPass`'s `overrideMaterial` discarding alpha-test | **no** — the blob is pixel-identical with the whole post chain off. It was NaN from the terrain surface shader reading roughness as a tangent normal's Z |
+| `isnan()` / `isinf()` / `(x >= 0 \|\| x < 0)` can detect a NaN in a shader here | **all three are folded away by this backend's compiler.** Six sanitisers read as innocence on a frame with a visible hole in it. Test the bits with `floatBitsToUint` |
+| A zero blend weight gates a poisoned term | `0.0 * NaN` is NaN |
+| A NaN diagnostic can be flagged out through `totalEmissiveRadiance` | invisible on a NaN pixel — it cost the canopy lane its second attempt |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 
