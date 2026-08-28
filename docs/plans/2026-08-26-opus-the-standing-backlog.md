@@ -336,6 +336,42 @@ lane.
   road is scrub and dirt. `probes/rockfield.mts` already does most of the census.
 - **`_genOutcrop` is ungraded** and needs the same plan/seat split `_genTor` got.
 
+### WS-5 result, 2026-08-28 (`landmarks` lane)
+
+Landed: `b1db957` the Meteor's texture scale is world-referenced (metres per
+tile) rather than per object · `7fdd391` the mass seat, the prow and the crater
+rim · `7cb498e` tower massing, six plans · `c2e2295` every POI boulder is a real
+`rockGeometry` on a real `rockMaterial` · `94a6429` `assertAttributeContract`
+wired into `PartBuilder.build` · `d3b4ba9` stacked-rock joints planned against
+the sunk position · `53de19d` rills and a tonal break on the apron batter, and
+`PoiKits.PAD_R` published for the vegetation lane.
+
+**The measurement that reframed most of it.** `discCrater` is a real crater and
+nobody had read its profile: a 253 m central peak, a moat at **3–56 m from 200
+to 600 m out**, and a rim at **800–1000 m standing 130–420 m** over it. The four
+outer Meteor masses stand 320–360 m from the centre — in the moat — so the
+previous round's full ground-follow dropped each about 180 m and their crowns
+finished *below* the rim. From every camera, four of five masses were invisible
+and the fifth was a lone dome: the seat had reintroduced the exact silhouette
+five masses were authored to cure. And the 420–800 m ejecta ring was in the moat
+too, walled off from every camera by the crater's own rim, which is why fixing
+its seat last round made it visible and changed nothing.
+
+**A new defect, found on the way and not in this plan.** Every rock instance is
+drawn at `y - ny * sink` with `sink` from `placedScale`, scaling with the
+instance's own `s`; a stack tapers, so the block below always sinks further than
+the block on it, and `stackPlan` / `torPlan` / `_genOutcrop` all authored their
+overlap on the un-sunk numbers. **122 open joints of 1615** on the slab-based
+corestone stacks, up to 378 mm of daylight. Invisible to both instruments that
+look closest: `probes/mushroom.mts` grades width and is silent about the
+vertical, and `floatcheck` gate 2 measures against the *terrain*, so a course
+standing on another rock is in its own published blind list.
+`probes/stackjoint.mts` is the missing measurement.
+
+Still open: the seven kits that build from bare `BoxGeometry` (`_tomb` first),
+`_haven`'s shelf drum, `_genOutcrop`'s grading. `project/handoff/landmarks.md`
+has the state.
+
 ## WS-6 — The last perf stalls → phase4 WS-0b
 
 The baseline is **published and passing** as of 2026-08-25 (`RULER_VALID: true`,
@@ -643,6 +679,10 @@ without opening the handoff it lived in.
 | `isnan()` / `isinf()` / `(x >= 0 \|\| x < 0)` can detect a NaN in a shader here | **all three are folded away by this backend's compiler.** Six sanitisers read as innocence on a frame with a visible hole in it. Test the bits with `floatBitsToUint` |
 | A zero blend weight gates a poisoned term | `0.0 * NaN` is NaN |
 | A NaN diagnostic can be flagged out through `totalEmissiveRadiance` | invisible on a NaN pixel — it cost the canopy lane its second attempt |
+| **WS-5: the POI kits publish `_exclusions` and something downstream is not reading them at pad radius** | **the premise is false.** `PoiKits._exclusions` is a POI-versus-POI *placement* ban list (dungeon mouths at 130 m, `sameOnly`) and has never had a vegetation meaning; `Ecology.ts:192` already said so. What leaks is that `Ecology._layoutClearings` authors a clearing as a **linear cone** whose zero is the settlement's *catchment* radius, and grass is the only population with no hard reject — only a density multiply and a `d < 0.02` cut. 4 000 uniform samples per pad: every other population is rejected on **100%** of the pad, grass passes on **97–99%**, standing up to **0.57 m proud** of the kit's own top surface. Plus `FRAC` has ten keys against twelve POI types, so `tomb` (10) and `landmark` (23) — **33 of 123 POIs** — get no clearing at all (`cleared` = 0.000 at `tomb_just`). The fix is a plateau-plus-skirt in `Ecology.poiClear` and belongs to **`src/world/veg/`**; `PoiKits.PAD_R` now publishes the twelve pad radii for it |
+| **WS-5: grass grows through the town plaza** | **false at HEAD.** `cleared > 0.06` rejects **100.0%** of samples on the Hammerhead deck and mean `grassDensity` there is **0.067** against 0.627 in open country; `town_forecourt` and `town_wide` show clean asphalt with a hard pad edge. Only the *POI aprons* leak. Galdin Quay and Lestallum are map pins with a `_town` kit, not plazas |
+| **WS-5: the near half of `zone_longwythe` has no rock in it** | **it is the framing, not the field.** Neutralising the carriageway sweep and the POI pad *entirely* buys **5 instances and zero legible ones** — the count of stones ≥ 20 px does not move at all (4 either way). The camera stands **30 m from a 33.4 m tor and points 48° away from it**: twelve outcrop/tor knots sit within 400 m and every one is behind the camera or 48–80° off-axis against a 35.7° half-fov. Per hectare of *visible* ground the near band is the densest in the frame (7.4 drawn/ha against 3.1 mid and 1.2 far); it just subtends 1.7% of it. Dollying back 80 m along the view axis takes drawn instances 16 → 38 and median on-screen height **10.7 px → 73.0 px**. The change belongs in `Shots.ts`, which is the coordinator's. **Do not raise `rockD`** |
+| **WS-5: the 124 POI aprons are still cake stands** | **half-stale.** `gradePad` already replaced the faceted drum with a real cut-and-fill earthwork. What reads as a cake stand at `poi_haven` is not the apron at all — it is `_haven`'s **own two-course shelf drum** with a hard circular rim, which is a different object in a different function |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 
