@@ -17,6 +17,7 @@ const g = window.GAME;
 g.applyShot('zone_vannath');
 const sky = g.get('Sky'); if (sky) sky.setTimeOfDay(9.4);
 const rig = g.get('CameraRig'), w = g.get('Water'), t = g.get('Terrain');
+const eco = g.get('Vegetation').ecology;
 const menus = g.get('Menus'); if (menus) menus.setScreen(null);
 const hud = g.get('HUD'); if (hud) hud.setVisible(false);
 const { WORLD } = await import('/world/map/WorldMap.ts');
@@ -120,6 +121,34 @@ async function river(name, idx, fov) {
 }
 await river('riv-deep', byDepth[0].i, 55);
 await river('riv-deep2', byDepth[Math.floor(n * 0.06)].i, 55);
+
+/*
+ * One more, from the bank of a reach that has something growing on it.
+ *
+ * The two above find the deepest water in the world, and the deepest water in
+ * this world is at the bottom of a bare rock gorge — a correct frame of a place
+ * where the defect could never have shown. This one takes the deepest station
+ * whose own bank carries grass, stands six metres out from the waterline at
+ * 2.5 m over the surface, and looks across and downstream: water, waterline and
+ * sward in one frame, which is the only way to see whether the edge reads.
+ */
+async function bank(name, idx, fov) {
+  const r = rows[idx];
+  const ax = pos.getX(idx * L), az = pos.getZ(idx * L);
+  const bx = pos.getX(idx * L + L - 1), bz = pos.getZ(idx * L + L - 1);
+  const l = Math.hypot(bx - ax, bz - az) || 1;
+  const nx = (bx - ax) / l, nz = (bz - az) / l;
+  const ex = bx + nx * 6, ez = bz + nz * 6;
+  const dn = rows[Math.min(n - 1, idx + 26)];
+  rig.setShot({ pos: [ex, r.cy + 2.5, ez], target: [dn.cx, dn.cy, dn.cz], fov });
+  g.settle(26);
+  out.shots.push({ name, x: +ex.toFixed(1), z: +ez.toFixed(1), depth: +r.depth.toFixed(2) });
+  census(name);
+  await window.__shot(name);
+}
+const green = byDepth.find((r) => eco.grassDensity(
+  r.cx + (r.wd + 10) * 0.5, r.cz) > 0.25 || eco.grassDensity(r.cx, r.cz + (r.wd + 10) * 0.5) > 0.25);
+if (green) await bank('riv-green', green.i, 52);
 
 // -------------------------------------------------------------------- tarns
 async function tarn(name, b) {
