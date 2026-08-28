@@ -181,3 +181,29 @@ together:
 
 `src/world/terrain/Field.ts` · `src/world/water/River.ts` ·
 `src/world/water/Tarns.ts`.
+
+## Gates
+
+- **`pnpm run check` 19/19 in 117.6 s**, on a busy tree. The three that matter
+  for a lane that moved the heightfield are all green: **`driftcheck` PASS**
+  (0.05 m drift, 0.45 m against `heightAt`), **`heightcheck` worst
+  `|gpu - cpu|` = 0.000 m**, and **`hydrocheck` PASS**. `integration` PASS with
+  **8 holes with water**. Perf gates skipped and not claimed — the tree was busy.
+- **`nanscan` 0 of 142** (`{"shots":142,"hits":[]}`), run after every change
+  here. No shader was edited this session; the risk was the generator, and it is
+  clean.
+- **The corpus diff the corduroy row would have needed, run against what I
+  actually landed.** Ten shots most exposed to a heightfield move — the two
+  vistas, `hero_full`, `zone_longwythe` (frames Longwythe Peak, the one landform
+  `_peak` touches), `zone_taelpar`, `zone_fallgrove`, `zone_vannath`,
+  `zone_galdin`, `poi_haven`, `regalia_road` — **cold on both sides**, `074dfb5`
+  against `0a7fead`:
+
+      hero_full        1.304  floor 2.25       zone_galdin      0.390  floor 2.00
+      poi_haven        0.482  floor 0.66       zone_longwythe   0.478  floor 1.23
+      regalia_road     0.377  floor 2.00       zone_taelpar     0.323  floor 2.00
+      vista_dusk       0.179  floor 0.25       zone_vannath     0.314  floor 2.00
+      vista_noon       0.123  floor 0.39       zone_fallgrove   0.254  floor 0.69
+
+  **0 of 10 over their own cold floor**, and that span also carries three other
+  lanes' commits. The world outside the three sites did not move.
