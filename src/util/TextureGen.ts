@@ -89,6 +89,46 @@ export type HeightFn = (u: number, v: number, x: number, y: number) => number;
 /** Immediate-mode draw into a `size` x `size` canvas. */
 export type CanvasDrawFn = (ctx: CanvasRenderingContext2D, size: number) => void;
 
+/**
+ * Free a canvas-backed texture's bitmaps the moment the GPU has them.
+ *
+ * The `DataTexture` sibling above is the visible half of this problem; this is
+ * the half no instrument in the repo counts. `bootprof`'s "CPU texel arrays"
+ * row walks `texture.image.data`, and a canvas has no `data` — its bitmap lives
+ * in the renderer process outside V8 entirely, which is exactly where the ~570
+ * MB of unattributed RSS was hiding.
+ *
+ * The painted faces are the case that matters. `Face.faceTexture` builds an
+ * eleven-level pyramid by hand and assigns it to `texture.mipmaps`, so **every
+ * level of every face canvas stays alive for the session**: `texc.bin.gz` is
+ * 67.1 MB of face texels inflated, and the canvases they are painted into are
+ * the same bytes again.
+ *
+ * Setting a canvas's `width` discards its bitmap immediately — that is what the
+ * HTML spec says a resize does — so one assignment per level is the whole
+ * release. Same trade and same context-loss story as
+ * {@link dropTexelsAfterUpload}: see `Renderer._wireContextLoss`.
+ *
+ * @param tex the texture whose upload to wait for
+ * @param canvases every canvas it draws from, level 0 first
+ */
+export function dropCanvasAfterUpload<T extends THREE.Texture>(tex: T, canvases: HTMLCanvasElement[]): T {
+  tex.onUpdate = (t: THREE.Texture) => {
+    t.onUpdate = null;
+    // The mip array is three's only reader of levels 1..n, and it has read them.
+    t.mipmaps = [];
+    // Level 0 is `t.image`, and something has to answer for its size after this:
+    // every GPU-side estimate in the repo, `bootprof --mem` included, reads
+    // `texture.image.width`. So the canvas is replaced by its own dimensions
+    // rather than shrunk in place — the bytes go, the instrument stays honest.
+    const w = canvases.length ? canvases[0].width : 0;
+    const h = canvases.length ? canvases[0].height : 0;
+    if (w && h) t.image = { width: w, height: h };
+    for (const cv of canvases) { cv.width = 1; cv.height = 1; }
+  };
+  return tex;
+}
+
 /** Build an RGBA DataTexture from a per-texel callback returning [r,g,b] in 0..1. */
 export function makeTexture(size: number, fn: TexelFn, {
   colorSpace = THREE.SRGBColorSpace,

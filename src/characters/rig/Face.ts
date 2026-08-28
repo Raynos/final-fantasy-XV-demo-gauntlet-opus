@@ -7,6 +7,7 @@ import type { Look } from './Look.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import { bakedCanvasMips } from '../../engine/TexBake.ts';
+import { dropCanvasAfterUpload } from '../../util/TextureGen.ts';
 
 /**
  * Head, face and eyes.
@@ -1570,7 +1571,11 @@ function faceTexture(bakeKey: string | null, size: number, draw: (ctx: CanvasRen
   tex.mipmaps = mips;
   tex.generateMipmaps = false;
   tex.needsUpdate = true;
-  return tex;
+  // A hand-built pyramid is eleven canvases that three reads exactly once, and
+  // fifteen faces of them is the single largest thing in the process that no
+  // instrument here counts -- a canvas bitmap has no `image.data`, so
+  // `bootprof`'s texel row walks straight past it. Freed on upload.
+  return dropCanvasAfterUpload(tex, mips);
 }
 
 /** How one painted stroke or fill composites onto the face canvas. */
