@@ -223,10 +223,34 @@ export class MaterialPatch {
         // The small rise that remains is real: a few kilometres of ground haze
         // is not the infinite column the true horizon sample integrates, so it
         // sits a little short of full horizon brightness.
-        vec3 highDir = normalize(vec3(apDir.x, apDir.y + 0.10, apDir.z));
+        // The rise and the zenith mix were the residue of the navy bug, kept on
+        // the argument that "a few kilometres of ground haze is not the infinite
+        // column the true horizon sample integrates". That argument does not
+        // survive its own numbers. uHazeBase is 2.4e-4 per metre where the
+        // sky LUT's own near-ground extinction is about 3.4e-5 -- Rayleigh at
+        // 1.35e-5 plus the LUT's Mie -- so our haze is roughly SEVEN TIMES the
+        // atmosphere the LUT integrates. Four kilometres of it is optically as
+        // deep as the LUT's whole horizon column, and the equilibrium radiance
+        // a path that deep converges on is the true horizon radiance, not one
+        // lifted 5.7 degrees and pulled an eighth of the way to the zenith.
+        //
+        // Measured, ?post=aerialmax --ablate noexp, zone_vannath: the
+        // converged colour was #99bbd2 -- luma 182, R-B -57 -- while the sky
+        // band directly above the same ridge in the same frame reads #c3d6d9,
+        // luma 210. ART-DIRECTION.md §2's measured FFXV ridge is #bad2e4, luma
+        // 206. So the term was converging 24 levels below, and 15 levels bluer
+        // than, the value the project's own reference measures, and 28 levels
+        // below the sky it is supposed to join.
+        //
+        // The rise is not deleted, because the reason it was introduced is
+        // real: at low sun the horizon band is reddened all the way round, and
+        // sampling flat at the view azimuth makes every azimuth warm. 0.03 is
+        // about 1.7 degrees, enough to clear the horizon's own reddest sliver
+        // while landing on its value.
+        vec3 highDir = normalize(vec3(apDir.x, apDir.y + 0.03, apDir.z));
         vec3 zenith  = atmSkyRadiance(uSkyLut, r, vec3(0.0, 1.0, 0.0), uSunDir) * uSunIntensity;
         vec3 rayCol  = atmSkyRadiance(uSkyLut, r, highDir, uSunDir) * uSunIntensity;
-        rayCol = mix(rayCol, zenith, 0.12);
+        rayCol = mix(rayCol, zenith, 0.05);
         vec3 mieCol  = atmSkyRadiance(uSkyLut, r, apDir, uSunDir) * uSunIntensity;
         // The near-sun entry of the sky LUT carries the whole solar aureole,
         // integrated over the entire atmosphere. A few kilometres of surface
