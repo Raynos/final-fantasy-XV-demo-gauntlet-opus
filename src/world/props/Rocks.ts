@@ -1103,12 +1103,13 @@ export interface StackCourse {
 export function stackPlan(
   k: StoneKind, s0: number, sy0: number, rng: Rng,
   ext: ReadonlyMap<StoneKind, [number, number, number]>, overlap = 0.38,
+  bury0 = 0,
 ): StackCourse[] {
   const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
   const w0 = s0 * (ext.get(k) ?? _EXT1)[0];
   const cs = corestones(rng, n);
   const out: StackCourse[] = [];
-  let y = 0, hPrev = 0, wPrev = 0;
+  let y = 0, hPrev = 0, wPrev = 0, sinkPrev = 0;
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];
     const kind: StoneKind = i === 0 ? k
@@ -1127,7 +1128,46 @@ export function stackPlan(
     const s = wSelf / ex[0];                          // finished half-width / hull
     const sy = _sc(sy0 * c.sy);
     const h = s * sy * ex[1];
-    if (i > 0) y += (hPrev + h) * (1 - (wSelf > wPrev ? Math.max(overlap, 0.52) : overlap));
+    /**
+     * **The joint has to be planned against the SUNK position, not the
+     * authored one, and this is the bug that made stacks levitate.**
+     *
+     * `Rocks.update`'s `emit` draws every instance at `it.y - it.ny * sink`,
+     * where `sink` comes from {@link placedScale} and is
+     * `s * max(bury, SINK_FRAC * max(ex0, ex2) * 2)`. That is a *per-course*
+     * number: it scales with `s`, and the base course additionally carries its
+     * kind's own `bury` (0.22 for granite, up to 0.42 for pebble) where every
+     * course above it is handed `bury: 0` and falls back to the 0.12 floor.
+     *
+     * So the block below always sinks FURTHER than the block above it — more
+     * `s`, and at the base a bigger `bury` as well. Solving the drawn joint,
+     * with `dy` the course centre,
+     *
+     *     gap = -(h + hPrev) * overlap + (sinkPrev - sink)
+     *
+     * and `sinkPrev - sink` is POSITIVE, so it eats the overlap and then opens
+     * the joint. Adding `sink - sinkPrev` to the step cancels the term exactly
+     * and leaves `gap = -(h + hPrev) * overlap`, which is what every number in
+     * `corestones` was tuned against. In words: the upper course has to follow
+     * the lower one down.
+     *
+     * Nothing was measuring this. `probes/mushroom.mts` grades the WIDTH ratio
+     * of one course to the one below and is silent about the vertical, and
+     * `floatcheck` gate 2 measures instances against the TERRAIN, so a course
+     * standing on another rock is in that gate's own published blind list.
+     * `probes/stackjoint.mts` is the missing measurement.
+     *
+     * It reads `placedScale` rather than recomputing the sink: a bench that
+     * reimplements the rule it measures is how `2d91563` shipped a table that
+     * was eight months stale, and this is the same trap from the authoring
+     * side.
+     */
+    const sink = placedScale(ex, s, 1, sy, 1, i === 0 ? bury0 : 0).sink;
+    if (i > 0) {
+      y += (hPrev + h) * (1 - (wSelf > wPrev ? Math.max(overlap, 0.52) : overlap))
+        + (sink - sinkPrev);
+    }
+    sinkPrev = sink;
     wPrev = wSelf;
     hPrev = h;
     out.push({
@@ -1286,6 +1326,7 @@ export function torPlan(
 
   const courses: TorCourse[] = [];
   let y = 0;                                        // the buried foot of the stack
+  let sinkPrev = 0;                                 // see the sink term below
   let cx = 0, cz = 0, wPrev = 0, pcx = 0, pcz = 0;
   for (let i = 0; i < n; i++) {
     const kind: StoneKind = rng.next() < 0.58 ? dom
@@ -1350,6 +1391,34 @@ export function torPlan(
     // in the SAME azimuth as the lean so the two read as one deformation
     // rather than as two random tilts.
     const lean = leanTop * t + dip;
+    /**
+     * **The joint has to be planned against the SUNK position, and only where
+     * it is actually opening.**
+     *
+     * `Rocks._genTor` hands every course `it.bury = 0`, so each is drawn at
+     * `y - ny * sink` with `sink` from {@link placedScale} —
+     * `s * SINK_FRAC * max(ex0, ex2) * 2`, proportional to that course's own
+     * `s`. A tor tapers by construction, so the block below always sinks
+     * further than the block above it and every joint loses the difference.
+     * The lap on a `boss` is as shallow as 0.24, which is less than the term.
+     * `probes/stackjoint.mts` is the measurement — it composes the shipped plan
+     * through the shipped `placedScale`, because nothing else could see this:
+     * `probes/mushroom.mts` grades the WIDTH ratio of one course to the one
+     * below, and `floatcheck` gate 2 measures instances against the TERRAIN, so
+     * a course standing on another rock is in its own published blind list.
+     *
+     * **`Math.min(0, …)`, and the clamp is not caution — it is what keeps the
+     * silhouette ratchet.** Applying the full differential at every joint
+     * shortens every tor slightly, and `silhouette.mts --set rocks` graded that:
+     * `rock:tor:boss` 24.0 -> 23.8 distinct against a floor of 24, and
+     * `rock:tor:hoodoo` variety 1.44 -> 1.39 against a floor of 1.40. Two
+     * floors breached to fix joints that were not open. So the correction only
+     * ever pulls a course DOWN, never lifts one, and a stack whose joints were
+     * already closed is left exactly as the bench recorded it.
+     */
+    const sink = placedScale(ex, s, sx, sy, sz, 0).sink;
+    if (i > 0) y += Math.min(0, sink - sinkPrev);
+    sinkPrev = sink;
     courses.push({
       kind, dx: cx, dy: y + h, dz: cz, s, sx, sy, sz,
       yaw: fabric + twist * (n > 1 ? i / (n - 1) : 0) + rng.gauss(0, 0.14),
@@ -1830,7 +1899,7 @@ export class Rocks {
    * @param out the streamed cell's instance list
    */
   _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.38) {
-    for (const c of stackPlan(it.k, it.s, it.sy, rng, this.ext, overlap)) {
+    for (const c of stackPlan(it.k, it.s, it.sy, rng, this.ext, overlap, it.bury)) {
       out.push({
         ...it,
         k: c.kind,
@@ -2019,13 +2088,29 @@ export class Rocks {
           // `dipM` meet along a plane and the far corner stands `w*sin(dip)`
           // proud of the contact, so an overlap authored for level beds leaves
           // exactly that much daylight under it.
+          it.bury = 0;
+          // **And `under.top` is the DRAWN top, so this block's own sink has to
+          // come off too.** `emit` draws every instance at `y - ny * sink`, with
+          // `sink` from `placedScale`, scaling with the instance's own `s` and
+          // with its `bury` — which is `kind.bury * 0.35..0.8` on a course-0
+          // block and 0 above it. The block below therefore sinks further than
+          // the block on it and an overlap authored on the un-sunk numbers
+          // loses the difference. Same term as `stackPlan` and `torPlan`, same
+          // reason, measured by `probes/stackjoint.mts` on those two: 123 open
+          // joints of 6207 before, 0 after.
           it.y = under.top - 2 * hSelf * 0.30 + hSelf
-            - wSelf * Math.abs(Math.sin(dipM)) * 0.9;
+            - wSelf * Math.abs(Math.sin(dipM)) * 0.9
+            + placedScale(ex, it.s, it.sx, it.sy, it.sz, 0).sink;
           it.pitch = it.pitch * 0.4 + dipM * dipC * 0.6;
           it.roll = it.roll * 0.4 - dipM * dipS * 0.6;
-          it.bury = 0;
         }
-        laid[course].push({ x: px, z: pz, top: it.y + hSelf, w: it.s * it.sx * ex[0] });
+        // The DRAWN top, for the same reason: whatever lands on this block has
+        // to be placed against where it will actually be, not where it was
+        // authored.
+        laid[course].push({
+          x: px, z: pz, w: it.s * it.sx * ex[0],
+          top: it.y + hSelf - placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury).sink,
+        });
         it.far = true;
         out.push(it);
       }
