@@ -269,6 +269,36 @@ the jitter is sub-pixel and each leaf boundary is about one pixel.
    reference for `VegTextures.ts`'s coverage-preserving chain and should be
    re-derived.
 
+### WS-3 result, 2026-08-28 (`alpha-edges` lane)
+
+All three items closed. Shas `95a34c0`, `46c72a1`. Numbers in
+`project/handoff/alpha-edges.md`.
+
+**1 was already landed and is still working.** `alphaToCoverage` plus a
+multisampled `rtScene` plus the centred coverage ramp shipped at `3237976` /
+`1245d14`; the plan was written before that merge. Re-verified on today's main
+with `?post=nomsaa` as the control: near-crown p90 step **102.1 → 75.0**,
+`hard%` 28.6 → 22.6, and the partial-coverage band `mid%` 7.86 → 8.74. Hashed
+alpha was the fallback if the cross-lane half could not be had; it was had, so
+it is moot and nobody should build it.
+
+**2 is landed.** CAS's sharpness is now multiplied by a mask read off
+`fx.rtScene.depthTexture`, asking *"does this neighbourhood contain more than
+one surface"* as total variation against range over a seven-tap line per axis.
+A plane at any angle and a single step edge are both monotone, ratio 1, and
+keep all their sharpen; a leaf against the sky doubles back, ratio 2; canopy
+runs 2–4. `?post=casmask` renders the mask and is the argument: **2.0% of
+`town_forecourt`** (wires and a few thin mouldings, all masonry black),
+**26.7% of `hero_full`** — every blade of grass, with the four characters
+standing out as clean black silhouettes. Canopy `d1` **9.28 → 8.56** against
+the reference plate's 8.58, `d8` and above unchanged to two decimals; treeline
+`edge%` 42.14 → 38.96 and p90 61.5 → 58.2; near-crown speckle 37.6 → 26.1.
+`perf` 0 of 5 shots over the floor, `gameplay` PASS.
+
+**3 is a measured negative on its stated cause, and the defect has moved.** See
+the negatives table. `src/tools/probes/leaftexel.mts` is new and is the
+instrument.
+
 ## WS-4 — Clouds and sky
 
 **The free win first.** `clouds.md`: *"Why is TAA not accumulating the cloud
@@ -477,27 +507,60 @@ Still open: the seven kits that build from bare `BoxGeometry` (`_tomb` first),
 `_haven`'s shelf drum, `_genOutcrop`'s grading. `project/handoff/landmarks.md`
 has the state.
 
-## WS-6 — The last perf stalls → phase4 WS-0b
+## WS-6 — The last perf stalls — **CLOSED 2026-08-28, and the 33 ms rule is MET**
 
-The baseline is **published and passing** as of 2026-08-25 (`RULER_VALID: true`,
-floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
+`gameplay.mts` at `747136a` reports **total hitches: 0**, `RULER_VALID: true`,
+every segment over 60 fps. `sprint+turn`'s worst frame went **40.7 -> 7.6 ms**.
+This is the first session in this repo's history with no frame over 33 ms
+anywhere in a real play session, and BRIEF rule 3 is now met rather than owned.
+Handoff: `project/handoff/perf-r4.md`.
 
-- **`sprint+turn`, 84–116 ms, same frame index every run**, when Hammerhead
-  first enters the frustum — the one remaining breach of the 33 ms rule. **Not
-  CPU**: `ThreadTime` 10.1 ms on a 102.9 ms frame, zero new programs, zero
-  texture uploads, zero new visible geometries, 82.0 of 84.3 ms inside
-  `post.render`, and it survives rAF pacing. Two unseparated candidates: buffer
-  uploads for geometry `Warmup` built but never drew (its `_warmShadows` renders
-  into a **64×64** target, and a Metal PSO is keyed by attachment format, so the
-  pipeline built there may not be the one the composer's MRT needs), and
-  shadow-cascade work for hundreds of new casters.
-- **`menu-open` hitches are not a regression.** `perfmenurepro.mts` gives 27
+**Four of this section's items were already dead when it was picked up**, which
+is what a queue costs when nobody re-reads it — the same failure the velocity
+cull note below records. `day-night-sweep` was **7.0-7.1 ms**, not 11.3;
+`menu-open` had **zero hitches and a 7.4 ms max**, twice; the menu scrim was
+signed off by those same two runs; and `town_forecourt` was already at 786 with
+`drawcheck` flat and green, not "24 away". Each is struck through below.
+
+The baseline was **published and passing** as of 2026-08-25 (`RULER_VALID: true`,
+floor 16%, mean 218.1 fps, worst 140, every shot over 60). What was left:
+
+- ~~**`sprint+turn`, 84–116 ms, same frame index every run**~~ — **DONE,
+  `747136a`. It is ONE draw call linking ONE shader program, and it was neither
+  named candidate.** Both are now measured negatives in the table below. The
+  frame's whole cost is inside a single `renderBufferDirect` (35.5-90.8 ms),
+  `renderer.info.programs` grows by exactly one across it, and the new cache key
+  differs from its nearest already-linked twin in **one bit** of three's second
+  `getProgramCacheKeyBooleans` mask: bit 11 `doubleSided` for
+  `roadflat_road_rust` at frame 35, bit 5 `skinning` for a `VelocityPass` proxy
+  at frame 23. `RoadFurniture`'s rust is `FrontSide` and only the `DoubleSide`
+  copies in `PoiKits`/`Outposts`/`Landmarks` had ever drawn; every mover in the
+  world at boot is a character, so only the skinned velocity shader had ever
+  linked. `Warmup` gains two steps — `unbuilt content` (walks each system's own
+  material tables and draws a scratch box per material; deliberately does *not*
+  skip materials already in the scene, because three keys the program on the
+  object too) and `velocity proxies` (`VelocityPass.warm`, all six variants,
+  materials **held** so three does not release the programs). Cost: the loading
+  screen pays **150 -> 566 ms for 9 programs**; boot time is not in `BRIEF.md`.
+  New instrument: `src/tools/probes/perfstall.mts`.
+
+  **And `perfsprint.mts`'s "zero new programs" was a false negative that cost
+  two rounds.** It compares programs by `name + '|' + cacheKey.length`
+  *strings*, so a program whose key-string is already in the list reads as no
+  program at all. Count `renderer.info.programs.length`, or diff the keys.
+- ~~**`menu-open` hitches are not a regression.**~~ **CLOSED — there are no
+  hitches.** `gameplay.mts` three times on 2026-08-28: `menu-open` is
+  **4.6-4.9 ms thru, p99 7.4-8.9, max 7.4-8.9, zero hitches** every run, two of
+  the three on a ruler that stamped `VERDICT: quiet`. The historic finding, kept
+  because it is the shape of the defect if it returns: `perfmenurepro.mts` gives 27
   against the certified baseline and 26 against HEAD; the `baseline-gameplay.json`
   row saying 0 was a lucky 90-frame sample. 100% gated on a menu having been
   opened, periodic on frames 9/19/29/…, pure CPU inside `post.render` with
   `ScenePass` going 3.5 → 37.6 ms at the same draw count and triangle count,
   creating no programs, textures or geometries, and surviving every ablation.
-- **`day-night-sweep`: 11.3 ms, 11% over budget, unattributed.**
+- ~~**`day-night-sweep`: 11.3 ms, 11% over budget, unattributed.**~~ **CLOSED —
+  7.0-7.1 ms**, three runs, well inside a 16.7 ms budget. It was never
+  attributed because by the time anyone looked it was not over.
 - **The frame is a draw-call count** (~8.7 µs/draw, corr 0.801 vs 0.628 for
   triangles). **Gated now** — `src/tools/drawcheck.mts`, in `check.mts`, budget
   parsed out of BRIEF rule 3, ratcheted on `project/draw-baseline.json`. It
@@ -536,16 +599,26 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
   which is what a queue costs when nobody re-reads it. The next one is the same shadow-proxy merge
   applied to the NPCs — see `shadowProxy` in `world/town/Hammerhead.ts` and
   `world/props/PoiKits.ts` (duplicated in both; it belongs on `PartBuilder`).
-- **A perf sign-off is owed on the menu scrim.** WS-9 made a full-screen 26 px
+- ~~**A perf sign-off is owed on the menu scrim.**~~ **SIGNED OFF.** Two
+  `gameplay.mts` runs, the second stamped `VERDICT: quiet`: `menu-open` **4.7
+  and 4.9 ms thru, max 7.4 ms, zero hitches**. The blur costs nothing a frame
+  budget can see. The claim it settles: WS-9 made a full-screen 26 px
   `backdrop-filter` blur render for the first time — it had never run — and it
   now runs on every menu frame. `uxcheck` passes 93/93 with no page errors but
   does not time frames, so BRIEF's 33 ms rule is unverified against it.
   `gameplay.mts` on a quiet tree settles it.
-- **`tf_stoch` has never been measured.** `splat.md` calls this its
-  highest-priority remaining item: 6 array fetches per active layer instead of 4,
-  ~2 layers typically live, so roughly +4 fetches per pixel, and the fragment
-  cost is unknown. Pre-planned fallback if it does not pay: gate it to
-  `vTDist < ~400 m` and single-tap beyond.
+- ~~**`tf_stoch` has never been measured.**~~ **MEASURED, and it is free.**
+  `?post=nostoch` (`73ae5f0`) collapses the Heitz-Neyret sampler to a single
+  barycentric tap. `perf.mts` over six ground-dominant shots, both sides
+  `RULER_VALID: true`: **0 of 6 shots moved by more than the 0.93 ms floor**,
+  mean 239.0 fps against 239.5, and the sign is inconsistent shot to shot
+  (`zone_longwythe` is *slower* with the sampler off). **The `vTDist < 400 m`
+  fallback is not worth building.**
+
+  The ablation is not a null one — that trap is `BRIEF.md` §6.1's and it was
+  checked: nostoch moves `zone_longwythe` **1.14 mean/255, max 196, over 14.8%
+  of pixels**, and the ground's micro-detail is visibly different in a crop.
+  `splat.md`'s highest-priority remaining item, closed.
 - **Wave 3's frame-cost split** (pixel-scaled vs fixed), and **a noise floor per
   shot in `perf.mts`** which is what blocked it — the floor is measured on
   `shots[0]`, so argument order decides whether a run certifies. Both are already
@@ -942,6 +1015,11 @@ without opening the handoff it lived in.
 
 | claim | verdict |
 |---|---|
+| **WS-6: the 84-116 ms `sprint+turn` frame is buffer uploads for geometry `Warmup` built but never drew** | **no.** `probes/perfupload.mts` snapshots every geometry uuid the renderer has uploaded and lists what first renders each frame: both spike frames report `fresh 0, freshKb 0` — not one geometry rendering for the first time — while the frame that really does upload **497 KB** of fresh Menace-POI geometry costs **6.4 ms**. The 64x64-target / Metal-PSO-by-attachment-format reasoning was also unnecessary: the thing being built is a **WebGL program**, and three's program key does not carry the attachment format, only whether a target was bound at all |
+| **WS-6: the 84-116 ms `sprint+turn` frame is shadow-cascade work for hundreds of new casters** | **no.** `probes/perfstall.mts` times `renderer.shadowMap.render` and splits every `renderBufferDirect` into shadow and colour. On the 86 ms frame the shadow pass is **0.3-0.6 ms**, with the same **99 shadow draws and 1.48 Mtris** the median frame on that cascade phase carries; the all-three-cascade phase (292 draws, 4.4 Mtris) has a median frame of **5.4 ms**. It is one draw call linking one program — see WS-6 |
+| **`perfsprint.mts` reporting "zero new programs" on the stall frames means no program was linked** | **it means the opposite of what it says.** The probe compares programs by `name + '|' + cacheKey.length` STRINGS and reports `added = now.filter(p => !prev.includes(p))`, so a program whose key-string is already in the list reads as no program at all. `renderer.info.programs.length` grows by exactly one across both spike frames. Two rounds of WS-6 were spent looking past a link because of it |
+| **`tf_stoch`'s three taps are a fragment cost worth gating to `vTDist < 400 m`** (`splat.md`'s highest-priority item) | **they cost nothing measurable.** `?post=nostoch` cuts the Heitz-Neyret sampler to one tap; `perf.mts` over six ground-dominant shots, both sides `RULER_VALID: true`, moves **0 of 6 shots by more than the 0.93 ms floor** — mean 239.0 fps against 239.5, with the sign inconsistent shot to shot. Not a null ablation: it moves `zone_longwythe` **1.14 mean/255, max 196, over 14.8% of pixels**. Do not build the fallback |
+| **The page is at 16/16 texture units** (used to close PCSS, and carried as an open defect through three plans) | **it is at 15 fragment, 4 vertex, 17 of a combined 32, and the program links.** `probes/texunits.mts` names the culprit — it is the terrain material on every clipmap ring — and then reads the linked program's active samplers back by stage: `uHeightTex`/`uFarHeightTex` are vertex-only displacement taps, `uNormalTex`/`uFarNormalTex` are both. three's `allocateTextureUnit` warns when its running total of allocated units reaches `capabilities.maxTextures`, which is `MAX_TEXTURE_IMAGE_UNITS` (the **fragment** limit, 16) — not `MAX_COMBINED_TEXTURE_IMAGE_UNITS`, which is **32**. Nothing is starved, `LINK_STATUS` is true, and there is a fragment unit free. PCSS is still closed on its other clause (the depth read `sampler2DShadow` cannot do), but not on this one |
 | Widen the eye-socket brushes | changed the rendered frame by **nothing**, twice; cost a lane most of a session |
 | A world-metre contact ramp for grounding | sub-pixel at judged range; its own positive control moved 2.600/255 with the crop *visually identical* |
 | TAA's clamp is why leaf edges alias | measured false — TAA reaches them and softens them, it is just not enough |
@@ -998,6 +1076,9 @@ without opening the handoff it lived in.
 | **`daycycle_dawn`'s magenta is the burial removing the blue that desaturated the sun tint** | **backwards.** B reads **143 in all of** base, `nocloudsun`, `nocloudamb` and `noambbury`, to the level, so the blue is the sky behind plus the `uCloudHaze` wash. What the ablations move is red — `noambbury` adds 22 levels of it at p90. The burial's cost at dawn is warmth |
 | `clear`'s `haze` 0.00024 was only compensating for a converged colour a third too dark, so it can come down once the colour is right | **half true and not worth taking.** With the colour fixed, 0.00016 is better on all four colour columns and worse on all five range columns, and `hi230%`/`clip%`/`stops` at 0.00024 land within 0.19/0.06/1.11 of `FFXV-field` where the cut takes them to 2.09/0.17/1.88. Looked at on `zone_three_valleys`, the cut also brings the far mountain forward to the near ridge's value. The 6x raise is carrying the frame's depth separation as well |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
+| **WS-3.3: the near ring's leaf cards are chunky because of the alpha map's own texel resolution** | **the near ring never magnifies.** `probes/leaftexel.mts` measures texels per screen pixel per triangle from the geometry's own UVs — a bounding box reads a 6x minification as a 2x magnification, because a crown mesh is dozens of cards each carrying the whole 0..1 UV square. On `zone_fallgrove` the nearest instance of every near-ring kind is **minified 6.7x to 38.6x** (`tree_duscae_0_leaf` 38.7 m / 6.69, `tree_duscae_1_leaf` 55.4 m / 8.35, `scrub_fern` 44.5 m / 38.58). The 256 px canvas already holds six to thirty-nine times the detail the frame can carry; raising it buys nothing. Looked at, too: a near crown at 8x today is **soft, not chunky** — the "hard binary staircase" is not in that part of the frame any more. `46c72a1` |
+| **WS-3.3: `alphaRef` is the wrong reference for the coverage-preserving mip chain now that the cutoff is straddled** | **no, and the near ring is not where to ask.** The previous lane's argument stands — a ramp *centred* on `alphaRef` integrates to the same 50% crossing that `buildAlphaMips`' hard `count(a >= alphaRef)` measures, where three's one-sided ramp biased it low. And the measurement says the question is misaddressed: the band where the chain sits at **one texel per pixel** is the **impostor ring at 210-280 m** (`tree_duscae_1_impostor` 0.99, `tree_duscae_0_impostor` on `zone_nebulawood` 0.74), not the near ring at 6-39. That is the worst case for aliasing in the vegetation system — mip 0, no supersampling from minification — and it is exactly where the treeline `edgestat` scores sits |
+| **WS-3.2: a depth mask can take CAS's foliage cost down to what `?post=nocas` shows** | **about a third of it, and the rest is not a depth phenomenon.** The mask lands treeline `edge%` 42.14 -> 38.96 where `nocas` is 27.93, and near-crown speckle 37.6 -> 26.1 where `nocas` is 7.1. What survives is CAS sharpening *within* a card: a distant tree is three impostor planes and a mid tree is crossed cards, so the leaf detail is in the alpha and albedo texture and the depth buffer sees one flat surface across it. A depth mask structurally cannot see texture aliasing. The part it does reach — the silhouette and the multi-card fringe — is the part the judge named. Landed at `95a34c0` |
 | **WS-7: seven fishing pins have no water and it is a `Water.ts` / `WorldMap.ts` + re-bake job** | **Four of the six had water 6 m away.** `Fishing._survey` tested `terrain.heightAt(x,z) < water.level` — the *global* −6.5 m — after `Water` stopped having one global level: `_findTarns` and `Field._tarnBasins` had already given every inland pin its own body at +36.9 to +80.5 m. One predicate, no re-bake. 4 live holes -> **8**. `2b344e7` |
 | **WS-8: the near-field foam's handles are the shore ribbon's `lace` threshold and the `brk` shore-break term** | **Neither can touch it.** Ablated at the third-gentlest beach on the map: hide `shoreRibbon` entirely, and separately set its `uFoam` to 0 — the white patch is unchanged both times. It is the **lake surface's** own depth-derived margin in `Water._makeMaterial`, where `uFoamBand` is 1.35 m of *depth* and therefore four-plus metres of *ground* on anything that shelves. `5531bd9` |
 | The river bank reads as hovering plates because it still uses the clipmap-envelope lift `Shore.ts` rejected | **Removing the lift moved the ablation frame by nothing visible.** It is gone anyway — the shore's argument applies verbatim and it costs a `drawnEnvelope` probe per station — but the plates were the bank being **8.08 m mean, 13.0 max per side** against a 1.75 m water half-width, because `firstCrossing` never finds `bankH` on a valley floor and returns the whole of `MAX_BANK` |
@@ -1059,12 +1140,22 @@ damage-number lanes · `ea87e16` + `77e5c51` the damage share. Handoff:
 6. **Hair colour** — slate blue `0x252834` against a near-black-with-warm
    reference. One number, and the cheapest win left on the head.
 
-**Draw calls — one shot, and it is 24 away.**
+**Draw calls — ~~one shot, and it is 24 away~~ NOTHING IS OVER BUDGET.**
+`project/STATUS.md` records the corpus at median 567, worst **786**
+(`town_forecourt`), zero shots over 800, with `drawcheck` gating the flat BRIEF
+rule and carrying no debt file. The velocity-pass cull (`4c57c1c`) and the NPC
+shadow-proxy merge (`a465ad0`, `a50ad33`, `881d065`) both landed. What is below
+is **headroom, not a failure**, and at ~8.7 µs/draw the reflection item is worth
+about 0.35 ms.
 
-- `town_forecourt` is the only shot of 142 over BRIEF's 800. What clears it is
-  named in WS-6: the party rigs' **velocity-pass proxies** (one per mesh per
-  mover, and the same merge that fixed their shadows fixes these), and a
-  **reflection pass spending ~40 draws on a shot with no visible water**.
+- ~~`town_forecourt` is the only shot of 142 over BRIEF's 800.~~ What clears it is
+  named in WS-6: the party rigs' **velocity-pass proxies** (done) and a
+  **reflection pass spending ~40 draws on a shot with no visible water** — still
+  open, and the mechanism is named now: `Water._visible` tests each body's
+  *bounding box* against the frustum and nothing else, so a tarn behind a hill
+  or four pixels across on the horizon buys a whole mirrored render of the sky
+  dome and the clipmap. It wants a screen-coverage or distance gate.
+  `src/world/Water.ts`, which is the `water-content` lane's neighbourhood.
 - **`shadowProxy` is duplicated three ways** — `Hammerhead.ts`, `PoiKits.ts` and
   `npc/NpcShadow.ts`. The static pair belongs on `props/PartBuilder.ts`, where
   WS-6 has now put it; the skinned one is a sibling, not the same function.
