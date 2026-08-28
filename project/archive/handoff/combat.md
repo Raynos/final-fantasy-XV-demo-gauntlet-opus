@@ -1,4 +1,17 @@
-# combat — WS-11's combat list
+# combat — WS-11's combat list — **DONE, 2026-08-28**
+
+Graduated. All five items landed or closed; the two things it reports rather
+than fixes are in `docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-11
+and in that plan's negatives table, which is the only queue.
+
+Gates on the finished tree: **`pnpm run check` 19/19** (`drawcheck` re-run
+alone on a quiet tree after a VOID), **`combatloop` 31/31**, **`nanscan` 0 of
+142**, **`perf` PASS at 229.3 fps mean** with 142/142 shots clearing 60 by
+more than their own noise, **`gameplay` PASS** with a worst segment of 133.3
+fps. Corpus baselines that move: `warp_strike`, `warp_wide`, `combat_stagger`
+(the shards), plus every shot that draws a damage number or a call-out (the
+lanes and the wash).
+
 
 Owns `src/combat/`, `src/characters/ai/PartyAI.ts`, `src/game/CameraRig.ts`
 (the framing block) and the fight-side of `src/ui/` (call-outs, damage
