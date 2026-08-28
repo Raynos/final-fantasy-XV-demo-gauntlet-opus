@@ -144,11 +144,19 @@ const MEM_PROBE = `(() => {
  * compressed pages plus its IOKit allocations, with clean shared file-backed
  * pages excluded. It is the number Activity Monitor shows.
  *
- * It moves in both directions, which is why it is worth printing beside RSS
- * rather than instead of it. Measured on this box: browser process 104 MB RSS
- * / **23 MB** footprint and network utility 59 / **14.5** (shared framework,
- * counted five times), against gpu-process 312 / **591.5** (GPU allocations
- * that are not resident pages at all).
+ * It moves in both directions, which is why it is printed **beside** RSS and
+ * not instead of it, and why neither is "the number". Measured on this box:
+ *
+ *   - browser process **106 MB RSS / 25 MB footprint**, network utility
+ *     **48 / 8** — that is one shared framework counted five times, and it is
+ *     about 120 MB of every total this repo has ever quoted;
+ *   - gpu-process **~800 MB RSS / ~2 300 MB footprint**, and the footprint side
+ *     is *not* usable: it reads within 500 MB of the same value at `q=ultra`
+ *     and `q=low`, two pages whose GPU-side inventory differs by 88 MB, so it
+ *     is measuring the GPU address space and not this page's share of it.
+ *
+ * So: trust footprint for the small processes, trust RSS for the gpu-process,
+ * and trust the game's own attributed buckets over both.
  */
 function footprint(pid: number): number {
   try {

@@ -1208,7 +1208,7 @@ directory boundary it did not own.
   the change is landed but unverified and the lane says it would take an argument
   to revert. There is also a **p99 hard edge**.
 
-### Memory — `TODO.md` line 2 — **ANSWERED 2026-08-28 (`memory-content` lane)**
+### Memory — `TODO.md` line 2 — **CLOSED 2026-08-28.** Measured by `memory-content`, cut by `memory-cut`: −362 MB off the tab, every row landed or closed with its number
 
 `12e1a41` `4c089cb`. Handoff `project/handoff/memory-content.md`. The
 instruments are `bootprof.mts --mem` (now four pages, `--prod`, `--play`) and
@@ -1267,43 +1267,79 @@ i.e. 21.8 MB and 1.31 M vertices of geometry that only ever casts a shadow.
 `3x Float32Array`; as unit-normalised bytes they would be a quarter of that,
 which is ~65 MB of the 275 with no visual change and no generator rewrite.
 
-**Cheaply recoverable, in order, none taken:** the 103 MB of CPU texel arrays
-(dead after upload — needs per-texture `onUpload` disposal and a context-loss
-story), ~65 MB of Float32 colour/normal attributes, 21.8 MB of shadow-proxy
-geometry that could carry position only, and 59 MB of boot garbage that a single
-`gc()` after `ready` returns.
+#### What the cutting lane did with all of it
 
-**And the biggest one, found by ablation: 309 MB of the renderer is the bake
-containers.** `bootprof --mem --play --prod --nobake` against the same run with
-the caches in: browser RSS **2 533 → 2 224 MB**, renderer **1 555 → 1 234**,
-while gpu-process (+1), GPU-side estimate (−0.2), geometry attributes (0) and
-CPU texel arrays (0) do not move. Everything the game *builds* is identical to
-the megabyte, so it is not the content — it is the inflated bake buffers, still
-held after the last generator has read them. `src/engine/GeoBake.ts:170` exports
-`releaseGeoBake()` and `Props.ts:130` calls it; **`src/engine/TexBake.ts:82`
-declares the same module-level `store` and nothing releases it.** Six lines, and
-the call site is the whole question — one system too early is the silent
-cache-miss defect `boot-memory.md` records. Owner: whoever owns `Props.ts`.
+Handoff `project/archive/handoff/memory-cut.md`. Shas `7d08a7f` `80440c2`
+`070766f` `ca4690f` `88ffc62`. Headline, `bootprof --mem --play --prod`, all
+four bake caches warm: browser RSS **2 596 → 2 226 MB**, the tab (renderer)
+**1 608 → 1 246 MB**. Against an *ablation tree* — today's HEAD with only this
+lane's six files reverted, because thirty commits from three other lanes landed
+inside the window — the controlled delta is **−249 MB** with `tex.bin.gz` as the
+only container present, and the `texc.bin.gz` container it also frees is another
+67.1 MB that configuration could not show. Corpus, ablation against HEAD, cold
+both sides: **1 of 142 shots over its floor** (`hero_portrait` 0.385 against
+0.185, cropped 2x and looked at — indistinguishable).
 
-**And `TexBake.ts`'s own docstring already answers "which call site", in the
-negative: not `Props.init`.** Decoding is deferred to the lookup and an entry is
-**dropped from the index once served**, so what stays resident is precisely *the
-entries nothing has asked for yet* — and the docstring names why that set is not
-waste: **the dungeon interiors are built on first `enter()`, long after boot, and
-they are the reason this is not simply freed when `init()` ends.** `Sky`,
-`Hammerhead` and `Dungeons` each call `loadTexBake()` for the same reason.
-Mirroring `Props.ts:130` would therefore push every interior onto the
-generate-in-place fallback, and **it would only show up when a player walks into
-a cave** — no gate poses a dungeon interior cold.
+- **The 309 MB of containers: LANDED, −249 MB.** And the premise was wrong in a
+  way that made it easy. It is not that "nothing releases the store" — it is
+  that **releasing an entry frees nothing**: every index entry carries `buf`,
+  the whole inflated container, so `take`'s `index.delete` removes the lookup
+  and not the reference, and one surviving `dgn/*` key pins **both containers,
+  whole, 134.4 MB**, for the session. So the fix is a **compaction, not a
+  release** — `compactTexBake()` gives each surviving entry its own `slice` and
+  drops the containers — and that dissolves the call-site question this section
+  spent a page on: **there is no such thing as calling a compaction too early**,
+  because no key is dropped and no later lookup can miss. Called at the end of
+  `Dungeons.init()`, the last system in the boot order. All three interiors
+  captured cold before and after, same triangles, same draw calls, looked at.
+- **103 MB of CPU texel arrays: LANDED, and a measured negative.** They are
+  freed (`103.0 MB over 221 DataTextures` → `39.2 over 62`) and the process does
+  not move: post-GC RSS 2 295.1 → 2 295.8. Real, freeable, and not where the
+  gigabyte is. It costs a page reload on a WebGL context restore, which
+  `Renderer._wireContextLoss` now performs and documents.
+- **~65 MB of Float32 colour and normal: LANDED, −58 MB.** `src/engine/AttrPack.ts`.
+  Geometry attributes 275.1 → 241.5 MB CPU and 318.7 → 285.0 MB on the GPU;
+  gpu-process RSS −25 MB. Less than 65 because two guards give some up on
+  purpose: **`mergeGeometries` returns null, silently, on a batch that mixes
+  normalised and unnormalised**, so nothing under 8 000 vertices and nothing
+  shared by more than one mesh is touched.
+- **A find the measuring pass could not have made: 67 MB of canvas mip
+  pyramids.** `bootprof`'s texel row walks `texture.image.data`, and a canvas
+  has none — its bitmap is outside V8 entirely. `Face.faceTexture` assigns an
+  eleven-level hand-built pyramid to `texture.mipmaps`, which three reads once
+  and holds forever; `texc.bin.gz` is 67.1 MB raw over 132 entries, all `face`.
+  Freed on upload.
+- **59 MB of boot garbage: CLOSED, negative, twice over.** There is no `gc()` in
+  a shipped browser — `bootprof` only sees the drop because it launches with
+  `--js-flags=--expose-gc`. And after the compaction the drop is not there to
+  take: a forced GC returned **57.9 / 42.1 MB** of RSS on the baseline and
+  **−1.8 / +3.3** afterwards. The 59 MB *was* the containers, handed to the
+  collector at the moment they finally became unreachable.
+- **21.8 MB of shadow proxies: CLOSED, already landed.**
+  `PartBuilder.shadowProxy` and both its copies already build position-only, and
+  say so in a comment. The arithmetic agrees: `town_shadow` is 670 619 vertices
+  at 11.2 MB, and 670 619 × 12 B plus a `Uint32` index is 10.7. The row was
+  written from a memowners MB figure without reading the function.
 
-So it is six lines *and* a correctness argument. Three shapes that would work:
-release **per key** once its last consumer has been served; release the whole
-store at the end of the first `Dungeons.enter()`; or split the dungeon keys into
-their own container loaded on demand. 309 MB is worth that work. It is not worth
-a regression that hides until someone enters a dungeon.
+**And the ~570 MB is attributed. It is two instrument facts, not a leak.**
 
-That names 309 of the ~880. **~570 MB of renderer is still unattributed**, and
-`?q=low` is the next discriminator — one `bootprof --mem` run.
+1. **A summed `ps` RSS counts the shared framework once per process.** Browser
+   process 106 MB RSS against a **25 MB** physical footprint, network utility 48
+   against **8** — ~120 MB of the total is one framework counted five times.
+   `bootprof --mem` prints footprint beside RSS now. It over-reads in the other
+   direction on the gpu-process, which is why both are printed.
+2. **The renderer mirrors GPU allocations, and `?q=low` proves it.** That page
+   drops **88.4 MB** of GPU-side resource (render targets 181.1 → 133.0, shadow
+   maps 41.9 → 2.6) while changing not one byte of content — scene textures and
+   geometry identical to the megabyte — and the browser tree falls **112.7 MB**,
+   **62 of it out of the renderer** and 52 out of the gpu-process. 0.70 MB of
+   renderer per MB of GPU resource; over the whole 714 MB that is most of what
+   was unnamed.
+
+So the remaining lever is **GPU resources**, and the largest single one is the
+**181 MB of render targets across 33 of them**. That is a `PostFX` question, it
+is priced above, and this section does not hand it anywhere: it is written down
+in `docs/BOOT_PERF.md` for whoever the human funds next.
 
 ### The face (from `head`, passes 3–5)
 

@@ -8,7 +8,7 @@ Update the number, keep the date, delete a row that stops being true.
 | **Startup**, warm caches, quiet tree | **5.78 s** cold boot · `Game.init()` 5.61 s | `bootprof --n 3` | 08-28 |
 | **Startup**, first visit, empty HTTP cache | **7.1 s** to `GAME.ready` on localhost · **85.5 MB on the wire** in 5 requests, 199.9 MB decoded. The wire is the number that travels: 0.3 s here, **~14 s on a 50 Mbit line** | `coldload --prod --n 2` | 08-28 |
 | **Startup**, screen responsive during it | **No, and now measurably.** 77 frames in 7.3 s (**10.6 fps**; responsive is ~437), **92% of the load with no paint and no input**, worst single block **1.2 s**. Was **one unbroken 7961 ms task** before `Game.init()` learned to yield | `coldload --prod`, gate `bootblock` | 08-28 |
-| **RAM** | **1.5 GB** the tab (renderer) · **2.5 GB** whole process tree, prod play | `bootprof --mem --play --prod` | 08-28 |
+| **RAM** | **1.25 GB** the tab (renderer) · **2.23 GB** whole process tree, prod play. Was **1.61 / 2.60** this morning; −362 MB off the tab | `bootprof --mem --play --prod` | 08-28 |
 | **CPU**, idle page | **~16.5 ms of CPU per rendered frame** = **96–105% of one core at 60 Hz**, ~200% at 120 Hz, **113% at Retina pixel scale**. It is the rAF render loop, all of it: `stop()` takes the page to **0.5–2.4%** | `idlecpu --q high --dpr 1.5` | 08-28 |
 | **FPS** | mean **226–229**; 142/142 shots clear 60 by more than their own noise | `perf.mts`, `RULER_VALID: true` | 08-28 |
 | **Worst frame** | **no frame over 33 ms**, 0 hitches; worst gameplay segment 133.3 fps | `gameplay.mts`, `RULER_VALID: true` | 08-28 |
@@ -99,21 +99,41 @@ why the `bootblock` gate carries a transfer budget rather than a timing one. On 
 
 ## RAM, in named buckets
 
-Prod play page, 2 281 MB of "world" after Chromium's ~250 MB floor:
+Prod play page, all four bake caches warm, 1 999 MB of "world" after Chromium's
+~227 MB floor. The **was** column is the same measurement this morning:
 
-| MB | bucket |
-|---|---|
-| 740 | GPU-side — textures 199, **render targets 181**, shadow maps 42, vertex+index 318 |
-| 448 | CPU typed arrays outside V8 — 275 vertex, 103 texel, 44 index, 27 instance |
-| 85–143 | live V8 heap (59 of it boot garbage a `gc()` returns) |
-| ~880 | renderer remainder — **309 MB is bake containers**, ~570 MB still unattributed |
+| MB | was | bucket |
+|---|---|---|
+| 714 | 747 | GPU-side — textures 206, **render targets 181**, shadow maps 42, vertex+index 285 |
+| 324 | 427 | CPU typed arrays outside V8 — 241 vertex, 39 texel, 44 index |
+| 83–85 | 82–85 | live V8 heap |
+| 0 | ~134 | **the two texture-bake containers**, held for the session by an index that could not empty |
+| 0 | ~67 | **the painted faces' canvas mip pyramids**, which no instrument here counted |
+| ~880 | ~1 130 | renderer + gpu-process remainder |
 
 **`performance.memory` is frozen in this build** — 200 MB allocated moves it by
 0.0 MB — so any heap figure taken from inside the page is a constant.
 
-**~600–800 MB looks recoverable without changing how anything looks**; the
-itemised list and the reason the biggest slice is not a one-line fix are in
-`docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-13.
+### What the remainder is, because it is no longer "unattributed"
+
+Two mechanisms, both measured, and **neither of them is free memory**:
+
+1. **A summed `ps` RSS counts the shared framework once per process.** The
+   browser process reads 106 MB RSS against a **25 MB** physical footprint and
+   the network utility 48 against **8** — about 120 MB of the total is one
+   framework counted five times. `bootprof --mem` now prints footprint beside
+   RSS. (It over-reads in the other direction on the gpu-process, which is why
+   both are printed and neither is "the number".)
+2. **The renderer process mirrors GPU allocations.** `?q=low` is the
+   discriminator: it drops **88.4 MB** of GPU-side resource (render targets
+   181.1 → 133.0, shadow maps 41.9 → 2.6) while changing not one byte of
+   content — scene textures and geometry are identical to the megabyte — and
+   the browser tree falls **112.7 MB**, of which **62 MB comes out of the
+   renderer** and 52 out of the gpu-process. 0.70 MB of renderer per MB of GPU
+   resource; over the whole 714 MB that is most of what was unnamed.
+
+So the remaining lever on this number is **GPU resources**, and the largest
+single one is the **181 MB of render targets across 33 of them**.
 
 ## Why the screen was unresponsive while loading
 
