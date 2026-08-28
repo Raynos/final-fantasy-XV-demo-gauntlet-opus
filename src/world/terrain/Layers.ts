@@ -16,14 +16,48 @@ export const LAYER_COUNT = 6;
 /** Detail array depth: 2 tiled detail maps + the 2 world-space palette layers. */
 export const DETAIL_LAYERS = 4;
 
-/** Average albedo per layer (linear-ish sRGB bytes /255) used for the far LOD. */
+/**
+ * Mean **linear** albedo per layer: what the far LOD paints where the layer
+ * textures have stopped resolving, and what `Terrain.groundColorAt` blends so
+ * every plant tints from the ground it stands on.
+ *
+ * **These are measured from the recipes below, not authored, and that is the
+ * fix.** The old table was the recipes' *sRGB* numbers used as linear light —
+ * its own comment said "linear-ish sRGB bytes /255", which is the confusion
+ * written down. `albedoArray` is `SRGBColorSpace` with mipmaps, so the GPU
+ * decodes to linear *before* filtering and the top mip a distant pixel reads is
+ * the mean linear albedo. Against that, the old table was painting the far
+ * ground **2.2x to 4.0x too bright**:
+ *
+ *     layer    mean linear (the far mip)   old LAYER_AVG      ratio
+ *     sand     0.538 0.328 0.172           0.66  0.42  0.26   1.27x
+ *     dirt     0.202 0.122 0.068           0.50  0.40  0.29   3.05x
+ *     gravel   0.148 0.124 0.101           0.46  0.41  0.36   3.27x
+ *     rock     0.128 0.083 0.059           0.44  0.35  0.29   4.02x
+ *     grass    0.166 0.114 0.057           0.45  0.41  0.26   3.38x
+ *     road     0.251 0.213 0.155           0.51  0.475 0.415  2.21x
+ *
+ * The second column of that table is also the answer to a claim two documents
+ * carry: *"the six layer recipes have mean lumas running 0.35 to 0.47, a spread
+ * of +-15%, so the splat can switch material and the value barely moves."* That
+ * describes THIS TABLE, not the recipes. The recipes' real linear lumas run
+ * **0.091 to 0.361, a spread of 3.98x** — sand against rock is four to one, a
+ * pale scoured pan against a dark wet stone, and the value contrast the splat
+ * was said to lack has been there in the near field all along. What was flat is
+ * the far LOD, because a narrow range of sRGB numbers read as linear is narrow
+ * *and* wrong, and it was flattest exactly where the frame is largest.
+ *
+ * Re-derive with `tmp/gl/layerstat.mts` (or any 256x256 evaluation of
+ * `buildLayerData`) after editing a recipe; nothing regenerates this
+ * automatically, and a recipe edit that does not update it puts the seam back.
+ */
 export const LAYER_AVG = [
-  [0.66, 0.42, 0.26],   // sand   – red ochre
-  [0.50, 0.40, 0.29],   // dirt   – dry cracked earth
-  [0.46, 0.41, 0.36],   // gravel – grey-brown scree
-  [0.44, 0.35, 0.29],   // rock   – rust / ash strata
-  [0.45, 0.41, 0.26],   // grass  – bleached khaki scrub
-  [0.51, 0.475, 0.415],  // road   – pale compacted dirt
+  [0.538, 0.328, 0.172],   // sand   – red ochre
+  [0.202, 0.122, 0.068],   // dirt   – dry cracked earth
+  [0.148, 0.124, 0.101],   // gravel – grey-brown scree
+  [0.128, 0.083, 0.059],   // rock   – rust / ash strata
+  [0.166, 0.114, 0.057],   // grass  – bleached khaki scrub
+  [0.251, 0.213, 0.155],   // road   – pale compacted dirt
 ];
 export const LAYER_ROUGH = [0.95, 0.92, 0.88, 0.82, 0.94, 0.86];
 /**
