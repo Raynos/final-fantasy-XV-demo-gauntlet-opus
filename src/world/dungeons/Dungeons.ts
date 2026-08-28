@@ -18,6 +18,7 @@ import type { ChestInteractable, DoorInteractable, Interactable } from './kit/In
 import type { InteractableHandle } from '../../game/interaction/Interactables.ts';
 import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake, compactTexBake } from '../../engine/TexBake.ts';
+import { packSubtree } from '../../engine/AttrPack.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
@@ -224,6 +225,13 @@ export class Dungeons {
     // still read from the bake.
     const held = compactTexBake();
     if (game.debug) console.log(`[Dungeons] texbake compacted, ${(held / 1e6).toFixed(1)} MB still held`);
+
+    // Same reason this is here and not in `Props`: it wants the *finished*
+    // scene, and this is the last `init()` in `Game`'s boot order. It has to
+    // run after every merge in the world, which is what makes the boot's last
+    // system the only correct place for it short of `Game.init` itself.
+    const packed = packSubtree(game.scene);
+    if (game.debug) console.log('[Dungeons] attributes packed', JSON.stringify(packed));
   }
 
   /**
@@ -372,7 +380,12 @@ export class Dungeons {
       if (def.extras) def.extras(d);
       game.scene.add(d.group);
       this.built.set(def.id, d);
-      if (game.debug) console.log(`[Dungeons] built ${def.id}`, JSON.stringify(d.stats));
+      // The interior is finished the instant `build()` returns -- nothing merges
+      // into it afterwards -- so this is its equivalent of the boot pass in
+      // `init()`. Without it an interior is the one subtree in the world still
+      // carrying Float32 colour and normals, and it is a million vertices.
+      const packed = packSubtree(d.group);
+      if (game.debug) console.log(`[Dungeons] built ${def.id}`, JSON.stringify({ ...d.stats, packed }));
     }
     this.current = d;
     d.group.visible = true;
