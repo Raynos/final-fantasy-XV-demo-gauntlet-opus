@@ -1230,8 +1230,22 @@ which is ~65 MB of the 275 with no visual change and no generator rewrite.
 (dead after upload — needs per-texture `onUpload` disposal and a context-loss
 story), ~65 MB of Float32 colour/normal attributes, 21.8 MB of shadow-proxy
 geometry that could carry position only, and 59 MB of boot garbage that a single
-`gc()` after `ready` returns. Nothing here touches the ~880 MB the renderer
-holds that is not ours, and **that is the largest bucket and still unnamed.**
+`gc()` after `ready` returns.
+
+**And the biggest one, found by ablation: 309 MB of the renderer is the bake
+containers.** `bootprof --mem --play --prod --nobake` against the same run with
+the caches in: browser RSS **2 533 → 2 224 MB**, renderer **1 555 → 1 234**,
+while gpu-process (+1), GPU-side estimate (−0.2), geometry attributes (0) and
+CPU texel arrays (0) do not move. Everything the game *builds* is identical to
+the megabyte, so it is not the content — it is the inflated bake buffers, still
+held after the last generator has read them. `src/engine/GeoBake.ts:170` exports
+`releaseGeoBake()` and `Props.ts:130` calls it; **`src/engine/TexBake.ts:82`
+declares the same module-level `store` and nothing releases it.** Six lines, and
+the call site is the whole question — one system too early is the silent
+cache-miss defect `boot-memory.md` records. Owner: whoever owns `Props.ts`.
+
+That names 309 of the ~880. **~570 MB of renderer is still unattributed**, and
+`?q=low` is the next discriminator — one `bootprof --mem` run.
 
 ### The face (from `head`, passes 3–5)
 
