@@ -9,6 +9,7 @@ import { WORLD, worldMap } from '../map/WorldMap.ts';
 import type { Game } from '../../game/Game.ts';
 import type { ErosionSample } from '../terrain/Field.ts';
 import { maternScatter } from './Cluster.ts';
+import { PAD_R } from '../props/PoiKits.ts';
 import type { ClusterPoint } from './Cluster.ts';
 
 // `hash3` moved down to `Cluster.ts` — this file is the layer above it — and is
@@ -44,12 +45,25 @@ const C_SOIL_WET = srgb(0x4c4a30);
 const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
 
+/**
+ * How far a pad's clearing skirt reaches, as a multiple of the pad's own
+ * radius, for the POI types that have no `FRAC` catchment entry.
+ *
+ * 2.2 is chosen so a 13 m tomb pad stops mattering by 29 m -- far enough that
+ * the plateau's edge is not a visible ring of grass, near enough that a
+ * waymark does not sterilise a hillside. Types that DO have a `FRAC` keep
+ * their authored catchment; this only ever raises a radius, never lowers one.
+ */
+const PAD_SKIRT = 2.2;
+
 /** One cleared disc around a settlement, and how far its clearing reaches. */
 interface Clearing {
   x: number;
   z: number;
-  /** Clearing radius, metres. */
+  /** Clearing radius, metres — where the skirt reaches zero. */
   r: number;
+  /** The built pad's own radius. Inside this the clearing is exactly 1. */
+  inner: number;
 }
 
 /** The clearings bucketed into a coarse grid, for a cheap point query. */
@@ -129,9 +143,17 @@ export class Ecology {
    * `sites` only knows about the handful of landmarks Vegetation authored near
    * the origin. Once the forest streams across all 8 km it will happily close
    * over Lestallum, Wiz's paddocks and every turning circle, so the 124 POIs
-   * get a say too. Radii are a *fraction* of the discovery radius, per type: a
-   * town really is cleared for 130 m, a landmark ("Longwythe Peak", r = 520)
-   * is not cleared at all.
+   * get a say too. Two radii per POI: a **plateau** at the built pad's own
+   * `PoiKits.PAD_R`, where the clearing is exactly 1, and a **skirt** running
+   * out to a *fraction* of the discovery radius — a town really is cleared for
+   * 130 m, while a landmark ("Longwythe Peak", r = 520) is cleared only for the
+   * 8 m of waymark deck it actually built.
+   *
+   * That second half is why `FRAC` is not the whole story and a missing key is
+   * not a "no clearing" instruction. `tomb` and `landmark` have none — 33 of
+   * the 124 POIs — and before the pad term they were the only two types with no
+   * clearing of any kind, which is not what the table meant to say about a
+   * built stone deck.
    */
   _layoutClearings() {
     const FRAC = {
@@ -141,9 +163,20 @@ export class Ecology {
     const cell = 256;
     const grid = new Map();
     for (const p of worldMap.pois) {
-      const f = FRAC[p.type as keyof typeof FRAC];
-      if (!f) continue;
-      const r = p.r * f;
+      // `PAD_R` is the built pad's own radius, published by `props/PoiKits.ts`
+      // rather than copied here, because a copy drifts the first time a kit is
+      // retuned. It is the *plateau*; `FRAC * p.r` is the catchment the
+      // plateau's skirt runs out over. A POI with no `FRAC` entry -- a tomb, a
+      // waymark landmark -- still gets its pad, which is the whole point:
+      // before this, 33 of the 124 POIs had no clearing of any kind.
+      const pad = PAD_R[p.type] ?? 0;
+      const f = FRAC[p.type as keyof typeof FRAC] ?? 0;
+      const r = Math.max(p.r * f, pad * PAD_SKIRT);
+      if (r <= 0) continue;
+      // The plateau can never eat its own skirt: a kit whose pad is most of its
+      // catchment (parking is 0.95 of a small `r`) keeps a ramp rather than
+      // becoming a cliff edge in the density field.
+      const inner = Math.min(pad, r * 0.85);
       const i0 = Math.floor((p.x - r) / cell), i1 = Math.floor((p.x + r) / cell);
       const j0 = Math.floor((p.z - r) / cell), j1 = Math.floor((p.z + r) / cell);
       for (let j = j0; j <= j1; j++) {
@@ -151,14 +184,30 @@ export class Ecology {
           const k = i * 65536 + j;
           let a = grid.get(k);
           if (!a) { a = []; grid.set(k, a); }
-          a.push({ x: p.x, z: p.z, r });
+          a.push({ x: p.x, z: p.z, r, inner });
         }
       }
     }
     return { cell, grid };
   }
 
-  /** 1 where a settlement or camp has cleared the ground, 0 in open country. */
+  /**
+   * 1 where a settlement or camp has cleared the ground, 0 in open country.
+   *
+   * **A plateau and a skirt, not a cone, and the cone was a measured bug.**
+   * This used to return `1 - d / r` with `r` the settlement's *catchment*
+   * radius, so the value only reached 1 at the exact centre and at the built
+   * pad's own edge it was still most of the way to open country. Grass is the
+   * one population with no hard reject -- only a density multiply and a
+   * `d < 0.02` cut -- so it survived that. The landmarks lane measured it over
+   * 4 000 uniform samples per pad: **every other population is rejected on 100%
+   * of the pad and grass passes its gate on 97-99% of it**, standing up to
+   * 0.57 m proud of the kit's own top surface.
+   *
+   * So: exactly 1 inside `PoiKits.PAD_R`, then linear to 0 at the catchment
+   * edge. The skirt is what keeps a plaza from ending in a ring of full-height
+   * grass one texel outside the pad.
+   */
   poiClear(x: number, z: number) {
     const { cell, grid } = this._clearings;
     const a = grid.get(Math.floor(x / cell) * 65536 + Math.floor(z / cell));
@@ -167,7 +216,9 @@ export class Ecology {
     for (let i = 0; i < a.length; i++) {
       const s = a[i];
       const d = Math.hypot(x - s.x, z - s.z);
-      if (d < s.r) b = Math.max(b, 1 - d / s.r);
+      if (d >= s.r) continue;
+      b = Math.max(b, d <= s.inner ? 1 : 1 - (d - s.inner) / (s.r - s.inner));
+      if (b >= 1) return 1;
     }
     return b;
   }
