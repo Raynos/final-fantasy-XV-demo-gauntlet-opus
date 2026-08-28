@@ -4,147 +4,93 @@
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`.** Zero `any`, both typechecks clean, **`pnpm run check:perf` 21/21**, and
-**both perf gates certify** — `gameplay.mts` for the first time ever.
+**`main`.** `pnpm run check` **19/19**, `nanscan` **0 of 142**, draw calls
+**786/800**, and **`BRIEF.md`'s 33 ms rule is met for the first time** — `perf`
+and `gameplay` both `RULER_VALID: true`, mean 226–229 fps, 0 hitches.
 
-**Both live plans are IN-PROGRESS and staffed.**
-`handoff/2026-08-28-coordinator.md` carries the lane map, the five plan-pairs
-that are really one lane, and the human's rulings: full coverage, the head may
-be rebuilt, a lane may re-baseline a shot it has looked at, a measured negative
-closes an item. Fifteen lanes, waves of 2-3. Wave 1: **head · harness · canopy**.
+**Live lanes: one.** `rockseat`, on the bounding-box joint bug. Everything else
+from the 2026-08-28 wave has reported and graduated.
 
-**Two of the numbers this repo was steering by were wrong, and both were the
-same defect** — an instrument folding a bad result into a failed measurement.
-"Median `shoot` 22.6 s against a target of 8" was 370 `drawcheck` corpus chunks
-sharing a ledger row-kind with `shoot`: a real shoot is **8.0 s cold and 1 s
-warm**. "80 errors in 1818 jobs, 4.5%" was 28 red gates plus 40 duplicate rows:
-the real fault rate is **0.66%**. The ledger now records `units` per job and
-distinguishes `fail`/`void`/`busy` from `error`.
+## Both plans are wrapped up
 
-## Phase 4 is DONE, 5 of 5, and graduated
+`2026-08-25-opus-after-phase3` closed **4 of 4** and is in `archive/plans/`.
+`2026-08-26-opus-the-standing-backlog` closed **all twelve** of the workstreams
+it was written with and **stays live because §WS-13 is the queue** — that is its
+own definition of done, and archiving it would recreate the condition it exists
+to prevent. `docs/plans/` is one file.
 
-`2026-08-22-opus-phase4-content-and-gameplay` is in `project/archive/plans/` and
-its §5 carries the evidence per box. The headline: **perf mean 208.0 fps** with
-142/142 shots clearing 60 by more than their own noise, **gameplay certifying
-for the first time ever** (worst segment 127.4 fps, from 67.3), 18/18 gates, and
-27-28 unbroken minutes of play across two lanes in which every ending was the
-harness closing the page rather than the game. Round 16, blind: 19 of 20
-identified, and the first non-zero hesitation in five rounds.
+## The headline is that the plans were wrong more often than they were right
 
-**The 33 ms rule is MET, 2026-08-28.** `gameplay.mts`: **total hitches 0**,
-`RULER_VALID: true`. The last breach — `sprint+turn`, 40.7 ms at a fixed frame
-index — was ONE draw call linking ONE shader program one cache-key bit away
-from one `Warmup` had built. `747136a`; worst frame **7.6 ms**. `perf-r4.md`.
+Six premises were falsified by measurement, and each had already cost a lane:
 
-## The world was barren, and four systems were never read by any code
+- **The head was not a sculpting problem.** `buildHead`'s skull grid was **wound
+  inside out**, so with a `FrontSide` material the near surface was
+  backface-culled in *every frame this repo has ever captured* — what drew was
+  the inside of the far side of the skull. It beat five passes because **every
+  bench here reads the position buffer**, which was always correct.
+- **The program count was not material sprawl.** 271 → 126 without touching one
+  of the 132 construction sites: `renderer.compile()` was building programs no
+  frame ever binds, in two ways.
+- **The canopy blob was not GTAO.** It was NaN from the terrain shader reading
+  roughness as a tangent normal's Z.
+- **The shadow-warmth gap is not ground albedo.** Pushing every ground *and*
+  plant pixel far past shippable buys 5.2 of the 13.2 levels needed. It is
+  aerial perspective, in shadows that are otherwise black.
+- **The seven dry fishing pins were one predicate** — `Fishing._survey` tested a
+  global water level after `Water` stopped having one.
+- **`--hide` was never broken the way WS-9 said**: one frame of shadow-cascade
+  phase, not 320 draws of missing content.
 
-Both found by *playing*, not by reading, and both invisible to every gate
-because nothing was broken. The measurements are in
-`journal/2026-08-27-perf-certified.md` and the archived phase-4 plan's §5; the
-shape, so nobody re-derives it:
+## Instruments were lying, repeatedly
 
-- **The world ended at 440 m** (instance density fell off a cliff past 400 m),
-  **18 hand-placed territories covered 0.08% of a 67 km² map**, **nothing in the
-  open world could be picked up** while the boot objective said to collect it,
-  and a **4-30 m hole in the terrain's cover octaves** left every hillside at
-  150-400 m one flat hue. Anything alive within 120 m of a walk went 32% -> 63%
-  of samples; the worst gap between events 325 m -> 75 m.
-- **`Territory.passive`, `Enemy.level`, `CameraRig.setLockOn` and
-  `game.currentShot`** were each authored, documented and dead. Density is a
-  **swept-corridor** number, not a per-area one — the first tuning reasoned
-  per-area and measured as *no change at all*.
+This is the pattern worth carrying forward. **`anycheck` reported `0 any across
+0 files`** — a scanner that walked nothing, and "zero `any`" rested on it.
+**`perfsprint`'s "zero new programs" is a false negative** (it compares
+`cacheKey.length` strings). **`.menu-scrim`'s 26 px blur had never rendered.**
+**`performance.memory` is frozen** — 200 MB allocated moves it by 0.0 MB — so
+every JS-heap figure in the old boot-memory work was a constant. **`facemark`
+never drew anything.** **`corpus.mts` rejected `--build`**, so a 142-shot corpus
+could only ever be captured at HEAD. **`creaturecheck --dirty` never worked.**
+And the **16/16 texture-unit warning is three counting the wrong limit** — the
+program is 17 of a combined 32 and links fine.
 
-## The instruments are the durable half
+## What moved
 
-Six did not exist yesterday and each answers a question no held frame can.
-`walkabout` (what a player MEETS over kilometres) · `longplay` (one continuous
-session, thirteen dead-end checks) · `loopclose` (fight -> reward -> spend ->
-fight better) · `fightshape` (does a fight have shape) · `barrencensus`
-(instances by distance) · `drawcheck` (the gate for a budget nothing had read).
+**Boot 7.13 → 5.78 s** (geometry bake), **−850 ms more** (dead compiles), and
+`texc.bin.gz`/`geo.bin.gz` rebuilt after being absent all session — every
+absolute boot number taken mid-session was ~2.5 s inflated.
 
-**Their own bugs are recorded in their headers, because each is a trap for the
-next reader.** A posed page boots with the encounter loop OFF; `keyDown` reads
-the per-frame EDGE set, not the held one; `CameraRig.yaw` is the camera's orbit
-angle, so W walks `-(sin, cos)`; EXP is **banked**, not applied; grazing beasts
-key on `ax/az`.
+**Frames.** The exposure meter was overriding the Sky's own physics by a median
+1.361 with six of twenty poses on a rail; fixed, and `sh(R−B)` went −9.8 → −5.1
+with no re-tint. Galdin Quay is a beach (strand p50 **14 → 78 m**). The 4–30 m
+relief hole is filled (`reliefstat` 31.17 → 38.02 of 49). The Meteor no longer
+reads as a floating arch. Fishing pins with water **4 → 8**. Anak reads as an
+animal. A fight has a beginning and an end, and the arm no longer whips.
 
-## The harness measures itself now, and it got much faster
+**`zone_longwythe` and `zone_mencemoor` were reframed** — both had cameras that
+made their own content unreachable, measured by `framedepth`. `Shots.ts` is
+otherwise unowned; the coordinator took it for those two.
 
-`docs/plans/2026-08-24-opus-benchmaxx-harness.md` is implemented A-F;
-`project/handoff/benchmaxx.md` has the per-phase evidence. What changed, in
-numbers:
+## What is knowingly left
 
-| | before | after |
-|---|---|---|
-| `pnpm run check`, cold, quiet | ~780 s serial | **72.2 s**, 18/18, two pools |
-| `pnpm run check`, tree already graded | ~780 s | **0.68 s** |
-| `drawcheck` (the old critical path) | 269 s | **120 s** alone (`--par 4`), 0.18 s memoised |
-| pre-commit | 1.59 s | **1.04 s**, three jobs at once |
-| 30-game-minute `longplay` | ~22 wall-min | **~3**, `--turbo 10`, telemetry identical |
-| "why was that slow?" | 2 h of transcript archaeology | `harnessstats.mts`, one command |
+- **The head is short of `BRIEF.md`'s bar and closed anyway**, by the human,
+  after six passes. Its own "done when" is met and `facecheck` asserts it. What
+  remains is in the archived plan's §WS-1, led by: **every painted brush on that
+  head was authored while the face was culled.**
+- **§WS-13 is the queue.** Biggest rows: ~600–800 MB of recoverable RAM (the
+  309 MB slice is *not* a one-line call — see the dungeon constraint), the
+  `hullseat` bounding-box joint bug, the Meteor's chroma, `_genOutcrop`.
+- **`docs/BOOT_PERF.md` is new and three of its rows say NOT MEASURED.** A tab
+  pinned at 100% while idle is invisible to all 19 gates by construction,
+  because `?shoot=1` never calls `game.start()`. So is a first-visit cold-cache
+  load, and so is the unresponsive loading screen.
 
-**The daemon writes a ledger** (`~/.cache/ffxv-harness/<key>/jobs.jsonl`) and
-every response carries `queuedMs`/`ranMs`, so a slow call names its own reason in
-the transcript. `daemon.mts --wait quiet|exclusive-free|idle` replaces polling
-and a hook now blocks the loops. `gitlock.mts` gives git's index lock the queue
-it never had. `post-commit` prewarms the sha you just made.
+## Rules this run bought, all in `LANDMINES.md`
 
-**A stepped frame is 95% draw submission** — 11.0 ms of 11.66, against a 0.16 ms
-A/B/A drift, with the simulation at 0.58 ms (`probes/turbocost.mts`). That, not
-the sim, was always what a long probe paid for.
-
-Still the way to kill a long run: a probe needs **`--ttl <minutes>`** or the
-lease closes its page at fifteen, and **committing during one** can drop the tree
-it is served from. **`perf`/`gameplay` no longer kill it** — `/exclusive` queues
-behind a live lease. HMR is off and `pnpm dev` gone: the `dirty:` build serves the
-shared tree, so any lane's save navigated every open page.
-
-**A page costs 2 449 MB of chromium RSS, and four cost 16 465 MB** — `ps` over
-the process tree, so shared pages are counted per process; it is a trendline on
-one machine, not an absolute. `TODO.md` says 1.4 GB and this file used to say
-1.94; neither was attached to a repeatable measurement, and now one is, on every
-ledger line.
-
-## Draw calls: 1013 -> 786, and nothing is over budget
-
-`drawcheck` gates it and parses the budget out of `BRIEF.md` rather than copying
-it. **`project/draw-baseline.json` is gone**: over the full 142-shot corpus, zero
-shots are over 800, median 567, worst 786 (`town_forecourt`, confirmed across two
-independent runs). The gate is now the flat BRIEF rule carrying no exceptions,
-which is the strongest state it has been in.
-
-**It also agrees with itself now.** The +/-60 it disagreed by was
-`VehicleBody`/`Player` damping attitude and gait *exponentially* — asymptotic, so
-still moving at a pose's 68th frame on a page's first pose and at rest by its
-second, which drew a velocity proxy per still-moving mesh. Both implement
-`converge()` now, as `Vegetation` and `Props` always had.
-
-**A held pose does not draw a constant number of calls**: `poi_reststop` goes
-707 / 855 / 707 / 1005 as three shadow cascades refresh on a rotating schedule.
-The capture lands on a fixed phase, so it is comparable and it is the expensive
-one.
-
-## Still weak, and who owns it
-
-Round 16's ranked tells, verified rather than asserted: **faces first** — no
-subsurface, skin detail so coarse that pores read as scratches, hair as opaque
-shards; the silhouettes are fine and it is entirely shading. Then **clouds**
-(organisation, not shading — they are a real raymarch, and round 15's
-"cotton-wool sprites" diagnosis was wrong and is corrected in place), then **no
-sky fill in shadow**, then **no foreground occluder in any establishing shot**.
-
-`Layers.ts`'s splat still reads as one texture. `RpgSystem.enemyScaling` is
-documented as reading the party's level and does not. There is terrain where
-holding forward yields zero progress with no slide-off. **Cold boot is 6.54 s**
-(`bootprof`): Vegetation 1216 ms, Props 930, shader warm-up 1710 — the diet is
-`the-standing-backlog` §WS-12, not the harness lane's.
-
-## Next
-
-`docs/plans/2026-08-25-opus-after-phase3.md` (WS-1 the head — worth 3.0 -> 4.0
-on its own costing, more than everything else combined) and
-`docs/plans/2026-08-26-opus-the-standing-backlog.md`, whose table of **measured
-negatives** now lists seventeen claims not worth re-opening.
-
-**After any merge: `build:full`**, not `build` — `build` deletes the
-painted-face cache without replacing it and cold boot regresses ~2.5 s.
+A GLSL compile or link failure is **invisible on a warm page** — the river water
+surface was undrawn for a day with every gate green, and only `--cold` sees it.
+An **inversely wound shell is invisible to every bench here**. `isnan`, `isinf`
+and `(x >= 0 || x < 0)` are **all folded away by this backend's compiler**. A
+`follow:` shot **ignores `setShot`**. A pathspec commits **the file, not your
+hunks**. The pre-commit hook builds the **working tree, not the tree the commit
+creates**. `daemon.mts --wait` **exits 0 when it gives up**.
