@@ -86,6 +86,10 @@ export interface RiverStats {
   /** Total channel length, metres. */
   metres: number;
   confluences: number;
+  /** Meander loops spliced out because the line came back inside its own width. */
+  oxbows: number;
+  /** Channel metres those loops were carrying. */
+  oxbowMetres: number;
   meanWidth: number;
   maxWidth: number;
   meanDepth: number;
@@ -114,6 +118,13 @@ const MAX_HALF = 32;
 const MAX_BANK = 13;
 /** Bound on how fast a lane may move per metre of channel; see `Shore.ts`. */
 const LIPSCHITZ = 0.6;
+/**
+ * Stations a loop must span before `cutOxbows` will call it a loop.
+ *
+ * 20 stations is 60 m of channel. Below that a line coming back inside its own
+ * width is a tight meander, which is a river; above it, it is a spiral.
+ */
+const MIN_LOOP = 20;
 const AREA_FLOOR = 1e-7;
 
 /** Options; `level` is the sea surface, where a reach stops. */
@@ -125,6 +136,16 @@ export interface RiverOpts {
   maxReaches?: number;
   /** Accumulation percentile a source must beat. */
   sourceAccum?: number;
+  /**
+   * Metres two sources must be kept apart.
+   *
+   * It is the knob that decides whether this world can have a confluence at
+   * all, so it is an option rather than a literal. At the original 700 m the
+   * seven traces' *closest* approach to one another was **782 m** — no two of
+   * them came within thirty times the truncation radius, so the join logic
+   * below was unreachable code from the day it was written.
+   */
+  sourceSep?: number;
   debug?: boolean;
 }
 
@@ -141,6 +162,7 @@ export function traceReaches(ground: RiverGround, opts: RiverOpts): { reaches: R
   const half = opts.half;
   const maxR = opts.maxReaches ?? 7;
   const minAccum = opts.sourceAccum ?? 0.93;
+  const sep2 = (opts.sourceSep ?? 700) ** 2;
   const e: ErosionSample = { accum: 0, deposit: 0, scree: 0, wet: 0, rock: 0, flowX: 0, flowZ: 0 };
 
   // Coarse scan for candidate sources.
@@ -165,7 +187,7 @@ export function traceReaches(ground: RiverGround, opts: RiverOpts): { reaches: R
   for (const c of cands) {
     if (sources.length >= maxR) break;
     let ok = true;
-    for (const s of sources) if ((s.x - c.x) ** 2 + (s.z - c.z) ** 2 < 700 * 700) { ok = false; break; }
+    for (const s of sources) if ((s.x - c.x) ** 2 + (s.z - c.z) ** 2 < sep2) { ok = false; break; }
     if (ok) sources.push({ x: c.x, z: c.z });
   }
 
@@ -280,6 +302,96 @@ function resample(pts: number[], step: number): number[] {
   return out;
 }
 
+/**
+ * Discharge proxy per station, the one number the whole channel is sized from.
+ *
+ * `accum` is a percentile of the cells that carry water, so this reads "wetter
+ * than 88% of them" rather than any absolute discharge — the property that
+ * makes it survive a change of resolution or of erosion tuning. It is a proxy
+ * and it is named one.
+ *
+ * Discharge also GROWS downstream, and leaving that out was visible: the
+ * percentile is already high at the source of a traced reach, so every river
+ * came out full width from its first metre and a headwater looked like an
+ * estuary. A river gathers its catchment as it runs.
+ *
+ * Smoothed, because the percentile field is noisy at 3 m and a river that
+ * changes width every station reads as a rope, not as water.
+ */
+function dischargeAlong(p: number[], ground: RiverGround, e: ErosionSample): Float64Array {
+  const m = p.length / 2;
+  const q = new Float64Array(m);
+  for (let i = 0; i < m; i++) {
+    ground.erosionAt(p[i * 2], p[i * 2 + 1], e);
+    const grow = 0.12 + 0.88 * Math.min(1, (i * STATION) / 850);
+    q[i] = Math.min(grow, Math.max(0, Math.min(1, (e.accum - 0.88) / 0.115)));
+  }
+  for (let pass = 0; pass < 6; pass++) {
+    const s = Float64Array.from(q);
+    for (let i = 1; i < m - 1; i++) q[i] = s[i - 1] * 0.25 + s[i] * 0.5 + s[i + 1] * 0.25;
+  }
+  return q;
+}
+
+/**
+ * The widest half-width this station's discharge can pay for.
+ *
+ * The bound `emitWater` actually draws to — `firstCrossing` is capped by it on
+ * four stations in five — so it is also the right radius for asking whether two
+ * pieces of channel are the *same* piece of channel.
+ */
+function halfWidthCap(q: number): number { return Math.min(MAX_HALF, 2.5 + 14.0 * q); }
+
+/**
+ * Cut the oxbows out of one traced line.
+ *
+ * **This, not two rivers crossing, is what the overlapping translucent panels
+ * in `tmp/shots/t3riv-f2/r-pmax.jpg` are.** Measured on the built sheet before
+ * this existed: the seven reaches' *closest approach to one another* was 782 m,
+ * so no two of them so much as saw each other — but four of the seven crossed
+ * **themselves**, 3 060 station pairs at least 60 m apart in arc length yet
+ * inside their own combined half-widths, the tightest of them overlapping by
+ * 25 m. Reach 1 ran 1 389 m of channel between points 425 m apart (sinuosity
+ * 3.27) and reach 3 ran 303 m between points **32 m** apart (sinuosity 9.37):
+ * an inertial walk spiralling in a hollow, laying its own ribbon over itself
+ * three and four deep.
+ *
+ * A real river in that situation does not stack. It **cuts the neck** and
+ * abandons the loop, which is where oxbow lakes come from. So do we: take the
+ * earliest station that comes back inside its own channel, find the LAST
+ * station that does, and splice the loop out. Repeated, because one line can
+ * hold several.
+ *
+ * The radius is the discharge cap rather than a constant, because that is the
+ * width the sheet is actually drawn to.
+ */
+function cutOxbows(pts: number[], hw: Float64Array): { pts: number[], cuts: number, removed: number } {
+  let p = pts, w = hw, cuts = 0, removed = 0;
+  for (let guard = 0; guard < 12; guard++) {
+    const m = p.length / 2;
+    let ci = -1, cj = -1;
+    scan:
+    for (let i = 0; i < m; i++) {
+      for (let j = m - 1; j > i + MIN_LOOP; j--) {
+        const dx = p[i * 2] - p[j * 2], dz = p[i * 2 + 1] - p[j * 2 + 1];
+        const r = w[i] + w[j];
+        if (dx * dx + dz * dz < r * r) { ci = i; cj = j; break scan; }
+      }
+    }
+    if (ci < 0) break;
+    const np: number[] = [];
+    const nw: number[] = [];
+    for (let k = 0; k <= ci; k++) { np.push(p[k * 2], p[k * 2 + 1]); nw.push(w[k]); }
+    for (let k = cj + 1; k < m; k++) { np.push(p[k * 2], p[k * 2 + 1]); nw.push(w[k]); }
+    cuts++; removed += cj - ci;
+    p = np; w = Float64Array.from(nw);
+  }
+  // The neck is a chord of up to two channel widths, so the spliced line has one
+  // long segment in it; put the uniform arc length back before anything measures
+  // a station spacing.
+  return { pts: cuts ? resample(p, STATION) : p, cuts, removed };
+}
+
 /** First crossing of `h == target` walking out along `n`, then bisected. */
 function firstCrossing(ground: RiverGround, x: number, z: number, nx: number, nz: number, target: number, maxD: number, step = 0.5): number {
   let prev = 0;
@@ -315,6 +427,7 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const stats: RiverStats = {
     sources: 0, reaches: 0, dropped: 0, stations: 0, metres: 0, confluences: 0,
+    oxbows: 0, oxbowMetres: 0,
     meanWidth: 0, maxWidth: 0, meanDepth: 0, maxDepth: 0,
     waterTris: 0, bankTris: 0, folded: 0, degenerate: 0, downFacing: 0, ms: 0,
   };
@@ -333,6 +446,12 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     p = snapThalweg(p, ground, 6);
     p = smoothLine(p, 2);
     p = resample(p, STATION);
+    if (p.length / 2 < MIN_REACH / STATION) { stats.dropped++; continue; }
+    // A river does not run over itself. See `cutOxbows`.
+    const cut = cutOxbows(p, Float64Array.from(dischargeAlong(p, ground, e), halfWidthCap));
+    stats.oxbows += cut.cuts;
+    stats.oxbowMetres += Math.round(cut.removed * STATION);
+    p = cut.pts;
     if (p.length / 2 < MIN_REACH / STATION) { stats.dropped++; continue; }
     lines.push(p);
   }
