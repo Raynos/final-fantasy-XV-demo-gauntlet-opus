@@ -40,6 +40,26 @@ const SCENES: Record<string, Scene> = {
   // because the ladder is the only visible long-arc progression in the game and
   // its curve was unclimbable until it was measured against what the board pays.
   menu_hunts: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('hunts')`, then: 90 },
+  /**
+   * THE SIX SCREENS NOTHING HAD EVER PHOTOGRAPHED.
+   *
+   * `Shots.ts` stages nine `menu_*` screens and `Menus` registers fifteen. The
+   * six below -- `elemancy`, `armiger`, `quests`, `archives`, `system`,
+   * `controls` -- were reachable in play, type-checked, in `must-run.json`, and
+   * had never appeared in a capture: 2,000 lines of layout whose only reader
+   * was the person who wrote it. `MapScreen` was the seventh and is now a
+   * subclass of `WorldMapScreen`, so `menu_map` and `menu_map_wide` are the
+   * same screen and one shot covers both.
+   *
+   * They are staged from `menu_main` like every other menu scene, so what is
+   * photographed is the screen a player opening the menu gets.
+   */
+  menu_elemancy: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('elemancy')`, then: 80 },
+  menu_armiger: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('armiger')`, then: 80 },
+  menu_quests: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('quests')`, then: 80 },
+  menu_archives: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('archives')`, then: 80 },
+  menu_system: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('system')`, then: 80 },
+  menu_controls: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('controls')`, then: 80 },
   area_card: {
     shot: 'hud_field', settle: 30,
     after: `g.get('HUD').areaTitle('Leide', 'Kingdom of Lucis', 'Longwythe Region  ·  Level 12 — 20')`,
