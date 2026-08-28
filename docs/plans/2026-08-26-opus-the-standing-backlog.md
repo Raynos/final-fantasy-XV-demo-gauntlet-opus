@@ -1,7 +1,12 @@
 # The standing backlog — everything 52 handoffs were still holding
 
-Status: IN-PROGRESS (2026-08-28, opus) — **ten workstreams, none staffed, nothing
-locked.** This is a *queue*, not a snapshot: every item below is work somebody
+Status: IN-PROGRESS (2026-08-28, opus) — **the twelve workstreams this plan was
+written with are all CLOSED. It stays live because §WS-13 is the queue**, which
+is what its own definition of done requires: when a lane finishes, its open work
+comes back here rather than staying in a handoff. Do not archive this file while
+§WS-13 has rows in it.
+
+Originally: **ten workstreams, none staffed, nothing locked.** This is a *queue*, not a snapshot: every item below is work somebody
 measured, wrote down, and could not finish.
 
 ## Why this file exists
@@ -68,7 +73,7 @@ Handoffs with nothing open: `2026-08-22-coordinator`, `2026-08-23-coordinator`,
 
 ---
 
-## WS-1 — The head and hair
+## WS-1 — The head and hair — **CLOSED 2026-08-28** (called by the human after six passes: the winding defect is fixed and `facecheck` asserts it; `BRIEF.md`'s beauty bar is not met. See `2026-08-25-opus-after-phase3` §WS-1 for what is left)
 
 **The judge's #1, and worth more than everything else combined** (3.0 → 4.0 on
 its own costing). `2026-08-25-opus-after-phase3` WS-1 already owns the head's
@@ -104,7 +109,7 @@ it should be read as that plan's other half rather than as a competitor.
   where FFXV slopes C7 → acromion on every character (one term in `torsoShape`,
   one in `jacket`).
 
-## WS-2 — The ground, and the light that reaches it
+## WS-2 — The ground, and the light that reaches it — **CLOSED 2026-08-28** (2a a measured negative with a positive control; 2b landed; 2c had already shipped; 2d was never reached and is in §WS-13)
 
 Four items with one theme: what the ground reflects, what occludes it, what
 shadows the light reaching it, and how things meet it. **Two have already been
@@ -241,7 +246,7 @@ FFXV's Longwythe is dense scrub for ten metres and scattered rock and dead scrub
 beyond. Confirmed by eye. This is 2b's dry-cover term and WS-5's rock scatter
 meeting each other.
 
-## WS-3 — Alpha edges: the round-5 #1, located and unfixed
+## WS-3 — Alpha edges — **CLOSED 2026-08-28** (item 1 had already landed, item 3 is a negative and the defect moved to the impostor ring, item 2's spatial CAS is the real work)
 
 `vegetation.md` magnified it: **every leaf boundary is a hard one-pixel binary
 staircase** with isolated texels flicked off the silhouette, no partial coverage
@@ -300,7 +305,7 @@ floor, `gameplay` PASS, `check` 19/19, `nanscan` 0 of 142.
 the negatives table. `src/tools/probes/leaftexel.mts` is new and is the
 instrument.
 
-## WS-4 — Clouds and sky
+## WS-4 — Clouds and sky — **CLOSED 2026-08-28** (the TAA "free win" was already working; the exposure meter was the real item and landed)
 
 **The free win first.** `clouds.md`: *"Why is TAA not accumulating the cloud
 buffer?"* — proven not to, and fixing the dither's temporal decorrelation did not
@@ -423,7 +428,7 @@ Eight-shot day slice against `FFXV-field`, session start -> shipped:
 Seven of eleven columns improved; `R-B` and `hi(R-B)` moved about a level the
 wrong way and both are sky-fraction-confounded.
 
-## WS-5 — The Meteor, the landmarks, and massing
+## WS-5 — The Meteor, the landmarks, and massing — **CLOSED 2026-08-28** (the crater profile explains why the previous seat fix changed nothing; 122 open joints closed; residue in §WS-13)
 
 The single most-named object in the judge's rounds, across five handoffs that
 each own a piece of it. **Read all five before touching it** — `rocks.md`
@@ -625,7 +630,7 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What was left:
   `shots[0]`, so argument order decides whether a run certifies. Both are already
   written into `2026-08-22-opus-phase4-content-and-gameplay.md`'s WS-0b inbox.
 
-## WS-7 — Content holes that break a playthrough
+## WS-7 — Content holes that break a playthrough — **CLOSED 2026-08-28** (the seven dry fishing pins were one predicate; deposits landed; Fociaugh is a measured negative)
 
 ### WS-7 result, 2026-08-28 (`memory-content` lane) — **CLOSED, all five**
 
@@ -684,7 +689,7 @@ The original text follows, from `content-wire.md`, ranked there:
    corpus and not only in `tmp/`. The diff is in that handoff's §6.
 5. Fociaugh's cave mouth sits on a 1.26 bank.
 
-## WS-8 — Water
+## WS-8 — Water — **CLOSED 2026-08-28** (Galdin is a beach; the foam handles were a negative; the rivers are landed but unverified and the lane says so)
 
 ### WS-8 result, 2026-08-28 (`water-content` lane) — 1 landed but unverified, 2 closed, 3 handed on
 
@@ -779,7 +784,7 @@ already `Game` and `browser.d.ts`'s wildcard already closed by a tsconfig path
 mapping; the 13 floating landmarks are already re-seated, `poiFloating` 0 against
 the pinned 0, instance floats 362 → 355.
 
-## WS-10 — Creatures
+## WS-10 — Creatures — **CLOSED 2026-08-28** (Anak rebuilt; Titan was not floating; `Enemy.level` had already landed and poise was the unnoticed third half)
 
 - **Anak needs a sculpt rebuild, not more paint.** 2,770 tris and the only
   species with **no `colorAt` anywhere** — built from `GeoKit` primitives with
@@ -935,7 +940,7 @@ Handoff: `project/handoff/creatures.md`.
 
 ---
 
-## WS-12 — The boot diet, 2026-08-28, from the close-out plan
+## WS-12 — The boot diet — **CLOSED 2026-08-28** (12a: cold boot 7.13 -> 5.78 s. 12b: programs 271 -> 126 without touching one of the 132 material sites)
 
 `2026-08-28-opus-close-out` closed eight of its ten items and handed these two
 back, because they are builds rather than fixes and it is the close-out plan's
@@ -1046,7 +1051,7 @@ headroom, not a cost.
 **Also untouched: the 16/16 texture-unit warning**, still logged dozens of times
 a frame. It was not on the path of either fix.
 
-## WS-13 — What the 2026-08-28 wave handed back
+## WS-13 — What the 2026-08-28 wave handed back — **OPEN. This is the queue.**
 
 Five lanes closed on 08-28. **This section exists because their open work would
 otherwise have died in a handoff**, which is the failure this whole plan was
@@ -1377,7 +1382,7 @@ buy a point while that frame exists. **WS-9 is closed, so the `--hide` gate on
 WS-3/5/6's cost ablations is lifted** (`da7bfe2`). WS-2c before WS-2d. Everything else is parallel and
 collides nowhere; the directory map is in each section.
 
-## WS-11 — What phase 4's four lanes left, 2026-08-27
+## WS-11 — What phase 4's four lanes left — **CLOSED 2026-08-28** (both combat premises falsified by probe; draw calls closed under §WS-6; the character list is in `2026-08-25-opus-after-phase3` §WS-1)
 
 Phase 4 closed DONE with four lanes running under it. Their handoffs graduated
 to `project/archive/handoff/` the same day and their open work is here, which is
