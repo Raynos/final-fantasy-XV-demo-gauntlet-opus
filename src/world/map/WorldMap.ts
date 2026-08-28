@@ -526,16 +526,27 @@ export const POIS: PoiSpec[] = [
     does: 'A waterfall off the Lestallum shelf into the crag. Good photograph, bad footing.', gate: null },
   { id: 'greyshire', name: 'Greyshire Glacial Grotto', type: 'dungeon', zone: 'taelpar', x: -2560, z: -1260, r: 160, lv: 30,
     does: 'Ice cave in the crag wall. The Tomb of the Fierce is at the end of it.', gate: 'ch6' },
-  // 40 m north of where this was authored, and the 40 m is measured. The pad's
-  // toe hung **22.0 m** in the air at (-2604, -1314) — `probes/padhang.mts`,
-  // third worst of the 91 aprons — because the footprint straddled the lip of
-  // the Taelpar crag and `gradePad`'s `FILL_MAX` will not cantilever a fill out
-  // over one, correctly. `tmp/probes/poiseat.mts` rebuilt the kit on a 20 m
-  // lattice and read the toe at each: this seat is the flattest ground within
-  // 100 m by a wide margin — relief over the footprint **72.0 m -> 24.0 m** —
-  // and the toe comes down to +0.24 m with a mean of -0.23. The grotto whose
-  // far end this tomb is (`greyshire`, 60 m north-east) is unmoved.
-  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1274, r: 60, lv: 30,
+  // 100 m north of where this was authored, and every metre of it is measured.
+  // The pad's toe hung **22.0 m** in the air at (-2604, -1314) —
+  // `probes/padhang.mts`, third worst of the 91 aprons — because the footprint
+  // straddled the lip of the Taelpar crag, and `gradePad`'s `FILL_MAX` will not
+  // cantilever a fill out over one, correctly.
+  //
+  // The first move went to -1274 on the toe numbers alone: hang +0.24, toe mean
+  // -0.23, footprint relief 72 -> 24 m. **The frame said no.** Read from the
+  // north-east it was a fifteen-metre curtain of pale striated fill plastered
+  // flat across a dark rock cliff, with a hard vertical corner silhouetted
+  // against the valley — which is `landmarks-r3`'s 46 m of smooth fill down a
+  // red cliff arriving a second time, in a different costume. Nothing hung in
+  // the air and nothing read as ground.
+  //
+  // So `tmp/probes/poiseat.mts` gained the number that says it: `deep`, how far
+  // the earthwork falls below its own deck, which is the only place the
+  // `cliff`-branch retaining wall shows up at all. At -1274 it is **26.0 m,
+  // gradePad's own cap**. Here it is **2.6 m** — an earthwork you would walk
+  // over without noticing — at hang +0.20 and relief 35. `greyshire`, the
+  // grotto this tomb is the far end of, is 64 m away and unmoved.
+  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1214, r: 60, lv: 30,
     does: 'Royal Arm: the Swords of the Wanderer.', gate: 'greyshire' },
   { id: 'greyshire_menace', name: 'Menace Beneath Greyshire', type: 'menace', zone: 'taelpar', x: -2518, z: -1312, r: 70, lv: 65,
     does: 'Post-game endless descent.', gate: 'menace' },
