@@ -652,8 +652,9 @@ const SHOT_TABLE = {
     // shot seeing 2.8 m of a 13 m temple -- 21% -- with the eye 32.5 m BELOW
     // the deck, at bearing 35 deg, five degrees inside the only blocked
     // sector. Anything from 150 to 250 deg sees the whole temple at the same
-    // range with no lift, so this is the same distance at 200 deg.
-    pos: [-171.1, 95.8, -1565.0], target: [90, 124.6, -1470], fov: 44,
+    // range with no lift. 200 deg it is -- but at the full 278 m the temple
+    // was 80 px in an aerial expanse of rock, so this is 130 m in.
+    pos: [-32.2, 108, -1514.5], target: [90, 124.6, -1470], fov: 44,
   },
   poi_chocobo: {
     doc: 'A chocobo post: the Wiz paddock prairie in the Malacchi Hills (pad only)',
