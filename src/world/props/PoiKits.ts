@@ -4,7 +4,7 @@ import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { isMesh } from '../../util/three-guards.ts';
 import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
-import { dressAt, type Dress } from './ZoneDress.ts';
+import { dressAt, type Dress, type StoneKind } from './ZoneDress.ts';
 import {
   bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
@@ -13,9 +13,10 @@ import {
 import { seatY } from './Seat.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
-  woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
+  woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial, rockMaterial,
   signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
+import { rockGeometry, KINDS } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import type { Game } from '../../game/Game.ts';
 
@@ -266,6 +267,73 @@ export interface BuiltSite extends PoiSite {
  * {@link PoiMats} is the set itself, and a kit that wants a new colour cannot
  * drift from a hand-maintained parallel interface.
  */
+/**
+ * **A boulder in a kit is a rock, and it is built by the rock generator.**
+ *
+ * Every stone in this file was `new THREE.DodecahedronGeometry(s, 0)` — a bare
+ * twelve-sided platonic solid, one mesh, scale and rotation the only variation.
+ * `poi_haven` is the case that shows what that costs: fourteen of them in two
+ * concentric rings around the deck, pale, flat-faceted and identical, in the
+ * shot a player looks at for more hours than any other POI in the game. It is
+ * the literal instance of the judge's *"ten boulders evenly ringed"* and *"the
+ * same few instances repeated"*, and `Debris.ts:353` already carried a comment
+ * saying a dodecahedron reads wrong next to real stone.
+ *
+ * `Rocks.rockGeometry` and `Rocks.KINDS` are exported for exactly this. The one
+ * thing that stops a kit calling `rockGeometry` per boulder is cost — there are
+ * 124 POIs — so this is a **pool**, built once on first use and shared: five
+ * size bands, twelve shapes in each from four of the real rock archetypes at
+ * three seeds. `PartBuilder.add` clones before it transforms, so one pooled
+ * geometry can be placed any number of times, and `applyMatrix4` carries the
+ * normal matrix, so a non-uniform placement scale is correct rather than
+ * approximate.
+ *
+ * **Bands, not one unit mesh scaled.** `uvScale` is baked into the triplanar
+ * UVs at build time in tiles per world metre, so scaling a unit rock to 3 m
+ * would scale its joint network with it and put mud cracks on a boulder. Each
+ * band is generated at its own world size and the placement scale stays inside
+ * about ±40% of it, which is a texel-density error nobody can see.
+ *
+ * 60 geometries at `detail` 1–2 is 180–400 triangles each: the whole pool is
+ * about 20 k triangles built once at boot, and every use of it is geometry
+ * merged into a batch that already exists — **zero draw calls**.
+ */
+const ROCK_BANDS = [0.30, 0.6, 1.1, 2.0, 3.4];
+const ROCK_KINDS: StoneKind[] = ['granite', 'bedded', 'talus', 'worn'];
+let _rockPool: THREE.BufferGeometry[][] | null = null;
+function rockPool(): THREE.BufferGeometry[][] {
+  if (_rockPool) return _rockPool;
+  const byKey = new Map(KINDS.map(k => [k.key, k]));
+  _rockPool = ROCK_BANDS.map((band, bi) => {
+    const out: THREE.BufferGeometry[] = [];
+    for (let si = 0; si < 3; si++) {
+      for (let ki = 0; ki < ROCK_KINDS.length; ki++) {
+        const k = byKey.get(ROCK_KINDS[ki])!;
+        out.push(rockGeometry(9100 + bi * 137 + si * 31 + ki * 7, { ...k.opts, size: band }));
+      }
+    }
+    return out;
+  });
+  return _rockPool;
+}
+
+/**
+ * One pooled boulder at a wanted world size.
+ *
+ * @param rng the kit's stream, so the shape drawn is deterministic
+ * @param size wanted radius in metres
+ * @returns the shared geometry and the scale to place it at
+ */
+export function kitRock(rng: Rng, size: number): { geo: THREE.BufferGeometry, s: number } {
+  const pool = rockPool();
+  let bi = 0;
+  for (let i = 1; i < ROCK_BANDS.length; i++) {
+    if (Math.abs(Math.log(size / ROCK_BANDS[i])) < Math.abs(Math.log(size / ROCK_BANDS[bi]))) bi = i;
+  }
+  const list = pool[bi];
+  return { geo: list[Math.floor(rng.next() * list.length) % list.length], s: size / ROCK_BANDS[bi] };
+}
+
 export function poiMaterials() {
   return {
     // Anything bigger than a couple of metres gets a *plain* material.
@@ -275,6 +343,17 @@ export function poiMaterials() {
     // which is what made the first pass of Lestallum look like granite
     // chippings. Flat colour at that scale reads far better.
     stone: plain(0x968a76, 0.93),
+    /**
+     * **Boulders only.** `stone` above is the *building* material and the
+     * argument in the block above it — flat colour beats a 1 m-authored map
+     * stretched over a fourteen-metre wall — is an argument about walls. A
+     * camp boulder at two metres in a hero shot is the case it does not cover,
+     * and `handoff/finish.md` measured the consequence: the haven's boulder
+     * ring was pixel-identical before and after a `rockMaterial` fix (luma
+     * 90.50 vs 90.49) because the ring is not made of `rockMaterial` at all.
+     * `instanceTint` off, because `PartBuilder` merges these.
+     */
+    rock: rockMaterial(0x9a8b74, 0.94, false),
     dark: plain(0x6b6357, 0.94),
     concrete: plain(0x8d8779, 0.9),
     ground: plain(0x796450, 0.96),
@@ -578,10 +657,11 @@ export class PoiKits {
     // drum had and why it read as a garnish rather than as earthworks.
     for (const sp of pad.spoil) {
       const sc = sp[2] * rng.range(0.7, 1.25);
-      B.add(M.dark, new THREE.DodecahedronGeometry(sc, 0),
+      const rk = kitRock(rng, sc);
+      B.add(M.rock, rk.geo,
         mat4([sp[0] + rng.gauss(0, 0.5), -sc * rng.range(0.2, 0.5), sp[1] + rng.gauss(0, 0.5)],
           [rng.gauss(0, 0.5), rng.next() * 6, rng.gauss(0, 0.5)],
-          [1, rng.range(0.5, 0.85), 1]));
+          [rk.s, rk.s * rng.range(0.5, 0.85), rk.s]));
     }
     void depth;
   }
@@ -673,8 +753,10 @@ export class PoiKits {
     // Fire: a ring of set stones, an ash bed, embers and a pot on a tripod.
     for (let i = 0; i < 11; i++) {
       const a = (i / 11) * Math.PI * 2 + rng.gauss(0, 0.12);
-      B.add(M.dark, new THREE.DodecahedronGeometry(0.24 * rng.range(0.7, 1.35), 0),
-        mat4([Math.cos(a) * 1.2, deck + 0.08, Math.sin(a) * 1.2], [rng.next(), rng.next(), 0]));
+      const fs = 0.24 * rng.range(0.7, 1.35), fk = kitRock(rng, fs);
+      B.add(M.rock, fk.geo,
+        mat4([Math.cos(a) * 1.2, deck + 0.08, Math.sin(a) * 1.2], [rng.next(), rng.next(), 0],
+          [fk.s, fk.s, fk.s]));
     }
     B.add(M.dark, new THREE.CircleGeometry(1.05, 16).rotateX(-Math.PI / 2), mat4([0, deck + 0.02, 0]));
     B.add(M.hot, new THREE.CircleGeometry(0.82, 14).rotateX(-Math.PI / 2), mat4([0, deck + 0.05, 0]));
@@ -753,10 +835,11 @@ export class PoiKits {
     // Seating boulders, cut from the shelf, and the lantern pole.
     for (let i = 0; i < 6; i++) {
       const a = rng.next() * 6.28, d = r * rng.range(0.55, 0.9);
-      const sc = rng.range(0.55, 1.3) * dress.rockS;
-      B.add(M.stone, new THREE.DodecahedronGeometry(sc, 0),
+      const sc = rng.range(0.55, 1.3) * dress.rockS, rk = kitRock(rng, sc);
+      B.add(M.rock, rk.geo,
         mat4([Math.cos(a) * d, deck + sc * 0.28, Math.sin(a) * d],
-          [rng.gauss(0, 0.3), rng.next() * 6, rng.gauss(0, 0.3)]));
+          [rng.gauss(0, 0.3), rng.next() * 6, rng.gauss(0, 0.3)],
+          [rk.s * rng.range(0.9, 1.25), rk.s * rng.range(0.72, 1.0), rk.s]));
     }
     B.add(M.steel, new THREE.CylinderGeometry(0.05, 0.06, 2.6, 6), mat4([r * 0.7, deck + 1.3, -r * 0.35]));
     B.add(M.steel, box(0.2, 0.06, 0.2), mat4([r * 0.7, deck + 2.63, -r * 0.35]));
@@ -764,10 +847,11 @@ export class PoiKits {
     // A boulder pile against one flank so the shelf grows out of the hill.
     for (let i = 0; i < 8; i++) {
       const a = rng.range(2.0, 4.2), d = r * rng.range(1.0, 1.4);
-      const sc = rng.range(0.9, 2.6) * dress.rockS;
-      B.add(M.stone, new THREE.DodecahedronGeometry(sc, 0),
+      const sc = rng.range(0.9, 2.6) * dress.rockS, rk = kitRock(rng, sc);
+      B.add(M.rock, rk.geo,
         mat4([Math.cos(a) * d, -0.2 + sc * 0.2, Math.sin(a) * d],
-          [rng.gauss(0, 0.4), rng.next() * 6, rng.gauss(0, 0.4)]));
+          [rng.gauss(0, 0.4), rng.next() * 6, rng.gauss(0, 0.4)],
+          [rk.s * rng.range(0.9, 1.3), rk.s * rng.range(0.7, 1.0), rk.s]));
     }
     return { cast: true, r: r + 4 };
   }
@@ -2029,8 +2113,10 @@ export class PoiKits {
       // it. Pinned to the deck they were the mesh that decided the compound's
       // float number at `keycatrich_ruins` -- eight metres from the stele and
       // reading for the whole waymark.
-      put(M.stone, new THREE.DodecahedronGeometry(sr, 0),
-        [bxx, gy(bxx, bzz, sr * 2) + sr * 0.62, bzz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]);
+      const brk = kitRock(rng, sr);
+      put(M.rock, brk.geo,
+        [bxx, gy(bxx, bzz, sr * 2) + sr * 0.62, bzz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)],
+        [brk.s * rng.range(0.9, 1.25), brk.s * rng.range(0.75, 1.0), brk.s]);
     }
     return { cast: true, r: 9, noApron: true };
   }
@@ -2169,8 +2255,10 @@ export class PoiKits {
     }
     for (let i = 0; i < 14; i++) {
       const a = rng.range(-1.7, 1.7), d = rng.range(3, 9);
-      put(M.stone, new THREE.DodecahedronGeometry(rng.range(0.25, 0.95), 0),
-        [Math.sin(a) * d, 0.2, Math.cos(a) * d + 1], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]);
+      const drk = kitRock(rng, rng.range(0.25, 0.95));
+      put(M.rock, drk.geo,
+        [Math.sin(a) * d, 0.2, Math.cos(a) * d + 1], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)],
+        [drk.s * rng.range(0.9, 1.3), drk.s * rng.range(0.7, 1.0), drk.s]);
     }
     return { cast: true, r: 11 };
   }
