@@ -64,6 +64,13 @@ declare global {
     'encounter:tech': CustomEvent<{ member: string, tech: string, name: string }>;
     'encounter:kill': CustomEvent<{ name: string, level: number, exp: number, drops: string[], boss: boolean }>;
     /**
+     * `_exitCombat(true)`. Carries what the fight was worth, and is what the
+     * victory card in `ScreenFX` is drawn from — before it existed nothing at
+     * all marked the end of a fight and the payload went nowhere but the
+     * toasts.
+     */
+    'encounter:victory': CustomEvent<{ name: string, kills: number, exp: number, gil: number, drops: string[] }>;
+    /**
      * UI-side events, dispatched by the game rather than by combat.
      *
      * `ffxv-damage` is the HUD's public floating-number bus, listed in

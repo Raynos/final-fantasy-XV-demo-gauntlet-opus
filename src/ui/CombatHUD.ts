@@ -9,6 +9,24 @@ import type { Enemy } from '../characters/enemies/EnemyBase.ts';
 
 const _v = new THREE.Vector3();
 
+/**
+ * Screen-space lanes a floating damage number is dealt into, px, from birth.
+ *
+ * Consecutive numbers walk the list, so four blows landing at one world point
+ * inside a tenth of a second — a link-strike, a stagger punish — are dealt
+ * into four separated slots rather than printed on top of each other.
+ *
+ * The **vertical** ladder is what does the work. A damage number is a wide,
+ * short box: "1,803" at crit size is about 110 x 36 px, so two of them are
+ * clear of each other only if they are ~110 px apart horizontally or ~36 px
+ * apart vertically, and 36 px of height is much the cheaper of the two. A
+ * number thrown 110 px sideways has stopped reading as belonging to the thing
+ * it was dealt to.
+ */
+const LANES_X = [-70, 66, -38, 42];
+/** Matching vertical rungs; 38 px apart clears the tallest number box. */
+const LANES_Y = [0, -38, -76, -114];
+
 /** Anything with world coordinates: a `Vector3` or a bare `{x, y, z}`. */
 interface Xyz { x: number; y: number; z: number }
 
@@ -53,7 +71,10 @@ interface FloatingNumber {
   node: HTMLElement;
   crit: boolean;
   world: THREE.Vector3;
-  /** Screen-space drift, px. */
+  /** Screen-space lane offset, px — held at full strength from birth. */
+  ox: number;
+  oy: number;
+  /** Screen-space drift, px — eased in on top of the lane. */
   dx: number;
   dy: number;
   /** World-space drift, metres per unit of clip time. */
@@ -161,9 +182,14 @@ export class CombatHUD {
     this.calloutWord = el('div.co-word');
     this.calloutSub = el('div.co-sub');
     this.calloutRule = el('div.co-rule');
-    this.calloutNode.appendChild(this.calloutWord);
-    this.calloutNode.appendChild(this.calloutRule);
-    this.calloutNode.appendChild(this.calloutSub);
+    // The word sits on a soft wash so it survives a bright sky — see the note
+    // above `.callout` in `ui.css`. The box is an inline-block, so it is only
+    // ever as wide as the word it is carrying.
+    const box = el('div.co-box');
+    box.appendChild(this.calloutWord);
+    box.appendChild(this.calloutRule);
+    box.appendChild(this.calloutSub);
+    this.calloutNode.appendChild(box);
     this.root.appendChild(this.calloutNode);
     this.callout = null;
 
@@ -259,8 +285,12 @@ export class CombatHUD {
     this.numbers.push({
       node, crit,
       world: new THREE.Vector3(ev.world.x, ev.world.y, ev.world.z),
-      // alternate the drift side so consecutive hits never stack on each other
-      dx: (r() - 0.5) * 54 + (this.numbers.length % 2 ? 74 : -74),
+      // Four lanes, not two, and held from the first frame — see `LANES_X`.
+      // `tmp/shots/cb0/f-victory.jpg` reads "1,8039" because a 1,803 and a
+      // 689 are printed on the same pixel.
+      ox: LANES_X[this.numbers.length % LANES_X.length] + (r() - 0.5) * 22,
+      oy: LANES_Y[this.numbers.length % LANES_Y.length] + (r() - 0.5) * 12,
+      dx: (r() - 0.5) * 30,
       dy: -(34 + r() * 26),
       jx: (r() - 0.5) * 0.5, jy: 0.4 + r() * 0.7, jz: (r() - 0.5) * 0.5,
       size,
@@ -590,8 +620,14 @@ export class CombatHUD {
       const sp = cam ? project(wp, cam, w, h) : null;
       if (!sp) { n.node.style.opacity = '0'; continue; }
       const arc = -Math.sin(Math.PI * clamp(t * 1.15, 0, 1)) * 1;
-      const x = clamp(sp.x + n.dx * easeOutQuint(t), 76, w - 76);
-      const y = sp.y + n.dy * easeOut(t) * 0.55 + arc * n.dy * 0.55;
+      // A lane is worth nothing if it opens at zero. The separation used to
+      // be the whole offset times `easeOutQuint(t)`, which is exactly 0 on the
+      // frame a number is born — so two simultaneous hits were printed on top
+      // of each other at the one moment they are biggest and most readable,
+      // and only came apart as they shrank and faded. The lane is held from
+      // frame one now and the drift eases in on top of it.
+      const x = clamp(sp.x + n.ox + n.dx * easeOutQuint(t), 76, w - 76);
+      const y = sp.y + n.oy + n.dy * easeOut(t) * 0.55 + arc * n.dy * 0.55;
       const pop = t < 0.22 ? easeBack(t / 0.22) : 1 - (t - 0.22) * 0.16;
       const fade = t < 0.72 ? 1 : 1 - (t - 0.72) / 0.28;
       n.node.style.transform =

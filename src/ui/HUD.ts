@@ -7,6 +7,7 @@ import { CombatHUD } from './CombatHUD.ts';
 import type { DamageEvent } from './CombatHUD.ts';
 import { Prompts } from './Prompts.ts';
 import { ScreenFX } from './ScreenFX.ts';
+import type { VictorySpoils } from './ScreenFX.ts';
 import { Subtitles } from './Subtitles.ts';
 import { Toasts } from './Toasts.ts';
 import { Hints } from './Hints.ts';
@@ -35,7 +36,7 @@ import type { Enemy } from '../characters/enemies/EnemyBase.ts';
  * - `hud.setArmiger(0..1)`
  * - `hud.areaTitle(name, sub, meta)` — region title card
  * - `hud.say(who, line)` / `hud.banter(who, line)`
- * - `hud.levelUp(n)` / `hud.hit(0..1)`
+ * - `hud.levelUp(n)` / `hud.hit(0..1)` / `hud.victory(spoils)`
  *
  * The same things are reachable as window CustomEvents so nothing has to import
  * the HUD: `ffxv-damage`, `ffxv-callout`, `ffxv-area`, `ffxv-say`,
@@ -137,6 +138,8 @@ export class HUD {
   /** @param who @param line */
   banter(who: string, line: string) { this.subtitles.bant(who, line); }
   levelUp(n: number) { this.fx.levelUp(n); }
+  /** End-of-encounter spoils card. @param s the `encounter:victory` payload */
+  victory(s: VictorySpoils) { this.fx.victory(s); }
   /** @param amount 0..1 */
   hit(amount: number) { this.fx.hit(amount); }
 
@@ -145,6 +148,7 @@ export class HUD {
     this.combat.resetDemo();
     this.fx.cardState = null;
     this.fx.luState = null;
+    this.fx.vicState = null;
     this.fx.flashAmt = 0;
     this.subtitles.clear();
     this.toasts.clear();

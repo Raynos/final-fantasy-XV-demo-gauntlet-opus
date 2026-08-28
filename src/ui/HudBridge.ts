@@ -132,6 +132,17 @@ export class HudBridge {
       const el = e.detail.element;
       if (el) this._call('spell', `${el[0].toUpperCase()}${el.slice(1)} unleashed`);
     });
+
+    // The end of a fight. `EncounterDirector._exitCombat(true)` has always
+    // published what the encounter was worth and nothing has ever drawn it:
+    // the toasts printed AP, items and gil one at a time down the left edge
+    // and the party stood up. The card is the beat.
+    on('encounter:victory', (e) => {
+      this.hud.victory(e.detail);
+      // and the banner from the last stagger of the fight goes with it —
+      // whatever is on screen when the fight ends belongs to the fight
+      this.hud.combat.callout = null;
+    });
   }
 
   /* -- rpg --------------------------------------------------------------- */
