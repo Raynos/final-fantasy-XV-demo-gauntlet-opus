@@ -171,11 +171,22 @@ for (const [, id] of Object.entries(who)) {
   const ch = m && m.character;
   const map = ch && ch.faceMat && ch.faceMat.map;
   if (!map || !map.mipmaps) continue;
+  let marked = 0;
   for (const [name, anchor] of Object.entries(FACE_ANCHORS)) {
     const [u, v] = uvOf(anchor);
+    let drew = 0;
     for (const cv of map.mipmaps) {
-      const cx = cv.getContext('2d');
+      // **This guard is why this probe reported success having drawn nothing.**
+      // The shipped chain's levels are ImageBitmaps, not canvases, so
+      // `getContext` is undefined on every one of them, the loop `continue`d
+      // straight through, and sixteen captures came back with no magenta in
+      // them -- which reads as "the map is not sampled at the mouth" and is
+      // really "no mark was ever made". Counted and thrown now; use
+      // `facebar.mts`, which rebuilds a canvas from mip 0 with `drawImage`
+      // (which does work on an ImageBitmap) and replaces the texture outright.
+      const cx = cv.getContext && cv.getContext('2d');
       if (!cx) continue;
+      drew++;
       cx.fillStyle = name === 'mouth' ? '#ff00ff' : name === 'noseTip' ? '#00ff00' : '#ffff00';
       // 8 mm across, 4 mm down, in the map's own anisotropic texels
       const px = cv.width / (0.085 * Math.PI * 2), py = cv.height / (Y_MAX - Y_MIN);
@@ -183,7 +194,10 @@ for (const [, id] of Object.entries(who)) {
       // v is bottom-up in canonical space and the canvas is top-down
       cx.fillRect(u * cv.width - w / 2, (1 - v) * cv.height - h / 2, Math.max(1, w), Math.max(1, h));
     }
+    marked += drew;
   }
+  if (!marked) throw new Error('facemark: could not draw into any mip level -- '
+    + 'the chain is not canvases. Use src/tools/probes/facebar.mts.');
   map.needsUpdate = true;
   out.mark = { ...(out.mark || {}), [id || 'player']: Object.fromEntries(
     Object.entries(FACE_ANCHORS).map(([k, a]) => [k, uvOf(a).map((x) => +x.toFixed(4))])) };
