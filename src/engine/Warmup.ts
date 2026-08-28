@@ -27,6 +27,18 @@ function isWeaponClass(k: string): k is WeaponClass {
   return Object.hasOwn(WEAPONS, k);
 }
 
+/**
+ * The material types `_warmOrphanMaterials` will build a program for.
+ *
+ * three's own mesh materials and nothing else: those are what a streamed prop
+ * kit holds, and they are the ones a scene draw really does bind. See that
+ * method's note on why a bare `ShaderMaterial` is excluded.
+ */
+const WARMABLE = new Set([
+  'MeshStandardMaterial', 'MeshPhysicalMaterial', 'MeshBasicMaterial',
+  'MeshLambertMaterial', 'MeshPhongMaterial', 'MeshToonMaterial',
+]);
+
 
 /**
  * Boot-time shader pre-warm.
@@ -151,6 +163,8 @@ export class Warmup {
    */
   _rest(rt: THREE.WebGLRenderTarget) {
     this._step('shadow casters', () => this._warmShadows(rt));
+    this._step('unbuilt content', () => this._warmOrphanMaterials(rt));
+    this._step('velocity proxies', () => this._warmVelocity(rt));
     this._step('weapons', () => this._warmWeapons(rt));
     this._step('vfx', () => this._warmVfx(rt));
     this._step('weather', () => this._warmWeather(rt));
@@ -243,6 +257,135 @@ export class Warmup {
       for (const o of hidden) o.visible = false;
       for (const o of culled) o.frustumCulled = true;
     }
+  }
+
+  /**
+   * Link the programs for materials a system has BUILT but nothing has DRAWN.
+   *
+   * This is the third bullet of this class's own header -- "materials
+   * constructed lazily on first use" -- and until now it was the one the class
+   * did not actually cover. `renderer.compile(scene, camera)` and
+   * `_warmShadows` both walk the scene graph, so a material that exists only as
+   * an entry in a system's table is invisible to both. `src/world/props/`'s
+   * streamed kits are the whole population: `RoadFurniture.mats`,
+   * `PoiKits.mats`, `Outposts.mats` and the mega-prop kit are built in `init()`
+   * and attached to a mesh only when a chunk streams in, which on a road is
+   * hundreds of metres into a sprint.
+   *
+   * **It deliberately does NOT skip a material already in the scene**, and
+   * that is not laziness. `road_rust` is in the scene at boot and its program
+   * still linked mid-play, because three derives the program key from the
+   * *object* as well as the material -- the geometry's attributes, its
+   * instancing, its skinning. "This material is attached to something" is not
+   * "this material's program exists". three re-derives and hits its own cache
+   * for every one that really was covered, so the redundant ones are cheap and
+   * the honest ones are the whole point: skipping by uuid warmed 3 programs
+   * and left the 90 ms frame exactly where it was, while warming all of them
+   * costs **150 -> 566 ms of the loading screen for 9 programs** and takes the
+   * frame with it. Boot time is not in `BRIEF.md`; the 33 ms rule is.
+   *
+   * **Measured, and it was the last >33 ms frame in the gate.** `sprint+turn`
+   * spikes to 40.4 ms at a fixed frame index every run. Replayed under
+   * `src/tools/probes/perfstall.mts`, all of it is ONE draw call -- 35.5-90.8 ms
+   * inside `renderBufferDirect` for `roadflat_road_rust` -- and
+   * `renderer.info.programs` grows by exactly one across that frame. Its cache
+   * key differs from an already-linked program in **one bit**: bit 11 of
+   * three's second `getProgramCacheKeyBooleans` mask, `doubleSided`.
+   * `RoadFurniture`'s rust is `FrontSide`; `PoiKits`', `Outposts`' and
+   * `Landmarks`' are the same recipe with `side: DoubleSide` bolted on, and
+   * only those had ever been drawn. A whole shader program, and 90 ms of a
+   * player's frame, for one boolean.
+   *
+   * Two earlier hypotheses died in front of this one and are recorded so nobody
+   * re-opens them: it is **not a buffer upload** (`probes/perfupload.mts`: the
+   * spike frames report `fresh 0, freshKb 0`, while the frame that really does
+   * upload 497 KB of fresh Menace-POI geometry costs 6.4 ms), and it is **not
+   * shadow-cascade work for new casters** (`probes/perfstall.mts`: 0.3-0.6 ms
+   * inside `renderer.shadowMap.render` on an 86 ms frame, with the same 99
+   * shadow draws and 1.48 Mtris that the median frame on that cascade phase
+   * has).
+   *
+   * **Only three's built-in mesh materials.** A bare `ShaderMaterial` sitting
+   * in a system's table belongs to a *pass* -- PMREM's convolution, the god-ray
+   * composite, the weather volume -- which renders into its own target with its
+   * own camera, and compiling a scene flavour of it would build a program no
+   * frame ever binds. That is precisely what `engine/CompileGuard.ts` exists to
+   * stop, and this must not walk it back: of 23 orphans at boot, 18 are prop
+   * kits and 5 are pass materials, and only the 18 are wanted.
+   */
+  _warmOrphanMaterials(rt: THREE.WebGLRenderTarget) {
+    const orphans: THREE.Material[] = [];
+    const seen = new Set<string>();
+    /**
+     * Walk a system's own properties looking for material tables.
+     *
+     * Deliberately structural rather than a registry every kit has to remember
+     * to call: a registry is a line somebody forgets, and the defect this fixes
+     * is exactly "somebody forgot". Bounded hard -- plain objects and arrays
+     * only, two levels below the system -- so it cannot wander into the scene
+     * graph, a geometry or a texture.
+     */
+    const visit = (v: unknown, depth: number) => {
+      if (!v || typeof v !== 'object' || depth > 2) return;
+      const o = v as Record<string, unknown> & { isMaterial?: boolean };
+      if (o.isMaterial) {
+        const m = v as THREE.Material;
+        if (seen.has(m.uuid)) return;
+        seen.add(m.uuid);
+        if (WARMABLE.has(m.type)) orphans.push(m);
+        return;
+      }
+      if (Array.isArray(v)) { for (const x of v) visit(x, depth + 1); return; }
+      // Anything below the system that is not a plain `{}` is a class instance
+      // -- a scene node, a pass, a chunk -- and not a material table.
+      if (depth > 0 && Object.getPrototypeOf(v) !== Object.prototype) return;
+      for (const k of Object.keys(o)) {
+        let x: unknown;
+        try { x = o[k]; } catch { continue; }
+        visit(x, depth + 1);
+      }
+    };
+    for (const sys of this.game.systems) {
+      for (const k of Object.keys(sys)) {
+        let x: unknown;
+        try { x = (sys as unknown as Record<string, unknown>)[k]; } catch { continue; }
+        visit(x, 0);
+      }
+    }
+    if (!orphans.length) return;
+
+    // Position, normal and uv -- the attribute set every prop part carries, and
+    // the one `roadflat_road_rust` drew with. `hasPositionAttribute` and
+    // `vertexNormals` are both cache-key bits, so a geometry missing one would
+    // warm the wrong program.
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const holder = new THREE.Group();
+    holder.name = 'warmup_unbuilt';
+    for (const m of orphans) {
+      const mesh = new THREE.Mesh(geo, m);
+      // Unculled and casting: the depth variant is only built by a real shadow
+      // draw, which is the same reason `_warmShadows` exists.
+      mesh.frustumCulled = false;
+      mesh.castShadow = true;
+      holder.add(mesh);
+    }
+    this.scene.add(holder);
+    try {
+      this._render(rt, { shadows: true });
+    } finally {
+      this.scene.remove(holder);
+      geo.dispose();
+    }
+  }
+
+  /**
+   * The velocity pass keeps its proxies in a scene of its own, so nothing that
+   * walks `game.scene` can reach them. See `VelocityPass.warm`.
+   */
+  _warmVelocity(rt: THREE.WebGLRenderTarget) {
+    const vel = this.game.post && this.game.post.velocity;
+    if (!vel || typeof vel.warm !== 'function') return;
+    vel.warm(this.renderer, this.camera, rt);
   }
 
   /** Every weapon class and the Armiger swarm, drawn once. */

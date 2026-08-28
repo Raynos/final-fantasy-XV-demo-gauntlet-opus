@@ -78,6 +78,8 @@ export class VelocityPass extends Pass {
   fx!: PostFX;
   moverCount!: number;
   proxyScene!: THREE.Scene;
+  /** Kept alive by {@link warm} so three does not release its programs. */
+  _warmHeld: { geo: THREE.BufferGeometry, mats: THREE.ShaderMaterial[] } | null = null;
   /** Keyed by `Object3D.uuid`. */
   tracked!: Map<string, TrackedMesh>;
   constructor(fx: PostFX) {
@@ -114,6 +116,81 @@ export class VelocityPass extends Pass {
     this._reseed = true;
     for (const [, e] of this.tracked) if (e.proxy) e.proxy.visible = false;
     this.moverCount = 0;
+  }
+
+  /**
+   * Link every proxy program variant now, into a throwaway target, so that no
+   * frame of play ever links one.
+   *
+   * **This was the second of the two remaining >33 ms gameplay frames.**
+   * `gameplay.mts`'s `sprint+turn` segment hit 33.1-40.7 ms at frame index 23
+   * every run; replayed under `src/tools/probes/perfstall.mts`, the whole of it
+   * is ONE `renderBufferDirect` call — 30.8-61.2 ms in a single draw — and
+   * `renderer.info.programs` grows by exactly one across that frame. The new
+   * program's cache key differs from an already-linked one in a single bit of
+   * three's second `getProgramCacheKeyBooleans` mask: **bit 5, `skinning`**.
+   *
+   * That is this pass. Every mover in the world at boot is a character, so only
+   * the SKINNED flavour of `VEL_VERT` had ever been linked; the first plain
+   * `Mesh` to move on screen — a road sign, a door, a swaying prop — linked the
+   * non-skinned one mid-frame. `Warmup` could not reach it either, because the
+   * proxies live in `proxyScene`, which is not `game.scene` and is not what
+   * `renderer.compile(scene, camera)` walks.
+   *
+   * Three geometry flavours (`skinning` / `instancing` / neither) times the two
+   * `side` values a proxy inherits from its source, because `doubleSided` is
+   * bit 11 of that same mask and is exactly what separated the OTHER stall's
+   * pair. Six programs, linked on the loading screen where they belong.
+   *
+   * @param rt throwaway target to draw into — `Warmup` owns it
+   */
+  warm(renderer: THREE.WebGLRenderer, camera: THREE.Camera, rt: THREE.WebGLRenderTarget) {
+    // A tri with the attribute set a real proxy has. `skinIndex`/`skinWeight`
+    // are what make the skinned variant legal; three reads them off the
+    // geometry, not off the mesh.
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(6), 2));
+    geo.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array(12), 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 4));
+    const bone = new THREE.Bone();
+    const skeleton = new THREE.Skeleton([bone]);
+    const made: THREE.Mesh[] = [];
+    for (const side of [THREE.FrontSide, THREE.DoubleSide]) {
+      // `_makeMaterial` reads `src.material.side`, so a stand-in source with
+      // the side we want is the honest way to ask it for that variant.
+      const stand = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side }));
+      const plain = new THREE.Mesh(geo, this._makeMaterial(stand));
+      const skinned = new THREE.SkinnedMesh(geo, this._makeMaterial(stand));
+      skinned.add(bone);
+      skinned.bind(skeleton);
+      const inst = new THREE.InstancedMesh(geo, this._makeMaterial(stand), 1);
+      for (const m of [plain, skinned, inst]) {
+        m.frustumCulled = false;
+        this.proxyScene.add(m);
+        made.push(m);
+      }
+      stand.material.dispose();
+    }
+    const prevTarget = renderer.getRenderTarget();
+    try {
+      renderer.setRenderTarget(rt);
+      renderer.render(this.proxyScene, camera);
+    } finally {
+      renderer.setRenderTarget(prevTarget);
+      for (const m of made) this.proxyScene.remove(m);
+      skeleton.dispose();
+    }
+    // **Held, not disposed, and this is the difference between a fix and a
+    // half-fix.** three refcounts a program by the materials using it, so
+    // disposing these six releases the six programs again and the frame goes
+    // back to linking one. Measured: dispose them and the `sprint+turn` spike
+    // falls 43 -> 7.1 ms (ANGLE still has the translated shader cached) but
+    // `renderer.info.programs` still grows by one on that frame; hold them and
+    // it does not. Six tiny materials and one 3-vertex geometry, against a pass
+    // that already keeps one material per tracked mesh.
+    this._warmHeld = { geo, mats: made.map((m) => m.material as THREE.ShaderMaterial) };
   }
 
   _makeMaterial(src: THREE.Mesh): THREE.ShaderMaterial {
