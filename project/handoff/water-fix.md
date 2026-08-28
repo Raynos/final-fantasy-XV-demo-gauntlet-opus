@@ -145,23 +145,161 @@ what `water.md` §5 already said.
 
 ---
 
+## WS-13 item 2 — the jetty at the dry pins: FIXED, and it was two bugs
+
+`1d41cf4`. `_fishing` set its deck from `WORLD.seaLevel` and never asked whether
+there was water at the place.
+
+| pin | water (`tmp/water/near.mts`) | before | after |
+|---|---|---|---|
+| `caem_shore` | 246 m away | 22 m of pier on a grass hillside | shack, rod stands, boat hauled out |
+| `rachsia_bridge` | none within 600 m | same | same |
+| `crestholm_reservoir` | at the pin, +80.53 | deck **1.6 m under water** | deck at water + 1.5 |
+| `swainsmere` | at the pin, +67.90 | deck **2.1 m under** | deck at water + 1.5 |
+| `archaeans_mirror` | at the pin, +36.93 | deck **2.1 m under** | deck at water + 1.5 |
+| `maidenwater` | at the pin, +40.06 | deck **1.5 m under** | deck at water + 1.5 |
+
+**The submerged four are the newer bug and nobody had seen it.** `max(1.4,
+seaLevel + 1.5 - base)` collapses to its own floor at any inland site, so the
+deck, the shack, the rod stands and the moored rowboat were all under the pond.
+Those four bodies are three days old; the kit predates them.
+`tmp/shots/jetty/j-crestholm_reservoir.jpg`, `tmp/shots/jetty/j-caem_shore.jpg`.
+
+The threshold for "not a waterside" is **180 m, not the jetty's own 22 m**, on
+purpose: half the *wet* pins are already further from the water than the deck
+reaches (`galdin_pier` is 72 m out), so a reach test would take the pier off
+Galdin Quay. Whether a jetty meets its shoreline is a different question from
+whether the place is a shore, and Galdin's shoreline is the terrain lane's.
+
+**And it cost a gate, which is the gate working.** `5ca25f5`. `floatcheck`'s POI
+rule is the *minimum* float over a compound's meshes — at least one thing has to
+be in the ground — and the wet kit met it for free, because its jetty piles run
+3.4 m below the deck. Take the jetty away and the lowest mesh left is the shack,
+on a deck `_base` seats on a ring **average**: `caem_shore` came up 0.38 m proud,
+`rachsia_bridge` 0.06, and `poiFloating` went 0 → 2. Four stub piles fixed the
+number and looked wrong (a shack on visible legs with daylight under it, on a
+lawn — `tmp/shots/jetty2/`); a sunk sill fills the gap instead of framing it
+(`tmp/shots/jetty3/`). `deckSink` and `stands` are measured off
+`group.position.y` and the compound's top, so neither can trade a float for a
+burial.
+
+---
+
+## The tarns render as flooded ground, not as ponds — half fixed
+
+Half fixed at `27960bd`, and the remaining half is named and measured.
+
+**Fixed: half of every tarn was inside its own foam band.** `foamBand` was "a
+third of the deepest point", which on a dished basin lands at the *median*
+depth, and was then clamped to the sea's own 1.35 m — the number the field
+exists to escape. Measured, 81×81 per body: **45.7–48.0% of every tarn was
+foaming.** It is now the depth of the shallowest sixth of the body's own wet
+area, so a sixth foams by construction: 0.36–0.43 m, **14.9–16.7%**.
+`tmp/shots/tarn-foam/` against `tmp/shots/jetty/`.
+
+**Also fixed, and it was worth doing anyway: shallow lake water was six per cent
+opaque over its own bed.** `7d91caa`. `uSigma.b` is 0.045/m, so at the tarns'
+1.4 m median depth `alpha = 1 - exp(-0.045 × 1.4) = 0.061`, and the sky in the
+water, the glint and the foam were all multiplied by that. Same physics the
+river lane measured at `b237dc6`, same answer: a floor ramped in over the first
+metre, so the swash line stays see-through and the waterline silhouette still
+comes from the bed. Controlled against `tmp/water/look2.mts`'s twelve frames
+(`tmp/shots/w-look-before/` vs `w-look-after/`): `galdin_beach`, the shot most at
+risk, is **indistinguishable**; `shore1`, a shallow weedy lake margin, is
+**better**. No regression found.
+
+**And the honest negative: that is NOT what makes the tarns read as flooded
+ground.** `tmp/shots/tarn-alpha/` is not meaningfully different from
+`tmp/shots/tarn-foam/`. The brown in those frames is mostly not shallow water —
+it is **emergent bed**. Only **50–64% of each body's footprint is under its own
+level**, against the ~78% a circular pond inscribed in its bounding box would
+give, so about a fifth of every tarn is dry islands. That is the basin's shape
+and it is carved by **`Field._tarnBasins`** — the terrain lane. Anyone taking it
+should note the basin has to hold water at a *median* depth that is large against
+its own bed roughness, not merely at its deepest point.
+
+**A second measured negative — do not spend a day on it.** The emergent bed is
+*not* `microDetail`, the terrain's ±0.9 m analytic relief. Each body against
+`Field.heightAt` (with) and `Field.rawHeightAt` (without): **50.0% wet against
+49.7%**, depth p10 0.27 against 0.24 (`tmp/water/tarnmicro.mts`). The roughness
+is in the carved DEM.
+
+---
+
+## WS-13 item 4 — both scoped, both outside this lane's directories
+
+Investigated in full, not started. Neither is in `src/world/water/`,
+`src/world/Water.ts`, `src/world/map/` or `src/game/fishing/`.
+
+**Energy deposits are invisible because nothing draws one.** The model is
+complete and live: 12 sites at `src/game/rpg/Elemancy.ts:101-121`, `draw()` at
+`:511-540`, `RpgSystem.drawNearby(pos, 12)` at `RpgSystem.ts:684-693`, called
+from `CombatSystem.ts:987`, bound to `KeyT` at `CombatSystem.ts:1484`, with a
+mote-burst VFX on success. What is missing is **any geometry** — no file under
+`src/world/**` references `DEPOSITS` — and **any interaction prompt** — no
+`ix.register` for a deposit anywhere. So the mechanic is: stand within 12 m of
+an invisible point and press an unlisted key. `docs/SCOPE.md:318` already says
+so. Note `DEPOSITS[i].pos[1]` is hard-coded `0` (`Elemancy.ts:120`); anything
+that draws or prompts must call `terrain.heightAt`. ~60–90 lines in
+`src/world/props/` (template: `Foraging.ts`, and `HavenCamp.ts:44-68` for the
+prompt-installation pattern and *why* it happens on the first tick).
+`content-wire.md:212-221` makes one argument worth keeping: **geometry first,
+prompt second** — a prompt with no visible subject is the phantom-prompt defect
+a blind judge ranked 2nd of eight. Also found: **`KeyT` is bound twice**, Draw
+on foot and Type-D in the Regalia (`RegaliaSystem.ts:60`), and
+`ControlsScreen.ts` lists `T` only as Type-D, so there is currently no correct
+in-game statement of how to draw.
+
+**Fociaugh's "1.26 bank" is a *grade*, not 1.26 m.** It comes from
+`probes/dungeondoor.mts:66-71`, rise over run at 6 m: **the sill stands ≈7.6 m
+above the ground 6 m in front of the door, about 51°**, against Keycatrich 0.13
+and Balouve −0.25. The door is at terrain height by construction; it is the
+approach that is a cliff. `Portal.ts:49-59` gives the builder a door space `P`
+and a ground space `G`, and `buildCaveMouth` mixes them: the knoll and breakdown
+blocks follow the slope in `G`, but the brow (`:274`), the jambs (`:276`) and
+the black void card (`:278`) are in `P`, so on a 1.26 grade the brow sits metres
+inside the hill. Fix owner is `src/world/dungeons/kit/Portal.ts`; cheapest
+option is moving those three into `G` (~20 lines). `gradePad()` at
+`Wear.ts:332` is the real answer and needs an `Ecology` handle threaded into
+`Dungeons.init`. `dungeondoor.mts` already prints the grade every run and
+asserts only distance-to-pin — one `check('approach grade is walkable',
+abs(grade) < 0.35)` turns it into a gate. **Not re-measured live** (the daemon
+was saturated); the figure is from `content-wire.md:189` plus a line-by-line
+read of the probe.
+
+---
+
 ## Open, in the order I would take them
 
-1. **The p99 hard edge** — `emitWater` in `River.ts`, ~15 lines: ramp the
+1. **The tarn basins are a fifth dry islands** — `Field._tarnBasins`, the terrain
+   lane, with the numbers above. It is the biggest remaining thing standing
+   between the four newest water bodies and reading as ponds.
+2. **The p99 hard edge** — `emitWater` in `River.ts`, ~15 lines: ramp the
    outermost lane down to the local ground wherever the discharge cap bound, so
    the sheet closes onto the terrain instead of ending in a wall. Needs a fold
-   re-check (`riverStats.folded`). This is the one river defect that is fixable
-   inside this lane.
-2. **`PoiKits._fishing` builds a jetty at `caem_shore` and `rachsia_bridge`** —
-   dry ground, in the 3D world. The map is honest; the geometry is not.
-3. **Energy deposits invisible**, and **Fociaugh's cave mouth on a 1.26 bank** —
-   WS-7 leftovers.
+   re-check (`riverStats.folded`). The one river defect fixable inside this lane.
+3. **Energy deposits**, and **Fociaugh's cave mouth** — both fully scoped above,
+   both in other people's directories.
 4. **Fix `riv2.mts`'s p90 framing** before anyone quotes a p90 river shot.
 
 ## Not mine, stated so nobody re-opens it
 
 **Galdin Quay.** 698 of 6 280 shore points have a run-out gentler than 4 m; it
 needs a `Field.ts` sand shelf and an `Ecology` grass suppression. Terrain lane.
+
+## Two things I could not do from this lane
+
+- **`project/LANDMINES.md` has an uncommitted change from another lane**, so I
+  did not touch it. The entry it should get is the one at the top of this file:
+  *a GLSL compile or link failure is invisible on a warm page, because a program
+  is compiled once per page and the daemon clears a slot's errors per run — only
+  `--cold` can see it, and `renderer.info.programs` + `LINK_STATUS` is how you
+  find which material, since `material.program` is undefined in three 0.185.*
+- **The geometry bake.** Adding `Tarns.ts` to `GEO_SOURCES` means
+  `pruneStaleGeoBake` drops the geometry cache on the next server start (~1.2 s
+  of boot). `node src/tools/texbake.mts --geo` restores it. I left it to whoever
+  is next past the `geometry-bake` lane rather than racing a shared gz with the
+  lane that owns that tooling.
 
 ## A process note
 
