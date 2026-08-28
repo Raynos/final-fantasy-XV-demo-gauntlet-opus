@@ -319,6 +319,41 @@ function rockPool(): THREE.BufferGeometry[][] {
 }
 
 /**
+ * **The landform-sized band, which the pool deliberately does not cover.**
+ *
+ * `ROCK_BANDS` tops out at 3.4 m because that is what a *boulder* is, and
+ * `kitRock` is a boulder pool. `_dungeon`'s own docstring promises "a corbelled
+ * portal cut into a **rubble mound**", and what it built was
+ * `SphereGeometry(9, 14, 8)` on `M.dark` — 239 vertices over twelve world
+ * metres, mapless, smooth-shaded. That is the "smooth dark ellipsoid" the
+ * coordinator read in `poi_tomb`: the Keycatrich Trench mouth stands 68 m from
+ * the Tomb of the Wise, so the tomb's own hero shot is looking straight at it.
+ *
+ * It is the same class `c2e2295` fixed for the kits' boulders and the same fix,
+ * one band up: a real `rockGeometry` at its own world size, so the triplanar
+ * UVs are baked at nine metres rather than at one and stretched. Three shapes
+ * rather than twelve — there are ten of these in the world, not 124 — at
+ * `detail: 3`, because a twelve-metre landform read at 175 m needs a silhouette
+ * and 320 faces do not give it one.
+ *
+ * `stretch` is authored into the *geometry* and not into the placement, for the
+ * reason the pool docstring gives: a placement scale scales the joint network
+ * with it. A squat mound is a squat mound at bake time.
+ */
+const MOUND_R = 9;
+let _moundPool: THREE.BufferGeometry[] | null = null;
+export function kitMound(i: number): THREE.BufferGeometry {
+  if (!_moundPool) {
+    _moundPool = [0, 1, 2].map((k) => rockGeometry(4400 + k * 53, {
+      detail: 3, warp: 0.30, stretch: [1.12, 0.60, 1.02], planes: 6,
+      upright: 0.30, bite: 0.82, bedding: 0.10, beds: 4, chips: 4,
+      round: 0.22, crease: 34, weather: 0.22, size: MOUND_R, uvScale: 0.34,
+    }));
+  }
+  return _moundPool[((i % 3) + 3) % 3];
+}
+
+/**
  * One pooled boulder at a wanted world size.
  *
  * @param rng the kit's stream, so the shape drawn is deterministic
@@ -2489,9 +2524,37 @@ export class PoiKits {
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.35, 1.35, 1.35]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 11, 9, 29, undefined, { yaw, wear: [[0, 2.5, 1.4]] });
-    // the mound the portal is cut into
-    put(M.dark, new THREE.SphereGeometry(9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
-      [0, -0.6, -4], [0, 0, 0], [1, 0.62, 1]);
+    /*
+     * **The mound, and it is rubble.**
+     *
+     * This was `SphereGeometry(9, 14, 8)` on `M.dark` — a mapless `plain()`
+     * material — and at the 1.35 world scale that is a twelve-metre grey
+     * ellipsoid carrying 239 vertices and no map of any kind. It is the
+     * "smooth dark ellipsoid beside the tomb" in `poi_tomb`, because the
+     * Keycatrich Trench mouth stands 68 m from the Tomb of the Wise.
+     *
+     * A core from {@link kitMound} on `M.rock` — the mapped, triplanar-UV
+     * material `c2e2295` minted for exactly this — with pooled boulders riding
+     * its shoulders so the silhouette is broken by stone rather than by a
+     * smooth arc. `y` puts the core's crown where the hemisphere's was
+     * (`-0.6 + 9 * 0.62 = 4.98`); the rest of the blob is inside the hill.
+     */
+    put(M.rock, kitMound(Math.floor(rng.next() * 3)),
+      [0, 4.98 - MOUND_R * 0.62, -4], [0, rng.next() * 6.28, 0], [1, 0.62, 1]);
+    for (let i = 0; i < 11; i++) {
+      const a = rng.range(0, 6.28), d = 5.6 + rng.range(0, 3.2);
+      // On the shoulder, not on the ground: the flank of a squat ellipsoid at
+      // radius `d` is at `y = h * sqrt(1 - (d/R)^2)`, and sinking each block a
+      // third of its own size into that surface is what makes it read as
+      // rubble the mound is made OF rather than as boulders set around it.
+      const t = Math.min(1, d / (MOUND_R * 1.04));
+      const sc = rng.range(1.1, 2.6);
+      const rk = kitRock(rng, sc);
+      put(M.rock, rk.geo,
+        [Math.cos(a) * d, (4.98 - MOUND_R * 0.62) + MOUND_R * 0.62 * Math.sqrt(Math.max(0, 1 - t * t)) - sc * 0.34, Math.sin(a) * d - 4],
+        [rng.gauss(0, 0.4), rng.next() * 6.28, rng.gauss(0, 0.4)],
+        [rk.s * rng.range(0.9, 1.35), rk.s * rng.range(0.6, 0.95), rk.s]);
+    }
 
     const b = bag();
     const tv = toneVariant(rng, { valueAmp: 0.12, warmAmp: 0.05 });
