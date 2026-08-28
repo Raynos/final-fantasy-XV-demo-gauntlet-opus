@@ -946,6 +946,8 @@ without opening the handoff it lived in.
 | A world-metre contact ramp for grounding | sub-pixel at judged range; its own positive control moved 2.600/255 with the crop *visually identical* |
 | TAA's clamp is why leaf edges alias | measured false — TAA reaches them and softens them, it is just not enough |
 | `compileAsync` for shader warm | **3% slower** here, six pairs |
+| **WS-11: the arm whips beside a boulder, so it is `CameraRig._armDistance`'s sphere sweep, not the framing** | **the sweep is innocent.** `probes/armwhip.mts` records the lens's own kinematics in a real den fight, decomposed into focus translation / arm length / orbit: **zero frames at the `minDistance` clamp** in the fight and in the walking control, and **14.45 of the 14.86 m/s p95 lens speed is the ORBIT term**. It is the combat **framing block**, which steered `yawTarget` at the bearing from the *player* — the one unstable quantity in a melee, a sabertusk two metres away swings it 90 degrees in a third of a second while barely moving on screen — with no deadzone and no rate limit, while `restDistance = targetDistance + flat * 0.22` ran the arm out to 7.9 m so every degree of it was 40% more lens travel. Rewritten: `e218f5b`. The **boulder** is a separate defect and is still open — see below |
+| **WS-11: `PartyAI.ROLES`' motion values are the knob for "Noctis does 14% of the damage in his own fight"** | **they are not.** `probes/dpsshare.mts` runs every attacker's real blow through `rpg.damage` with that attacker's own stats and cadence: at **full uptime Noctis already has 64%** of the party's output (781 dps to gladio 203, ignis 131, prompto 112). The entire gap is **uptime**, which `ROLES` cannot reach — and most of the measured 14% was the probe, whose melee policy stood at `t.radius + 3.4` (4.4 m for a sabertusk) with a 2.05 m blade and swung at air; one round went **0% -> 27%** on that line alone. What was left was a missing **attack step-in** and a flat warp-strike multiplier. `ea87e16`, `77e5c51` |
 | Raising a cost cap in the ground layer | no budget bug exists there; the limit is `Ecology.scrubDensity` at 0.09–0.34, which is authored ecology |
 | `GrassField`'s 155 m outer ring is a fictional budget constant | it is justified on quality and the justification is good |
 | The Meteor's flat facets are a texture problem | it has real maps, triplanar UVs and the vertex-colour trap handled; it is the cleave-plane shading |
@@ -1021,31 +1023,26 @@ to `project/archive/handoff/` the same day and their open work is here, which is
 the rule this file exists to enforce. Directories: `src/combat/**`,
 `src/characters/**`, `src/ui/**`, `src/world/props/**`.
 
-**Combat — the fight has shape now; these are what is still ugly in it.**
+**Combat — DONE, 2026-08-28.** All five items landed or closed; two of the
+five closed as measured negatives on their stated cause (both in the negatives
+table). `e218f5b` the camera whip and the combat framing · `10c2688` +
+`e729bb8` the shards · `6a00b0f` the victory card, the call-out wash and the
+damage-number lanes · `ea87e16` + `77e5c51` the damage share. Handoff:
+`project/archive/handoff/combat.md`. Two things it reports rather than fixes:
 
-- **The arm whips when the fight is beside a boulder.** Every `stagger` frame of
-  every run in four capture sets is a smear with Noctis not in it and a boulder
-  filling the near corner, unchanged by both camera commits — so it is
-  `CameraRig._armDistance`'s sphere sweep, not the framing. **The single ugliest
-  thing a fight here does.**
-- **`CameraRig`'s combat framing is live and under-tuned.** `wantPitch = 0.16 +
-  toTarget.y * 0.03` barely tilts down for a metre-tall beast, so a sabertusk at
-  eight metres is ~60 px; FFXV's combat camera comes in *and* down. And
-  `restDistance = targetDistance + flat * 0.22` is why `_frameCombat` only
-  frames a threat inside 16 m — beyond that the term pushes the arm 5.6 → 10 m
-  and makes framing worse than none.
-- **Nothing marks the end of a fight.** `encounter:victory` carries kills, EXP,
-  gil and drops; the party just stands up with weapons drawn. And the
-  **`STAGGER!` banner outlives the stagger** — still on screen at the victory
-  frame four seconds after the last kill, in white letterspaced type with no
-  plate over a bright sky. So are the damage numbers.
-- **The warp-strike shard burst reads as flat blue confetti at close range** —
-  large opaque mid-blue lozenges, no emissive gradient, occluding the fight.
-  `src/combat/VFX.ts` / `CrystalShards.ts`.
-- **Noctis does 14% of the damage in his own fight.** `PartyAI.ROLES` motion
-  values are the knob. The lane's warning that this should not be tuned before
-  the level bands moved has been **discharged** — levels scale HP and damage
-  now and wild dens track the party — so this is live work rather than a trap.
+- **The boulder in the near corner is prop occlusion, and there has never been
+  a prop sweep.** `CameraRig._armDistance` sweeps **terrain only**; its own
+  comment says `Props` would have to publish an opt-in `cameraColliders`, and
+  nothing does. `tmp/shots/cb1/f-engage.jpg` is a rock filling the top-right
+  quadrant a metre from the lens, and it happens walking as much as fighting.
+  Needs `Rocks` (`src/world/props/Rocks.ts`, a `TileStream` of instances) to
+  publish the nearby instances' centres and radii; `_armDistance` is where the
+  sweep goes and is written to take one.
+- **A wild enemy's max HP is one Noctis combo**, which is why field encounters
+  last **6-7 s** against FFXV's 30-90. A level 21 sabertusk is 1381 hp; a full
+  Engine Blade combo is 1375 over 1.76 s and the party's full-uptime output is
+  1227 dps (`probes/dpsshare.mts`). Not a combat-lane knob: it is enemy HP
+  scaling, `WildTerritories` bands and `RpgSystem.enemyScaling`.
 
 **Characters — WS-7's own list, in its order.**
 
