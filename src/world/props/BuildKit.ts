@@ -1010,7 +1010,12 @@ export function basaltColumns(out: THREE.BufferGeometry[], o: {
       fallen.push([ct * (r + chord * 0.55), st * (r + chord * 0.55), Math.min(1.6, chord * 0.42)]);
       continue;
     }
-    const crown = top + rng.gauss(0, 0.09);
+    // **The crown step has to be metres-visible, not centimetres.** ±90 mm on a
+    // ten-metre shelf projects to nothing at the 20-60 m a haven is read from
+    // and the first capture came back with a level rim — `tmp/shots/lr2-met-b/
+    // poi_haven.jpg`, a ring of neat blocks at one height. One column in four
+    // is also a good half-metre out of line, because an even step is a pattern.
+    const crown = top + rng.gauss(0, 0.26) + (rng.next() < 0.25 ? rng.range(-0.55, 0.55) : 0);
     const h = crown + depth;
     const proud = rng.range(-0.02, 0.10) * r * 0.4;
     // Radial thickness is generous: the column is a wedge into the core, so
@@ -1018,11 +1023,14 @@ export function basaltColumns(out: THREE.BufferGeometry[], o: {
     const thick = r * 0.30;
     const cx = ct * (r - thick / 2 + proud), cz = st * (r - thick / 2 + proud);
     out.push(box(chord, h, thick, {
-      ry: -mid,
+      ry: -mid + rng.gauss(0, 0.07),
       // Lean the top IN so the foot stands proud: a battered face, which is
-      // what throws the flank into shadow under an overhanging crown.
-      rx: Math.sin(mid) * batter * 0.5,
-      rz: -Math.cos(mid) * batter * 0.5,
+      // what throws the flank into shadow under an overhanging crown. Plus a
+      // couple of degrees of its own, in a direction the batter did not pick —
+      // a laid block is plumb and a basalt column is not, and that is the cue
+      // that separates a rock from a plinth.
+      rx: Math.sin(mid) * batter * 0.5 + rng.gauss(0, 0.035),
+      rz: -Math.cos(mid) * batter * 0.5 + rng.gauss(0, 0.035),
       x: cx, y: crown - h / 2, z: cz,
       arris: Math.min(0.14, chord * 0.06),
     }));
