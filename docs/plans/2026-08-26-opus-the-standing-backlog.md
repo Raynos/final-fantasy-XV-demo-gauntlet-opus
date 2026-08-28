@@ -1244,6 +1244,23 @@ declares the same module-level `store` and nothing releases it.** Six lines, and
 the call site is the whole question — one system too early is the silent
 cache-miss defect `boot-memory.md` records. Owner: whoever owns `Props.ts`.
 
+**And `TexBake.ts`'s own docstring already answers "which call site", in the
+negative: not `Props.init`.** Decoding is deferred to the lookup and an entry is
+**dropped from the index once served**, so what stays resident is precisely *the
+entries nothing has asked for yet* — and the docstring names why that set is not
+waste: **the dungeon interiors are built on first `enter()`, long after boot, and
+they are the reason this is not simply freed when `init()` ends.** `Sky`,
+`Hammerhead` and `Dungeons` each call `loadTexBake()` for the same reason.
+Mirroring `Props.ts:130` would therefore push every interior onto the
+generate-in-place fallback, and **it would only show up when a player walks into
+a cave** — no gate poses a dungeon interior cold.
+
+So it is six lines *and* a correctness argument. Three shapes that would work:
+release **per key** once its last consumer has been served; release the whole
+store at the end of the first `Dungeons.enter()`; or split the dungeon keys into
+their own container loaded on demand. 309 MB is worth that work. It is not worth
+a regression that hides until someone enters a dungeon.
+
 That names 309 of the ~880. **~570 MB of renderer is still unattributed**, and
 `?q=low` is the next discriminator — one `bootprof --mem` run.
 
