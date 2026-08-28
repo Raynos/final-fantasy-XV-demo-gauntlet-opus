@@ -1851,3 +1851,70 @@ twice** — and the two commits' columns agreed to three decimals, which is itse
 the tell that the residual is boot-to-boot TAA rather than anything either
 commit did. Cold on both sides, always: `--cold` is what makes the floors the
 measured cold floors.
+
+## An instrument that re-derives the code's own arithmetic cannot notice the code changing
+
+`probes/fishdeck.mts` was written to answer "how far above its own bank does a
+fishing camp stand", and it answered it by recomputing `_fishing`'s own
+`deck = max(1.4, water.level + 1.5 - base)` and adding the offsets the kit uses.
+That was correct on the day it was written. `b648b69` then split the bank out of
+the deck — and the probe went on printing **4.6–5.3 m of shack float that no
+longer existed**, for two lanes, with no symptom at all. Its numbers were
+internally consistent, plausible, and describing a version of the code that had
+been replaced.
+
+The rule that falls out: **a probe measures the geometry that was built, not the
+formula that built it.** Walk `pk.built`, read `geometry.attributes.position`
+through `matrixWorld`, and compare against the world. A probe written that way
+cannot silently describe a dead branch, and the same rewrite immediately found
+two defects the arithmetic version was structurally unable to see — that all four
+tarn camps stood entirely over water and all four sea camps entirely over land.
+
+**And the second half of that rewrite has its own trap.** Dropping every vertex
+into a 2 m cell and judging each cell by its own lowest vertex reports **every
+overhang as a float**: a roof eave stands 0.4 m outside the shack it is nailed
+to, so the cell under the eave holds nothing but roof and reads 2.5 m of air.
+That produced a confident 2.8–4.1 m "proud" reading on camps whose every piece
+was individually seated. A cell is supported by the lowest thing within one cell
+of it in each direction; a structure genuinely in the air still has nothing under
+any of it, which is the case the probe exists for.
+
+## `gradePad` at a brink builds a WALL, so a toe probe cannot see the pad that fails
+
+`probes/padhang.mts` measures an apron's outer ring against the drawn ground and
+is the right instrument for a pad that stops in mid air. It is **blind to the
+other failure of the same code**, and the blindness is structural rather than a
+tuning matter.
+
+`Wear.gradePad` has a `cliff` branch. On a bearing where the ground falls faster
+than fill can stand, it does not hang a batter — it builds a kerb and then a
+**retaining wall straight down to the ground the bearing measured, capped at
+26 m**. A wall *lands*. So `hang` is happy, `toeMean` is happy, `floatcheck` is
+happy, and what is in the frame is a twenty-six-metre curtain of pale striated
+fill plastered flat across a dark rock cliff — which is exactly the composition
+`FILL_MAX`'s own docstring says it exists to prevent, arriving through the branch
+that fires when `FILL_MAX` is exceeded.
+
+This cost a full move-and-look cycle on `tomb_fierce`: a seat chosen on hang
+(22.0 → +0.24 m) and footprint relief (72 → 24 m) turned out to be the worst of
+the four candidates once looked at. **The number that sees it is how far the
+earthwork falls below its own deck** — the minimum `y` over every vertex of the
+apron mesh, against the group's origin. At the pretty seat it read `26.0`, the
+cap; forty metres further on it read `2.6`. `tmp/probes/poiseat.mts` ranks
+candidate seats on both, and a seat is only good when hang ≈ 0 **and** that
+number is small.
+
+Corollary worth stating on its own: `padhang`'s `over0`/`meanToe` improving is
+not evidence that any pad looks better. Capture and look.
+
+## A fishing pin cannot be moved off its own pond, because the pond is defined from the pin
+
+`Tarns.findTarns` walks `worldMap.poisOfType('fishing')` and fits a basin
+**centred on each pin**, out to a 105 m disc. So every tarn pin is in the middle
+of its own water by construction, and "move the pin to the bank" is not an
+available fix — the bank moves with it. Four fishing camps stood entirely over
+their own tarn for exactly this reason, and the fix had to be in the kit: it
+finds its waterline and lays itself out from there, up to 80 m from the pin.
+
+The same shape will bite anything else that derives world content from a POI
+position and is then asked to reposition that POI.
