@@ -89,10 +89,13 @@
  *   x = 30 mm at the mouth line. A head does about 7. `shellPoint` sweeps a
  *   pure ellipse, so this is the one number under "a blank cheek", "flat
  *   sockets" and "a wedge" alike.
- * - **`mentonWidthFrac`** — half-width at the menton over the head's own
- *   maximum half-width. Farkas' adult male runs 0.32; a cone runs less, and a
- *   chin that comes to a point is what makes a low camera read the chin as the
- *   leading feature of the face.
+ * - **`jawWidthErr`** — the mean absolute error of the bottom four samples of
+ *   the vertex-to-menton half-width profile against Farkas' adult male
+ *   (0.82, 0.70, 0.53, 0.32). One number for the mandible's whole silhouette,
+ *   and it catches the V a landmark bench cannot: this cast stays *wide* at the
+ *   gonion and then comes to a *point* at the chin, so two of the four are over
+ *   and two are under and a signed mean would be zero. A chin that comes to a
+ *   point is what makes a low camera read the chin as the leading feature.
  *
  * ## What this gate is blind to
  *
@@ -134,8 +137,8 @@ const LIMITS = {
   mouthReliefMm: 2.0,
   /** fall-back from the midline by x = 30 mm at the mouth line, mm. Head: ~7. */
   transverseDropMm: 12,
-  /** menton half-width over max half-width. Farkas adult male: 0.32. */
-  mentonWidthFrac: 0.28,
+  /** mean |error| of the mandible's four width samples against Farkas. */
+  jawWidthErr: 0.05,
 };
 
 /**
@@ -164,7 +167,8 @@ interface CharRow {
   noseLeadMm: number;
   mouthReliefMm: number;
   transverseDropMm: number;
-  mentonWidthFrac: number;
+  jawWidthErr: number;
+  widthProfile: number[];
   headHeightMm: number;
 }
 
@@ -451,10 +455,43 @@ const loZ  = maxOver(zf, FACE.mouth[1] - 0.009, FACE.mouth[1] - 0.002);
 // x = 30 mm, in the same 4 mm band.
 const midZ = maxOver(zf, FACE.mouth[1] - 0.002, FACE.mouth[1] + 0.002);
 const dropZ = maxOver(z30, FACE.mouth[1] - 0.002, FACE.mouth[1] + 0.002);
-let wMax = 0;
-for (let b = 0; b < NB; b++) if (wf[b] > wMax) wMax = wf[b];
-let wMenton = 0;
-for (let b = bandOf(yMin); b <= bandOf(yMin + 0.008); b++) if (wf[b] > wMenton) wMenton = wf[b];
+// ---- the width profile, vertex to menton -----------------------------------
+// Twelve half-widths from the vertex to the menton, each over the profile's own
+// maximum -- headprop.mts's statistic, re-derived so it can be gated. This is
+// the coronal shape in one line and it is where "a wedge" and "a cone" live:
+// Farkas' adult male runs
+//
+//   0.40 0.64 0.80 0.91 0.98 1.00 0.98 0.92 | 0.82 0.70 0.53 0.32
+//
+// and the four after the bar are the mandible. A head that stays wide to the
+// jaw and then comes to a point fails on those four while the top eight are
+// perfect, which is exactly what this cast does.
+//
+// **The menton is not the mesh's lowest vertex.** The shell wraps under the jaw
+// into the neck, so its lowest point is that wrap and any closed surface tapers
+// to nothing there; normalising against it measures the pole and calls it a
+// chin. The menton is the lowest band whose midline z is still genuinely in
+// FRONT -- headprop.mts's own rule, and the fraction is scale-free.
+let zFront = -Infinity;
+for (let b = 0; b < NB; b++) if (zf[b] > zFront) zFront = zf[b];
+let mentonB = 0;
+for (let b = 0; b < NB; b++) if (zf[b] > 0.35 * zFront) { mentonB = b; break; }
+let vertexB = NB - 1;
+for (let b = NB - 1; b >= 0; b--) if (wf[b] > 0) { vertexB = b; break; }
+const wAt = (b) => {
+  let v = 0;
+  for (let k = Math.max(0, b - 2); k <= Math.min(NB - 1, b + 2); k++) v = Math.max(v, wf[k]);
+  return v;
+};
+const prof = [];
+for (let i = 0; i < 12; i++) {
+  prof.push(wAt(Math.round(vertexB + (mentonB - vertexB) * ((i + 0.5) / 12))));
+}
+const pMax = Math.max(...prof, 1e-9);
+const widthProfile = prof.map((v) => +(v / pMax).toFixed(3));
+const ADULT_JAW = [0.82, 0.70, 0.53, 0.32];
+let jawErr = 0;
+for (let i = 0; i < 4; i++) jawErr += Math.abs(widthProfile[8 + i] - ADULT_JAW[i]);
 const mm = (v) => +(v * s * 1000).toFixed(2);
 
 return {
@@ -476,7 +513,8 @@ return {
   noseLeadMm: mm(prn - chinZ),
   mouthReliefMm: mm(Math.min(upZ, loZ) - stoZ),
   transverseDropMm: mm(midZ - dropZ),
-  mentonWidthFrac: +(wMenton / Math.max(1e-9, wMax)).toFixed(3),
+  jawWidthErr: +(jawErr / 4).toFixed(4),
+  widthProfile,
   headHeightMm: mm(yMax - yMin),
 };
 `;
@@ -488,7 +526,8 @@ interface PageRow {
   noseLeadMm: number;
   mouthReliefMm: number;
   transverseDropMm: number;
-  mentonWidthFrac: number;
+  jawWidthErr: number;
+  widthProfile: number[];
   headHeightMm: number;
 }
 
@@ -577,7 +616,8 @@ async function main() {
       rows.push({
         name, litSign, pxPerMm: +mmp.toFixed(3), mouth, nose, cheek,
         noseLeadMm: c.noseLeadMm, mouthReliefMm: c.mouthReliefMm,
-        transverseDropMm: c.transverseDropMm, mentonWidthFrac: c.mentonWidthFrac,
+        transverseDropMm: c.transverseDropMm, jawWidthErr: c.jawWidthErr,
+        widthProfile: c.widthProfile,
         headHeightMm: c.headHeightMm,
       });
     }
@@ -626,14 +666,14 @@ async function main() {
   }
 
   console.log('\ngeometry — canonical head space, millimetres.');
-  console.log(`  ${pad('char', 9)}${'noseLead'.padStart(10)}${'mouthRelief'.padStart(12)}${'transDrop'.padStart(11)}${'menton/max'.padStart(12)}${'headH'.padStart(8)}`);
+  console.log(`  ${pad('char', 9)}${'noseLead'.padStart(10)}${'mouthRelief'.padStart(12)}${'transDrop'.padStart(11)}${'jawWidthErr'.padStart(13)}${'headH'.padStart(8)}`);
   for (const r of rows) {
     console.log(`  ${pad(r.name, 9)}${num(r.noseLeadMm, 1, 10)}${num(r.mouthReliefMm, 2, 12)}` +
-      `${num(r.transverseDropMm, 1, 11)}${num(r.mentonWidthFrac, 3, 12)}${num(r.headHeightMm, 0, 8)}`);
+      `${num(r.transverseDropMm, 1, 11)}${num(r.jawWidthErr, 4, 13)}${num(r.headHeightMm, 0, 8)}`);
     if (r.noseLeadMm < LIMITS.noseLeadMm) fails.push(`${r.name}: noseLeadMm ${r.noseLeadMm} < ${LIMITS.noseLeadMm} — the chin is level with or ahead of the nose`);
     if (r.mouthReliefMm < LIMITS.mouthReliefMm) fails.push(`${r.name}: mouthReliefMm ${r.mouthReliefMm} < ${LIMITS.mouthReliefMm} — no mouth geometry`);
     if (r.transverseDropMm > LIMITS.transverseDropMm) fails.push(`${r.name}: transverseDropMm ${r.transverseDropMm} > ${LIMITS.transverseDropMm} — the face turns away from the front too fast`);
-    if (r.mentonWidthFrac < LIMITS.mentonWidthFrac) fails.push(`${r.name}: mentonWidthFrac ${r.mentonWidthFrac} < ${LIMITS.mentonWidthFrac} — the chin comes to a point`);
+    if (r.jawWidthErr > LIMITS.jawWidthErr) fails.push(`${r.name}: jawWidthErr ${r.jawWidthErr} > ${LIMITS.jawWidthErr} — the mandible is not an adult's: ${JSON.stringify(r.widthProfile.slice(8))} against [0.82,0.7,0.53,0.32]`);
   }
   console.log(`\n  limits: ${JSON.stringify(LIMITS)}`);
   console.log('  * noseRange is reported, not gated — see the comment at its call site.');
