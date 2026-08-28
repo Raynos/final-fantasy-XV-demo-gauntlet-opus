@@ -182,6 +182,14 @@ const GATES: Gate[] = [
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
   { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
   { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures', kind: 'cpu', cost: 7.6 },
+  // The only gate in this suite that scores a **rendered face**. Every other
+  // head instrument here -- `headprop`, `headprofile`, `brushsurvive`,
+  // `hairstand` -- reads the position buffer, and three lanes in a row have now
+  // moved those numbers into their adult bands while the picture got worse.
+  // head-r3 measured the gap: 8 mm of added lip relief moved the *rendered*
+  // mouth by 1 of 255. So this one renders the face at 0.55 m and asks the
+  // image whether there is a mouth on it. NOT pixelBlind, obviously.
+  { name: 'facecheck', gate: true, script: 'facecheck.mts', expect: 'a mouth and a nose read in the frame', kind: 'browser', cost: 30 },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
   { name: 'reachcheck', pixelBlind: true, script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
