@@ -262,6 +262,24 @@ const GATES: Gate[] = [
     args: [path.join(HERE, 'coldload.mts'), '--prod', '--gate'],
     expect: 'the boot yields; no multi-second freeze; first visit inside its transfer budget',
   },
+  /**
+   * What a page costs when nobody is touching it.
+   *
+   * `perf.mts` steps frames by hand and times the main thread, so it can see
+   * neither the frame RATE a free-running page chooses nor the CPU the GPU
+   * process spends. An idle tab at 96–105% of a core was invisible to all
+   * nineteen gates and to both perf gates, by construction.
+   *
+   * The load-bearing assertion is the `stopped` arm: with the rAF loop
+   * cancelled and nothing else changed, the page costs 0.5–2.4% of a core. A
+   * `setInterval`, a poll, or a converge loop that stops reporting finished
+   * lands there and nowhere else in this suite.
+   */
+  {
+    name: 'idlecpu', pixelBlind: true, perf: true, kind: 'browser', cost: 60,
+    args: [path.join(HERE, 'idlecpu.mts'), '--q', 'high', '--gate'],
+    expect: 'nothing runs when the loop is stopped; one frame inside its whole-browser CPU budget',
+  },
 ];
 
 function parse(argv: string[]) {

@@ -8,6 +8,7 @@
  *   node src/tools/idlecpu.mts --hidden        # add a background-tab arm
  *   node src/tools/idlecpu.mts --q high        # what a PERSON opens; the harness default is ultra
  *   node src/tools/idlecpu.mts --dpr 1.5       # add a Retina-resolution arm (headless reports dpr 1)
+ *   node src/tools/idlecpu.mts --gate          # the `idlecpu` gate, as `check --perf` runs it
  *
  * **This is the gate-shaped hole `docs/BOOT_PERF.md` names.** `?shoot=1` is a
  * determinism gate and also a blindfold: `main.ts` does not call `game.start()`
@@ -261,8 +262,55 @@ function report(arms: Arm[]) {
   }
 }
 
+/**
+ * The gate, and the one thing it is really guarding.
+ *
+ * **`STOPPED_MAX` is the assertion that matters.** With the rAF loop cancelled
+ * and nothing else changed, an idle page costs 0.5–2.4% of a core, and that is
+ * the *whole* non-loop cost of this game: no timer, no interval, no microtask
+ * storm, no streaming loop still converging. Anything that introduces one —
+ * a `setInterval` for a day cycle, a poll for a network feature, a converge
+ * that stops reporting finished — lands squarely in this arm and nowhere else
+ * in the suite. It is also the arm least sensitive to a busy box, because a
+ * page doing nothing does not do more of it under contention.
+ *
+ * `FRAME_CPU_MAX` guards the other half: what one rendered frame costs across
+ * every browser process, GPU included. 16.5 ms today, and the budget is loose
+ * on purpose. `perf.mts` cannot see this number at all — it steps frames by
+ * hand and times the main thread, so a regression that lands in the GPU
+ * process or the compositor is invisible to it.
+ */
+const STOPPED_MAX = 15;
+const FRAME_CPU_MAX = 28;
+
+function gate(arms: Arm[]): boolean {
+  const armOf = (n: string) => arms.find((a) => a.name === n);
+  const stopped = armOf('stopped');
+  const running = armOf('running2') ?? armOf('running');
+  if (!stopped || !running || !running.prof?.frames) {
+    console.log('idlecpu: FAIL — the ablation did not produce both arms');
+    return false;
+  }
+  const stoppedPct = pct(Object.values(stopped.proc).reduce((x, y) => x + y, 0), stopped.wallMs);
+  const frameCpu = Object.values(running.proc).reduce((x, y) => x + y, 0) * 1000 / running.prof.frames;
+  const checks: [string, boolean, string][] = [
+    ['an idle page with the render loop stopped costs nothing',
+      stoppedPct <= STOPPED_MAX, `${p1(stoppedPct)} of a core, budget ${p1(STOPPED_MAX)}`],
+    ['one rendered frame stays inside its whole-browser CPU budget',
+      frameCpu <= FRAME_CPU_MAX, `${frameCpu.toFixed(2)} CPU ms/frame = ${p1(frameCpu * 60 / 10)} of a core at 60 Hz, budget ${FRAME_CPU_MAX} ms`],
+  ];
+  let ok = true;
+  for (const [what, pass, detail] of checks) {
+    console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${what} — ${detail}`);
+    if (!pass) ok = false;
+  }
+  console.log(`\nidlecpu: ${ok ? 'PASS' : 'FAIL'} — stopped ${p1(stoppedPct)}, ${frameCpu.toFixed(2)} CPU ms/frame`);
+  return ok;
+}
+
 async function main() {
-  const SECS = num('--secs', 15);
+  const GATE = flag('--gate');
+  const SECS = num('--secs', GATE ? 8 : 15);
   const ABLATE = !flag('--no-ablate');
   const HIDDEN = flag('--hidden');
   const DPR = num('--dpr', 0);
@@ -285,6 +333,7 @@ async function main() {
   if (!sysCdp) console.log('[idlecpu] no browser-level CDP session; per-process CPU unavailable');
 
   const arms: Arm[] = [];
+  let failed = false;
   try {
     const installed = await page.evaluate(INSTALL);
     console.log(`[idlecpu] instrument ${installed}; page is ${await page.evaluate('!!window.GAME._running') ? 'RUNNING' : 'STOPPED'}`);
@@ -346,12 +395,14 @@ async function main() {
     // load, which is how a clean run prints "CONTENDED" with an empty list of
     // worktrees.
     await leased.release();
+    if (GATE) failed = !gate(arms);
     const after = contention();
     if (after.busy) {
       console.log(`\n!! CONTENDED by the end — load ${after.load1.toFixed(2)}`
         + `${after.trees.length ? `, live worktrees: ${after.trees.join(', ')}` : ''}. Not a baseline.`);
     }
   }
+  if (failed) process.exit(1);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
