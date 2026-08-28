@@ -8,7 +8,6 @@ import { TileStream } from './TileStream.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import { dressAt, zoneMoist, LITTER_KINDS, type LitterKind } from './ZoneDress.ts';
 import type { ErosionSample } from '../terrain/Field.ts';
-import { WORLD } from '../map/WorldMap.ts';
 import { leafClusterTex } from '../veg/VegTextures.ts';
 import { patchVeg, registerAlphaCard } from '../veg/VegMaterial.ts';
 
@@ -20,7 +19,6 @@ import { patchVeg, registerAlphaCard } from '../veg/VegMaterial.ts';
  */
 
 /** Water plane height; several litter kinds key off proximity to it. */
-const SEA = WORLD.seaLevel;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -622,7 +620,7 @@ export class Debris {
         // so it only reads if the bed is within a trunk's height of the
         // surface: any deeper and the whole thing is submerged, which is how
         // the first attempt put four hundred invisible trees in the Vesperpool.
-        const d = SEA - h;
+        const d = eco.waterLevel(x, z) - h;
         return base * THREE.MathUtils.smoothstep(d, -2.5, 0.5)
           * (1 - THREE.MathUtils.smoothstep(d, 4.0, 6.5));
       }
@@ -631,7 +629,7 @@ export class Debris {
         // band at the waterline, and any ground that stays wet. The second is
         // most of them — a marsh is not a lake edge — and it is the erosion
         // pass, not the sea level, that knows where it is.
-        const dw = SEA - h;
+        const dw = eco.waterLevel(x, z) - h;
         const shore = THREE.MathUtils.smoothstep(dw, -1.6, -0.2)
           * (1 - THREE.MathUtils.smoothstep(dw, 0.6, 1.6));
         const marsh = THREE.MathUtils.smoothstep(ero.wet, 0.80, 0.97);
@@ -639,7 +637,7 @@ export class Debris {
       }
       case 'driftwood':
         // A strandline is where water ran, not merely where it stood.
-        return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 3, 22))
+        return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - eco.waterLevel(x, z)), 3, 22))
           * (0.25 + 0.75 * THREE.MathUtils.smoothstep(ero.accum, 0.55, 0.92));
       case 'rubble':
       case 'barrel':
