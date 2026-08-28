@@ -944,3 +944,97 @@ export function sandbagStack(out: THREE.BufferGeometry[], o: {
   }
   for (let k = first; k < out.length; k++) xform(out[k], { ry, x, y, z });
 }
+
+/**
+ * A ring of columnar-jointed basalt: the shelf a haven sits on.
+ *
+ * The object this replaces was a `CylinderGeometry` with two sines added to its
+ * radius, and a 5% wobble on a lathe is still a lathe. What gives a turned edge
+ * away is not the plan — it is that the rim is **one continuous smooth curve at
+ * one height** all the way round, and nothing in a landscape has one. Read
+ * `tmp/shots/lr2-base/poi_haven.jpg`: a grey disc with a hard circular lip and
+ * a second, smaller one on top of it, which is a cake stand however the plan
+ * wobbles.
+ *
+ * So the rim is built as a **ring of prisms**, and every property that matters
+ * varies per column rather than per revolution:
+ *
+ * - **Width.** Each column owns an unequal arc, so the joints between them are
+ *   never evenly spaced and the plan is a polygon nobody drew with a compass.
+ * - **Crown height.** ±90 mm, so the top edge steps rather than runs — this is
+ *   the single strongest cue, because the eye reads the *rim* against the sky
+ *   long before it resolves the flank.
+ * - **Batter and inset.** Each column leans out by its own few degrees and
+ *   stands its own few centimetres proud, so the flank carries a vertical
+ *   shadow at every joint instead of one smooth cone.
+ * - **Two columns are missing.** A notch in the rim, and the block that came
+ *   out of it is returned so the caller can lay it at the foot. A broken edge
+ *   with its own debris under it is what says *weathered outcrop*; a broken
+ *   edge with nothing below it says *unfinished mesh*.
+ *
+ * Column count is small on purpose: 9–13 prisms is 11 silhouette steps, which
+ * is what reads at the 20–60 m a haven is actually seen from, and it costs a
+ * third of the triangles the 17-segment drum did.
+ *
+ * @param out geometry sink — the caller decides the material
+ * @returns `[x, z, size]` per notch: where the fallen block goes and how big
+ */
+export function basaltColumns(out: THREE.BufferGeometry[], o: {
+  r: number; top: number; depth: number; rng: Rng; n?: number;
+  /** How far the flank leans out from crown to foot, as a fraction of `r`. */
+  batter?: number;
+}): number[][] {
+  const { r, top, depth, rng, n = 11, batter = 0.07 } = o;
+  // Unequal arcs. Normalised so the ring still closes, which a per-column
+  // random width does not do on its own.
+  const w: number[] = [];
+  let tot = 0;
+  for (let i = 0; i < n; i++) { const k = rng.range(0.62, 1.45); w.push(k); tot += k; }
+  const fallen: number[][] = [];
+  // The two notches are adjacent-ish rather than opposite: a slab comes off a
+  // rock face in one piece, and two single gaps on opposite sides read as
+  // damage somebody applied evenly.
+  const gap0 = Math.floor(rng.next() * n);
+  const gap1 = (gap0 + 1 + Math.floor(rng.next() * 2)) % n;
+  let a = rng.range(0, Math.PI * 2);
+  for (let i = 0; i < n; i++) {
+    const span = (w[i] / tot) * Math.PI * 2;
+    const mid = a + span / 2;
+    a += span;
+    // The chord this column has to cover, plus a lap so neighbours interlock
+    // rather than leaving a wedge of daylight between them.
+    const chord = 2 * r * Math.sin(span / 2) * 1.18;
+    const ct = Math.cos(mid), st = Math.sin(mid);
+    if (i === gap0 || i === gap1) {
+      // The notch: no column, and the block that was here is lying below it.
+      fallen.push([ct * (r + chord * 0.55), st * (r + chord * 0.55), Math.min(1.6, chord * 0.42)]);
+      continue;
+    }
+    const crown = top + rng.gauss(0, 0.09);
+    const h = crown + depth;
+    const proud = rng.range(-0.02, 0.10) * r * 0.4;
+    // Radial thickness is generous: the column is a wedge into the core, so
+    // however far it leans out its back is still inside the drum.
+    const thick = r * 0.30;
+    const cx = ct * (r - thick / 2 + proud), cz = st * (r - thick / 2 + proud);
+    out.push(box(chord, h, thick, {
+      ry: -mid,
+      // Lean the top IN so the foot stands proud: a battered face, which is
+      // what throws the flank into shadow under an overhanging crown.
+      rx: Math.sin(mid) * batter * 0.5,
+      rz: -Math.cos(mid) * batter * 0.5,
+      x: cx, y: crown - h / 2, z: cz,
+      arris: Math.min(0.14, chord * 0.06),
+    }));
+    // A cap block on about a third of them: the crown of a basalt column is a
+    // separate joint block, and it puts a second step on the rim for 12 tris.
+    if (rng.next() < 0.34) {
+      out.push(box(chord * rng.range(0.45, 0.8), rng.range(0.18, 0.42), thick * 0.75, {
+        ry: -mid + rng.gauss(0, 0.14),
+        x: cx + rng.gauss(0, 0.2), y: crown + 0.1, z: cz + rng.gauss(0, 0.2),
+        arris: 0.06,
+      }));
+    }
+  }
+  return fallen;
+}
