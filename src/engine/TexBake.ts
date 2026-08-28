@@ -74,10 +74,13 @@ interface TexHeader {
  * The inflated container and where each key's planes live in it.
  *
  * Decoding is deferred to the lookup and the entry is dropped from the index
- * once served, so the only texels resident at any moment are the ones a live
- * `DataTexture` owns plus the ones nothing has asked for yet. That second set
- * is not waste: the dungeon interiors are built on first `enter()`, long after
- * boot, and they are the reason this is not simply freed when `init()` ends.
+ * once served. **That alone frees nothing** — every entry holds `buf`, the
+ * whole inflated container — which is why {@link compactTexBake} exists and is
+ * called once the boot-path consumers have run. After it, the only texels
+ * resident are the ones a live `DataTexture` owns plus the ones nothing has
+ * asked for yet. That second set is not waste: the dungeon interiors are built
+ * on first `enter()`, long after boot, and they are the reason this is
+ * compacted rather than simply freed when `init()` ends.
  */
 let store: { index: Map<string, TexEntry & { buf: Uint8Array }> } | null = null;
 /** Filled instead of `store` when the bake tool is driving. */
@@ -191,6 +194,45 @@ export function loadTexBake(): Promise<boolean> {
 /** True once a usable cache is resident. */
 export function texBakeReady(): boolean { return store !== null; }
 
+/**
+ * Copy the unserved entries out of the shared containers and drop the containers.
+ *
+ * **Dropping an entry from the index does not free a byte, and that is the
+ * whole defect.** Every entry carries `buf` — the *entire* inflated container —
+ * so `take`'s `index.delete` only stops a second lookup; the 67.3 MB of
+ * `tex.bin.gz` and the 67.1 MB of `texc.bin.gz` stay reachable through whatever
+ * entry is still in the index. `GeoBake` gets away with the same shape because
+ * its index does empty on the boot path (`GeoBake.ts:345` nulls the store when
+ * it does, and `releaseGeoBake()` catches the leftovers); this index **never**
+ * empties, because the 17.3 MB of `dgn/*` keys belong to interiors that are
+ * built on first `Dungeons.enter()`, long after boot. So the resident set after
+ * boot is not "the entries nothing has asked for yet" as the docstring above
+ * says it is — it is *both containers, whole*, for the life of the session.
+ *
+ * The fix is a compaction, not a release: give each surviving entry its own
+ * buffer and let the two big ones become garbage. **There is no such thing as
+ * calling this too early.** No key is dropped, no lookup can miss afterwards,
+ * and the interiors still read from the cache; calling it before a consumer has
+ * run only means copying a few more bytes than necessary. That is deliberately
+ * the opposite trade from `releaseGeoBake()`, where one system too early is a
+ * silent cache miss.
+ *
+ * @returns bytes still held after the copy — the unserved entries, no container
+ */
+export function compactTexBake(): number {
+  if (!store) return 0;
+  let held = 0;
+  for (const [k, e] of store.index) {
+    const len = e.w * e.h * 4;
+    // `slice`, not `subarray`: a view would keep the container alive, which is
+    // the entire bug being fixed here.
+    store.index.set(k, { k: e.k, w: e.w, h: e.h, off: 0, buf: e.buf.slice(e.off, e.off + len) });
+    held += len;
+  }
+  if (!store.index.size) store = null;
+  return held;
+}
+
 /** Apply the settings `makeTexture` would have applied, to a cache hit. */
 function dress(tex: THREE.DataTexture, {
   colorSpace = THREE.SRGBColorSpace, repeat = 1, anisotropy = 16, generateMipmaps = true,
@@ -226,10 +268,11 @@ function cached(key: string, size: number, opts: TextureOpts, gen: () => THREE.D
 /**
  * Pull one entry's texels out of the cache, dropping it from the index.
  *
- * Dropping is what keeps the resident set honest: after boot the only texels
- * held are the ones a live texture owns plus the ones nothing has asked for
- * yet, and that second set is the dungeon interiors, which are built on first
- * `enter()`.
+ * Dropping keeps the *index* honest; {@link compactTexBake} is what makes it
+ * free memory, because until the containers are compacted every entry holds one
+ * whole container alive. After boot the only texels held are the ones a live
+ * texture owns plus the ones nothing has asked for yet, and that second set is
+ * the dungeon interiors, which are built on first `enter()`.
  *
  * @returns the RGBA bytes, or null on a miss or a size disagreement
  */

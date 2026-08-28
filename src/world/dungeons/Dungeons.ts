@@ -17,7 +17,7 @@ import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
 import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
 import type { InteractableHandle } from '../../game/interaction/Interactables.ts';
 import { bootPhase } from '../../engine/BootProfile.ts';
-import { loadTexBake } from '../../engine/TexBake.ts';
+import { loadTexBake, compactTexBake } from '../../engine/TexBake.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
@@ -214,6 +214,16 @@ export class Dungeons {
     if (game.debug) console.log('[Dungeons] entrances', JSON.stringify(this.stats));
 
     this._wireInteraction(game);
+
+    // `Dungeons` is the last system in `Game.init`'s boot order, so every
+    // boot-path consumer of the texture bake has run by here. Compaction gives
+    // the entries nobody asked for — the `dgn/*` interiors, which are built on
+    // first `enter()` — their own buffers and lets the two inflated containers
+    // go. It is not `releaseGeoBake()`'s trade: nothing is dropped, so this
+    // cannot cause a cache miss no matter where it is called, and the interiors
+    // still read from the bake.
+    const held = compactTexBake();
+    if (game.debug) console.log(`[Dungeons] texbake compacted, ${(held / 1e6).toFixed(1)} MB still held`);
   }
 
   /**
