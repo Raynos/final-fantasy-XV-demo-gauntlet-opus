@@ -87,6 +87,8 @@ interface FrameProfile {
   drawW: number;
   drawH: number;
   quality: string;
+  /** `Game.maxFps` — the render loop's frame-rate cap, 0 if it is free-running. */
+  maxFps: number;
 }
 
 /**
@@ -154,6 +156,7 @@ const READ = `(() => {
     drawW: g.renderer.getContext().drawingBufferWidth,
     drawH: g.renderer.getContext().drawingBufferHeight,
     quality: g.rnd ? g.rnd.quality : (g.renderer.quality || '?'),
+    maxFps: g.maxFps,
   };
 })()`;
 
@@ -279,9 +282,27 @@ function report(arms: Arm[]) {
  * on purpose. `perf.mts` cannot see this number at all — it steps frames by
  * hand and times the main thread, so a regression that lands in the GPU
  * process or the compositor is invisible to it.
+ *
+ * `CAP_SLACK` guards the *product* of those two, which is the number a person
+ * feels and the reason this tool exists. Idle CPU is `frame cost x frame rate`;
+ * the two budgets above bound the first factor twice over and neither says a
+ * word about the second. `Game.start()` now caps the loop (see its comment),
+ * and this is the only assertion in the suite that would notice if it stopped:
+ * every other gate poses a `?shoot=1` page that never calls `start()` at all.
+ *
+ * The slack is not a tolerance for noise — the cap can only ever *skip* a
+ * frame, so contention pushes this number down and never up. It is there
+ * because the cap is a vsync divisor: a host refresh that is not a multiple of
+ * the cap legitimately draws above it (144 Hz -> 72 fps, 1.2x, because 60 is
+ * not reachable there and `BRIEF.md` rule 3's floor wins). The daemon's
+ * headless chromium runs a ~120 Hz rAF, so the divisor is 2 and the observed
+ * rate is 60.0-60.2. If this ever fails with a rate between the cap and 2x it,
+ * the host's refresh moved into the 61-119 Hz band, where no legal division
+ * exists and the honest answer is to widen the budget — not to blame the cap.
  */
 const STOPPED_MAX = 15;
 const FRAME_CPU_MAX = 28;
+const CAP_SLACK = 1.25;
 
 function gate(arms: Arm[]): boolean {
   const armOf = (n: string) => arms.find((a) => a.name === n);
@@ -293,18 +314,25 @@ function gate(arms: Arm[]): boolean {
   }
   const stoppedPct = pct(Object.values(stopped.proc).reduce((x, y) => x + y, 0), stopped.wallMs);
   const frameCpu = Object.values(running.proc).reduce((x, y) => x + y, 0) * 1000 / running.prof.frames;
+  const cap = running.prof.maxFps;
+  const fps = running.prof.frames / (running.prof.wallMs / 1000);
   const checks: [string, boolean, string][] = [
     ['an idle page with the render loop stopped costs nothing',
       stoppedPct <= STOPPED_MAX, `${p1(stoppedPct)} of a core, budget ${p1(STOPPED_MAX)}`],
     ['one rendered frame stays inside its whole-browser CPU budget',
       frameCpu <= FRAME_CPU_MAX, `${frameCpu.toFixed(2)} CPU ms/frame = ${p1(frameCpu * 60 / 10)} of a core at 60 Hz, budget ${FRAME_CPU_MAX} ms`],
+    ['the render loop is capped, and honours its cap',
+      cap > 0 && fps <= cap * CAP_SLACK,
+      cap > 0
+        ? `Game.maxFps ${cap}, drew ${fps.toFixed(1)} fps, budget ${(cap * CAP_SLACK).toFixed(1)}`
+        : 'Game.maxFps is 0 — the loop free-runs at the display refresh rate'],
   ];
   let ok = true;
   for (const [what, pass, detail] of checks) {
     console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${what} — ${detail}`);
     if (!pass) ok = false;
   }
-  console.log(`\nidlecpu: ${ok ? 'PASS' : 'FAIL'} — stopped ${p1(stoppedPct)}, ${frameCpu.toFixed(2)} CPU ms/frame`);
+  console.log(`\nidlecpu: ${ok ? 'PASS' : 'FAIL'} — stopped ${p1(stoppedPct)}, ${frameCpu.toFixed(2)} CPU ms/frame, ${fps.toFixed(1)} fps against a cap of ${cap}`);
   return ok;
 }
 
