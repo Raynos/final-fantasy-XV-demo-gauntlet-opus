@@ -585,7 +585,7 @@ export class VFX {
 
   /** Blue crystal shard burst — dematerialisation / rematerialisation. */
   crystalBurst({
-    pos, count = 34, speed = 6.5, t0 = this.clock, life = 0.7, size = 0.30,
+    pos, count = 34, speed = 6.5, t0 = this.clock, life = 0.7, size = 0.20,
     color = 0x39a7ff, gravity = -6, spread = Math.PI, dir = V2.set(0, 1, 0),
     stretch = 0, drag = 2.2,
   }: CrystalBurstOpts) {
@@ -648,7 +648,7 @@ export class VFX {
 
     /* --- dematerialisation at the launch point ------------------------ */
     this.crystalBurst({
-      pos: origin, count: 30, speed: 5.2, t0, life: 0.65, size: 0.19 * scale,
+      pos: origin, count: 30, speed: 5.2, t0, life: 0.65, size: 0.135 * scale,
       color, gravity: -7, drag: 2.6,
     });
     this.flare({ pos: origin, color: 0x8fd8ff, size: 1.5 * scale, life: 0.30, t0, intensity: 2.4 });
@@ -775,10 +775,21 @@ export class VFX {
       pos: target, dir: back, count: 30, speed: 26, spread: 0.5, color: 0xe8f6ff,
       size: 0.075 * scale, t0: impactT, life: 0.3, intensity: 6.5, stretch: 0.12,
     });
+    // Two shells rather than one big one: a fast, small, velocity-stretched
+    // spray that reads as the dash arriving, and a slower shower behind it.
+    // The single 58 x 0.21 m burst this replaces put third-of-a-metre shards
+    // a couple of metres from the lens for a full second — the "flat blue
+    // confetti at close range" of WS-11, and no shard shape survives being
+    // that big in frame.
     this.crystalBurst({
-      pos: target, count: 58, speed: 9.5, t0: impactT, life: 1.0,
-      size: 0.21 * scale, color, gravity: -11, drag: 1.5,
-      spread: 1.5, dir: back,
+      pos: target, count: 34, speed: 13.0, t0: impactT, life: 0.42,
+      size: 0.12 * scale, color, gravity: -9, drag: 2.4,
+      spread: 1.35, dir: back, stretch: 2.4,
+    });
+    this.crystalBurst({
+      pos: target, count: 30, speed: 8.0, t0: impactT + 0.03, life: 0.72,
+      size: 0.135 * scale, color, gravity: -11, drag: 1.5,
+      spread: 1.6, dir: back,
     });
     this.flare({ pos: target, color: 0xd8f0ff, size: 3.2 * scale, life: 0.30, t0: impactT, intensity: 1.35 });
     this.flare({ pos: target, color: 0xffffff, size: 0.85 * scale, life: 0.22, t0: impactT, intensity: 2.4 });
@@ -811,7 +822,7 @@ export class VFX {
       this.shards.emit({
         pos: V, vel: V3, axis: { x: rng.gauss(), y: rng.gauss(), z: rng.gauss() },
         color: C.set(0x63c0ff), t0: impactT + rng.next() * 0.08,
-        life: 0.9 + rng.next() * 0.9, size: (0.06 + rng.next() * 0.11) * scale,
+        life: 0.7 + rng.next() * 0.7, size: (0.045 + rng.next() * 0.085) * scale,
         spin: rng.gauss(0, 6), drag: 0.6, gravity: -13, phase: rng.next() * 6.28,
       });
     }

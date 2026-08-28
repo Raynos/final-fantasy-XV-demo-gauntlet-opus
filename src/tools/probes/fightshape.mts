@@ -103,13 +103,26 @@ const nearest = () => {
   for (const e of hostiles()) { const d = d2(e.position, player.position); if (d < bd) { bd = d; best = e; } }
   return best ? { e: best, d: bd } : null;
 };
-/** Signed angle between where the camera looks and `p`, radians. */
-const bearingOff = (p) => {
-  const want = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
-  let d = want - rig.yaw;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
+/** Shortest-arc difference between two angles, radians. */
+const angDiff = (a, b) => {
+  let d = (a - b) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
   return d;
+};
+/**
+ * Signed angle between where the camera looks and `p`, radians.
+ *
+ * Measured from the **lens**, which is what the name always claimed and what
+ * "is it on screen" actually means. It used to be measured from the player,
+ * and with the lens five metres behind him an enemy two metres in front can
+ * be 0.85 rad off the *player's* bearing while sitting a quarter of that off
+ * screen centre — so the re-aim below fired constantly at things that were
+ * already in frame. Same correction the rig's own framing block needed.
+ */
+const bearingOff = (p) => {
+  const c = rig.cam.position;
+  return angDiff(Math.atan2(-(p.x - c.x), -(p.z - c.z)), rig.yaw);
 };
 /**
  * Point the camera so that W walks at `p`. `yaw` is the ORBIT angle.
@@ -120,10 +133,18 @@ const bearingOff = (p) => {
  * of being overwritten every step. Without this every mid-fight capture came
  * back as a smear.
  */
+/** A brisk but human flick, radians per second. */
+const PLAYER_SLEW = 5.0;
 const faceToward = (p, snap = false) => {
   const yaw = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
-  rig.yawTarget = yaw;
-  if (snap) rig.yaw = yaw;
+  if (snap) { rig.yawTarget = yaw; rig.yaw = yaw; return; }
+  // Rate-limited, because writing `yawTarget` outright is NOT "what a mouse
+  // does": no hand and no stick moves an aim 67 degrees in one 16 ms frame,
+  // and the rig then burns that error down at `rotDamp` as a 900 deg/s lens
+  // sweep the game never asked for. `probes/armwhip.mts` measured it, and it
+  // is why every `stagger` and `kill` frame this probe took came back as a
+  // full-frame smear even after the rig's own whip was fixed.
+  rig.yawTarget += Math.max(-PLAYER_SLEW * dt, Math.min(PLAYER_SLEW * dt, angDiff(yaw, rig.yawTarget)));
 };
 
 /** Sprint on the given heading until something hostile is inside 100 m. */
@@ -167,10 +188,10 @@ for (let round = 0; round < 3; round++) {
   for (let f = 0; f < 60 * 40; f++) {
     g.frame(dt);
     if (f % 300 === 0) await breathe();
+    { const n0 = nearest(); if (n0) faceToward(n0.e.position); }
     if (f % 6) continue;
     const n = nearest();
     if (!n) break;
-    faceToward(n.e.position);
     const live = hostiles();
     const aware = live.filter((e) => e.awareness > 0.1).length;
     const fighting = live.filter((e) => e.fighting).length;
@@ -190,7 +211,7 @@ for (let round = 0; round < 3; round++) {
   const beats = [];
   const seen = {};
   const prevState = new Map();
-  let staggerShot = false, killShot = false, midShot = false, attacking = false;
+  let staggerShot = false, killShot = false, midShot = false, attacking = false, reaiming = false;
   let playerHpMin = player.stats.hp, dodges = 0, warps = 0, techs = 0;
   let enemyAttacks = 0, enemyTelegraphs = 0, framesInMelee = 0, distSum = 0, distN = 0, frames = 0;
   const startNow = g.time.now;
@@ -209,10 +230,15 @@ for (let round = 0; round < 3; round++) {
     if (!live.length) break;
     if (enc.state !== 'combat') { overFor += dt; if (overFor > 2) break; } else overFor = 0;
     const n = nearest();
-    // Re-aim only when the target has drifted well off screen. A player does
-    // not hold the stick on the enemy every frame, and slamming the yaw every
-    // frame hides whatever the game's own combat framing is doing.
-    if (n && Math.abs(bearingOff(n.e.position)) > 0.85) faceToward(n.e.position);
+    // Re-aim only when the target has drifted well off screen, and then turn
+    // until it is back near centre — hysteresis, the way a player does it. A
+    // player does not hold the stick on the enemy every frame, and slamming
+    // the yaw every frame hides whatever the game's own framing is doing.
+    if (n) {
+      const off = Math.abs(bearingOff(n.e.position));
+      if (off > 0.55) reaiming = true; else if (off < 0.20) reaiming = false;
+      if (reaiming) faceToward(n.e.position);
+    }
 
     // The policy a person plays: stay on the target, swing, get out of the way
     // of a telegraph, punish a stagger with a warp-strike, spend a tech bar.

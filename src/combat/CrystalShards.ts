@@ -87,19 +87,33 @@ export class CrystalShards {
 
     this.uniforms = {
       uTime: { value: 0 },
-      uIntensity: { value: 0.68 },
-      uRim: { value: new THREE.Color(0x8fd8ff) },
+      uIntensity: { value: 1.05 },
+      uRim: { value: new THREE.Color(0xa8e6ff) },
       uLightDir: { value: new THREE.Vector3(-0.5, 0.75, 0.42).normalize() },
     };
+    // **Additive and front-faced**, which is what makes these read as crystal
+    // rather than as blue confetti.
+    //
+    // They were `NormalBlending` + `DoubleSide` + `depthWrite: false`, alone
+    // in this directory — every other VFX material here is additive — and
+    // that combination costs the effect twice. Normal blending over a bright
+    // sky *darkens*: a mid-blue body at alpha 0.8 subtracts 80% of whatever
+    // is behind it and adds back a colour dimmer than the sky, so a shard in
+    // front of the fight is a hole in it. And double-siding a closed solid
+    // with the depth write off draws the far facets over the near ones, which
+    // destroys the facet read the geometry exists for: the shards flatten
+    // into leaves. `shardGeometry` is a closed, outward-wound bipyramid (the
+    // winding is checked in that function's own note), so front faces alone
+    // are the whole silhouette.
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       vertexShader: SHARD_VERT,
       fragmentShader: SHARD_FRAG,
       transparent: true,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: true,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     });
 
     this.mesh = new THREE.Mesh(geo, this.material);
@@ -170,6 +184,15 @@ export class CrystalShards {
 /**
  * A tapered hexagonal crystal: pointed tip, wide shoulder, short tail point.
  * Flat-shaded facets are essential — smooth normals would kill the read.
+ *
+ * **Wound outward**, which the material depends on: it draws `FrontSide`
+ * only. Ring `r` vertex `i` is at `(cos a * R, y, sin a * R)` and the quad is
+ * emitted `(a, c, b)` / `(b, c, d)` with `c` on the ring above; taking the
+ * cross product at `i = 0` on the widest band gives a normal with a positive
+ * `x`, which is radially outward there. `computeVertexNormals` on the
+ * non-indexed copy then agrees with it, and every transform the vertex shader
+ * applies — `axisAngle`, the velocity basis, the positive stretch — has a
+ * determinant of `+1`, so none of them flips it.
  */
 export function shardGeometry(sides = 6) {
   const pos = [], nor = [], uvs = [], idx = [];
@@ -294,14 +317,29 @@ void main() {
   if (vAlpha <= 0.004) discard;
   vec3 N = normalize(vNormal);
   vec3 V = normalize(vView);
-  float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.1);
+  float ndv = clamp(dot(N, V), 0.0, 1.0);
+  // Every pow() here takes a base that is clamped or a smoothstep, never a
+  // raw varying: a negative base is NaN on this backend and NaN in a trail
+  // shader in this directory is a recorded defect.
+  float fres = pow(1.0 - ndv, 2.4);
   float facetLight = 0.35 + 0.65 * abs(dot(N, normalize(uLightDir)));
-  // hot inner core toward the tip, deep saturated colour in the body
-  vec3 body = vColor * (0.30 + 0.70 * facetLight);
-  vec3 col = mix(body, uRim * vColor * 2.6, fres * 0.7);
-  col += uRim * pow(fres, 6.0) * 1.1;
-  col *= uIntensity * (0.65 + 0.5 * vFacet);
-  float a = vAlpha * (0.14 + 0.55 * fres + 0.16 * facetLight);
-  gl_FragColor = vec4(col, clamp(a, 0.0, 0.80));
+
+  // The emissive gradient the flat version had no trace of. vFacet is the
+  // ring index along the crystal -- 0 at the tail point, 1 at the tip -- so the
+  // tip carries a near-white cyan core and the body stays a deep blue glass.
+  float tip = smoothstep(0.30, 1.0, vFacet);
+  vec3 core = mix(vColor, uRim, 0.62);
+  vec3 body = vColor * (0.16 + 0.52 * facetLight);
+  vec3 col = mix(body, core * 1.9, tip * 0.72);
+  col = mix(col, uRim * 2.4, fres * 0.8);              // lit facet edges
+  col += uRim * pow(fres, 5.0) * 2.2;                  // the rim itself
+  col += core * pow(tip, 3.0) * 1.4;                   // the hot tip
+  col *= uIntensity;
+
+  // Glass, not paper. Under additive blending the alpha is intensity rather
+  // than coverage, so a nearly clear body with bright edges and a bright tip
+  // is a shard you can see the fight through.
+  float a = vAlpha * (0.06 + 0.44 * fres + 0.34 * tip * tip);
+  gl_FragColor = vec4(col, clamp(a, 0.0, 0.62));
 }
 `;

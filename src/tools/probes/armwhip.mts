@@ -52,18 +52,35 @@ const nearest = () => {
   for (const e of hostiles()) { const d = d2(e.position, player.position); if (d < bd) { bd = d; best = e; } }
   return best ? { e: best, d: bd } : null;
 };
+/**
+ * How far off the **lens axis** `p` sits, radians, signed.
+ *
+ * Measured from the camera and not from the player, which is the same
+ * correction the rig's own framing block needed: with the lens six metres
+ * behind the player, an enemy two metres in front of him can be 0.85 rad off
+ * the PLAYER's bearing while sitting a quarter of that off screen centre. The
+ * old form made this probe re-aim at things that were already in frame.
+ */
 const bearingOff = (p) => {
-  const want = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
-  let d = want - rig.yaw;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
+  const c = rig.cam.position;
+  return angDiff(Math.atan2(-(p.x - c.x), -(p.z - c.z)), rig.yaw);
 };
+/**
+ * Turn toward `p` at a rate a hand can produce.
+ *
+ * Writing `yawTarget` outright is not "what a mouse does": no hand and no
+ * stick moves an aim 67 degrees in one 16 ms frame, and the rig then burns
+ * that error down at `rotDamp`, which is a 900 deg/s lens sweep the game
+ * never asked for. `PLAYER_SLEW` is a brisk flick, 286 deg/s.
+ */
+const PLAYER_SLEW = 5.0;
 const faceToward = (p, snap = false) => {
   const yaw = Math.atan2(-(p.x - player.position.x), -(p.z - player.position.z));
-  probeYawWrite += Math.abs(angDiff(yaw, rig.yawTarget));
-  rig.yawTarget = yaw;
-  if (snap) { rig.yaw = yaw; probeYawWrite = 0; }
+  if (snap) { rig.yawTarget = yaw; rig.yaw = yaw; probeYawWrite = 0; return; }
+  const d = angDiff(yaw, rig.yawTarget);
+  const step = Math.max(-PLAYER_SLEW * dt, Math.min(PLAYER_SLEW * dt, d));
+  probeYawWrite += Math.abs(step);
+  rig.yawTarget += step;
 };
 
 /* ---- the recorder --------------------------------------------------- */
@@ -186,19 +203,26 @@ for (let round = 0; round < (window.__ROUNDS || 2); round++) {
     g.frame(dt);
     sample(approach, `approach r${round + 1}`);
     if (f % 300 === 0) await breathe();
-    if (f % 6 === 0) { const n = nearest(); if (n) faceToward(n.e.position); }
+    { const n = nearest(); if (n) faceToward(n.e.position); }
     if (enc.state === 'combat') break;
   }
   inp.keys.clear();
 
-  let attacking = false, overFor = 0;
+  let attacking = false, overFor = 0, reaiming = false;
   const inFight = () => hostiles().filter((e) => d2(e.position, player.position) < 45);
   for (let f = 0; f < 60 * 120; f++) {
     const live = inFight();
     if (!live.length) break;
     if (enc.state !== 'combat') { overFor += dt; if (overFor > 2) break; } else overFor = 0;
     const n = nearest();
-    if (n && Math.abs(bearingOff(n.e.position)) > 0.85) faceToward(n.e.position);
+    // Hysteresis, the way a player does it: start turning when the target is
+    // well off the lens axis, and keep turning until it is back near centre.
+    if (n) {
+      const off = Math.abs(bearingOff(n.e.position));
+      if (off > 0.55) reaiming = true;
+      else if (off < 0.20) reaiming = false;
+      if (reaiming) faceToward(n.e.position);
+    }
     const t = n && n.e;
     const reach = t ? (t.radius || 1) : 1;
     const inDanger = live.some((e) => e.state === 'telegraph' && d2(e.position, player.position) < (e.reach || 4) + 2.5);
