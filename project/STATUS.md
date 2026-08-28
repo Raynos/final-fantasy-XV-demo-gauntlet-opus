@@ -4,7 +4,7 @@
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`.** Zero `any`, both typechecks clean, **`pnpm run check` 18/18**, and
+**`main`.** Zero `any`, both typechecks clean, **`pnpm run check:perf` 21/21**, and
 **both perf gates certify** — `gameplay.mts` for the first time ever.
 
 **Both live plans are IN-PROGRESS and staffed.**
@@ -31,10 +31,10 @@ for the first time ever** (worst segment 127.4 fps, from 67.3), 18/18 gates, and
 harness closing the page rather than the game. Round 16, blind: 19 of 20
 identified, and the first non-zero hesitation in five rounds.
 
-**The 33 ms rule is breached by 3 frames and is owned, not met.** One is a 660 m
-teleport `streaming-traverse` performs on purpose and no player pays for; the
-other two are 1% of one segment, down from 90-104 ms. Grounds in
-`journal/2026-08-27-perf-certified.md`.
+**The 33 ms rule is MET, 2026-08-28.** `gameplay.mts`: **total hitches 0**,
+`RULER_VALID: true`. The last breach — `sprint+turn`, 40.7 ms at a fixed frame
+index — was ONE draw call linking ONE shader program one cache-key bit away
+from one `Warmup` had built. `747136a`; worst frame **7.6 ms**. `perf-r4.md`.
 
 ## The world was barren, and four systems were never read by any code
 
