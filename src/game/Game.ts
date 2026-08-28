@@ -96,6 +96,22 @@ export interface SystemRegistry {
 export type SystemKey = keyof SystemRegistry;
 
 /**
+ * Yield to the event loop — a real task, not a microtask.
+ *
+ * See {@link Game.init} for the measurement that made this necessary. Kept at
+ * module scope so it costs one closure for the life of the page rather than one
+ * per phase, and exported because a generator loop that wants to chunk itself
+ * against a time budget needs the same primitive.
+ */
+export function yieldToBrowser(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => { ch.port1.close(); resolve(); };
+    ch.port2.postMessage(0);
+  });
+}
+
+/**
  * Extra keys each system answers to. Callers grew up using both the short
  * label and the class name, and neither may be derived from `constructor.name`
  * because a production build mangles it.
@@ -178,9 +194,36 @@ export class Game {
   /** @param name registry key or alias */
   get<K extends SystemKey>(name: K): SystemRegistry[K] | undefined { return this._registry.get(name) as SystemRegistry[K] | undefined; }
 
+  /**
+   * Give the thread back to the browser, for real.
+   *
+   * **`await` did not do this and everybody assumed it did.** `Game.init()`
+   * awaits `sys.init(this)` for twenty-six systems, and an `await` on a promise
+   * that is already settled — which most of these are — schedules a
+   * *microtask*. Microtasks drain at the end of the *current* task without ever
+   * returning to the event loop, so there is no rendering opportunity between
+   * them. Measured before this existed (`src/tools/coldload.mts --prod`): the
+   * `longtask` observer saw **two** entries for an entire 8.4 s first visit and
+   * the worst was **7961 ms**. The browser got 43 frames in 8.5 s, and 96% of
+   * the load had no paint and no input.
+   *
+   * That is also why the loading bar freezes exactly when it is meant to
+   * reassure: `#boot .bar i` animates `right`, which is not a compositor
+   * property, so it repaints on the same main thread the boot is holding.
+   *
+   * A `MessageChannel` message is a genuine task, so the browser gets its
+   * rendering opportunity before the next phase starts. Not `setTimeout(0)`:
+   * nested timeouts are clamped to 4 ms after five levels, which across a
+   * twenty-six-phase boot is ~100 ms of pure clamp.
+   *
+   * This does not make any single phase shorter — `Npcs` is still 1.7 s of
+   * unbroken work. It turns one 8 s block into twenty-six blocks, each of which
+   * the loading screen can be redrawn between.
+   */
   async init() {
     const p = this.onProgress;
     p(0.02, 'Booting renderer');
+    await yieldToBrowser();
 
     this.rnd = new Renderer(this.container);
     this.scene = this.rnd.scene;
@@ -244,12 +287,17 @@ export class Game {
     for (let i = 0; i < order.length; i++) {
       const { name, boot } = order[i];
       p(0.05 + 0.8 * (i / order.length), name);
+      // The yield goes AFTER the label is set and BEFORE the work starts, so
+      // the phase a person is about to wait for is the one they can read.
+      // eslint-disable-next-line no-await-in-loop
+      await yieldToBrowser();
       const sys = boot();
       // eslint-disable-next-line no-await-in-loop
       if (sys.init) await sys.init(this);
     }
 
     p(0.9, 'Compiling shaders');
+    await yieldToBrowser();
     this.post = new PostFX(this.rnd);
     this.renderer.compile(this.scene, this.camera);
     p(1.0, 'Ready');
