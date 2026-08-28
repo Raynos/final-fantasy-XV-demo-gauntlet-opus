@@ -184,13 +184,30 @@ full-corpus **cold** diff is at or under each shot's floor.
 are cache reads. Same tree, same page pool, artifact moved aside and put back
 between the two runs, so nothing but the cache differs:
 
+| | cold boot | `Game.init()` |
+|---|---|---|
+| **with the geometry bake** | **5.78 s** | **5.61 s** |
+| without it | 7.13 s | 6.95 s |
+
+(`bootprof --n 3`, quiet tree, `VERDICT: quiet`, exclusive lease, every other
+cache warm, the artifact moved aside and put back between the runs.) Per phase,
+at one committed sha:
+
 | phase | no artifact | artifact live |
 |---|---|---|
-| `Water.shore` | 465.5 ms | **0.7 ms** |
-| `Props.mega` | 492.6 ms | **6.4 ms** |
-| `Props.poiPrebuild` | 440.2 ms | **32.2 ms** |
+| `Water.shore` | 384.4 ms | **0.9 ms** |
+| `Props.mega` | 454.8 ms | **9.0 ms** |
+| `Props.poiPrebuild` | 423.1 ms | **38.2 ms** |
 | the wait for the 35.5 MB artifact | — | **0 ms** |
-| `Game.init` | **9120 ms** | **7889 ms** |
+
+**And the correctness argument is the arrays, not a frame.**
+`probes/geoverify.mts` compares what the cache served at boot against what the
+generator makes when asked again, in one page at one instant:
+**IDENTICAL — 145 parts, 4 624 052 vertices, byte for byte.** The full-corpus
+cold diff the section asks for is **142 of 142 at or under floor**, worst
+`party_formation` 2.033 against 2.85 — but that is the weaker check, because a
+stale geometry cache serves *well-formed* geometry and an image diff would have
+to be lucky to see it.
 
 **The codec was priced before it was written** (`probes/geocodec.mts`, in the
 page, on the real bytes): those three subtrees are **164.9 MB raw / 45.6 MB

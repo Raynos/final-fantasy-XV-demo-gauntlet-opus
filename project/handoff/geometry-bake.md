@@ -29,28 +29,54 @@ standard phase 3 held the relief chart to.
 It is also the only comparison that survives this trunk. See "what went wrong
 the first time" below.
 
+**The image half, for completeness.** Both corpora at one committed sha
+(`e387f89`), cold, artifact present then absent, with a `geoboot` probe either
+side proving the cache was and then was not serving:
+
+    142 of 142 shots at or under floor
+    worst mean delta  party_formation  2.033 / 255  against a floor of 2.85
+
+Nothing is close to its floor, and the largest values are the character, combat
+and bestiary shots — the noisiest in the corpus — not the shots the cache
+actually feeds: `road_viaduct` 0.703, `landmark_meteor` 0.438 (floor 1.24),
+`landmark_dreadnought` 0.153, `zone_lestallum` 0.166, `poi_haven` 0.316 (floor
+0.66). A cold seven-shot capture over the cached structures exits zero with no
+console errors — worth taking, because a GLSL link failure is invisible on a
+warm page.
+
+The Meteor is the one place a cache hit decides *placement* rather than only
+vertices — `{ x, gy, z, yaw }` rides back through the entry's `meta`, `gy` being
+`seatY` under the impact centre — so `landmark_meteor` was read as an image, not
+only diffed. It is seated in the Disc, not floating and not sunk.
+
 ## The headline
 
-`src/tools/probes/geoboot.mts`, same page pool, same tree, artifact moved aside
-and put back between the two runs — so nothing but the cache differs:
+`node src/tools/bootprof.mts --n 3` at HEAD, **quiet tree, `VERDICT: quiet`**,
+exclusive lease, every other cache warm — the artifact moved aside and put back
+between the two runs, so nothing but the cache differs:
+
+| | cold | warm 1 | warm 2 |
+|---|---|---|---|
+| **with the geometry bake** | **5.78 s** wall, **5.61 s** in `Game.init()` | 5.56 / 5.45 | 5.53 / 5.40 |
+| without it | 7.13 s wall, 6.95 s init | 6.67 / 6.56 | 6.69 / 6.57 |
+
+**1.35 s off a cold boot, at 188 cold boots per suite cycle.** The plan's own
+starting figure was 6.54 s; this tree without the bake reads 7.13 s, because a
+day of content landed in between.
+
+Per phase, at one committed sha (`e387f89`), `probes/geoboot.mts` either side of
+the same artifact move:
 
 | phase | no artifact | artifact live |
 |---|---|---|
-| `Water.shore` | 465.5 ms | **0.7 ms** |
-| `Props.mega` | 492.6 ms | **6.4 ms** |
-| `Props.poiPrebuild` | 440.2 ms | **32.2 ms** |
-| `Water.geobake` (the wait for it) | 0 ms | **0 ms** |
-| `Props.geobake` | 0 ms | 0 ms |
-| **`Game.init` total** | **9120 ms** | **7889 ms** |
+| `Water.shore` | 384.4 ms | **0.9 ms** |
+| `Props.mega` | 454.8 ms | **9.0 ms** |
+| `Props.poiPrebuild` | 423.1 ms | **38.2 ms** |
+| the wait for the 35.5 MB artifact | — | **0 ms** |
 
-**1231 ms off the boot, for a fetch that costs nothing measurable.** The
-artifact is 35.5 MB gz / 165 MB inflated and the transfer is started at module
-evaluation, so it overlaps Sky (271 ms) + Terrain (335 ms) + Water's own
-textures/reflection/bed/basins/surfaces and is finished before anything asks.
-
-Those totals are high in absolute terms because the tree they were taken on has
-no painted-face cache (`Npcs` 1709 ms; the characters lane was editing
-`Face.ts`). The **difference** is the number; both sides carry the same 1.7 s.
+The fetch measures nothing because it starts at module evaluation and is not
+awaited until immediately before the shoreline — Sky, Terrain and Water's own
+textures, reflection, bed, basins and surfaces are all head start.
 
 ## The measurement that decided the design, before any of it was written
 

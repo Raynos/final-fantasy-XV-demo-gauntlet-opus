@@ -784,10 +784,14 @@ moves `hero_full` by 13.359/255 against a floor of 2.25. See `LANDMINES.md`.
 `src/engine/GeoBake.ts`, `node src/tools/texbake.mts --geo`, and the full
 account in `docs/plans/2026-08-25-opus-after-phase3.md` §WS-3 and
 `project/handoff/geometry-bake.md`. `Water.shore` 465.5 -> **0.7 ms**,
-`Props.mega` 492.6 -> **6.4 ms**, `Props.poiPrebuild` 440.2 -> **32.2 ms**,
-`Game.init` 9120 -> **7889 ms**, for a 35.5 MB artifact whose fetch measures
-**0 ms** because it starts at module evaluation and Water is only the third
-system.
+`Props.mega` 454.8 -> **9.0 ms**, `Props.poiPrebuild` 423.1 -> **38.2 ms**, and
+**cold boot 7.13 s -> 5.78 s** on a quiet tree, for a 35.5 MB artifact whose
+fetch measures **0 ms** because it starts at module evaluation and is not
+awaited until immediately before the shoreline.
+
+Verified by `probes/geoverify.mts` — the cache against the generators, one page,
+one instant, **145 parts, 4 624 052 vertices, byte for byte identical** — and by
+a full-corpus cold diff at **142 of 142 under floor**.
 
 `trees.build` was left, as this section said to: it draws impostor atlases on
 the GPU and would need baking as *images* with the image baselines re-checked.
