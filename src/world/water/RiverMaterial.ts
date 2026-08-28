@@ -169,7 +169,18 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         // Sky, cheaply. A river is narrow and moving; a planar reflection of it
         // would be a second scene render for a surface a wave normal smears
         // beyond recognition, and the lakes already pay that once.
-        vec3 sky = uAmbient * 1.15 + uSunColor * max(uSunDir.y, 0.0) * 0.06;
+        //
+        // The gain is 2.9, not 1.15, and that is the difference between a river
+        // and a damp patch. uAmbient is Sky.fill -- a hemisphere *fill*
+        // intensity, which is the light the sky delivers to a diffuse surface,
+        // not the radiance you see looking at it. Reflecting the fill directly
+        // put the water an octave under the sunlit grass beside it, so at the
+        // median station (4.1 m wide, 0.6 m deep) the reach read as a dry
+        // gravel wash on a pasture: no sky in it, and at that depth the
+        // Beer-Lambert alpha is 0.13, so there was nothing else either.
+        // (No backticks in here. This file's own handoff records that landmine
+        // twice and this is the third time it has been paid.)
+        vec3 sky = uAmbient * 2.9 + uSunColor * max(uSunDir.y, 0.0) * 0.20;
 
         // --- foam, derived ------------------------------------------------
         // Riffle-pool alternation. Two detuned periods, so the pattern never
@@ -201,7 +212,16 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         col += uSunColor * shine * 0.6 * (1.0 - foam * 0.7);
 
         float alpha = 1.0 - max(max(Tr.r, Tr.g), Tr.b);
-        alpha = clamp(max(max(alpha, fres * 0.9), foam * 0.95), 0.0, 1.0);
+        // A floor, because absorption alone cannot carry a shallow reach. Half
+        // a metre of water absorbs almost nothing at 0.14/m in blue, so the
+        // extinction alpha is ~0.05 and the Fresnel one ~0.13 looking down a
+        // reach from the bank — the surface was 87% invisible over its own bed
+        // and every cue that says "water" (the sky in it, the specular, the
+        // foam) was being multiplied by that. Real shallow water is not
+        // transparent to look at: it carries a surface. The floor rises with
+        // depth so a puddle at the strip's own margin still fades out.
+        float body = smoothstep(0.02, 0.55, depth);
+        alpha = clamp(max(max(max(alpha, fres * 0.9), foam * 0.95), 0.34 * body), 0.0, 1.0);
         // Fade the last few centimetres into the bank so the strip has no rim.
         alpha *= smoothstep(0.0, 0.06, edge);
 

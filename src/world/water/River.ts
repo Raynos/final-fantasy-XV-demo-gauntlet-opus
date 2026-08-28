@@ -29,9 +29,9 @@ import type { ErosionSample } from '../terrain/Field.ts';
  * shared wave field. The banks are a **lifted terrain decal** — the bed plus six
  * centimetres, following the ground exactly. The source tried a flat sheet
  * across the bank and had **43% of the wet band depth-clipped** by the terrain
- * it was supposed to be lying on. Ours takes the same lesson twice over: the
- * lift is measured against the clipmap's *upper* drawn envelope, not against the
- * field, because those two differ by metres once the rings coarsen.
+ * it was supposed to be lying on. Ours follows the ground and is biased in the
+ * depth buffer instead; the clipmap's drawn envelope is the wrong lift for a
+ * thin band viewed edge-on and `emitBank` says why.
  *
  * ### Routing follows the drainage, so tributaries merge where the water does
  *
@@ -416,7 +416,7 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       for (let i = 1; i < m - 1; i++) bedMono[i] = s[i - 1] * 0.25 + s[i] * 0.5 + s[i + 1] * 0.25;
       for (let i = 1; i < m; i++) bedMono[i] = Math.min(bedMono[i], bedMono[i - 1]);
     }
-    for (let i = 0; i < m; i++) wsl[i] = bedMono[i] + 0.34 + 1.55 * q[i];
+    for (let i = 0; i < m; i++) wsl[i] = bedMono[i] + 0.45 + 2.20 * q[i];
     for (let i = 1; i < m; i++) wsl[i] = Math.min(wsl[i], wsl[i - 1]);
     // The surface may never sit under the ground it is drawn on.
     for (let i = 0; i < m; i++) wsl[i] = Math.max(wsl[i], bed[i] + 0.06);
@@ -430,12 +430,23 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       // happens to stay flat. Without the cap a reach crossing a pan bisects
       // its way to the full 32 m search limit on both sides and draws a
       // sixty-four metre sheet of standing water where there is a stream.
-      const cap = Math.min(MAX_HALF, 1.5 + 9.5 * q[i]);
+      const cap = Math.min(MAX_HALF, 2.5 + 14.0 * q[i]);
       wl[i] = firstCrossing(ground, x, z, -nx[i], -nz[i], wsl[i], cap);
       wr[i] = firstCrossing(ground, x, z, nx[i], nz[i], wsl[i], cap);
       const bankH = wsl[i] + 0.75 + 0.85 * q[i];
-      bl[i] = wl[i] + firstCrossing(ground, x - nx[i] * wl[i], z - nz[i] * wl[i], -nx[i], -nz[i], bankH, MAX_BANK);
-      br[i] = wr[i] + firstCrossing(ground, x + nx[i] * wr[i], z + nz[i] * wr[i], nx[i], nz[i], bankH, MAX_BANK);
+      // **The bank needs the same discharge cap the water has, and for exactly
+      // the same reason.** `firstCrossing` walks until the ground reaches
+      // `bankH`; on a valley floor it never does, so it returned the full
+      // `MAX_BANK` on both sides and painted a 26 m wet apron around a 3 m
+      // stream — re-introducing, in the decal, the sixty-four-metre sheet the
+      // water's own cap exists to prevent. Measured on the widest reach: bank
+      // half-width mean **8.08 m** against a water half-width mean of 1.75, and
+      // from 13 m up it reads as a sprawl of pale angular plates with the
+      // stream lost inside it. A bank is the wetted margin of a channel, so it
+      // scales with the channel.
+      const bankCap = Math.min(MAX_BANK, 1.2 + 5.0 * q[i]);
+      bl[i] = wl[i] + firstCrossing(ground, x - nx[i] * wl[i], z - nz[i] * wl[i], -nx[i], -nz[i], bankH, bankCap);
+      br[i] = wr[i] + firstCrossing(ground, x + nx[i] * wr[i], z + nz[i] * wr[i], nx[i], nz[i], bankH, bankCap);
     }
     limitSlope(wl, STATION); limitSlope(wr, STATION);
     limitSlope(bl, STATION); limitSlope(br, STATION);
@@ -529,17 +540,21 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     for (let i = 0; i < m; i++) {
       const x = p[i * 2], z = p[i * 2 + 1];
       const station = i * STATION;
-      // One clipmap-envelope probe per station, not per lane: the whole bank is
-      // inside one ring cell and the answer does not vary across it. Same
-      // measurement as the shore ribbon, same reason.
-      let lift = 0;
-      if (ground.drawnEnvelope) lift = Math.max(0, Math.min(0.9, ground.drawnEnvelope(x, z, 0, 6) - ground.heightAt(x, z)));
+      // A flat six-centimetre lift and `polygonOffset`, and NOT the clipmap's
+      // drawn envelope. The shore ribbon reached this conclusion on the same
+      // night and this file did not get the memo: the envelope is a *per-ring*
+      // quantity, it jumps by up to its own 0.9 m clamp between one station and
+      // its neighbour, and a strip built on it comes back as a scatter of pale
+      // plates hovering over the ground with hard straight silhouettes and
+      // their own shadows under them. That is exactly what a bank decal looks
+      // like from 13 m up at the widest station today. `Shore.ts` carries the
+      // long form of the argument; the envelope stays right for aprons.
       for (let j = 0; j < BANK_LANES; j++) {
         const u = j / (BANK_LANES - 1);                  // 0 = waterline
         const lat = sideSign * (inner[i] + (outer[i] - inner[i]) * u);
         const px = x + nx[i] * lat, pz = z + nz[i] * lat;
         const hh = ground.heightAt(px, pz);
-        bPos.push(px, hh + lift + 0.06, pz);
+        bPos.push(px, hh + 0.06, pz);
         bUv.push(u, hh - wsl[i]);
         bRiver.push(station, lat, froude[i]);
       }
