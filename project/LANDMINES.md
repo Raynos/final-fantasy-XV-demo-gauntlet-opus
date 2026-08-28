@@ -379,6 +379,23 @@ in this file.
 
 ## Baked caches
 
+- **An index that "drops an entry once served" frees nothing, and its own
+  docstring will tell you it does.** `TexBake`'s store was a `Map` whose every
+  entry carried `buf` — *the whole inflated container* — and `take()` deleted
+  the entry the moment a generator took its texels. The docstring concluded from
+  that that the resident set after boot was "the ones a live `DataTexture` owns
+  plus the ones nothing has asked for yet". It was **both containers, whole, for
+  the life of the session — 134.4 MB**, because `index.delete` removes the
+  *lookup*, not the reference, and one surviving entry pins every byte. One
+  always survives: the 17.3 MB of `dgn/*` keys belongs to interiors built on
+  first `Dungeons.enter()`. The tell was that `?nobake=1` ran **309 MB lighter**
+  while building bit-identical content. `GeoBake` has the identical shape and
+  escapes it only because its index *does* empty on the boot path. **The fix for
+  this shape is a compaction, not a release** (`compactTexBake`): give each
+  surviving entry its own `slice` and let the container go. A release has a call
+  site question — one system too early is a silent cache miss that only shows
+  when a player walks into a cave — and a compaction has none, because no key is
+  dropped.
 - **A stale texel bake is the one cache failure with no symptom.** `src/public/baked/`
   holds **four** caches of our own generators — `terrain.bin.gz` (the heightfield),
   `tex.bin.gz` (143 procedural `DataTexture`s, from `src/engine/TexBake.ts`),
@@ -1671,3 +1688,80 @@ property a rate is supposed to have: 4 of 2866 (0.14 %) at 1 760 m, 8 of 5490
 Same shape as the `hullExtents` finding one file over — a gate composing through
 the same quantity it grades — and the same cure: **the instrument must not share
 a coordinate system with the thing it is measuring by accident.**
+
+## `await` between boot phases is a microtask, so the whole boot is one task
+
+**Everybody who read `Game.init()` assumed the `await` in its phase loop gave the
+browser a chance to paint. It never did, for the life of this project.**
+
+```ts
+for (const { name, boot } of order) { p(...); const sys = boot(); await sys.init(this); }
+```
+
+`await` on a promise that is **already settled** — which most of these are, and
+which every synchronous `init()` returning `undefined` is — schedules a
+**microtask**. The microtask queue drains at the end of the *current* task, so
+control never returns to the event loop and there is no rendering opportunity
+between iterations. Twenty-six systems and eight seconds of work are **one task**.
+
+Measured (`src/tools/coldload.mts --prod`, before the fix): the `longtask`
+observer saw **two** entries for an entire 8.4 s first visit and the worst was
+**7961 ms**. The browser got 43 frames in 8.5 s where a responsive page would get
+~511, and 96% of the load could not paint or take a click. `docs/BOOT_PERF.md`
+had the mechanism written down from the code as *"`await` yields between phases,
+but a phase that runs 400 ms blocks for 400 ms"*; the second half was right and
+the first half was fiction.
+
+**The cure is a real task, and `Game.yieldToBrowser()` is the one spelling.** A
+`MessageChannel` `postMessage` is a genuine task. Not `setTimeout(0)`: nested
+timeouts clamp to 4 ms after five levels, ~100 ms of pure clamp across this boot
+— and that clamp is the same one that produced the 12–35% frame-time tail
+recorded further up this file. Measured after: **14** long tasks, worst
+**1243 ms**, and the boot wall clock did not move (8.90/8.48/8.28 s before,
+8.84/8.39/8.42 s after, back to back on the same box).
+
+**Two corollaries, both non-obvious.**
+
+- **A loading screen cannot be rescued by CSS alone.** `#boot .bar i` animates
+  `right` with a CSS transition, which is *not* a compositor property, so it
+  repaints on exactly the main thread the boot is holding. "Make it CSS-animated"
+  only works for `transform` and `opacity`.
+- **No gate in this repo could see any of it.** All nineteen start from a page
+  that has already booted. `bootprof` times `Game.init()` from inside the page,
+  and a wall clock measured *by* the blocked thread cannot tell a busy thread
+  from a frozen one. The `bootblock` gate (`coldload --gate`, in `check --perf`)
+  asserts on the **count** of blocks, not their duration, because a count is the
+  half that contention cannot move.
+
+## An idle tab at 100% of a core is not necessarily a leak
+
+The reflex diagnosis for a pinned idle tab is a runaway timer, a microtask storm
+or a streaming loop that never reports converged. **Here it was none of those,
+and the discriminator is one arm of one tool.**
+
+`src/tools/idlecpu.mts` runs A/B/A over `running -> stopped -> running`, where
+`stopped` is `Game.stop()` — which cancels the rAF loop **and nothing else**: the
+page, the world, the GL context and every timer survive. Idle cost went from
+**168–181% of a core to 2.4%**. That single arm eliminates every timer-shaped
+hypothesis in fifteen seconds, and it is cheaper than any profile.
+
+What was left is the loop itself: `Game.frame()` draws a full post-processed
+frame every tick whether or not anything moved, `post.render` is 74–77% of it,
+and the world is never actually static (day cycle, water, wind, TAA), so
+render-on-demand is not available without changing how the game looks.
+
+**Two traps in measuring this at all.**
+
+- **Headless does not vsync.** It free-ran at ~102 fps, so the raw percentage is
+  what the loop costs when *nothing* caps it, not what a person pays. The figure
+  that transfers is **CPU ms per frame × the display's refresh** — 16.5 ms/frame
+  is 99% of a core at 60 Hz and 198% at 120 Hz.
+- **Headless reports `devicePixelRatio` 1.** A Retina panel reports 2 and
+  `Renderer.ts` asks for `min(dpr, 1.5)` at `q=high` — **2.25× the pixels**. A
+  headless percentage *understates* a laptop. `idlecpu --dpr 1.5` measures it
+  rather than arguing about it.
+
+And `performance.memory` is not the only frozen in-page oracle: **nothing inside
+the page can see its own CPU.** `SystemInfo.getProcessInfo` over a browser-level
+CDP session is the only oracle that sees the GPU process, and the GPU process is
+half the number.
