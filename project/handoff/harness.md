@@ -83,12 +83,7 @@ nothing says; it now prints `0 in 0 of 534 files scanned`.
 `ui-shoot` scenes. `elemancy`, `armiger`, `quests`, `archives`, `system`,
 `controls` — ~2,000 lines of layout — had never appeared in a capture.
 
-## In flight — the menu scrim's blur has never rendered
-
-**Uncommitted, waiting on a co-agent's `src/world/terrain/TerrainMaterial.ts`
-syntax error to clear the pre-commit typecheck.** Files: `src/ui/ui.css`,
-`src/ui/Menus.ts`, `src/tools/ui-shoot.mts`, `src/tools/_probe/scrimfix2.mts`,
-`src/tools/_probe/scrimtone.mts`.
+## 8. The menu scrim's blur had never rendered — `256fe06`, `64b54c8`
 
 Looking at the six screens is what found it: five read as pale type floating on
 sharp terrain with the party walking through the reading column, and `controls`
@@ -103,20 +98,42 @@ z-index:2`) that backdrop is empty while the canvas is a different layer.
 Six arms, one held pose, blur only, PNG bytes as the proxy
 (`_probe/scrimfix2.mts`): as shipped 3.08 MB · scrim `position:fixed` 3.08 ·
 `will-change` 3.08 · `translateZ(0)` 3.08 · `#menus` fixed 3.08 · **scrim
-re-homed into `uiRoot` 0.51**. Only re-homing works. So the scrim is now a
-sibling of `#menus` inside `uiRoot`, and `lateUpdate` hides it explicitly since
-it no longer inherits `#menus`'s `display:none`.
+re-homed into `uiRoot` 0.51**. Only re-homing works. The scrim is now a sibling
+of `#menus` inside `uiRoot`; `lateUpdate` hides it explicitly (it no longer
+inherits `#menus`'s `display:none`) and `init` hides it from the first frame.
 
-And the gradient is lighter — `.74/.93` → **`.52/.72`** — because it used to be
-doing all the dimming alone; over a live `brightness(.54)` it was a black
-rectangle with type on it (`_probe/scrimtone.mts`, five arms).
+The gradient is lighter too — `.74/.93` → **`.52/.72`** — because it used to do
+all the dimming alone; over a live `brightness(.54)` it is a black rectangle
+with type on it (`_probe/scrimtone.mts`, five arms).
 
-**Next step:** re-run `node src/tools/ui-shoot.mts <the six> menu_main hud_field
---out tmp/shots/menus4 --dirty`, look at all eight, confirm `hud_field` is
-untouched (menu closed ⇒ scrim `display:none`), then commit. **Then measure the
-cost**: a full-screen 26px backdrop blur that never ran now runs every menu
-frame. `gameplay.mts` drives menus and BRIEF's rule is no frame over 33 ms —
-that gate is the one that has to sign this off.
+**Looked at, at HEAD**, all eight scenes in `tmp/shots/menus4/`: the six screens
+now read as one system — the Armiger ladder's locked rows are legible instead of
+invisible, `controls`' cards sit on a clean ground — and `hud_field` is
+untouched, so the scrim does not leak when the menu is closed.
+
+Also: `ui-shoot` swallowed the shared harness flags as scene names and printed
+`unknown scene --dirty` on every dirty run. Same fix `framecam` took in `6a14da5`.
+
+**Both commits used `SKIP_BUILD_CHECK=1`, and the gate was run anyway.** The
+hook checks the WORKING tree, which carried another lane's mid-edit
+`src/world/terrain/TerrainMaterial.ts` (a parse error) for the whole window.
+That file is not in either pathspec, so it is not in the tree these commits
+produce — and that tree was checked directly: `git archive HEAD` into a scratch
+dir, these files copied over it, `node_modules` symlinked, then `tsc -p
+tsconfig.json`, `tsc -p tsconfig.tools.json` and `vite build`, all three green.
+The same breakage is why the capture pass ran at `--build HEAD` rather than
+`--dirty`: a `dirty:` build is everyone's tree, and it did not boot.
+
+### Owed on this change
+
+- **A perf sign-off.** A full-screen 26 px backdrop blur that never ran now runs
+  every menu frame. `gameplay.mts` drives menus and `BRIEF.md`'s rule is no
+  frame over 33 ms; it takes the exclusive lease, so it needs a quiet tree —
+  `daemon.mts --wait quiet --for 600` first. `uxcheck` (93/93, no page errors)
+  is the only gate this change has passed so far, and it does not time frames.
+- Two small layout nits the blur made visible rather than caused: the Armiger
+  gauge caption is dark-on-dark and wraps to "on a / pad.", and the two-column
+  screens still leave the bottom ~35% empty.
 
 ## Closed as already done (measured negatives)
 
