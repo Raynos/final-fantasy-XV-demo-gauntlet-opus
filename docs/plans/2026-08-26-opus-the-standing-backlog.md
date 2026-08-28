@@ -1,10 +1,9 @@
 # The standing backlog — everything 52 handoffs were still holding
 
 Status: IN-PROGRESS (2026-08-28, opus) — **the twelve workstreams this plan was
-written with are all CLOSED. It stays live because §WS-13 is the queue**, which
-is what its own definition of done requires: when a lane finishes, its open work
-comes back here rather than staying in a handoff. Do not archive this file while
-§WS-13 has rows in it.
+written with are all CLOSED, and §WS-13 is TERMINAL.** Four final lanes are
+closing its rows; when they report this goes DONE and graduates. **No new rows.
+This plan ends — it is not a standing queue.**
 
 Originally: **ten workstreams, none staffed, nothing locked.** This is a *queue*, not a snapshot: every item below is work somebody
 measured, wrote down, and could not finish.
@@ -1051,7 +1050,30 @@ headroom, not a cost.
 **Also untouched: the 16/16 texture-unit warning**, still logged dozens of times
 a frame. It was not on the path of either fix.
 
-## WS-13 — What the 2026-08-28 wave handed back — **OPEN. This is the queue.**
+## WS-13 — What the 2026-08-28 wave handed back — **TERMINAL. Closes with this wave.**
+
+> **THIS PLAN IS NOT A STANDING QUEUE ANY MORE. IT ENDS.**
+>
+> WS-13 was a mistake in its original form. It was created to stop open work
+> dying inside a handoff, and it did — but it also made this plan
+> self-regenerating: every lane that finished handed its leftovers back into
+> WS-13, which kept the plan alive to staff another wave, which handed back more.
+> That is an infinite cycle wearing a `Status:` line, and it is exactly the shape
+> `docs/plans/README.md` warns about when it says a plan is written once and then
+> either built or abandoned, while a *tracker* is rewritten continuously.
+>
+> **The four lanes staffed on 2026-08-28 are the last ones. No row may be added
+> to this section by anyone, for any reason.** When they report, every row here
+> is landed or closed with a measured negative, this plan goes `Status: DONE`
+> and graduates to `project/archive/plans/`, and **it does not come back.**
+>
+> **Where a finding goes instead, once this is archived:**
+> a reusable trap → `project/LANDMINES.md`. What happened → `project/journal/`.
+> A thing the human should decide to fund → `project/TODO.md` is theirs, so say
+> it to them. **Nothing gets a new queue by default.** A defect that nobody is
+> willing to staff is not a backlog item, it is a thing we chose not to do, and
+> writing it down a fourth time does not change that.
+
 
 Five lanes closed on 08-28. **This section exists because their open work would
 otherwise have died in a handoff**, which is the failure this whole plan was
