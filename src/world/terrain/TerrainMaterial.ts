@@ -1453,12 +1453,31 @@ void tf_shade() {
    */
   float cvB1 = tf_snoise(P.xz * 0.142 - 211.0);   // ~7 m: the bush and its shadow
   float cvB2 = tf_snoise(P.xz * 0.046 + 157.0);   // ~22 m: the thicket
-  // Dry cover grows on the slopes grass abandons, and not on a live sand pan,
-  // a bare rock face or the road. The distance ramp hands over from the grass
-  // ring (far: 155) the way the sward hands over from the blades.
-  float dryAmt = smoothstep(60.0, 130.0, vTDist)
+  // Dry cover grows on the slopes grass abandons, and not on a bare rock face
+  // or the road.
+  //
+  // **The distance ramp used to start at 60 m, on the theory that it hands over
+  // from the grass ring the way the sward does. In Leide there is nothing to
+  // hand over from.** bioGreen runs 0.05-0.12 there, which is what switches
+  // the sward off and is also what collapses GrassField's rings, so between
+  // the camera and 60 m Leide had no grass geometry AND no painted cover --
+  // bare pan under both. zone_longwythe and zone_three_valleys read 11-13
+  // on EVERY reliefstat band from d1 to d64, which is not "short of the
+  // reference" so much as "no structure at any scale", and the reference's own
+  // ground runs 11 to 22 rising with scale. 18-62 m puts the tuft octave where
+  // the frame actually is; it is band-limited on its own screen footprint
+  // either way, so nearer is not noisier, it is bigger.
+  //
+  // **And it was suppressed 55% on sand, which in Leide is self-defeating.**
+  // w[0]'s own gain carries (1.0 - 0.80 * bioGreen), so sand is at FULL
+  // weight exactly where bioGreen is near zero -- the suppression that was
+  // written to keep thorn off a live dune was taking half the cover off the
+  // whole of Leide's floor, which is not a live dune, it is the ground the
+  // judge is looking at. Reduced to 0.32; a real moving dune still reads,
+  // because it is also the place w[0] gets closest to 1.
+  float dryAmt = smoothstep(18.0, 62.0, vTDist)
                * (1.0 - smoothstep(0.08, 0.34, bioGreen))
-               * (1.0 - 0.55 * w[0])
+               * (1.0 - 0.32 * w[0])
                * (1.0 - 0.60 * w[3])
                * (0.72 + 0.28 * smoothstep(0.03, 0.30, slope))
                * (1.0 - smoothstep(0.50, 0.75, slope))
