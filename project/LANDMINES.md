@@ -1579,3 +1579,28 @@ side: the damage is not only to the lane whose work is swept, it is a broken
 commit in the history under someone else's name. **Commit with an explicit
 pathspec, always, and never let a pathspec widen to a directory another lane is
 editing.**
+
+## `daemon.mts --wait` exits 0 when it gives up, so "the box went quiet" and "I stopped waiting" look identical
+
+**2026-08-28.** A lane waited for a quiet tree, read exit code 0, and reported
+that the daemon had gone idle. It had not: the wait **gave up after 1800 s with
+four jobs still running**, and the box was 4/4 busy at load 9.24. The lane then
+took a perf number on a saturated machine and had to correct itself.
+
+`--wait` prints *why* it is still waiting when it gives up — that part works, and
+it is the only signal. **The exit code does not distinguish the two outcomes**,
+so any script or agent branching on `&&` after a `--wait` proceeds as though the
+condition held. Read the printed reason, not the status.
+
+This matters most for exactly the tools that need it: `perf`, `gameplay`,
+`bootprof` and `bench` take the exclusive lease and are meaningless under
+contention. **A perf number taken after a `--wait` that timed out is void**, and
+nothing in the pipeline will say so — `perf.mts` stamps `RULER_VALID` and
+`VERDICT:`, but a tool that prints no verdict line at all (`perfmenurepro` is
+one) gives you a number with no way to tell. On a busy box that probe reported
+**938 ms and 14 hitches** which were pure contention; alone on a quiet tree it is
+0 and max 14 ms.
+
+**Until `--wait` gets a distinct exit code, treat the printed reason as the
+result** — and prefer a tool that stamps its own verdict over one that does not.
+
