@@ -46,7 +46,7 @@
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { call, ensureDaemon, harnessArgs, announceBuild, withBlankPage, runTool } from './harness.mts';
+import { call, ensureDaemon, harnessArgs, announceBuild, withBlankPage, runTool, HARNESS_FLAGS } from './harness.mts';
 import type { ShotsResponse } from './harness.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -61,6 +61,13 @@ function parseArgs(argv: string[]) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    // Not this parser's business — `harnessArgs` reads the same argv for them.
+    // Without this, `corpus.mts --build <sha>` died on `unknown flag --build`
+    // and the corpus could only ever be captured at HEAD, which makes the one
+    // comparison a whole-world change needs — the same 142 shots either side of
+    // it — impossible to run. `perf.mts` and `gameplay.mts` already do this.
+    const words = HARNESS_FLAGS.get(a);
+    if (words !== undefined) { i += words; continue; }
     if (a === '--sheet') o.sheetOnly = true;
     else if (a === '--frame') o.frame = JSON.parse(argv[++i]);
     else if (a === '--scout') o.scout = JSON.parse(argv[++i]);
