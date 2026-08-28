@@ -83,12 +83,22 @@ both arms taken back to back on the same contended box.
   to `'high'` with no `?q=`; every harness page asks for `ultra`. Idle cost barely
   differs between them, but do not assume that for anything else.
 
-## Certification
+## Certification, all after the `Game.ts` change
 
-`pnpm run check` and `nanscan` re-run at the end of the lane; `bootprof --n 3`
-A/B above is the boot-sequencing certification for the `Game.ts` change. The
-`bootblock` gate passes at 14 blocks / 1243 ms / 85.5 MB against budgets of
-≥ 8 / ≤ 3500 ms / ≤ 120 MB.
+| | result |
+|---|---|
+| `pnpm run check` | **19/19** in 317.3 s |
+| `perf.mts` | **PASS**, mean 212.0 fps, worst 143 (`town_forecourt`), 142/142 clear 60 by more than their own noise, `RULER_VALID: true` |
+| `gameplay.mts` | **PASS**, worst segment 123.5 fps (`streaming-traverse`), **0 hitches**, `RULER_VALID: true` |
+| `nanscan` | **0 of 142** shots carry NaN |
+| `bootblock` gate | **PASS** — 14 blocks / worst 1243 ms / 85.5 MB, against ≥ 8 / ≤ 3500 ms / ≤ 120 MB |
+| `idlecpu` gate | **PASS** — stopped **1.0%** of a core, **16.91 CPU ms/frame** = 101.4% at 60 Hz, against ≤ 15% / ≤ 28 ms |
+| `bootprof --n 3` A/B | 8.90/8.48/8.28 s before against 8.84/8.39/8.42 s after — **the yields cost nothing measurable** |
+| looked at | `hero_full` and `town_forecourt` at HEAD (`tmp/shots/runtime-facts/`) — party, terrain, vegetation and the whole Hammerhead forecourt intact; `Town`, `Npcs` and `Props` all initialise correctly across the new yields |
+
+`perf`'s mean reads 212 fps against the 226–229 recorded in `BOOT_PERF.md`; that
+run was taken with three other lanes live and is a PASS on a self-validated
+ruler, so the row was left alone rather than ratcheted down on a busy box.
 
 ## Not done, deliberately, and not queued anywhere
 
