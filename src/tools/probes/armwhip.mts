@@ -92,6 +92,7 @@ let first = true;
 const mkTrack = () => ({
   lin: [], ang: [], dist: [], drops: [], clamped: 0, n: 0, worst: [],
   orbit: [], radial: [], trans: [], framingYaw: [], probeYaw: [], yawRate: [],
+  blocked: 0,
 });
 const prevFocus = { x: 0, y: 0, z: 0 };
 let prevYaw = rig.yaw;
@@ -114,6 +115,7 @@ const sample = (track, tag) => {
     track.lin.push(lin); track.ang.push(ang); track.dist.push(rig.distance); track.n++;
     if (dd < -0.05) track.drops.push(-dd / dt);
     if (rig.distance <= rig.minDistance + 1e-3) track.clamped++;
+    if (occluded()) track.blocked++;
     // Decompose the lens motion: how much of it is the focus point moving
     // under the camera, how much is the arm changing length, and how much is
     // the camera swinging AROUND the focus.
@@ -164,6 +166,7 @@ const report = (name, t) => [
   `  arm collapses (>0.05 m in one frame): ${t.drops.length} (${(100 * t.drops.length / Math.max(1, t.n)).toFixed(1)}% of frames), worst ${Math.max(0, ...t.drops).toFixed(1)} m/s`,
   `  frames at the minDistance clamp: ${t.clamped} (${(100 * t.clamped / Math.max(1, t.n)).toFixed(1)}%)`,
   `  frames over 8 m/s or 200 deg/s: ${t.worst.length}`,
+  `  frames with a STONE between the lens and the player: ${t.blocked} (${(100 * t.blocked / Math.max(1, t.n)).toFixed(1)}%)`,
   `  lens motion split (p95): orbit ${pct(t.orbit, 0.95).toFixed(2)}  arm ${pct(t.radial, 0.95).toFixed(2)}  focus ${pct(t.trans, 0.95).toFixed(2)} m/s`,
   `  yaw rate     p50 ${pct(t.yawRate, 0.5).toFixed(0)}  p95 ${pct(t.yawRate, 0.95).toFixed(0)}  max ${Math.max(0, ...t.yawRate).toFixed(0)} deg/s`,
   `  yawTarget written by the FRAMING block: p95 ${pct(t.framingYaw, 0.95).toFixed(0)}  max ${Math.max(0, ...t.framingYaw).toFixed(0)} deg/s`,
@@ -185,6 +188,68 @@ const findDen = async (headings, secs) => {
   }
   inp.keys.clear();
   return null;
+};
+
+/* ---- is a rock standing between the lens and the player? -------------
+ *
+ * Computed here from `Rocks`' own instance records rather than read off
+ * `Props.cameraBlockers`, so the same number can be taken on a build that
+ * predates that list. Same arithmetic the list is built with: `placedScale`
+ * against the kind's own `ext` half-extents, and the median axis. */
+const props = g.get('Props');
+const rocks = props && props.rocks;
+const R = await import('/world/props/Rocks.ts');
+const EXT1 = [1, 1, 1];
+const spheres = [];
+let spheresAt = null;
+const rebuildSpheres = (c) => {
+  spheres.length = 0;
+  if (!rocks) return;
+  const streams = [rocks.stream, rocks.outcrops];
+  for (const st of streams) {
+    if (!st || !st.live) continue;
+    for (const arr of st.live.values()) {
+      for (const it of arr) {
+        const dx = it.x - c.x, dz = it.z - c.z;
+        if (dx * dx + dz * dz > 34 * 34) continue;
+        const ex = rocks.ext.get(it.k) || EXT1;
+        const ps = R.placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury);
+        const hx = it.s * ps.jx * ex[0], hy = it.s * ps.jy * ex[1], hz = it.s * ps.jz * ex[2];
+        const r = hx + hy + hz - Math.max(hx, hy, hz) - Math.min(hx, hy, hz);
+        if (r < 0.45) continue;
+        spheres.push(
+          it.x - it.nx * ps.sink,
+          it.y - it.ny * ps.sink + hy * 0.35,
+          it.z - it.nz * ps.sink,
+          r);
+      }
+    }
+  }
+};
+/** True when a stone intersects the segment from the lens to the focus. */
+const occluded = () => {
+  const c = rig.cam.position, f = rig._focusSmooth;
+  if (!spheresAt || spheresAt.distanceToSquared(c) > 64) {
+    spheresAt = c.clone();
+    rebuildSpheres(c);
+  }
+  const dx = f.x - c.x, dy = f.y - c.y, dz = f.z - c.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-4) return false;
+  const ux = dx / len, uy = dy / len, uz = dz / len;
+  for (let i = 0; i < spheres.length; i += 4) {
+    const ex = c.x - spheres[i], ey = c.y - spheres[i + 1], ez = c.z - spheres[i + 2];
+    const rr = spheres[i + 3];
+    const b = ex * ux + ey * uy + ez * uz;
+    const cc = ex * ex + ey * ey + ez * ez - rr * rr;
+    // A lens INSIDE a stone is the worst case of all, and counts.
+    if (cc < 0) return true;
+    const disc = b * b - cc;
+    if (disc < 0) continue;
+    const t = -b - Math.sqrt(disc);
+    if (t > 0 && t < len) return true;
+  }
+  return false;
 };
 
 const out = [];

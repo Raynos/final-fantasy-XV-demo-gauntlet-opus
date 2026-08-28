@@ -32,9 +32,10 @@ export interface CameraShot {
 /**
  * Third-person game camera.
  *
- * A spring arm with real collision (a swept probe against the terrain — see
- * `_armDistance` for why props are not in it — with a fast push-in and a slow
- * recover), separate position and rotation damping, velocity look-ahead,
+ * A spring arm with real collision (a swept probe against the terrain and
+ * against the prop spheres `Props` publishes — see `_armDistance` — with a
+ * fast push-in and a slow recover), separate position and rotation damping,
+ * velocity look-ahead,
  * speed-reactive FOV, a handheld noise layer, combat framing that keeps the
  * player and the lock-on target in the same frame, and a trauma-driven shake
  * model.
@@ -245,7 +246,8 @@ export class CameraRig {
 
   /**
    * Sweep the arm from the focus point outward and return the first distance
-   * at which the camera would clip something.
+   * at which the camera would clip something — the heightfield, or one of the
+   * prop spheres `Props.cameraBlockers` publishes.
    */
   _armDistance(game: Game, focus: THREE.Vector3, dir: THREE.Vector3, wanted: number) {
     let d = wanted;
@@ -280,13 +282,48 @@ export class CameraRig {
       }
     }
 
-    // There is no prop-collision sweep here. There used to be a raycast against
-    // `Props.cameraColliders || .colliders || .collisionMeshes` — none of which
-    // `Props` has ever had, so the list was always empty and the ray never ran.
-    // To restore it, `Props` needs to publish a real, opt-in
-    // `cameraColliders: THREE.Object3D[]` (opt-in because raycasting a whole
-    // prop group — instanced foliage and the rest — every frame costs more than
-    // the camera is worth), and this is where it would be swept.
+    // ---- props ---------------------------------------------------------
+    //
+    // **The camera has never collided with a prop.** There used to be a
+    // raycast against `Props.cameraColliders || .colliders ||
+    // .collisionMeshes`, none of which `Props` has ever had, so the list was
+    // always empty and the ray never ran — and every capture set of a real
+    // fight has a boulder filling the near corner because of it
+    // (`tmp/shots/cb1/f-engage.jpg`).
+    //
+    // What that comment asked for is what is here: an **opt-in list of
+    // spheres**, published by whoever owns the props, because raycasting a
+    // whole instanced group every frame costs more than the camera is worth.
+    // `Rocks` fills it from its own instance walk, which already visits every
+    // drawn stone and already only runs when the camera has moved eleven
+    // metres. An absent or empty list is "no props", so a world booted without
+    // `Props` behaves exactly as it did before this existed.
+    //
+    // Analytic against the swept sphere rather than stepped: the arm is one
+    // ray, and `|focus + dir*t - c| = R + r` is a quadratic. A focus point
+    // already inside a stone (`cc < 0`) is skipped — the player is standing in
+    // it, and there is no arm length that helps.
+    const props = game.get('Props');
+    const blockers = props && props.cameraBlockers;
+    const nb = (props && props.cameraBlockerCount) || 0;
+    if (blockers && nb > 0) {
+      const R = this.probeRadius;
+      for (let i = 0; i < nb; i++) {
+        const o = i * 4;
+        const ex = focus.x - blockers[o];
+        const ey = focus.y - blockers[o + 1];
+        const ez = focus.z - blockers[o + 2];
+        const rr = R + blockers[o + 3];
+        const b = ex * dir.x + ey * dir.y + ez * dir.z;
+        if (b > 0) continue;                         // the stone is behind us
+        const cc = ex * ex + ey * ey + ez * ez - rr * rr;
+        if (cc < 0) continue;                        // focus is inside it
+        const disc = b * b - cc;
+        if (disc < 0) continue;
+        const t = -b - Math.sqrt(disc);
+        if (t < d) d = Math.max(this.minDistance, t);
+      }
+    }
     return d;
   }
 
