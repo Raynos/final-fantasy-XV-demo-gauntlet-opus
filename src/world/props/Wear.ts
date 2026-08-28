@@ -394,10 +394,60 @@ export function gradePad(o: PadOpts): PadResult {
   const C_BATTER = [0.86, 0.825, 0.78];
   const C_TOE = [0.70, 0.685, 0.655];
   const C_SPOIL = [0.74, 0.70, 0.65];
+  /** A cut face, not a fill: darker than the toe and with none of its bleach. */
+  const C_SCARP = [0.58, 0.555, 0.525];
 
   const groundAt = (wx: number, wz: number) => coverY(eco, wx, wz, r * 0.35, cull) - base;
-  /** How far below the deck the earthwork may reach before it is a cliff. */
-  const plunge = Math.max(6, r * 0.5);
+  /**
+   * The ground the earthwork has to **bury itself under**, which is not the one
+   * it is **seated against**.
+   *
+   * `coverY` is `Terrain.drawnEnvelope`, and that is an *upper* envelope: the
+   * highest this point is drawn at any clip level in the neighbourhood. That is
+   * the right answer for a seat — a compound placed against the lowest reading
+   * sinks into its own hill as soon as the LOD coarsens — and it is exactly the
+   * wrong answer for a toe, which has to be under the surface at **every** LOD
+   * or it stands out of it at one of them. Measured at the four worst pads: the
+   * upper envelope runs 0.3 m over the finest drawn ground at `tomb_conqueror2`
+   * and **11.2 m** over it at `tomb_fierce`, which is most of that pad's 21 m
+   * of hang all on its own.
+   *
+   * So the batter grades against the *lower* envelope over the same clip range,
+   * and everything about the deck — its size, its retreat, the cut and fill
+   * volumes — stays on the upper one. Two questions, two answers; stating one
+   * in the other's frame is the error class this file has now paid for twice.
+   */
+  const _t = eco.terrain;
+  const _cell0 = _t && _t.clipmap ? _t.clipmap.cell0 : 1.5;
+  const _coarse = _t && typeof _t.clipSpacingForDistance === 'function'
+    ? _t.clipSpacingForDistance(cull) : _cell0;
+  const groundLo = (wx: number, wz: number): number => {
+    if (!_t || typeof _t.drawnHeightAt !== 'function') return groundAt(wx, wz);
+    let lo = eco.height(wx, wz);
+    for (let c = _cell0; c <= _coarse + 1e-6; c *= 2) lo = Math.min(lo, _t.drawnHeightAt(wx, wz, c));
+    return lo - base;
+  };
+  /**
+   * How far below the deck the DECK RETREAT may look before it stops retreating.
+   *
+   * Was also the batter's reach limit, and that was the bug: see `catchSlope`.
+   * The retreat is a question about the deck's own size and it is properly
+   * scaled to the deck; the batter's reach is a question about the hillside and
+   * it is not.
+   */
+  const deckPlunge = Math.max(6, r * 0.5);
+  /**
+   * The gentlest fill face this pad will ever build, as **run per unit drop**.
+   *
+   * `fill` is 3 — a 1:3 embankment, 18 degrees. Leide is not 18 degrees. A
+   * batter gentler than the ground it is chasing never catches it, so it stays
+   * above the hillside all the way out to the reach cap and then stops, and
+   * what that draws is a disc of ground floating over a slope. `catchSlope`
+   * below solves for the gentlest face that actually lands, and this is the
+   * floor: 1:0.45 is 66 degrees, a rock-cut scarp. Past it there is no
+   * earthwork, the ground itself is the wall, and the kerb is right.
+   */
+  const SCARP = 0.45;
   /**
    * How far under the ground the earthwork buries itself once it has met it.
    *
@@ -451,7 +501,7 @@ export function gradePad(o: PadOpts): PadResult {
    * above the ground at its own edge on four of six bearings, against a plunge
    * of 7.0 m, so seven metres of it is embankment and the rest is nothing.
    */
-  const maxFill = plunge * 0.75;
+  const maxFill = deckPlunge * 0.75;
   for (let j = 0; j <= seg; j++) {
     const th = (j / seg) * Math.PI * 2;
     const ct = Math.cos(th), st = Math.sin(th);
@@ -485,18 +535,44 @@ export function gradePad(o: PadOpts): PadResult {
      * chamfer, 0.9 m deep — and the cliff is what holds it up. That reads as
      * what it is, which is the whole of §5.4's argument about the cake stand.
      */
-    // Tested across the whole reach, not at the deck edge: at `nebula_parking`
-    // the ground at the edge is 0.2 m down and the cliff starts six metres
-    // further out, so an edge-only test says "gentle" about a twenty metre
-    // drop. The batter has caught the ground on this bearing if at ANY station
-    // out to the cap the 1:3 line is at or below it; if it never is, there is
-    // nothing to embank against.
-    let cliff = true;
-    for (let k = 1; k <= 5; k++) {
-      const run = (k / 5) * capOut;
-      if (groundAt(x + ct * (e + run), z + st * (e + run)) >= -run / fill) { cliff = false; break; }
+    /*
+     * **The gentlest face that actually lands, solved rather than assumed.**
+     *
+     * This test used to be a boolean — "does the 1:3 line reach the ground at
+     * any station out to the cap?" — and if it did not, the bearing gave up and
+     * took the 1.6 m kerb on the theory that the terrain was a cliff and would
+     * hold the pad up. A 1:3 line is **18 degrees**, and Leide is not 18
+     * degrees. So the test fired on ordinary hillside and the pad finished as a
+     * disc of ground floating over a slope, which is the cake stand it was
+     * written to prevent, one level down.
+     *
+     * Measured before the change (`probes/padhang.mts`, the toe ring against
+     * `drawnHeightAt` at the finest ring): **90 of 91 shipped aprons end above
+     * the ground they stand on**, 41 by over a metre and **19 by over six**;
+     * `tomb_conqueror2` hangs **22.1 m** — read `tmp/shots/lr2-tombp/float.png`
+     * for a temple on a flying saucer. And `probes/cliffwhy` says which clamp
+     * did it: on that pad **11 of 36 bearings took the kerb and 4 more took the
+     * plunge clamp**, while the ground under them falls 11.7 m on average and
+     * 41.6 m at worst.
+     *
+     * A batter gentler than the ground it is chasing never catches it, whatever
+     * you cap its reach at. So solve for the gentlest one that does: at each
+     * station a face of slope `s` sits at `-run/s`, so it lands at that station
+     * when `s <= run / drop`, and the whole bearing lands when `s` is at or
+     * under the **largest** of those ratios. Take that, never gentler than the
+     * 1:3 a dozer builds and never steeper than {@link SCARP}; past the floor
+     * there genuinely is no embankment and the kerb is right — which is
+     * `nebula_parking`, and it still gets one.
+     */
+    let need = 0, anyDrop = false;
+    for (let k = 1; k <= 6; k++) {
+      const run = (k / 6) * capOut;
+      const drop = -groundLo(x + ct * (e + run), z + st * (e + run));
+      if (drop > 0.05) { anyDrop = true; need = Math.max(need, run / drop); }
     }
-    cliff = cliff && groundAt(x + ct * e, z + st * e) < 0;
+    // `Infinity` means "this bearing is uphill or level and unconstrained".
+    const catchSlope = anyDrop ? need : Infinity;
+    const cliff = anyDrop && catchSlope < SCARP && groundLo(x + ct * e, z + st * e) < 0;
     // The ramp. A truck has to get onto the pad, so one sector is graded at
     // 1:9 instead of 1:3 and pushed further out; the transition is smooth in
     // angle or the ramp reads as a wedge glued on.
@@ -508,6 +584,11 @@ export function gradePad(o: PadOpts): PadResult {
       const k = Math.max(0, 1 - Math.abs(d) / 0.26);
       slopeFill = fill + (9 - fill) * (k * k * (3 - 2 * k));
     }
+    // A ramp that runs off a bluff is not a ramp. Where the ground demands a
+    // steeper face than the sector wants, the ground wins — on a gentle bearing
+    // `catchSlope` is Infinity or well over 9 and this does nothing, which is
+    // every ramp that was ever right.
+    slopeFill = Math.min(slopeFill, Math.max(SCARP, catchSlope));
     // How far this bearing's batter has to run: measured, not assumed -- and
     // measured ALONG the batter rather than at the deck edge alone.
     //
@@ -519,9 +600,9 @@ export function gradePad(o: PadOpts): PadResult {
     // drops five metres in one ring step. That is a vertical curtain at the rim
     // -- a cap on an undercut stalk. So walk out to the cap and take the
     // deepest ground the batter will actually have to cross.
-    let hEdge = groundAt(x + ct * e, z + st * e);
+    let hEdge = groundLo(x + ct * e, z + st * e);
     for (let k = 1; k <= 4; k++) {
-      const gk = groundAt(x + ct * (e + (k / 4) * capOut), z + st * (e + (k / 4) * capOut));
+      const gk = groundLo(x + ct * (e + (k / 4) * capOut), z + st * (e + (k / 4) * capOut));
       if (gk < hEdge) hEdge = gk;
     }
     // Capped, and the cap is a composition decision rather than an engineering
@@ -532,6 +613,21 @@ export function gradePad(o: PadOpts): PadResult {
       capOut,
       Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0),
     );
+    /**
+     * How deep this bearing's outermost station may go, and it is a property of
+     * the hillside rather than of the pad.
+     *
+     * `deckPlunge` is `max(6, r/2)` — six metres under a thirteen-metre haven —
+     * and it used to clamp the last ring as well, so once the ground fell
+     * further than that the batter stopped six metres down **in the air** no
+     * matter how steep it was allowed to be. Solving the slope without lifting
+     * this would have bought nothing: the face would dive correctly and then be
+     * cut off at the same height. It follows the ground the bearing actually
+     * measured, and is still capped, because a fill that reaches fifty metres
+     * down a gorge is the largest object in the frame and belongs to the
+     * terrain, not to the pad.
+     */
+    const reachDown = Math.min(46, Math.max(deckPlunge, -hEdge + 1.2));
     let crestY = 0, crestS = e;
     // This bearing's place in the rill field, drawn once for the whole radial.
     const rillRaw = nz2.simplex2(ct * rillK, st * rillK) * 0.70
@@ -565,7 +661,7 @@ export function gradePad(o: PadOpts): PadResult {
         y = -0.9 * (run / 1.6);
         c = C_BATTER;
       } else {
-        const g = groundAt(wx, wz);
+        const g = groundLo(wx, wz);
         const run = s - e;
         c = C_BATTER;
         if (g < 0) {
@@ -585,14 +681,14 @@ export function gradePad(o: PadOpts): PadResult {
         // on a steep site and leave the whole compound floating on nothing --
         // `floatcheck` caught exactly that, 13 POIs in the air.
         //
-        // But *only* down to `plunge`. Reaching without a limit is the same
+        // But *only* down to `reachDown`. Reaching without a limit is the same
         // mistake with the sign flipped: a pad whose footprint clips a cliff
         // finds ground fifty metres down and hangs a fifty-metre curtain off
         // its own edge, which `floatcheck` then reads as a compound buried
         // 56 m into the hill (`disc_overlook`, `greyshire`, 23 of them). Past
         // the limit it is a retaining wall, and the other three sides of the
         // pad are what keep the compound on the ground.
-        if (last) y = Math.max(g - bury(wx, wz), -plunge);
+        if (last) y = Math.max(g - bury(wx, wz), -reachDown);
         // Cut the rill in, but only where the batter is standing ABOVE the
         // ground it crosses. Below that the surface is already buried and
         // deepening it is invisible geometry; worse, it would pull the last
@@ -609,6 +705,13 @@ export function gradePad(o: PadOpts): PadResult {
         c = wash < 0.5
           ? mix3(C_CREST, C_BATTER, wash * 2)
           : mix3(C_BATTER, C_TOE, (wash - 0.5) * 2);
+        // A face steeper than a fill can stand at is not a fill, and painting it
+        // in the three fill values is what makes a twenty-metre embankment read
+        // as poured concrete on a red hillside. Past 1:1.6 it goes toward the
+        // scarp value — the darker, less bleached tone of a cut face — in step
+        // with how far past it is. Below that this is a no-op and every pad on
+        // level ground is untouched.
+        if (slopeFill < 1.6) c = mix3(c, C_SCARP, Math.min(1, (1.6 - slopeFill) / 0.9));
       }
       pos.push(ct * s, y, st * s);
       col.push(c[0], c[1], c[2]);
