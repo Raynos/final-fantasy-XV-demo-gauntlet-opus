@@ -46,11 +46,18 @@ steep and the water lane said so; Angelgard is a keep-out disc because a sheer
 prison island must not acquire a sandbar. Adding a second entry is a content
 decision, not a tuning one.
 
-**Looked at**: `tmp/shots/gr2-beach/zone_galdin.jpg` against
-`tmp/shots/gr2-base/zone_galdin.jpg`. Before: a grass table ending in a
-twenty-metre bluff, water starting where the grass stops. After: a pale sand
-strand across the width of the frame with the foam lace on it, shallows over a
-sandy bed, Angelgard still sheer. It reads as a beach.
+**Looked at**, three frames: `tmp/shots/gr2-base/zone_galdin.jpg` (before),
+`gr2-beach/` (terrain half), `gr2-look3/` (both halves). Before: a grass table
+ending in a twenty-metre bluff, water starting where the grass stops. After
+both halves: a green backshore, a pale sand strand with dune relief on it
+running the width of the frame, the foam lace at the swash, shallows over a
+sandy bed, and Angelgard still sheer — and the tree line standing **behind** the
+sand rather than in it. It reads as a beach.
+
+Two controls looked at as well, both unchanged as designed: `zone_vannath` is
+outside the site, and `zone_alstor` — a *drowned forest* whose floor is 16 m
+below the water plane — is untouched because `strand` is gated on
+`Field.beachMask` rather than on height above the sea.
 
 ### The `Ecology` half — LANDED too, `444f8ee`
 
