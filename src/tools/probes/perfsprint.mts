@@ -1,5 +1,18 @@
 // perf-r2: the 162 ms `sprint+turn` frame, in its real context.
 //
+// **THIS PROBE'S `newPrograms` IS A FALSE NEGATIVE AND IT COST TWO ROUNDS.**
+// `progs()` maps each program to `name + '|' + cacheKey.length` and `added`
+// is `now.filter(p => !prev.includes(p))` -- a comparison between STRINGS, so
+// a program whose name and key *length* already appear in the list reads as no
+// program at all. That is exactly the case that matters: the two programs that
+// linked on the spike frames differ from an already-linked twin in ONE BIT of
+// three's second `getProgramCacheKeyBooleans` mask, `8520706` against
+// `8522754` and `8390656` against `8390688` -- same material name, same digit
+// count, same key length. WS-6 carried "zero new programs" as established fact
+// for two rounds on the strength of it, and the whole 84-116 ms frame was a
+// program link. Count `renderer.info.programs.length`, or diff the keys
+// themselves; `src/tools/probes/perfstall.mts` does both.
+//
 // A probe that starts `sprint+turn` from a fresh `applyShot` is NOT measuring
 // what `gameplay.mts` measures: by the time the gate reaches that segment the
 // player has already walked and sprinted 330 frames from spawn, so the frame-35
