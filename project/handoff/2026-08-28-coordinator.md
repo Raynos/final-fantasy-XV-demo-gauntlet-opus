@@ -151,6 +151,34 @@ targets cluster the same way — `VegTextures` 18, `TerrainMaterial` 14,
 human's *"and maybe in prod mode too"* is very likely right and the lane should
 **measure prod first** rather than assuming the dev suite is the cause.
 
+**Sixteen `WIP` commits from retired lanes are still reachable, and neither plan
+mentions one of them.** `git log --all --oneline --grep="^WIP"` finds them. They
+are half-finished by construction — several say so — so they are evidence of
+what a previous pass tried and how far it got, not code to cherry-pick blindly.
+But two of them are the *exact* defect a live lane is chasing, and the grounding
+one is the plan's own "written and never run" next step, which the plan
+describes without naming its sha.
+
+| sha | what | lane |
+|---|---|---|
+| `6454bb6` | a profile with a nasion, a mandible body and a visible ear | **`head`** — this is the nose-leads-chin defect, attempted once |
+| `1a5fa03` | rebuild the eye — socket depth, lid closure, iris size, waterline | **`head`** — the proud-eyeball item, attempted once |
+| `10d8c42` | the ear's ridges were buried inside the plate it sits on | `head` — the flat-scoop ear, with a named cause |
+| `6397de1` | an ear with a helix, an antihelix and a tragus | `head` |
+| `b278b26` | lay the hair on the head instead of shooting it out radially | `head` |
+| `991e7a0` | clump the hair into locks, stop highlight aliasing across the strand | `head` — the sub-pixel shimmer, attempted |
+| `368711e` | scalp shell lock-scale relief, unify the two subsurface reds | `head` |
+| `deab013` | the hair specular was a brightness multiplier, which made blonds straw | `head` |
+| `207a399` | why nothing sits on the ground, and a half-finished term for it | **`ground-light`** — B-WS2c's un-rendered fraction-of-object ramp |
+| `721edca` | regional terrain splat | `ground-light` |
+| `9602004` | put half the leaf chroma back; neutralising it outright was too far | `ground-light` / `alpha-edges` |
+| `1a82078` | the clouds lane's uncommitted state, preserved on the way out | `sky-clouds` |
+| `06d4030` | grip-centred weapon geometry | `combat` |
+| `60a8e58` | `Animator.rest()` plus handoff | `combat` / `dress` |
+| `4db36e2`, `9816f1d` | salvaged after a watchdog stall — open to see what | — |
+
+Routed to `head` on 08-28. Route the rest as each lane launches.
+
 ## Results
 
 *(appended as lanes report)*
