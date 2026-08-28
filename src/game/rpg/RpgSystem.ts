@@ -22,6 +22,7 @@ import { Rng } from '../../util/Rng.ts';
 import { Emitter } from './Emitter.ts';
 import { CombatBridge } from './CombatBridge.ts';
 import { HavenCamp } from './HavenCamp.ts';
+import { Deposits } from './Deposits.ts';
 import { Fishing } from '../fishing/Fishing.ts';
 import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor, MAX_LEVEL, EXP_TABLE } from './Stats.ts';
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.ts';
@@ -161,6 +162,7 @@ export class RpgSystem {
   _rankSeen?: number;
   combatBridge!: CombatBridge;
   havenCamp!: HavenCamp;
+  deposits!: Deposits;
   fishing!: Fishing;
   day!: DayCycle;
   elemancy!: Elemancy;
@@ -218,6 +220,8 @@ export class RpgSystem {
     this.havenCamp = new HavenCamp(this);
     /** The "Fish" prompt at every fishing hole that has real water under it. */
     this.fishing = new Fishing(this);
+    /** The twelve elemental deposits, as objects you can see and draw from. */
+    this.deposits = new Deposits(this);
   }
 
   /* -- Lifecycle --------------------------------------------------------- */
@@ -403,6 +407,9 @@ export class RpgSystem {
     // `Interaction` boots six systems after this one, so the camp prompts
     // cannot be registered in `init()`. This is a no-op after the first tick.
     this.havenCamp.install(game);
+    // Same first-tick install, then a per-frame pulse and distance cull.
+    this.deposits.install(game);
+    this.deposits.update(dt, game);
     // Installs itself the same way, and owns the input while a cast is live.
     this.fishing.update(dt, game);
     this.combatBridge.update(dt, game);
