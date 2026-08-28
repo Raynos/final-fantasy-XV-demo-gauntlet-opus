@@ -524,7 +524,13 @@ const SHOT_TABLE = {
     // ridge and read the glowing fissure against the mass.
     doc: 'Mencemoor: the Disc of Cauthess seen from a spur of its rim',
     time: 16.5, weather: 'clear',
-    pos: [400, 286.4, -1200], target: [-1020, 393, -2160], fov: 42,
+    // Dropped onto the spur it always claimed to stand on. framedepth measured
+    // the old stand at 242.7 m above its own ground with the nearest terrain in
+    // frame at 569 m and the centre ray never meeting the ground -- against
+    // 33.9/79 m on longwythe and 22.9/51 on vannath. That is why this shot had
+    // no foreground and read as a bare corrugated massif: there was nothing
+    // near enough to be foreground. The ground here is 44 m.
+    pos: [400, 92, -1200], target: [-1020, 393, -2160], fov: 42,
   },
   zone_taelpar: {
     doc: 'Taelpar Crag: the 235 m gorge the highway crosses at its neck',
