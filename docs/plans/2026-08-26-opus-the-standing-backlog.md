@@ -626,6 +626,27 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What was left:
 
 ## WS-7 — Content holes that break a playthrough
 
+### WS-7 result, 2026-08-28 (`memory-content` lane) — **CLOSED, all five**
+
+`c220833` `e5557e5`. The two the water lane left open:
+
+2. **Energy deposits: LANDED.** `src/game/rpg/Deposits.ts` builds a faceted
+   crystal druse at each of the twelve anchors, sized by `capacity`, and
+   registers a **"Draw"** prompt on it carrying the live remaining units and the
+   hours to recharge. The handler routes through `CombatSystem.drawEnergy`, so
+   the existing mote burst, flare and `draw` event are reused rather than
+   duplicated. Installed on `RpgSystem`'s first tick, as `HavenCamp` is.
+   Photographed at walk-up and at 22 m for all three elements. Two things the
+   pictures decided: a POI centre is the middle of whatever the kit built there
+   (the first build stood on Hammerhead's painted lane markings — `siteNear`
+   steps 14–34 m off), and emissive 1.6 clips the shards to a flat colour under
+   `Exposure`'s meter so the faceting stops existing — 0.75 plus a separate dark
+   rock material for the socket.
+5. **Fociaugh's 1.26 bank: CLOSED as a measured negative.** See the negatives
+   table — the grade is one bearing of twenty-four, the scoped `Portal.ts` fix
+   cannot reach it, and a **POI apron is built on top of the mouth**. Balouve is
+   worse and was never reported.
+
 ### WS-7 result, 2026-08-28 (`water-content` lane) — 1, 3 and 4 closed, 2 and 5 untouched
 
 `2b344e7..b915af3`, handoff `project/handoff/water-content.md`.
@@ -794,7 +815,15 @@ The curve is already in the bestiary and fits its own table: Anak (lv 9, 900 hp,
 level for HP, ×1.058 for damage**. At a species' own listed level the factor is
 exactly 1, so the corpus and every gate are untouched by construction.
 
-It was **built and reverted** because it cannot live inside
+**CORRECTION, 2026-08-28: it landed on 2026-08-27 in `e7f4602`, both halves.**
+This section, §WS-11 and every brief written from them went on describing it as
+built-and-reverted for a further day. What was actually open was the *magnitude*
+— and **a third half nobody had noticed: poise is in the same bestiary table,
+fits at ×1.053/level, and was never scaled**, so a lifted den got 1.8× the HP and
+the same poise it had at its listed level, which is why it never attacked.
+
+The original note, kept because the mechanism is still why it is hard: it was
+built and reverted once because it cannot live inside
 `src/characters/enemies/**` alone. Two writers outside it defeat every version:
 
 - `src/characters/Enemies.ts:171` — `if (o.hp) { e.maxHp = o.hp; e.hp = o.hp; }`
@@ -1137,17 +1166,71 @@ directory boundary it did not own.
   the change is landed but unverified and the lane says it would take an argument
   to revert. There is also a **p99 hard edge**.
 
-### Memory — `TODO.md` line 2, still unstaffed (from `geometry-bake`)
+### Memory — `TODO.md` line 2 — **ANSWERED 2026-08-28 (`memory-content` lane)**
 
-- **The eight prebuilt POI compounds are 119.7 MB over 3.70 M vertices**, against
-  the **82.3 MB for the whole page** that `boot-memory.md` records. `lestallum`
-  (1.34 M) and `galdin_quay` (1.28 M) are 2.6 M of the 3.7 M on their own.
-  **Nobody has ever looked at a 1.3 M-vertex town.** The geometry bake does not
-  fix this — it caches the build, it does not shrink the result.
-- The instrument is `_probe/gcwatch.mts` (CDP `Runtime.getHeapUsage`);
-  **`performance.memory` is frozen in this headless build**, which is why
-  `probes/perfgc.mts` could not answer. Chromium RSS is also recorded per lease in
-  the daemon's ledger — a free time series nobody has read for this question.
+`12e1a41` `4c089cb`. Handoff `project/handoff/memory-content.md`. The
+instruments are `bootprof.mts --mem` (now four pages, `--prod`, `--play`) and
+`probes/memowners.mts`.
+
+**The number is not 1.4 GB and prod does not fix it.** Browser RSS, whole
+process tree, node excluded, one browser launch per variant, every bake cache
+warm:
+
+| page | browser RSS | Chromium's own floor | the world |
+|---|---|---|---|
+| dev, `?shoot=1` (the harness's page) | 2 759 MB | 236 | 2 365 |
+| dev, `?shoot=1&debug=1` | 2 757 MB | 238 | 2 360 |
+| dev, play (what a person opens) | 2 766 MB | 233 | 2 533 |
+| dev, play + `?debug=1` | 2 767 MB | 244 | 2 523 |
+| **prod, play** | **2 533 MB** | 252 | 2 281 |
+| **prod, play + `?debug=1`** | **2 556 MB** | 232 | 2 324 |
+
+So: **`?debug=1` costs 23 MB in prod and ~1 MB in dev** — and *this* is the
+first time that has been measured at all, because `main.ts:37` gates the suite
+on `qs.has('debug') && !qs.has('shoot')` and every previous run compared
+`?shoot=1` against `?shoot=1&debug=1`, i.e. the same page twice. The human's
+*"and maybe in prod mode too"* is right: **prod saves 215 MB of the 2 766 and
+leaves 2 533.**
+
+**Named buckets, prod play page, 2 281 MB of world:**
+
+| bucket | MB | notes |
+|---|---|---|
+| GPU-side, total | **740** | matches the gpu-process's own 823 MB RSS |
+| — scene textures + mips | 199 | 257 textures |
+| — render targets | 181 | 33, PostFX chain and generators. **Never counted before** |
+| — shadow maps | 42 | 2–3 cascades |
+| — vertex + index on the GPU | 318 | the upload of the row below |
+| CPU typed arrays (external to V8) | **448** | 275 vertex + 44 index + 103 texel + 27 instance |
+| V8 heap, live | **85–143** | 59 MB of it is boot garbage a forced GC returns |
+| unattributed | **~880** | Chromium renderer overhead, ANGLE/Metal, shader binaries |
+
+**Where the 275 MB of vertex arrays is**, by top-level scene child
+(`memowners.mts`; vertex + index, CPU side, resident again on the GPU):
+
+| owner | MB | verts | note |
+|---|---|---|---|
+| `poi_kits` | **119.7** | 3 704 402 | exactly the figure this section already carried — it is **resident geometry**, not a bake container |
+| `npcs` | 61.1 | 759 669 | plus **33.6 MB of texture**: eight-plus 1024² maps, one per NPC |
+| `Group` (the party) | 51.3 | 545 187 | `Gladiolus_hair` alone is **15.6 MB over 124 891 verts** — 125 bytes a vertex |
+| `megastructures` | 37.7 | 787 770 | `meteor_mega_stone` is one 34.8 MB geometry |
+| everything else | ~31 | | |
+
+**The two biggest single geometries in the game are the towns' shadow proxies**
+— `poi_kits / town_shadow` at 11.2 MB / 670 619 verts and 10.6 MB / 638 243 —
+i.e. 21.8 MB and 1.31 M vertices of geometry that only ever casts a shadow.
+
+**By attribute, across all 552 geometries:** position 79.0 MB, normal 44.9,
+**colour 42.7**, uv 30.3, skinWeight 20.4, skinIndex 10.2. Colour and normal are
+`3x Float32Array`; as unit-normalised bytes they would be a quarter of that,
+which is ~65 MB of the 275 with no visual change and no generator rewrite.
+
+**Cheaply recoverable, in order, none taken:** the 103 MB of CPU texel arrays
+(dead after upload — needs per-texture `onUpload` disposal and a context-loss
+story), ~65 MB of Float32 colour/normal attributes, 21.8 MB of shadow-proxy
+geometry that could carry position only, and 59 MB of boot garbage that a single
+`gc()` after `ready` returns. Nothing here touches the ~880 MB the renderer
+holds that is not ours, and **that is the largest bucket and still unnamed.**
 
 ### The face (from `head`, passes 3–5)
 
@@ -1168,6 +1251,11 @@ without opening the handoff it lived in.
 | **`perfsprint.mts` reporting "zero new programs" on the stall frames means no program was linked** | **it means the opposite of what it says.** The probe compares programs by `name + '|' + cacheKey.length` STRINGS and reports `added = now.filter(p => !prev.includes(p))`, so a program whose key-string is already in the list reads as no program at all. `renderer.info.programs.length` grows by exactly one across both spike frames. Two rounds of WS-6 were spent looking past a link because of it |
 | **`tf_stoch`'s three taps are a fragment cost worth gating to `vTDist < 400 m`** (`splat.md`'s highest-priority item) | **they cost nothing measurable.** `?post=nostoch` cuts the Heitz-Neyret sampler to one tap; `perf.mts` over six ground-dominant shots, both sides `RULER_VALID: true`, moves **0 of 6 shots by more than the 0.93 ms floor** — mean 239.0 fps against 239.5, with the sign inconsistent shot to shot. Not a null ablation: it moves `zone_longwythe` **1.14 mean/255, max 196, over 14.8% of pixels**. Do not build the fallback |
 | **The page is at 16/16 texture units** (used to close PCSS, and carried as an open defect through three plans) | **it is at 15 fragment, 4 vertex, 17 of a combined 32, and the program links.** `probes/texunits.mts` names the culprit — it is the terrain material on every clipmap ring — and then reads the linked program's active samplers back by stage: `uHeightTex`/`uFarHeightTex` are vertex-only displacement taps, `uNormalTex`/`uFarNormalTex` are both. three's `allocateTextureUnit` warns when its running total of allocated units reaches `capabilities.maxTextures`, which is `MAX_TEXTURE_IMAGE_UNITS` (the **fragment** limit, 16) — not `MAX_COMBINED_TEXTURE_IMAGE_UNITS`, which is **32**. Nothing is starved, `LINK_STATUS` is true, and there is a fragment unit free. PCSS is still closed on its other clause (the depth read `sampler2DShadow` cannot do), but not on this one |
+| **`?debug=1` costs 4 MB, so `TODO.md` line 2's premise is wrong** (`boot-memory.md`, pass 1, and this document until today) | **the dev suite was never loaded in either arm.** `main.ts:37` gates it on `qs.has('debug') && !qs.has('shoot')` and `bootprof --mem` booted `?q=ultra&shoot=1` against `?q=ultra&shoot=1&debug=1` — the same page twice, differing by boot noise. Measured properly on the *play* pages it is **23 MB in prod and ~1 MB in dev**, so the conclusion survives and the evidence for it did not. `12e1a41` |
+| **`performance.memory` can be trusted with `--enable-precise-memory-info`** | **it is frozen.** Allocate exactly 200 MB of `Float32Array` in the page and `usedJSHeapSize` reads 894.0 MB before and **894.0 MB after**. Every JS-heap row in `boot-memory.md` ("JS heap 498 MB … everything else 308.1 MB") is a reading of that constant. CDP `Runtime.getHeapUsage` on the same pages says **68–187 MB**, and the typed arrays that are the actual mass are *external* to the V8 heap either way, so neither oracle alone is the answer. `probes/memowners.mts`, `4c089cb` |
+| **The 119.7 MB / 3.70 M-vertex POI figure is the geometry bake's container, so `releaseGeoBake()` already deals with it** | **no — it is resident scene geometry.** `memowners.mts` charges every byte to its top-level scene child and `poi_kits` comes out at **119.7 MB over 3 704 402 vertices** on a live page, with the bake loaded and released. The two biggest single geometries in the game are the towns' **shadow proxies** (11.2 MB / 670 619 verts and 10.6 MB / 638 243), which only ever cast a shadow and carry a full vertex format to do it |
+| **Running in prod mode is the answer to `TODO.md` line 2** | **it buys 215 MB of 2 766 and leaves 2 533.** The human's own "and maybe in prod mode too" was right. Prod's saving is the dev server's unbundled module graph; the world costs 2 281 MB either way, and 740 MB of that is GPU-side and identical in both |
+| **WS-7: Fociaugh's cave mouth sits on a 1.26 bank, and moving the brow, jambs and void card from `P` to `G` in `Portal.ts` is the cheap fix** | **the 1.26 is one bearing of twenty-four (the gentlest is 0.02), the fix moves three ellipsoids two metres against an eight-metre step, and moving the void card to `G` lifts the doorway 1.7 m clear of its own sill.** What actually fills every approach frame is **a POI apron built on top of the mouth** — a ~40 m untextured beige deck with a structure on it, which survives hiding `TerrainClipmap`, `fociaugh-entrance` and `megastructures` in turn. Owner is `src/world/props/`. Separately: **Balouve's sill is 15.1 m *below* the eye 8 m out and 36.7 m below at 20 m**, worse than Fociaugh and never reported. `probes/doorsill.mts`, `probes/depositlook.mts`, `e5557e5` |
 | Widen the eye-socket brushes | changed the rendered frame by **nothing**, twice; cost a lane most of a session |
 | A world-metre contact ramp for grounding | sub-pixel at judged range; its own positive control moved 2.600/255 with the crop *visually identical* |
 | TAA's clamp is why leaf edges alias | measured false — TAA reaches them and softens them, it is just not enough |
