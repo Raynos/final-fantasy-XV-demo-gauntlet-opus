@@ -96,6 +96,43 @@ Wave 1 is in flight. On each completion: record the result below, fold anything
 the lane handed back into the right plan section, and launch the next lane so
 that 2–3 are always live.
 
+## Coordinator findings (no browser, taken while wave 1 ran)
+
+**The atmosphere patch is not what multiplies the shader programs.**
+`world/sky/MaterialPatch.ts` wraps every lit material's `onBeforeCompile` *and*
+its `customProgramCacheKey`, which is the shape that usually explains a program
+explosion — but the key it prepends is the constant `'atmo1|'`, and the
+per-material term it adds (`uActorHaze`) is a **uniform, not a define**, so it
+splits nothing. The multiplier is three's own feature key — maps present,
+`vertexColors`, skinning, instancing, batching, `alphaTest`, `side`,
+`flatShading`, fog — across **132 material construction sites** (the plan says
+127; the count moved). `materials` should start from the site list, not from the
+patch.
+
+Sites, by file, top of the distribution: `props/Regalia.ts` 10 ·
+`props/PropMaterials.ts` 9 · `props/Landmarks.ts` 8 · `props/PoiKits.ts` 7 ·
+`game/fishing/Fishing.ts` 7 · `characters/rig/Materials.ts` 7 ·
+`veg/Bushes.ts` 6 · `town/TownMaterials.ts` 6 ·
+`dungeons/kit/InteriorMaterials.ts` 6. Four files already centralise materials
+for their subsystem (`PropMaterials`, `TownMaterials`, `InteriorMaterials`,
+`rig/Materials`) — those are the templates, and the sites *outside* them are
+the sprawl.
+
+**The instruments each lane will want**, because `src/tools/probes/` holds 140
+files and finding the right one is otherwise a search:
+
+| lane | probe |
+|---|---|
+| `head` | `headprop` `headprofile` `headfold` `headlook` `facecam` `facemap` `facemark` `hairstand` `_probe/heads` `_probe/portrait` `_probe/eyes` |
+| `materials` | `drawwhere` `samplercount` `perfprog` `perfcompile` `warmquantum` `_probe/drawattrib` |
+| `memory` | `_probe/gcwatch` `perfgc` |
+| `perf` | `perfhitch` `perfsprint` `perfmenurepro` `casters` `npcdraws` `npcshadowlook` `perfupload` |
+| `ground-light` | `dryground` `scrubbind` `vegcensus` `vegcost` `barrencensus` `skyprobe` `weavecontact` |
+| `landmarks` | `meteor` `rockfield` `rockhull` `rockquilt` `torsite` `outposts` `whoowns` |
+| `water-content` | `fishwater` `fishloop` `havenloc` `questaudit` `questchain` |
+| `creatures` | `fightshape` `rankcurve` `dens` `titanfist` |
+| `combat` | `stagecam` `dmgnum` `setpiece` `huntloop` |
+
 ## Results
 
 *(appended as lanes report)*
