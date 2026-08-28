@@ -63,10 +63,25 @@ const BLEND_IN = 3560;
  *   there is no `location`; there the same tokens come from **`FIELD_ABLATE`**,
  *   comma-separated, so a term can be priced in metres without a browser.
  *
- * Tokens: `noterrace` (the macro pass's stratigraphic step quantiser),
- * `nogullygeo` (`_addDetail`'s 139 m ridged incision), `nofarstep` (the frontier
- * grid's 52-118 m step quantiser in `farHeight`), `nopeakband` (`_peak`'s two
- * cliff bands).
+ * Tokens, and what each is worth on `zone_mencemoor` (mean/255 against its own
+ * `--nobake` control, per-shot floor 2.00). **Read this table before opening
+ * the corduroy again**: eleven ablations, and the parallel ridge-and-gully mat
+ * survives every one of them.
+ *
+ *     nodetail    13.32   _addDetail in FULL -- the plan's named candidate
+ *     noterrace   15.31   the macro pass's 22-39 m stratigraphic quantiser
+ *     noerode     13.91   620 000 droplets of hydraulic erosion
+ *     belt2       16.26   the ridge belt cut from 5 octaves to 2
+ *     nogullygeo  12.24   _addDetail's 139 m ridged incision, alone
+ *     noroll      12.80   _addDetail's 74 m fbm, alone
+ *     nofine      11.65   _addDetail's 26 m fbm, alone
+ *     noscree     10.69   _addDetail's 18 m worley scree, alone
+ *     nobench     12.44   macroHeight's 633 m ridged bench
+ *     noincise     1.26   drainage incision -- UNDER the floor
+ *     nofarstep    0.96   farHeight's 52-118 m quantiser -- UNDER the floor
+ *
+ * `nopeakband` (`_peak`'s two cliff bands) is the one that closed a row: 5.07
+ * on `poi_tomb` and 1.03 here, i.e. a peak-only defect. See `_peak`.
  */
 const FIELD_ABL: Set<string> = new Set(
   ((typeof location !== 'undefined'
@@ -77,6 +92,18 @@ const FIELD_ABL: Set<string> = new Set(
 );
 /** True when `?post=<tok>` (browser) or `FIELD_ABLATE=<tok>` (node) is set. */
 export function fieldAblate(tok: string) { return FIELD_ABL.has(tok); }
+
+// Hoisted out of the per-cell loops. `_addDetail` alone runs 4.2 M times and a
+// `Set.has` in there is not free; these are read once at module evaluation.
+const ABL_TERRACE = FIELD_ABL.has('noterrace');
+const ABL_GULLY = FIELD_ABL.has('nogullygeo');
+const ABL_ROLL = FIELD_ABL.has('noroll');
+const ABL_FINE = FIELD_ABL.has('nofine');
+const ABL_SCREE = FIELD_ABL.has('noscree');
+const ABL_FARSTEP = FIELD_ABL.has('nofarstep');
+const ABL_PEAKBAND = FIELD_ABL.has('nopeakband');
+const ABL_BENCH = FIELD_ABL.has('nobench');
+const ABL_BELT2 = FIELD_ABL.has('belt2');
 
 const COARSE = 512;                             // macro pass resolution (16 m)
 const COARSE_CELL = (HALF * 2) / COARSE;
@@ -517,11 +544,15 @@ export class Field {
     const t2 = performance.now();
     this._farMs = Math.round(tFar - t1);
     this._applyLandforms();
-    this._addDetail();
+    if (!FIELD_ABL.has('nodetail')) this._addDetail(); else this._detailSlope();
     this._stitchFar();
     const t3 = performance.now();
+    // `noerode` keeps the pass (every downstream consumer reads `flow`/`sed`)
+    // and throws away only the height it moved.
+    const preErode = FIELD_ABL.has('noerode') ? this.h.slice() : null;
     this._erode();
-    this._inciseDrainage();
+    if (preErode) this.h.set(preErode);
+    if (!FIELD_ABL.has('noincise')) this._inciseDrainage();
     // Snapshot before the talus pass so the scree channel can be *measured*
     // rather than inferred from slope: what makes an apron is material that
     // actually arrived, and the relaxation is the only thing that moves it.
@@ -764,7 +795,7 @@ export class Field {
       const capH = 210 + 380 * (0.5 + 0.5 * n.fbm2(x * 0.0000975 - 13.1, z * 0.0000975 + 6.7, 2));
       if (h > capH) h -= (h - capH) * capAmt * 0.96;
     }
-    const stepAmt = FIELD_ABL.has('nofarstep') ? 0
+    const stepAmt = ABL_FARSTEP ? 0
       : smoothstep(0.24, 0.72, 1 - ch) * smoothstep(85, 200, h);
     if (stepAmt > 0.002) {
       const stepH = 52 + 66 * (0.5 + 0.5 * n2.fbm2(x * 0.000116 + 27.7, z * 0.000116 - 5.5, 2));
@@ -855,7 +886,8 @@ export class Field {
       + 0.20 * n2.fbm2(wx * 0.00218 - 2.2, wz * 0.00218 + 6.3, 4));
 
     // low benched ridges — mid-ground structure at 150-600 m
-    const bench = n.ridged2(wx * 0.00158 + 3.7, wz * 0.00158 - 9.1, 4, 2.05, 0.55);
+    const bench = ABL_BENCH ? 0
+      : n.ridged2(wx * 0.00158 + 3.7, wz * 0.00158 - 9.1, 4, 2.05, 0.55);
     h += Math.pow(Math.max(0, bench - 0.30) / 0.70, 1.6) * bRelief * 1.15;
 
     // ------- the ridge belt, held off the travel corridors -------
@@ -866,7 +898,7 @@ export class Field {
       const [ca, sa, kU, kV] = strikeFrame(n2, x, z, 0.0000275, 12.9, -31.5, 0.000229, -7.7, 22.1);
       const bu = (wx * ca + wz * sa) * 0.000506 / kU + 21.5;
       const bv = (-wx * sa + wz * ca) * 0.000506 * kV + 4.2;
-      let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
+      let rg = n.ridged2(bu, bv, ABL_BELT2 ? 2 : 5, 2.11, 0.5);
       rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
         0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
       // Notches the primary rather than filling it — see `farHeight`.
@@ -939,7 +971,7 @@ export class Field {
         let v = h[idx];
         const tw = terr[Math.min(COARSE - 1, (j >> 2)) * COARSE + Math.min(COARSE - 1, (i >> 2))];
 
-        if (v > 26 && tw > 0.05 && !FIELD_ABL.has('noterrace')) {
+        if (v > 26 && tw > 0.05 && !ABL_TERRACE) {
           // Two pitches, not one. The 2.4 km field alone gives a whole massif a
           // single riser spacing, and one spacing repeated up a face is what
           // reads as corduroy rather than as bedrock; the 260 m field breaks it
@@ -955,6 +987,21 @@ export class Field {
         h[idx] = v;
       }
     }
+  }
+
+  /** `?post=nodetail`'s stand-in: the slope grid `_addDetail` publishes, and no relief. */
+  _detailSlope() {
+    const h = this.h;
+    const grad = new Float32Array(N * N);
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const idx = j * N + i;
+        const gx = (h[idx + 1] - h[idx - 1]) / (2 * CELL);
+        const gz = (h[idx + N] - h[idx - N]) / (2 * CELL);
+        grad[idx] = Math.min(1, Math.hypot(gx, gz));
+      }
+    }
+    this.slope0 = grad;
   }
 
   /** High-frequency relief, stronger on slopes than on pans. */
@@ -982,12 +1029,12 @@ export class Field {
         // These are *world-space* wavelengths — 140 m washes, 75 m rolls, 19 m
         // rubble — so they do not scale with the grid. Rescaling them for the
         // 4 m cell was what turned the badlands into dough.
-        const gully = FIELD_ABL.has('nogullygeo') ? 0
+        const gully = ABL_GULLY ? 0
           : n2.ridged2(x * 0.0072 + 2.2, z * 0.0072 - 4.4, 3, 2.1, 0.55);
         let d = -3.7 * Math.pow(Math.max(0, gully - 0.34) / 0.66, 1.5) * (0.4 + 0.9 * s);
-        d += 2.9 * n2.fbm2(x * 0.0135, z * 0.0135, 3) * (0.6 + 0.95 * s);
-        d += 1.45 * n3.fbm2(x * 0.038 + 4.1, z * 0.038 - 2.7, 3) * rough;
-        if (s > 0.34) {
+        if (!ABL_ROLL) d += 2.9 * n2.fbm2(x * 0.0135, z * 0.0135, 3) * (0.6 + 0.95 * s);
+        if (!ABL_FINE) d += 1.45 * n3.fbm2(x * 0.038 + 4.1, z * 0.038 - 2.7, 3) * rough;
+        if (s > 0.34 && !ABL_SCREE) {
           const w = n3.worley2(x * 0.055, z * 0.055);
           d += Math.max(0, 0.58 - w.f1) * 4.6 * (s - 0.34);
         }
@@ -1166,7 +1213,7 @@ export class Field {
         const bDip = (dx * bdx + dz * bdz) / radius;
         const bWander = n3.fbm2(x * 0.0034 + 61.3, z * 0.0034 - 24.7, 3);
         const bCut = 0.5 + 0.5 * n3.fbm2(x * 0.0069 - 12.4, z * 0.0069 + 30.2, 3);
-        for (const band0 of FIELD_ABL.has('nopeakband') ? [] : [0.46, 0.68]) {
+        for (const band0 of ABL_PEAKBAND ? [] : [0.46, 0.68]) {
           const bandT = band0 * (1 + 0.13 * bDip + 0.13 * bWander);
           const bandY = height * Math.pow(bandT, 2.15);
           const w = (1 - smoothstep(0, 0.085, Math.abs(t - bandT)))
