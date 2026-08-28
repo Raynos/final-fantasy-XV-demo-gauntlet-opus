@@ -398,6 +398,12 @@ export class PostFX {
       else if (t === 'nocontact') this.contact.enabled = false;
       else if (t === 'nomb') this.motionBlur.enabled = false;
       else if (t === 'nocas') this.cas.sharpness = 0;
+      // CAS's sharpness is spatially varying — see `CasPass.ts`. `nocasmask`
+      // pins the depth mask off and reproduces the frame as it was before the
+      // mask existed, which is the control the change is graded against;
+      // `casmask` renders the mask itself instead of the image.
+      else if (t === 'nocasmask') this.cas.edgeSoft = 0;
+      else if (t === 'casmask') this.cas.material.uniforms.uShowMask.value = 1;
       else if (t === 'nograin') this.grade.uniforms.uGrain.value = 0;
       else if (t === 'nolut') this.grade.uniforms.uLutAmount.value = 0;
       // The bleach is a *scene-referred* stage, so `nolut` cannot ablate it and
