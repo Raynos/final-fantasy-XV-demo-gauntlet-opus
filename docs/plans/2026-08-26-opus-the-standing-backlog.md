@@ -1,9 +1,10 @@
 # The standing backlog — everything 52 handoffs were still holding
 
-Status: IN-PROGRESS (2026-08-28, opus) — **the twelve workstreams this plan was
-written with are all CLOSED, and §WS-13 is TERMINAL.** Four final lanes are
-closing its rows; when they report this goes DONE and graduates. **No new rows.
-This plan ends — it is not a standing queue.**
+Status: DONE (2026-08-28, opus) — **all thirteen workstreams closed.** The twelve
+this plan was written with, plus §WS-13, which was terminal by the time it was
+half-finished and is now empty. **This plan ended rather than becoming a
+standing queue**, which it very nearly did: see §WS-13's own header for the
+mistake and the rule that fixed it. Graduated to `project/archive/plans/`.
 
 Originally: **ten workstreams, none staffed, nothing locked.** This is a *queue*, not a snapshot: every item below is work somebody
 measured, wrote down, and could not finish.
@@ -1177,16 +1178,32 @@ directory boundary it did not own.
   masonry seated on the deck plane and scattered *past* the deck, plus the
   graded apron cantilevering over a crest. See the negatives table.
 - **The POI aprons: `probes/padhang.mts` and 90 of 91 toes in the air** —
-  `bb78cee` + `911f99d` took that to 50, mean toe `+1.13 m -> -1.30 m`. Still
-  open: **`fort_vaullerey` 24.8 m, `tomb_fierce` 21.1 m, `tomb_mystic2`
-  13.6 m** — three pins whose footprint straddles a brink, where the answer is
-  probably the *pin*, in `WorldMap.ts`, and not the earthwork.
-- **Four fishing camps stand 4.8–5.6 m above their own bank**, and
-  `vesperpool_dock`'s jetty piles hang **21 m** — `probes/fishdeck.mts`. The
-  water lane's two fixes both verified (the two dry pins take `_fishingDry`;
-  the four tarn decks now sit 1.5 m *over* their water, not 1.5–2.1 m under),
-  but `_fishing` sets one `deck` from the water and then puts the **shack, rod
-  stands, bench and crate** on it as well, and those stand on the bank.
+  `bb78cee` + `911f99d` took that to 50, mean toe `+1.13 m -> -1.30 m`, and the
+  last three are **CLOSED by `poi-seat`** — it *was* the pin, not the earthwork.
+  `fort_vaullerey` 24.8 → **−0.79** (seated 20 m south), `tomb_fierce` 22.0 →
+  **−0.15**, `tomb_mystic2` closed as a **measured negative**: every seat within
+  100 m of the Disc's flank reads `deep = 26`, and the first that does not is
+  200 m out and 100 m down, off the landform the tomb is named for — its toe is
+  buried 1.35 m, so the earthwork lands. World `over6` 5 → 2, mean toe −1.47 m.
+  **The lesson is that `padhang` alone chooses badly, twice:** `tomb_fierce`
+  took three seats, and each rejection came from a *frame* the previous number
+  called good. `hang` picked a seat whose retaining wall was a 26 m curtain — a
+  wall **lands**, so hang, toe mean and `floatcheck` are all structurally blind
+  to it. Adding `deep` picked one where the mausoleum sat in a notch with grass
+  across its roofline. It took three numbers and a look.
+- ~~**Four fishing camps stand 4.8–5.6 m above their own bank**~~ — **CLOSED by
+  `poi-seat`, and the diagnosis in this row was wrong.** `fishdeck`
+  **re-derived `_fishing`'s own arithmetic**, so it went on printing 4.6–5.3 m
+  of float that `b648b69` had already removed — an instrument that recomputes
+  the code cannot notice the code changing. Rewritten to measure *built
+  vertices* per 2 m cell against the surface each cell actually has, the real
+  defect was the opposite and worse: **all four tarn camps stood entirely over
+  water** (44–48 wet cells, zero dry — the shack on a bank 3.5 m under the
+  surface) and **all four sea/river camps entirely over land**, because the
+  jetty ran down `_yaw`, the nearest *road's* bearing. `PoiKits._waterLine` now
+  finds the shoreline and returns the heading facing it, so local `z = 0` is the
+  waterline at every pin. Ten camps, worst air **−0.02 m**, against 13.94 m at
+  `vesperpool_dock` before.
 - ~~**The Meteor is not yet a beautiful landmark**~~ — **CLOSED, both levers are
   measured negatives, and the frame is honestly still not right.** `tintNorm` for
   the rock field was built, priced over **two cold 142-shot corpora one commit
