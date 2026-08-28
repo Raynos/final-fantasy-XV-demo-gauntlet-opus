@@ -262,6 +262,15 @@ the hillside.
 
 ---
 
+## Gates
+
+- **`nanscan` 0 of 142**, run on this lane's own tree after both shader terms
+  landed (`{"shots": 142, "hits": []}`). Not inherited from the `alpha-edges`
+  run at `67660f8`: the mesorelief adds a `tf_bump` on a field built from three
+  `tf_snoise` calls and a `tf_sabs`, and the strandline adds two `smoothstep`s
+  — none of them a division or a `pow` on a varying, but this repo's own rule is
+  that reasoning about NaN here is what fails, so it was run rather than argued.
+
 ## Landmines paid on the way through
 
 - **A GLSL redefinition is invisible to every gate.** `mrA`/`mrB` were already
