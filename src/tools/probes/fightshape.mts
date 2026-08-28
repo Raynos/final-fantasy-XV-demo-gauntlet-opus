@@ -96,6 +96,8 @@ const tap = (code) => { keyDown(code); step(2); keyUp(code); step(1); };
 const mouse = (down, button = 0) => window.dispatchEvent(new MouseEvent(down ? 'mousedown' : 'mouseup', { button, bubbles: true }));
 
 const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+/** How far the drawn weapon reaches from the player, metres. */
+const WEAPON_REACH = combat.weapon?.def?.reach ?? 2.0;
 /** Every live thing that will actually fight us. */
 const hostiles = () => (enemies.list || []).filter((e) => !e.dead && !e.passive);
 const nearest = () => {
@@ -243,16 +245,25 @@ for (let round = 0; round < 3; round++) {
     // The policy a person plays: stay on the target, swing, get out of the way
     // of a telegraph, punish a stagger with a warp-strike, spend a tech bar.
     const t = n && n.e;
-    const reach = t ? (t.radius || 1) : 1;
+    // **Where the blade actually lands**, not where the animal's navel is.
+    // This was `t.radius + 3.4`, which for a sabertusk is 4.4 m — and the
+    // Engine Blade is 2.05 m long, so the policy walked to a metre and a half
+    // outside its own reach and then swung at air for the whole fight. That
+    // is the entire "Noctis does 14% of the damage in his own fight": in the
+    // run before this line changed his melee share was **0%** in one round
+    // and 7-10% in the others, while the retinue — which closes properly —
+    // did all of it. See `probes/dpsshare.mts` for what the formula says the
+    // share should be at full uptime: 64% to Noctis.
+    const bite = t ? (t.radius || 0.8) * (t.scale || 1) + WEAPON_REACH : 2;
     const inDanger = live.some((e) => e.state === 'telegraph' && d2(e.position, player.position) < (e.reach || 4) + 2.5);
-    if (t && n.d > reach + 3.4) inp.keys.add('KeyW'); else inp.keys.delete('KeyW');
+    if (t && n.d > bite * 0.72) inp.keys.add('KeyW'); else inp.keys.delete('KeyW');
 
     if (inDanger && f % 30 === 0) { tap('Space'); dodges++; if (attacking) { mouse(false); attacking = false; } }
     else if (t && t.staggered && f % 45 === 0) { tap('KeyQ'); warps++; }
     else if (f % 300 === 120) { tap('KeyG'); techs++; }
     else if (f % 300 === 240) { tap('KeyJ'); techs++; }
-    else if (!attacking && n && n.d < reach + 3.6) { mouse(true); attacking = true; }
-    else if (attacking && n && n.d > reach + 5.5) { mouse(false); attacking = false; }
+    else if (!attacking && n && n.d < bite + 1.2) { mouse(true); attacking = true; }
+    else if (attacking && n && n.d > bite + 3.0) { mouse(false); attacking = false; }
 
     g.frame(dt);
     frames++;
@@ -296,10 +307,18 @@ for (let round = 0; round < 3; round++) {
   const occ = Object.entries(seen).sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k} ${(100 * v / total).toFixed(0)}%`).join('  ');
   const bySrc = new Map();
-  for (const h of hits.slice(startHits)) bySrc.set(h.by, (bySrc.get(h.by) || 0) + h.dmg);
+  const nBySrc = new Map();
+  for (const h of hits.slice(startHits)) {
+    bySrc.set(h.by, (bySrc.get(h.by) || 0) + h.dmg);
+    nBySrc.set(h.by, (nBySrc.get(h.by) || 0) + 1);
+  }
   const dmgTotal = [...bySrc.values()].reduce((a, b) => a + b, 0) || 1;
   const dmgLine = [...bySrc].sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k} ${(100 * v / dmgTotal).toFixed(0)}%`).join('  ');
+  // Share alone cannot tell "swings and misses" from "hits for very little".
+  // Blows landed per second can, and is what named the standoff bug above.
+  const hitLine = [...nBySrc].sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${v} (${(v / Math.max(0.1, fightSecs)).toFixed(2)}/s)`).join('  ');
 
   emit([
     `=== round ${round + 1}: ${found.e.name} x${startHostiles} (lv ${found.e.level}, ${found.e.maxHp} hp each), player (${player.position.x | 0}, ${player.position.z | 0})`,
@@ -312,6 +331,7 @@ for (let round = 0; round < 3; round++) {
     `  mean range ${(distSum / Math.max(1, distN)).toFixed(1)} m, inside melee ${(100 * framesInMelee / Math.max(1, frames)).toFixed(0)}% of it`,
     `  enemy time: ${occ}`,
     `  damage by: ${dmgLine}`,
+    `  blows landed: ${hitLine}`,
     ...hits.slice(startHits).filter((h) => h.killed || h.dmg > 400).map((h) =>
       `    ${(h.t - startNow).toFixed(1)}s ${String(h.by).padEnd(9)} ${String(Math.round(h.dmg)).padStart(6)} of ${h.max}hp  ${h.st}${h.stag ? ' STAGGERED' : ''}${h.killed ? '  KILL' : ''}`),
   ].join('\n'));
