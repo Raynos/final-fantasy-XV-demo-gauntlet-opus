@@ -1163,6 +1163,20 @@ directory boundary it did not own.
   mean 1.0 and turn `vertexColors` on for `M.stone`. Touches a shared generator;
   needs its own before/after.
 
+### Seen in a frame, owner unknown (from the coordinator, 2026-08-28)
+
+- **Smooth dark ellipsoids sit beside the tomb** in `poi_tomb`, and they look
+  untextured next to the masonry and the rock around them. Visible at the shot's
+  new 175 m stand. Not recorded anywhere else that I can find, so it is here
+  rather than only in a commit message. Likely a `PoiKits` prop on a mapless
+  material — the same class the landmarks lane fixed for POI boulders in
+  `c2e2295`, which suggests a second population it did not reach.
+- **The Keycatrich peak carries hard horizontal terracing** at the range
+  `poi_tomb` now frames it. That is the corduroy negative above arriving in a
+  second judged shot: heightfield geometry, not shading, with `_addDetail`'s
+  139 m ridged `gully` named as the candidate and every hill in the world as its
+  blast radius.
+
 ### Content and water (from `water-content`)
 
 - **Energy deposits are invisible** and **Fociaugh's cave mouth sits on a 1.26
