@@ -121,13 +121,33 @@ export function findTarns(
     }
     if (!(maxX > minX)) continue;
     const pad = 8;
+    /*
+     * The foam band, as **the depth of the shallowest sixth of this body's own
+     * wet area** — so a sixth of the surface foams, by construction, whatever
+     * the body turns out to be.
+     *
+     * The rule it replaces was "a third of the deepest point", and the intent
+     * behind that — a narrow rim rather than a pond foaming bank to bank — was
+     * exactly right. The arithmetic does not deliver it. These basins run
+     * 4.0-4.4 m at their deepest and **1.4 m at their median**, so a third of
+     * the maximum lands at the median depth, and it was then clamped to the
+     * sea's own 1.35 m anyway. Measured over all four bodies on a 81x81 lattice
+     * (`tmp/water/tarnlook.mts`): **45.7-48.0% of every tarn was inside its own
+     * foam band.** Half a pond of white water is the mouldy-puddle failure the
+     * band exists to prevent, arrived at from the other direction.
+     *
+     * A quantile of the *area* cannot make that mistake, because it is stated
+     * in the units the defect is measured in. `hs` is ascending, so the
+     * submerged samples are its first `k` and the shallowest of them is last.
+     */
+    let k = 0;
+    while (k < hs.length && hs[k] < level) k++;
+    const band = k > 6 ? level - hs[k - 1 - Math.floor(k * 0.16)] : (level - hs[0]) * 0.34;
     out.push({
       cx: poi.x + (minX + maxX) / 2, cz: poi.z + (minZ + maxZ) / 2,
       w: (maxX - minX) + pad, d: (maxZ - minZ) + pad,
       level, name: poi.id, floor: hs[0],
-      // A third of the deepest point, so a shallow tarn gets a narrow rim
-      // rather than foaming from bank to bank.
-      foamBand: Math.max(0.12, Math.min(1.35, (level - hs[0]) * 0.34)),
+      foamBand: Math.max(0.12, Math.min(1.35, band)),
     });
   }
   return out;
