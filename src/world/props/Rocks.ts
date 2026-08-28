@@ -2564,14 +2564,43 @@ export class Rocks {
       const [nearCap, farCap] = CAP[k.key];
       const nearMax = Math.max(8, Math.round(nearCap * q));
       /*
-       * **EXPERIMENT — WS-13's open question, being priced.** `366e17d` added
-       * `tintNorm` and left it off here on purpose, so the Meteor's before and
-       * after would be readable. The row it left open is whether the instanced
-       * field wants it too. This arm turns it on; the corpus diff against the
-       * parent commit is the answer, and the message on whichever commit
-       * follows this one carries the number.
+       * **`tintNorm` stays OFF here, and this is the measured reason.**
+       *
+       * WS-13 left it open: `366e17d` turned it on for `megaMaterials().stone`
+       * and the Meteor's crown resolved into angular spires, so does the field
+       * want it too? Priced as a committed arm (`ec0c2bd`) and a cold 142-shot
+       * corpus against its own parent, because three lanes were live and a
+       * `--dirty` corpus would have been measuring somebody else's heightfield.
+       *
+       * **The ablation is not null and it reaches exactly this population**:
+       * `tmp/p4/hlw` is the `zone_longwythe` heat map and every changed pixel
+       * is a rock — terrain, sky, vegetation and the sky-line untouched. And
+       * **no shot in the corpus moves above its own noise floor.** The worst
+       * mean is `party_formation` at 1.814/255 against a floor of 2.85, and the
+       * rock-heavy shots that ought to lead it do not: `zone_longwythe` 0.680
+       * over 0.097% of pixels, `zone_three_valleys` 0.648 over 0.107%,
+       * `zone_mencemoor` 0.359, `landmark_meteor` under both.
+       *
+       * The arithmetic says why, and it is the point. Over the eight shipped
+       * kinds the bake's means run **0.8731 to 0.9270, mean of means 0.8966**,
+       * so `tintNorm` here is a **uniform x1.1153 albedo lift** plus a **6.01%**
+       * inter-kind equalisation. It is a re-tint wearing a normalisation's name
+       * — and `rockMaterial(0x6a5849, 0.93)` and `_item`'s per-instance range
+       * ("centred well above 1", deliberately) were both calibrated with that
+       * factor already in. If we wanted every rock 11% brighter we would say so
+       * in the hex.
+       *
+       * Looked at, because the mean is under the floor and that is not "no
+       * change": `tmp/p4/lwA.png` -> `tmp/p4/lwB.png`, the Longwythe corestone
+       * at 3x. The lift is if anything slightly **worse** — normalising to the
+       * mean raises the cavity as much as the ledge, so the crevice shading
+       * flattens, which is the one thing the bake exists to provide.
+       *
+       * The Meteor is the opposite case and keeps it: there the material had
+       * NO large-scale albedo variation at all, so the attribute was new
+       * information rather than a scale on information already there.
        */
-      const geo = rockGeometry(k.seed, { ...k.opts, tintNorm: true });
+      const geo = rockGeometry(k.seed, k.opts);
       const ex = hullExtents(geo);
       this.hy.set(k.key, ex[1]);
       this.ext.set(k.key, ex);
