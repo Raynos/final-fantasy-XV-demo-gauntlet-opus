@@ -816,6 +816,73 @@ default), and `RpgSystem.enemyScaling` — documented *"given the party's level"
 the curve without moving the bands makes the measured fights *weaker*. Both
 halves, or neither. `project/handoff/ws2-fight-shape.md` carries the frames.
 
+### WS-10 result, 2026-08-28 (`creatures` lane) — all five closed
+
+**Two of the five were already done and this plan did not know.** Read the
+tree before starting either.
+
+| item | result |
+|---|---|
+| **Anak sculpt rebuild** | **landed.** `cfe9fd2` `9391f29` `15ecca1` |
+| **Titan's floating `fissure()` wedges** | **closed as a measured negative — they are not floating.** See the table below |
+| **`Enemy.reset()` does not clear `analysed`/`_waited`/`status`/`airborne`** | **landed**, plus `vulnerable` and `_fall`, which are the same bug. `06999dc` |
+| **Five local `mix`/`blend` helpers** | **landed** — four files, not five: Garula, Goblin, IronGiant, Sabertusk. Coeurl, Dualhorn and Voretooth were already aliases. `5ca2479` |
+| **`Enemy.level` scaling** | **had already landed on 2026-08-27 in `e7f4602`, both halves.** The text above is out of date. What was still wrong was the *magnitude*, and a third half nobody had noticed — see below |
+
+**The Anak.** 2 770 -> 13 594 triangles, which is where the rest of the
+quadrupeds live (sabertusk 13 021, garula 14 134). Ported to `CBuilder`/`sweep`
+with the skeleton unchanged bone for bone, so every pose still addresses the
+same geometry. `creaturecheck --species anak` 9 poses, 0 failures, 0.000 drift;
+`geocheck --set enemies` PASS with the anak's edge-parity imbalance going **330
+same-direction interior edges to zero** and dropping out of the twelve
+least-outward geometries — which is the orientation-absolute winding check a
+rebuilt shell needs. Three capture rounds of five framings, all looked at. It
+reads as a gerenuk-like grazer: dark saddle, hard lateral stripe, cream belly
+and throat, black points, cloven hooves, ribbed backswept horns, an eye in a
+socket. Weakest remaining: the horns read as flat reeds edge-on, and the face
+is paler than the neck.
+
+**`Enemy.level`, and the third half.** `fightshape` on the shipped tree already
+spawned a Longwythe sabertusk den at **level 21, 1 381 hp** against a listed
+level 14 and 780 hp — the curve was live. Two things were still wrong:
+
+- **`LEVEL_LIFT` was 0.7 with no measurement under it.** Raised to 1.0
+  (`de11493`), so a den lands at the party's own level rather than seven under
+  it. Measured: sabertusk den 6.3 s -> **7.5 s**, voretooth den 6.8 s ->
+  **10.2 s**, Noctis' cost 1.3% -> 2.1% of max HP.
+- **Poise was never scaled, and that is why a lifted den does not attack.** A
+  log-linear fit of all 23 shipped species against their own listed levels
+  gives **x1.087 HP, x1.053 poise, x1.048 damage**: the poise column rises with
+  level exactly as the other two do and nothing read it. `hurt()` spends
+  `maxPoise` and staggers at zero, so a lifted den got 1.8x the HP and the same
+  poise it had at level 14 — it staggered just as often while taking twice as
+  long to kill, and the extra HP was spent lying on the ground. The control is
+  in the same run: the imperial patrol is an authored roamer whose level is not
+  lifted, its poise still matches its HP, and it is the only one of the three
+  with a rhythm (**0.99 attacks/s against 0.27 and 0.59**) and the only one
+  past fourteen seconds. `e5bc53d`.
+
+**The bound, so nobody re-derives it.** The party puts **660-730 hp/s** into a
+wild den. A thirty-second field encounter needs ~21 000 hp of den — five
+sabertusks at level 38 — and the bestiary's own top species, Red Giant at level
+50, is 22 000 hp by itself. **A three-animal trash den is not a thirty-second
+fight at any level that is not absurd, and 1.0 is the ceiling on the lift**,
+because above it the anonymous country outranks the party, which is what
+`WildTerritories`' own comment says a hunt mark is for. The rest of the gap is
+**pack composition** (a wild den draws 3-4 animals; the imperial patrol that
+lasts longest fields 9) and **warp-strike throughput** (26-47% of all damage,
+from 3-12 casts at 748-1 027 each). Neither is in `src/characters/enemies/**`.
+
+Two instruments came out of it: **`probes/creaturestage.mts`**, which
+photographs any species from five framings on real ground — the ten species
+with no entry in `Shots.ts` had no other way to be looked at — and
+**`creaturecheck --dirty`, which never worked**: its strict `parseArgs` threw
+`unknown flag --dirty`, so the gate that proves a sculpt change has not
+re-buried anything could only ever be run against `HEAD`, never on the edit you
+were making.
+
+Handoff: `project/handoff/creatures.md`.
+
 ---
 
 ## WS-12 — The boot diet, 2026-08-28, from the close-out plan
@@ -1088,6 +1155,9 @@ without opening the handoff it lived in.
 | **The 288 object/material buckets and the 132 material construction sites are the source of the 181 shader programs** (WS-2 and WS-12b's shared premise) | **no, and nothing in either list needed touching.** The keys this repo writes are honest: `VegMaterial.ts:520`'s eleven numbers and `rig/Materials.ts:430`'s eye `gloss` are GLSL *literals*, so those are genuinely different shaders. The multiplier was `renderer.compile()` building programs no frame ever binds — **60** because `Game.init()` compiles before `MaterialPatch.scan` has patched anything, and **85** because it compiles with no render target bound, which flips `outputColorSpace` *and* `toneMapping` in three's cache key while every scene pixel goes through `EffectComposer`. **271 -> 126 programs, `postfx+compile+warmup` 1776 -> 989 ms**, one wrapper in `engine/CompileGuard.ts` and one line of `Sky.ts`. `probes/progused.mts` |
 | A shader-program inventory can be read one cache-key field at a time | **it cannot, and this is why WS-2 survived three plans.** Held constant on its own, `outputColorSpace` collapses **4** programs and `toneMapping` **1**. Held together — they are two readings of one condition, "was a render target bound" — they collapse **85 of 211**. `probes/progrt.mts` exists to hold a pair |
 | three's program `cacheKey` can be parsed from the end, since its tail is fixed-length | **44 of 271 rows misparse into nonsense.** three's *default* `customProgramCacheKey` is `this.onBeforeCompile.toString()`, and a stringified function is full of commas. The misparse produces a confident phantom — "srgb splits every material, 103 against 124" — that survives being cross-tabbed. Anchor **forward** on the GLSL precision qualifier |
+| **WS-10: a dozen of Titan's `fissure()` wedges float free above the terrain, in arcs around and in front of the hands** | **They are seated, and have been since the bone-binding fix the `fissure` helper's own comment records** — every arm and hand fissure used to pass `'coreC'`, so the glow stayed with the torso while the limb moved with its own bones, which is exactly the described symptom. Measured rather than asserted (`_probe/fissure.mts` splits the merged buffer into connected components and tests each of the 47 emissive ones for AABB containment in the rock): **21 of 47 buried on all eight corners, worst case 0.32 m** — the palm furnace at 0.26 m, the shoulder at 0.24, and **every finger and thumb wedge at 0.01-0.05 m**. 0.32 m on a creature 24 m tall is 1.3% of its height. Confirmed by eye in `bestiary_titan` and in a hand framing driven from the live set piece |
+| **WS-10: five quadruped sculpts still carry their own `mix`/`blend`** | **four, not five, and none of them was one of the five quadrupeds.** Garula (which had already hit the nesting bug and worked around it privately with a third register returning a hex), Goblin, IronGiant and Sabertusk. Coeurl, Dualhorn and Voretooth were converted to `Palette.mixc` when it was written and are aliases already |
+| **WS-10 / WS-11: `Enemy.level` scaling was built and reverted and needs re-landing** | **it landed on 2026-08-27, both halves, in `e7f4602`** — `Enemies.spawn` applies the curve after the fresh/pooled branches and `WildTerritories.denLevel` lifts a wild den toward the party. `fightshape` on the shipped tree spawns a Longwythe sabertusk den at level 21 with 1 381 hp against a listed 14 and 780. What was actually open was the *magnitude* (`LEVEL_LIFT` 0.7, unmeasured) and **poise, which was never scaled at all** |
 | The atmosphere patch's `customProgramCacheKey` is the program multiplier | **the coordinator's own static pass called this right**: the key it prepends is the constant `'atmo1|'` and `uActorHaze` is a uniform, so it splits nothing. But the patch *is* implicated, from the other side: 60 lit materials compiled **before** it reached them and each of those programs is dead the moment it does |
 
 
