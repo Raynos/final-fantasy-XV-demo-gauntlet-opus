@@ -883,19 +883,38 @@ const SHOT_TABLE = {
    * byte-equality precisely by freezing the thing this shot exists to show.
    * Look at it; do not `imgdiff` it against a stored PNG and expect the floor.
    */
-  // A `setpiece_titan` shot belongs here and is deliberately absent, because an
-  // unusable shot in the corpus is worse than a missing one. Five attempts at
-  // framing it all came back as a wall of cracked stone, and what that stone is
-  // matters: Titan measures **33.8 x 28.7 x 22.6 m, base y 165.9, at
-  // (-1020, -2215)**, so at the 63 m stand-off of the last attempt he should
-  // occupy about half the frame height at fov 46. He does not, which means the
-  // mass filling the frame is not him — almost certainly the Disc of Cauthess
-  // landmark the arena sits inside. Framing this wants someone in freecam
-  // finding a vantage with a clear line, not another guess at an offset.
+  // A `setpiece_titan` shot belongs here and is **still** deliberately absent,
+  // because an unusable shot in the corpus is worse than a missing one. But the
+  // reason recorded here was wrong, and the correction is the useful part.
   //
-  // Two art defects were visible while trying, both outside this file: Titan's
-  // hide tiles at a plainly visible scale with seams down it, and his magma
-  // vents render as flat unlit yellow quads.
+  // The five failed attempts came back as "a wall of cracked stone" and that was
+  // read as the Disc of Cauthess filling the frame. **The camera had not
+  // moved.** `boss_astral` is a `follow:` shot, so `applyShot` sets
+  // `CameraRig.followShot` and the rig re-derives pos/target from the player
+  // every frame — silently overwriting any `setShot` a probe makes afterwards.
+  // Ten vantages at six azimuths and two radii came back byte-identical
+  // (`tmp/water/titanframe.mts`, first run). Clear `rig.followShot = null`
+  // first and the sweep works on the first try. **An offset that produces the
+  // same frame from every direction is not a framing problem.**
+  //
+  // With the camera actually moving, at 95 m and fov 46 from six azimuths, two
+  // defects are visible and both are outside this file:
+  //
+  // - **Titan renders as a flat black silhouette.** No albedo, no lighting, no
+  //   material — a cut-out against the stone. Previously reported as "his hide
+  //   tiles at a plainly visible scale with seams down it", which is a
+  //   different and much milder complaint; what a moving camera shows is that
+  //   he is not lit at all.
+  // - **He floats on the flank of the Disc's cone** rather than standing in an
+  //   arena. `EncounterDirector` puts the fight at (-1020, 166.8, -2216) and
+  //   `Terrain.heightAt` there is 169.8, so he is set three metres *under* the
+  //   ground the arena is measured against, on a slope, and the pose lifts him
+  //   clear of it.
+  // - Also still true: his magma vents render as flat unlit yellow quads.
+  //
+  // He is legible at azimuth 300 deg, radius 95 m, 34 m above his own base,
+  // fov 46 — that vantage has a clear line and sky behind him. Add the shot
+  // when he is lit and grounded; the framing is no longer the blocker.
   setpiece_deadeye: {
     doc: 'Deadeye and its voretooth pack, live, in the Nebulawood',
     time: 13.5, weather: 'overcast', scenario: 'setpiece_field', follow: 'player',
