@@ -122,26 +122,36 @@ full-corpus **cold** diff is at or under each shot's floor.
 
 ---
 
-## WS-4 — The black patch on the Nebulawood canopy
+## WS-4 — The black patch on the Nebulawood canopy — **DONE** (4384cff, 154e8bf)
 
-A solid black blob sits on the canopy near the road in `zone_nebulawood`,
-roughly a third of the way up the frame. **Pre-existing** — present identically
-at `b0bfb4f`, before any of phase 3's second pass — and `zone_nebulawood` is one
-of the 30 judged shots, so it is costing a grade on a frame that gets looked at.
+**It was a NaN, and both landmines this section pointed at are innocent.**
+`--ablate plain` was the first thing tried and the blob is **pixel-identical
+with the whole post chain off**, so GTAO's `overrideMaterial` never came into
+it. The blob is the terrain surface shader writing NaN, which the grade shows
+as a hole of pure 0,0,0.
 
-Small, concrete, and a good first task for someone new to the repo. Two entries
-in `project/LANDMINES.md` are almost certainly relevant and should be checked
-*before* anything else:
+`surfArray` is `rg = tangent normal xy, b = roughness, a = AO`, and the
+triplanar rock block read `sx.rgb * 2.0 - 1.0` as a tangent normal — taking the
+**roughness** for the normal's Z. On ground with no rock in it (most of a
+forest) all three planes keep the neutral fill `vec4(0.5)`, which decodes to the
+**zero vector** rather than to `(0, 0, 1)`, and the whiteout blend of three zero
+vectors is exactly zero on axis-aligned ground: `normalize` of that is NaN. It
+reached the frame even at zero rock weight, because `0.0 * NaN` is NaN. `tf_tanN`
+reconstructs Z, which also makes the neutral fill contribute exactly `N` — what
+the code's own comment already claimed it did.
 
-- **`GTAOPass` sets `scene.overrideMaterial`, which discards alpha-test**, so
-  foliage stamps solid black rectangles into the AO buffer. That is this defect's
-  exact shape.
-- **Bisect the post chain before the shader.** `?post=plain` takes thirty
-  seconds and `?post=nogtao` alone settled a different foliage/terrain artefact
-  outright.
+`src/tools/probes/nanscan.mts` came out of it and poses all 142 shots counting
+NaN in `rtScene`: **7 shots carried NaN, now 5**. `zone_nebulawood` (3261 px)
+and `zone_malmalam` (314 px) are fixed; `combat_wide`, `combat_hud`,
+`combat_armiger`, `warp_strike` and `warp_wide` carry 15-50 px each from a
+different source and are **open work** — see `project/handoff/canopy.md`.
 
-**Done when** the patch is gone, the cause is named rather than tuned away, and
-`zone_nebulawood` is at or under its floor against a deliberate new baseline.
+Both fixed shots now carry measured floors (0.744 and 0.276, verified by a
+third cold capture at 0.496 and 0.188); `pnpm run check` is green. The two
+traps that cost the lane most of its time — every in-shader NaN test is folded
+away by this backend's compiler, and a flag added through
+`totalEmissiveRadiance` is invisible on a NaN pixel — are in
+`project/LANDMINES.md`.
 
 ---
 

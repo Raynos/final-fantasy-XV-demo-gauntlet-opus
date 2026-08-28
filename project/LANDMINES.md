@@ -25,6 +25,36 @@ in this file.
   programs: a measured **9.5 s freeze**. `engine/LightBudget.ts` pins the counts.
 - **`GTAOPass` sets `scene.overrideMaterial`, which discards alpha-test**, so
   foliage stamps solid black rectangles into the AO buffer.
+- **A solid black blob in a frame can be a NaN, and the grade is what makes it
+  black.** The Nebulawood canopy's blob was `normalize()` of the zero vector in
+  the terrain's triplanar normal blend. Nothing on the canvas can tell you that:
+  8-bit output has no NaN, only 0,0,0. **Read `post.rtScene` — the linear HDR
+  scene target — with `readRenderTargetPixels` and count the NaNs.** It is
+  `HalfFloatType`, so decode `Uint16Array` yourself; exponent 31 with a non-zero
+  mantissa. `src/tools/probes/nanscan.mts` does it for all 142 shots and found
+  seven carrying NaN; five still are (`combat_wide`, `combat_hud`,
+  `combat_armiger`, `warp_strike`, `warp_wide` — tens of pixels each, a
+  different source). No gate catches this: a NaN is not a page error, does not
+  move a draw count, and against a baseline holding the same hole it is not even
+  a pixel diff.
+- **Every in-shader NaN test is folded away by the shader compiler here.**
+  `isnan()`, `isinf()` and the `(x >= 0.0 || x < 0.0)` idiom all answer *false*
+  for a NaN on this backend. Six sanitisers at six points of the terrain
+  fragment shader moved the NaN count by **zero pixels** and read as innocence;
+  so did "the normal is not below the horizon / not denormalised / not
+  backfacing", which were all NaN answering `false` to a comparison. Test the
+  bits: `(floatBitsToUint(v) & 0x7f800000u) == 0x7f800000u && (v_bits &
+  0x007fffffu) != 0u`. That cannot be folded, and it named the line in one run.
+- **A debug flag written through `totalEmissiveRadiance` is invisible on a NaN
+  pixel** — it is *added* to a term that is already NaN, so the flagged pixel
+  comes back NaN. Write the flag over `gl_FragColor` at `<dithering_fragment>`.
+  And `outgoingLight` is summed in `meshphysical_frag` **before** `#include
+  <opaque_fragment>`, so anything written to `totalEmissiveRadiance` at that
+  anchor is already too late and silently does nothing.
+- **`0.0 * NaN` is NaN, so a zero blend weight does not contain a bad value.**
+  `mix(planarN, rockN, 0.0)` carried the terrain's NaN rock normal onto ground
+  that has no rock in it at all — which is why the defect appeared on a forest
+  floor and not on a cliff.
 - **GTAO reconstructs its normals from depth** when `setGBuffer` is handed a
   depth texture alone (`NORMAL_VECTOR_TYPE = 0`). It then draws the raw triangle
   facets of every distant massif as a regular herringbone — see the chevron entry
@@ -71,6 +101,15 @@ in this file.
 
 ## Terrain
 
+- **`surfArray` carries no normal Z.** It is `rg = tangent normal xy, b =
+  roughness, a = AO` (`Layers.ts` line 9), so every reader has to rebuild Z —
+  and a reader that takes `.b` for it is reading the roughness. The triplanar
+  rock block did exactly that, and its neutral fill `vec4(0.5)` then decoded to
+  the **zero vector** rather than to a flat tangent normal `(0, 0, 1)`; the
+  whiteout blend of three of those is zero on axis-aligned ground, and
+  `normalize` of zero is NaN. That was the black blob on the Nebulawood canopy,
+  and it also had a smaller twin in `zone_malmalam`. `tf_tanN` is the one place
+  the reconstruction lives now; use it.
 - **The chevron hatch on conical peaks is GTAO**, not the heightfield and not the
   splat. Bisected, not guessed: constant albedo → unchanged; constant up-normal
   with AO forced to 1 → unchanged; **`?post=nogtao` alone → gone completely.**
