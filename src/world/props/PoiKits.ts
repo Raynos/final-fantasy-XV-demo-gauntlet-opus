@@ -15,7 +15,7 @@ import { findTarns, type TarnBasin } from '../water/Tarns.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial, rockMaterial,
-  signTexture, imperialTexture, runeTexture,
+  groundMaterial, signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
 import { rockGeometry, KINDS } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
@@ -428,8 +428,18 @@ export function poiMaterials() {
     rock: rockMaterial(0x9a8b74, 0.94, false),
     dark: plain(0x6b6357, 0.94),
     concrete: plain(0x8d8779, 0.9),
-    ground: plain(0x796450, 0.96),
-    gravel: plain(0x796f5f, 0.95),
+    /**
+     * **The earthworks, and the second case the `plain()` argument does not
+     * cover.** These two are not walls: they are `gradePad` aprons and the
+     * hardstanding on them, they carry **world-metre UVs** by construction, and
+     * `probes/blobcensus.mts` counts 23 of them streamed at `poi_tomb` alone —
+     * 380 000 m² of bounding-box area at 0.02–0.07 vertices per square metre
+     * with no map of any kind. {@link groundMaterial} is a mean-1.0 modulation
+     * tiled in metres, so the grade `gradePad` writes into `attributes.color`
+     * is untouched and only the texture moves.
+     */
+    ground: groundMaterial(0x796450, 0.96, 4.0, 0),
+    gravel: groundMaterial(0x796f5f, 0.95, 3.4, 1),
     roof: plain(0x4b5058, 0.72, 0.3),
     wall: plain(0xa2957e, 0.82),
     wall2: plain(0x7b7160, 0.84),

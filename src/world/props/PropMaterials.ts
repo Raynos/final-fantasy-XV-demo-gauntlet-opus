@@ -126,6 +126,97 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
   });
 }
 
+/**
+ * **Graded earth: the apron under a POI, and the hardstanding on top of it.**
+ *
+ * `PoiKits.poiMaterials` gives `ground` and `gravel` a `plain()` — a mapless
+ * flat colour — under an argument that is *correct, and is an argument about
+ * walls*: `PropMaterials`' tiles are authored for a metre-sized part, and one
+ * of them stretched over a fourteen-metre wall is metre-wide grey blotches.
+ * `c2e2295` found the first case that argument does not cover (a camp boulder
+ * at two metres); `probes/blobcensus.mts` finds the second and much larger one
+ * — 23 apron and hardstanding meshes streamed at `poi_tomb`, 380 000 m² of
+ * bounding-box area, **0.02–0.07 vertices per square metre**, no map of any
+ * kind. A seventy-metre earthwork in one flat colour is the "flying saucer"
+ * three handoffs have now photographed and none has attributed.
+ *
+ * The stretch objection does not apply here, for a structural reason: the
+ * apron carries **world-metre UVs**. `gradePad` writes `uv.push(ct * s, st * s)`
+ * in the field's own frame, in metres, precisely so "a wear texture stamped in
+ * world metres lines up with the geometry whatever the pad's rotation". So a
+ * map at `repeat = 1 / mpt` is a fixed texel density on a pad of any size — the
+ * same device `PartBuilder.texelBox` uses for boxes and `Rocks` bakes into its
+ * triplanar UVs — and there is nothing left to stretch.
+ *
+ * **The map is a mean-1.0 modulation, not an albedo.** The aprons already carry
+ * the grade in `attributes.color`: `gradePad` writes deck 1.0, crest 0.94,
+ * batter 0.86, toe 0.70 and scarp 0.58, and `WearField.sampleInto` writes the
+ * desire lines into the same attribute. That grading is `landmarks-r3`'s work
+ * and this must not move it, so `h`'s mean is **measured** over a 64² grid at
+ * build time and divided out: `k = 1 + (h - hMean) * amp`. The apron's value is
+ * therefore unchanged and only its texture moves — which is what makes the
+ * before/after readable, and what stops this being a re-tint wearing a
+ * texture's name.
+ *
+ * The energy is deliberately in the map's HIGH frequencies — grain, grit and a
+ * fine stone speckle, with the low octaves nearly flat. That is `rockMaterial`'s
+ * crack argument arriving from the other side: the lowest-frequency content of
+ * a tile is both what survives mipping and what makes its repetition visible,
+ * and a 74 m pad has eighteen repeats across it. The large scale is the grade's
+ * job and the grade already does it.
+ *
+ * @param tint base colour. It is baked into the map rather than left on
+ *   `material.color`, because the colour has to ride the same modulation.
+ * @param rough base roughness
+ * @param mpt metres of world per texture tile
+ * @param stony 0 for worn earth, 1 for a gravel hardstanding
+ */
+export function groundMaterial(tint = 0x796450, rough = 0.96, mpt = 4.0, stony = 0) {
+  return memoMat(`ground${tint}${rough}${mpt}${stony}`, (mk) => {
+    const n = new Noise(4211 + Math.round(stony * 100));
+    const h = (u: number, v: number) => {
+      const grain = n.fbm2(u * 23, v * 23, 4) * 0.5 + 0.5;
+      const grit = n.fbm2(u * 79 + 31, v * 79 - 12, 2) * 0.5 + 0.5;
+      // Loose stone: the small end of a Worley cell. `f1` is the distance to
+      // the feature point, so what appears is a scatter of pebbles around each
+      // one rather than the cracked network `rockMaterial` wants.
+      const w = n.worley2(u * 15 + 5, v * 15 - 3);
+      const stone = 1 - THREE.MathUtils.smoothstep(w.f1, 0.05 + 0.11 * stony, 0.30 + 0.16 * stony);
+      return grain * (0.44 - 0.14 * stony) + grit * 0.22 + stone * (0.34 + 0.14 * stony);
+    };
+    // Measured, not assumed: this is only mean-preserving if the mean it
+    // divides out is the one the texels actually have.
+    const N = 64;
+    let hSum = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) hSum += h(i / N, j / N);
+    const hMean = hSum / (N * N);
+    const amp = 0.46 + 0.16 * stony;
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
+    const map = bakedTexture(`props/${mk}/map`, 512, (u: number, v: number, c: Texel) => {
+      const k = Math.max(0.3, 1 + (h(u, v) - hMean) * amp);
+      // Iron staining is the one low-frequency term allowed in, at a third of
+      // the grain's amplitude, so the tile still has something at the scale of
+      // a person standing on it.
+      const iron = Math.max(0, n.fbm2(u * 2.6 + 41, v * 2.6 - 8, 3)) * 0.34;
+      c[0] = Math.min(1, base.r * k * (1 + iron * 0.30));
+      c[1] = Math.min(1, base.g * k * (1 + iron * 0.10));
+      c[2] = Math.min(1, base.b * k * (1 - iron * 0.16));
+    }, { repeat: 1 });
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(1 / mpt, 1 / mpt);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 512, h, 1.7 + 0.9 * stony);
+    normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+    normalMap.repeat.set(1 / mpt, 1 / mpt);
+    const roughnessMap = bakedDataMap(`props/${mk}/rough`, 256, (u: number, v: number) => 0.82 + h(u, v) * 0.2);
+    roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+    roughnessMap.repeat.set(1 / mpt, 1 / mpt);
+    return new THREE.MeshStandardMaterial({
+      color: 0xffffff, map, normalMap, roughnessMap, roughness: rough, metalness: 0,
+      normalScale: new THREE.Vector2(0.85, 0.85), vertexColors: true,
+    });
+  });
+}
+
 /** Sun-bleached, splintered timber. */
 export function woodMaterial(tint = 0x7a6449) {
   return memoMat(`wood${tint}`, (mk) => {
