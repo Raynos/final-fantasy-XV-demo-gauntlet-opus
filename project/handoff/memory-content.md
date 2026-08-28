@@ -120,11 +120,46 @@ each of these is a separate lane's file.
 | 22 | the towns' shadow proxies at position-only | `src/world/props/PoiKits.ts` |
 | 59 | boot garbage | one `gc()` after `ready` — but only reachable with `--expose-gc`, so it is really "allocate less during boot" |
 
-**None of it touches the ~880 MB the renderer holds that is not ours**, which is
-the largest single bucket and is still unnamed. That is the next question, and
-the discriminators nobody has run are `?nobake=1` (does the inflate of four
-artifacts stay resident?) and `?q=low` (does it scale with render-target size?).
-Both are one `bootprof --mem` run each.
+### 309 MB of the renderer is the bake artifacts, held after they are read
+
+The discriminator: `bootprof.mts --mem --play --prod --nobake`, which takes all
+four baked artifacts out of the loop for one page load. Same tree, same
+machine, same flags, against the run in the table above:
+
+| | baked | `?nobake=1` | delta |
+|---|---|---|---|
+| browser RSS, prod play | 2 533 MB | **2 224 MB** | **−309** |
+| renderer process | 1 555 MB | **1 234 MB** | **−321** |
+| gpu-process | 823 MB | 824 MB | +1 |
+| GPU-side estimate | 740.3 MB | 740.1 MB | −0.2 |
+| geometry attributes | 274.7 MB | 274.7 MB | 0 |
+| CPU texel arrays | 103.0 MB | 103.0 MB | 0 |
+
+**Everything the game builds is identical and 309 MB of resident memory
+disappears.** The whole delta is in the renderer process and none of it is
+GPU-side, geometry or texels — so it is not the *content*, it is the
+**containers**: the inflated bake buffers, still held after the last generator
+has read them. `terrain.bin.gz` is 33 MB gz / 57.7 MB raw, `tex.bin.gz` 28.5 /
+67.3, `texc.bin.gz` 20.5, `geo.bin.gz` 35.5.
+
+**And the file says so.** `src/engine/GeoBake.ts:170` exports
+`releaseGeoBake()`, called from `Props.ts:130` — that is the 165 MB codec
+container the geometry-bake lane already deals with. **`src/engine/TexBake.ts:82`
+has the same module-level `store` and nothing anywhere releases it.**
+
+This is the single biggest recoverable item in the game's own memory and it is
+about six lines: an exported `releaseTexBake()` beside `releaseGeoBake()`, and a
+call once the last keyed generator has run. It is **not landed here**, on
+purpose: the call site is the whole question (`Props.init` is where the geo one
+goes and `src/world/` is not this lane's), and a release taken one system too
+early is a silent cache miss, which `boot-memory.md`'s "a cache read before
+`Props.init()` misses on every boot" already cost somebody a measurement. A late
+miss is *correct* — the generator just runs, which is exactly what `?nobake=1`
+does — so the risk is boot time, not output.
+
+That leaves roughly **570 MB** of renderer still unnamed, against the ~880 the
+first pass could not account for. `?q=low` is the next discriminator and is one
+more `bootprof --mem` run.
 
 ---
 
