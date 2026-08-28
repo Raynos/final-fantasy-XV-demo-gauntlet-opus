@@ -526,7 +526,16 @@ export const POIS: PoiSpec[] = [
     does: 'A waterfall off the Lestallum shelf into the crag. Good photograph, bad footing.', gate: null },
   { id: 'greyshire', name: 'Greyshire Glacial Grotto', type: 'dungeon', zone: 'taelpar', x: -2560, z: -1260, r: 160, lv: 30,
     does: 'Ice cave in the crag wall. The Tomb of the Fierce is at the end of it.', gate: 'ch6' },
-  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1314, r: 60, lv: 30,
+  // 40 m north of where this was authored, and the 40 m is measured. The pad's
+  // toe hung **22.0 m** in the air at (-2604, -1314) — `probes/padhang.mts`,
+  // third worst of the 91 aprons — because the footprint straddled the lip of
+  // the Taelpar crag and `gradePad`'s `FILL_MAX` will not cantilever a fill out
+  // over one, correctly. `tmp/probes/poiseat.mts` rebuilt the kit on a 20 m
+  // lattice and read the toe at each: this seat is the flattest ground within
+  // 100 m by a wide margin — relief over the footprint **72.0 m -> 24.0 m** —
+  // and the toe comes down to +0.24 m with a mean of -0.23. The grotto whose
+  // far end this tomb is (`greyshire`, 60 m north-east) is unmoved.
+  { id: 'tomb_fierce', name: 'Tomb of the Wanderer', type: 'tomb', zone: 'taelpar', x: -2604, z: -1274, r: 60, lv: 30,
     does: 'Royal Arm: the Swords of the Wanderer.', gate: 'greyshire' },
   { id: 'greyshire_menace', name: 'Menace Beneath Greyshire', type: 'menace', zone: 'taelpar', x: -2518, z: -1312, r: 70, lv: 65,
     does: 'Post-game endless descent.', gate: 'menace' },
@@ -554,7 +563,17 @@ export const POIS: PoiSpec[] = [
     does: 'A Solheim ruin that rises out of the pool at low water. Quetzalcoatl on the roof.', gate: 'ch7' },
   { id: 'steyliff_menace', name: 'Menace Beneath Steyliff', type: 'menace', zone: 'vesperpool', x: -3336, z: -2814, r: 70, lv: 86,
     does: 'Post-game endless descent.', gate: 'menace' },
-  { id: 'fort_vaullerey', name: 'Fort Vaullerey', type: 'imperial', zone: 'meldacio', at: 'n_fort_vaullerey', r: 200, lv: 46,
+  // Authored `x`/`z` rather than `at: 'n_fort_vaullerey'`, and 20 m south of
+  // that node. Sitting exactly on the road node put the fort's 52 m deck across
+  // the lip of the pass it covers, and the apron's toe hung **24.8 m** in the
+  // air — the worst of the 91 shipped aprons (`probes/padhang.mts`). A fort is
+  // 80 m of earthwork and a road node is a point; the two cannot be the same
+  // place on a brink. `tmp/probes/poiseat.mts` rebuilt the kit on a 20 m
+  // lattice: this seat reads a toe of **-0.22 m** with a mean of -4.20, it is
+  // the nearest one that lands, and it moves the gate 20 m further from the
+  // `vaullerey_switchback` hairpin (51 m -> 67 m) rather than nearer. The road
+  // still ends where it ended; it now stops short of the wall instead of in it.
+  { id: 'fort_vaullerey', name: 'Fort Vaullerey', type: 'imperial', zone: 'meldacio', x: -2560, z: -2720, r: 200, lv: 46,
     does: 'Cliff-top magitek fort covering the pass. Anti-air guns and a landing pad.', gate: 'ch8' },
   { id: 'vaullerey_switchback', name: 'Fort Vaullerey Parking', type: 'parking', zone: 'meldacio', x: -2596, z: -2664, r: 46, lv: 46,
     does: 'A hairpin wide enough to turn a car on, and no wider.', gate: null },
@@ -602,7 +621,14 @@ export const POIS: PoiSpec[] = [
   // ===================== named minor sites =====================
   { id: 'tomb_conqueror2', name: 'Tomb of the Conqueror', type: 'tomb', zone: 'keycatrich', x: 152, z: -1568, r: 60, lv: 14,
     does: 'Royal Arm: the Axe of the Conqueror. Arachne guards the vault.', gate: 'keycatrich_trench' },
-  { id: 'tomb_mystic2', name: 'Tomb of the Mystic', type: 'tomb', zone: 'cauthess', x: -1064, z: -2214, r: 62, lv: 32,
+  // 45 m south-west of where this was authored, and the 45 m is measured. The
+  // toe hung **19.5 m** at (-1064, -2214) — `probes/padhang.mts` — on the
+  // steepest ground any POI in the world stands on: 131 m of relief across the
+  // footprint, and no seat within 100 m gets that under 105. So this is not a
+  // flat spot, it is the nearest place on the Disc's flank where the earthwork
+  // actually LANDS: `tmp/probes/poiseat.mts` reads the toe at -1.35 m with a
+  // mean of -4.79, a pad cut into the slope rather than one hanging off it.
+  { id: 'tomb_mystic2', name: 'Tomb of the Mystic', type: 'tomb', zone: 'cauthess', x: -1104, z: -2234, r: 62, lv: 32,
     does: 'Royal Arm: the Blade of the Mystic, inside the Disc itself.', gate: 'disc_cauthess' },
   { id: 'burbost', name: 'Burbost Souvenir Emporium', type: 'outpost', zone: 'taelpar', x: -2430, z: -560, r: 120, travel: true, lv: 30,
     does: 'Fuel, a caravan and a rack of postcards. Staging point for the Grotto.', gate: null },
