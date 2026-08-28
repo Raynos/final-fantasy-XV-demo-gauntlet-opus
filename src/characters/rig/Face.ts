@@ -184,8 +184,25 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0.0240, 0.0520, 0.0740], r: [0.0270, 0.0310, 0.0350], amt: 0.0036, dir: [0, 0, 1], mirror: true });
   add({ p: [0.0290, 0.0300, 0.0805], r: [0.0400, 0.0155, 0.0400], amt: -0.0034, dir: [0, 0, 1], mirror: true });
 
-  // brow ridge + glabella
-  add({ p: [0.030, 0.0155, 0.079], r: [0.048, 0.017, 0.052], amt: 0.0125 + 0.006 * brow, dir: [0, 0, 1], mirror: true });
+  /**
+   * Brow ridge + glabella, and **the reason to look at the geometry with the
+   * map ablated.**
+   *
+   * `facefront_flat.mts` — flat albedo, no normal map, so anything left in the
+   * frame is the sculpt — shows this ridge throwing a hard black shelf shadow
+   * across both eyes and half the mid-face, and the mouth framed by two raised
+   * arcs like a ventriloquist dummy's jaw. That is a **fifty-year-old's** face,
+   * and no work on the map fixes it, because the map is not what is making it.
+   * BRIEF asks for a slim twenty-year-old.
+   *
+   * Every one of these amounts was authored while the near surface of the face
+   * was culled (see `paintFace`'s occlusion block for the same story one layer
+   * out): a brush whose result you cannot see gets pushed until *something*
+   * shows in the frame, and what showed was the silhouette. So the whole set
+   * came in 30-50% hot. Softened here, together, rather than one at a time —
+   * they are one decision, and `facefront_flat` is how to judge it.
+   */
+  add({ p: [0.030, 0.0155, 0.079], r: [0.048, 0.017, 0.052], amt: 0.0098 + 0.006 * brow, dir: [0, 0, 1], mirror: true });
   add({ p: [0, 0.009, 0.082], r: [0.022, 0.016, 0.040], amt: 0.0045 + 0.002 * brow, dir: [0, 0, 1] });
   // Nasion. The single deepest point of the facial profile, at eye level
   // between the two orbits: the glabella above it comes forward, the nasal
@@ -196,7 +213,7 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0, 0.0015, 0.0865], r: [0.0145, 0.0115, 0.030], amt: -0.0082, dir: [0, 0, 1] });
   add({ p: [0.049, 0.010, 0.067], r: [0.028, 0.020, 0.042], amt: 0.0045, dir: 'normal', mirror: true });
   // shadowed hollow directly under the brow
-  add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0055, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0036, dir: [0, 0, 1], mirror: true });
 
   // Eye sockets.
   //
@@ -212,18 +229,43 @@ export function brushes(look: Look): SculptBrush[] {
   // a closed shell and the eye only shows where the skull falls behind the lid
   // margin. Six millimetres of clearance behind the margin is an open, adult
   // palpebral fissure; two is a squint; forty is goggles.
-  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0300, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0212, dir: [0, 0, 1], mirror: true });
   add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0110, dir: [0, 0, 1], mirror: true });
   add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0055, dir: [0, 0, 1], mirror: true });
   // lower orbital rim: this is what stops a crescent of sclera showing under
   // the iris and giving every character a permanently startled stare
-  add({ p: [0.0335, -0.0175, 0.0735], r: [0.030, 0.0090, 0.034], amt: 0.0112, dir: [0, 0, 1], mirror: true });
+  // 11.2 mm of push through a brush only 9 mm tall is a *rail* under the eye,
+  // and the groove it leaves on its lower side is the hard dark slash that runs
+  // down and out across each cheek in `hero_portrait`. Its job — stopping a
+  // crescent of sclera showing under the iris — is done by about half of it.
+  add({ p: [0.0335, -0.0175, 0.0735], r: [0.030, 0.0145, 0.034], amt: 0.0068, dir: [0, 0, 1], mirror: true });
+  /**
+   * **The infraorbital plane, and the hard dark slash under each eye.**
+   *
+   * The 30 mm socket crater above has a 24 mm y-radius, so its *inferior*
+   * falloff lands in the middle of the cheek — and the crease that leaves is
+   * the single loudest mark on `hero_portrait`: a broad soft groove running
+   * from the inner canthus out and down across the cheek, with a lit ridge
+   * above it. Ablated everything else first and every one came back negative:
+   * the hair mesh, the hair's cast shadow, the merged shadow proxy, GTAO,
+   * `ContactShadowPass`, CAS, auto-exposure, DOF, and **`paintFace`'s entire
+   * occlusion stack set to zero** — the frame is the same with all of them
+   * gone, and the dumped face map has nothing at all in that position.
+   * Narrowing this crater's y-radius to 15.5 mm *moved* the crease, which is
+   * what identifies it.
+   *
+   * Narrower is not the fix — it only makes the groove tighter and runs it up
+   * onto the nose. What is missing is the plane a real face has *between* the
+   * orbital rim and the malar: the infraorbital fills the trough so the socket
+   * ends in a slope instead of in an edge.
+   */
+  add({ p: [0.0350, -0.0268, 0.0715], r: [0.0300, 0.0180, 0.0380], amt: 0.0060, dir: [0, 0, 1], mirror: true });
   add({ p: [0.058, -0.004, 0.056], r: [0.020, 0.024, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
 
   // cheeks
   add({ p: [0.059, -0.014, 0.056], r: [0.038, 0.024, 0.050], amt: 0.0115 + 0.007 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.050, -0.0390, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0120 + 0.006 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.038, -0.0480, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0055, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.0390, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0078 + 0.006 * cheek, dir: 'normal', mirror: true });
+  add({ p: [0.038, -0.0480, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0036, dir: 'normal', mirror: true });
 
   // Nose.
   //
@@ -267,7 +309,7 @@ export function brushes(look: Look): SculptBrush[] {
   // The alar crease is the darkest small value on a lit face and it was 5.5 mm
   // of a brush 5.5 mm wide — half a millimetre of actual groove once the cosine
   // falloff is paid. Doubled and widened enough to have vertices in it.
-  add({ p: [0.0228, -0.0370, 0.0800], r: [0.0080, 0.0120, 0.0170], amt: -0.0112, dir: 'normal', mirror: true });
+  add({ p: [0.0228, -0.0370, 0.0800], r: [0.0080, 0.0120, 0.0170], amt: -0.0076, dir: 'normal', mirror: true });
   add({ p: [0, -0.0425, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0072, dir: [0, 0, 1] });
   // nostril openings, cut upward into the underside of the nose
   add({ p: [0.0092, -0.0412, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0112, dir: [0, 0.55, 1], mirror: true });
@@ -331,7 +373,10 @@ export function brushes(look: Look): SculptBrush[] {
   // undercut, and after it. The mouth there is carried by `paintFace`.
   add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0.42, 1] });     // mouth line
   add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0072, dir: [0, 0.12, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0104, dir: 'normal', mirror: true });
+  // 10.4 mm of pit at each mouth corner on a face 74 mm across: with the malar
+  // and canine-eminence brushes below pushing +z on either side of it, the pair
+  // read as the hinge lines of a marionette's jaw in every flat-map capture.
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0056, dir: 'normal', mirror: true });
   /**
    * **The maxilla and the malar, and why a hard terminator ran down the
    * midline of every front view in this repo's history.**
@@ -368,7 +413,7 @@ export function brushes(look: Look): SculptBrush[] {
   // nasolabial: the fold runs from the alar crease down past the mouth corner,
   // and it is the strongest off-midline value on the lower face at any angle
   // other than dead-on. One brush at the top of it was not a fold.
-  add({ p: [0.0310, -0.0570, 0.0715], r: [0.0140, 0.0165, 0.0240], amt: -0.0048, dir: 'normal', mirror: true });
+  add({ p: [0.0310, -0.0570, 0.0715], r: [0.0140, 0.0165, 0.0240], amt: -0.0031, dir: 'normal', mirror: true });
 
   // Chin and jaw.
   //
@@ -1695,9 +1740,32 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     // grey-brown that reads as dirt or bruising rather than as shadow. Damping
     // the whole stack in one place keeps the relative structure (which is what
     // survives to mip 5) and stops the pile-up.
+    // **And the whole stack is now painted over geometry that finally renders.**
+    // Every occlusion in this block was authored between round 11 and round 14,
+    // i.e. entirely inside the window in which `buildHead`'s skull grid was
+    // wound inside out and the near surface of the face was culled from every
+    // frame. There was no socket, no nasolabial, no alar crease, no cheekbone
+    // hollow, no mental crease and no mouth in the picture, so the map had to
+    // *be* all of them, at whatever strength it took. Pass 5 fixed the winding
+    // and the sculpt delivers every one of those now, so the map is drawing a
+    // second copy of each — offset from the first, because a painted blob is
+    // fixed in uv and the real terminator moves with the sun.
+    //
+    // **Bound it before believing it.** Set to zero and captured
+    // (`tmp/shots/p6-noao`), `hero_portrait` is visibly the same frame: the hard
+    // dark slashes across both cheeks in the judged shot are the *sculpt's* own
+    // grooves, crushed by the grade, not this paint. So this cut is a real but
+    // second-order improvement and the sculpt is where that defect lives — see
+    // the brow-ridge block in `brushes()`. Recording the bound matters more than
+    // the cut: it is what stops a seventh pass re-tinting the map for a week.
+    //
+    // 0.52 rather than 0.80. Every relative value in the block is unchanged, so
+    // a head at 6 m still has its lit T over darker perimeter planes, its socket
+    // and its jaw line — the structure is what survives to mip 5 and none of it
+    // moves.
     const ao = (p: number[], rx: number, ry: number, a: number, col = '104,68,62') => {
       const rgbv = col.split(',').map((k) => Math.round(+k + (205 - +k) * 0.22));
-      return soft(p, rx, ry, `rgba(${rgbv.join(',')},${a * 0.80})`, 1, 'multiply');
+      return soft(p, rx, ry, `rgba(${rgbv.join(',')},${a * 0.52})`, 1, 'multiply');
     };
     // the orbit: a real socket is 40mm wide and 28mm tall, and it is the
     // strongest value on a face. Eyes read as eyes because they sit in a hole.
@@ -1721,27 +1789,29 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
       shape([
         [sg * 0.0195, -0.0040], [sg * 0.0290, 0.0030], [sg * 0.0420, 0.0014],
         [sg * 0.0505, -0.0055], [sg * 0.0420, -0.0112], [sg * 0.0290, -0.0122],
-      ], 'rgba(52,32,34,0.34)', { blur: 4 });
+      ], 'rgba(52,32,34,0.19)', { blur: 4 });
     }
     // tear trough
-    ao([0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.34, '128,92,86');
-    ao([-0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.34, '128,92,86');
-    // temples, jaw undercut, under the chin
-    ao([0.062, 0.026, 0.048], 0.038, 0.044, 0.34);
-    ao([-0.062, 0.026, 0.048], 0.038, 0.044, 0.34);
-    // the outer face planes turn away from the light: darkening them is what
-    // gives a minified head a rounded, lit mass instead of a flat oval
-    ao([0.070, -0.02285, 0.020], 0.042, 0.066, 0.30, '104,76,72');
-    ao([-0.070, -0.02285, 0.020], 0.042, 0.066, 0.30, '104,76,72');
+    ao([0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.20, '128,92,86');
+    ao([-0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.20, '128,92,86');
+    // **The two big planar blobs, and why they are cut hardest.** 76 x 88 and
+    // 84 x 132 mm — a third of the face each — answering "a minified head is a
+    // flat oval". The shell has had its transverse superellipse since
+    // `FACE_FLAT`, so the outer face plane turns away from the light on its own
+    // now, and the winding fix means the frame contains that turn.
+    ao([0.062, 0.026, 0.048], 0.038, 0.044, 0.20);
+    ao([-0.062, 0.026, 0.048], 0.038, 0.044, 0.20);
+    ao([0.070, -0.02285, 0.020], 0.042, 0.066, 0.16, '104,76,72');
+    ao([-0.070, -0.02285, 0.020], 0.042, 0.066, 0.16, '104,76,72');
     // the hollow under the cheekbone — the single strongest age/sex cue on a
     // face after the jaw, and the thing whose absence read as "child"
-    ao([0.0475, -0.02987, 0.0575], 0.0300, 0.0230, 0.34, '120,84,78');
-    ao([-0.0475, -0.02987, 0.0575], 0.0300, 0.0230, 0.34, '120,84,78');
+    ao([0.0475, -0.02987, 0.0575], 0.0300, 0.0230, 0.22, '120,84,78');
+    ao([-0.0475, -0.02987, 0.0575], 0.0300, 0.0230, 0.22, '120,84,78');
     ao([0.048, -0.05881, 0.054], 0.028, 0.028, 0.32);
     ao([-0.048, -0.05881, 0.054], 0.028, 0.028, 0.32);
     // the jaw shadow, run right along the mandible: the single value that keeps
     // a head from merging into the neck and shoulders at distance
-    ao([0, -0.11327, 0.024], 0.058, 0.022, 0.44, '112,86,82');
+    ao([0, -0.11327, 0.024], 0.058, 0.022, 0.30, '112,86,82');
     ao([0.040, -0.10892, 0.038], 0.034, 0.016, 0.30, '116,90,86');
     ao([-0.040, -0.10892, 0.038], 0.034, 0.016, 0.30, '116,90,86');
     // brow-ridge cast shadow: the brow is a shelf and it shades the lid
@@ -1760,24 +1830,24 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     ao([0, -0.0418, 0.089], 0.013, 0.0058, 0.70, '104,68,62');
     // nostril wings: a crease curling around each ala
     stroke([[0.0215, -0.03373], [0.0215, -0.03899], [0.0140, -0.04215]],
-      'rgba(112,66,58,0.62)', 0.0022, { blur: 2 });
+      'rgba(112,66,58,0.40)', 0.0022, { blur: 2 });
     stroke([[-0.0215, -0.03373], [-0.0215, -0.03899], [-0.0140, -0.04215]],
-      'rgba(112,66,58,0.62)', 0.0022, { blur: 2 });
+      'rgba(112,66,58,0.40)', 0.0022, { blur: 2 });
     // the openings themselves: comma-shaped, dark, tilted inward
     for (const sg of [1, -1]) {
       shape([
         [sg * 0.0055, -0.0560], [sg * 0.0110, -0.0548], [sg * 0.0135, -0.0568],
         [sg * 0.0100, -0.0588], [sg * 0.0058, -0.0582],
-      ], 'rgba(48,26,26,0.80)', { blur: 1.5 });
+      ], 'rgba(48,26,26,0.58)', { blur: 1.5 });
     }
     // columella
     ao([0, -0.04145, 0.093], 0.0028, 0.0035, 0.5, '120,78,70');
 
     // ---- nasolabial fold + cheek plane ------------------------------------
     stroke([[0.0225, -0.03688], [0.0300, -0.05116], [0.0300, -0.06399]],
-      'rgba(140,98,88,0.22)', 0.0055, { blur: 7 });
+      'rgba(140,98,88,0.14)', 0.0055, { blur: 7 });
     stroke([[-0.0225, -0.03688], [-0.0300, -0.05116], [-0.0300, -0.06399]],
-      'rgba(140,98,88,0.22)', 0.0055, { blur: 7 });
+      'rgba(140,98,88,0.14)', 0.0055, { blur: 7 });
 
     // ---- mouth ------------------------------------------------------------
     // Two filled vermilion shapes with a real cupid's bow, not stacked blobs.
@@ -1817,7 +1887,7 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     shape([
       [cL, yC], [-0.0170, -0.05697], [0, -0.05758], [0.0170, -0.05697], [cR, yC],
       [0.0140, -0.06248], [0, -0.06329], [-0.0140, -0.06248],
-    ], 'rgba(44,18,22,0.78)', { mode: 'multiply', blur: 0.8 });
+    ], 'rgba(44,18,22,0.44)', { mode: 'multiply', blur: 0.8 });
     // vermilion border: a fine light line where lip meets skin
     stroke([[cL, yC - 0.0022], [-0.0160, -0.05636], [0, -0.0582], [0.0160, -0.05636], [cR, yC - 0.0022]],
       'rgba(255,226,208,0.24)', 0.0016, { blur: 2 });
@@ -1853,8 +1923,12 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     // *widened* for exactly that reason — a feature one texel wide at mip 4 is
     // a feature that is gone. Narrowing this to sharpen it would trade the
     // portrait for every frame past three metres.
+    // ...and 0.94 of a Y-25 stroke is still, at `hero_portrait`, the only pure
+    // black anywhere on the head. The sculpt now carries a real 6.6 mm mouth
+    // relief and an undercut (`facecheck`'s `mouthReliefMm` 6.56 against a limit
+    // of 2), so the seam no longer has to be drawn on. 0.72 of a warmer dark.
     stroke([[cL, yC], [-0.0130, -0.06486], [0, -0.06329], [0.0130, -0.06486], [cR, yC]],
-      'rgba(58,26,28,0.94)', 0.0032, { blur: 0.5 });
+      'rgba(74,40,40,0.72)', 0.0032, { blur: 0.5 });
     // wet highlight on the lower lip
     soft([0, -0.07298, 0.084], 0.009, 0.0026, 'rgba(255,228,212,0.46)', 1);
     // corner shadows and the mentolabial crease
@@ -1868,7 +1942,11 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     // horizontal in the upper face and it has to hold an edge.
     // Twice the mass it had: a brow that is one texel wide at mip 4 is a brow
     // that is gone, and the brow is the strongest horizontal in the upper face.
-    const browCol = look.browShadow || 'rgba(52,38,34,0.62)';
+    // 0.62 with a 0.85 core on top, blurred 3 texels, is a pair of dark wedges
+    // 49 mm long and softer-edged than any hair — at portrait range that reads
+    // as greasepaint, not as brows. The hair lane grows a real tuft of brow
+    // cards (`2d80a26`); this shape is the shadow under them, not the brow.
+    const browCol = look.browShadow || 'rgba(52,38,34,0.40)';
     for (const sg of [1, -1]) {
       shape([
         [sg * 0.0090, 0.0175], [sg * 0.0260, 0.0231], [sg * 0.0440, 0.0193],

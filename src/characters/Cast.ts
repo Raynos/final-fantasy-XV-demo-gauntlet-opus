@@ -132,10 +132,21 @@ export const CAST = {
         // sweeping across the brow to −x, sides falling past the ear to the
         // jaw, the back falling to the collar. Nothing radiates.
         guides: [
-          // fringe: forward off the brow, then down and across
-          { th: 0.00, v: 1.00, c1: [-0.10, -0.06, 0.28], c2: [-0.42, -0.38, 0.36], c3: [-0.72, -0.62, 0.26] },
-          { th: 1.10, v: 0.98, c1: [0.10, -0.08, 0.24], c2: [-0.14, -0.40, 0.34], c3: [-0.52, -0.66, 0.24] },
-          { th: -1.10, v: 0.98, c1: [-0.20, -0.10, 0.22], c2: [-0.42, -0.42, 0.26], c3: [-0.74, -0.64, 0.14] },
+          // Fringe: forward off the brow, then **across** and only then down.
+          //
+          // The three tips used to land at roughly equal parts across and down
+          // (-0.72/-0.62, -0.52/-0.66, -0.74/-0.64), which on a 0.55 m front
+          // framing puts the whole mass over the brow and **buries one eye
+          // completely** — see `tmp/shots/p6-base/noctis_face.jpg`, where the
+          // subject's left eye and eyebrow are not in the frame at all. The
+          // plate this is graded against (`character-noctis-face-01.jpg`) has a
+          // heavy fringe that sweeps *across* the brow and clears both eyes;
+          // that is the shape, and a sweep is a ratio, not a length. `HairGuide`
+          // normalises each curve by `|c3|` and the tuft's `len` sets the
+          // metres, so this moves the direction and nothing else.
+          { th: 0.00, v: 1.00, c1: [-0.10, -0.06, 0.28], c2: [-0.50, -0.24, 0.36], c3: [-0.86, -0.40, 0.28] },
+          { th: 1.10, v: 0.98, c1: [0.10, -0.08, 0.24], c2: [-0.22, -0.26, 0.34], c3: [-0.66, -0.42, 0.26] },
+          { th: -1.10, v: 0.98, c1: [-0.20, -0.10, 0.22], c2: [-0.52, -0.28, 0.26], c3: [-0.88, -0.42, 0.16] },
           // temples: down the side of the face, hugging then dropping
           { th: 1.55, v: 0.95, c1: [0.16, -0.24, 0.06], c2: [0.20, -0.66, 0.02], c3: [0.18, -0.98, -0.02] },
           { th: -1.55, v: 0.95, c1: [-0.16, -0.24, 0.06], c2: [-0.20, -0.66, 0.02], c3: [-0.18, -0.98, -0.02] },
