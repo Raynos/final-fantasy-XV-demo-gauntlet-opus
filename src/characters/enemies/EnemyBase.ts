@@ -595,8 +595,8 @@ export class Enemy {
    * Seconds left on Ignis' Analyse read; everything hits a read target 15%
    * harder. Written by `characters/ai/Techniques.analyse`, decayed by
    * `EncounterDirector`, read by `PartyAI.strike`. Declared here for the same
-   * reason as the fields above: it outlives a despawn, and `despawn()` does
-   * **not** clear it, so a pooled instance comes back still analysed.
+   * reason as the fields above: it outlives a despawn. `despawn()` still does
+   * not clear it — `reset()` does, on the way back out of the pool.
    */
   analysed!: number;
   /**
@@ -612,7 +612,7 @@ export class Enemy {
    * open: `CombatSystem.resolve` multiplies the stagger term by 1.5 while it
    * is true. Written only by `BossFight.update`, which is why it is optional —
    * an enemy that has never been a boss does not carry the key at all.
-   * `despawn()` does **not** clear it, like the two fields above.
+   * Cleared by `reset()`, like the two fields above.
    */
   vulnerable?: boolean;
   /**
@@ -809,6 +809,20 @@ export class Enemy {
     this.attack = null;
     this.attackId = null;
     this.invulnerable = false;
+    /* Five fields that outlive a despawn and were not being cleared here, so a
+     * pooled instance came back carrying the last life's state. Each one is a
+     * real behaviour change, not hygiene: `analysed` hands a fresh animal 15%
+     * of Ignis' Analyse read for free; `vulnerable` hands it a boss recovery
+     * window's x1.5 stagger term; `airborne` and `_fall` make a trooper that
+     * once fell out of a dropship bay either never land or land instantly the
+     * next time it is dropped (`Dropship.update` counts `!e.airborne` as
+     * landed); `_waited` gives it a head start on `Pack`'s engage token. */
+    this.analysed = 0;
+    this.status = null;
+    this.vulnerable = false;
+    this.airborne = false;
+    this._fall = undefined;
+    this._waited = 0;
     this.frozenPose = null;
     this.phaseIndex = 0;
     this.setState('idle');
