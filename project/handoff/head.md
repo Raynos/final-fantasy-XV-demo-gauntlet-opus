@@ -125,7 +125,10 @@ where the answer is:**
    menton**: the u isolines all run into one point at the chin and the v
    isolines become nested arcs around it. That is the `atan2(x, z)` cylinder's
    pole, at the exact place where the shell tapers toward its own axis under the
-   jaw, and **the mouth sits inside it.** `paintFace` draws the mouth as a
+   jaw. **The fan's upper boundary and the mouth's own latitude coincide** —
+   read off `tmp/shots/p4-uvs/` against `facebar`'s mouth latitude in
+   `tmp/shots/p4-bar3/`, by eye, so re-derive it before building on it.
+   `paintFace` draws the mouth as a
    horizontal band in a rectangular (u, v) canvas; the lower face samples that
    canvas along a fan, so the band arrives on the mesh as a curve smeared around
    the chin — which is what `facebar`'s latitude stripe looks like in
@@ -198,8 +201,8 @@ Describing them, because `tmp/` gets pruned:
 
 ## 5. State
 
-Tree at `dec74c4` plus one commit of probes (below). **No `src/characters/` file
-was changed this pass.** `facecheck` at HEAD is unchanged and still PASS:
+Tree at `dec74c4` plus two commits (below). **No `src/characters/` file was
+changed on `main` this pass**; the one edit that was written is in a stash, §6.3. `facecheck` at HEAD is unchanged and still PASS:
 
 ```
 noctis   mouthRange   2.3  VOID — lit half clipped (mean 227.3)
@@ -209,6 +212,9 @@ prompto  mouthRange -17.4  VOID — lit half clipped (mean 234.4)
 geometry rows: 4/4 heads pass — noseLead 26.5-27.5, transDrop 5.5-7.3,
                jawWidthErr 0.0122-0.0450
 ```
+
+Two commits this pass, both `src/tools/probes/` and documents:
+`deb6451` the probes, `8683a89` this handoff and the backlog plan's negatives.
 
 New in `src/tools/probes/`: **`faceclip`** (HDR readout + the party-hidden
 metering ablation), **`faceexp`** (the exposure ladder as pictures),
@@ -227,8 +233,34 @@ the shipped map already has anisotropy 16, so that theory is closed).
    head is being judged through it.
 2. **Hand §1 to the post lane.** It is a one-file change they own and it is
    worth more than any sculpt item here.
-3. **Gladiolus' beard.** Ugliest thing on any hero's face, un-VOIDs a quarter of
-   `facecheck`, and entirely inside this lane.
+3. **Gladiolus' beard — written, unverified, and sitting in a stash.** It is the
+   ugliest thing on any hero's face, it un-VOIDs a quarter of `facecheck`, and
+   it is entirely inside this lane. The change is in
+   `git stash@{0}` ("head-p4: Gladiolus beard") and as a plain patch at
+   `tmp/head-p4-beard.patch`; `dcg` refuses `git checkout --`, so it is stashed
+   rather than reverted. **It was not committed because I could not look at
+   it**: another lane held a syntax error in `src/world/Water.ts` for the last
+   twenty minutes of this pass, so the `dirty:` build would not boot and
+   `BRIEF.md`'s "look at the image" could not be satisfied. Do not take it on
+   trust — pop it, capture `gladio` through `framecam --probe facecam` and
+   `facecheck --shots`, and judge it.
+
+   What it changes and why, because the reasoning is the useful part: the
+   previous pass read the defect as *density* and doubled the roots
+   (260/160/46 → 520/320/92) and it did not work, because roots per square
+   centimetre is not what separates a mass from a scatter. Coverage per strand
+   and contrast per strand are, and both were untouched. So `width`
+   0.9 → 1.5 mm (2.7 px at this range is a dash; 4.5 px and neighbours touch —
+   1.7× the coverage for **zero extra vertices**, where another 700 roots would
+   cost 8 400 and still leave gaps between clumps), `len` down a fifth, `spike`
+   0.85 → 0.50, `splay` 0.55 → 0.75, and the two strand colours lifted a stop
+   and pulled together (0x503c26/0x6f573a → 0x5e4a30/0x8a7050) because they
+   render as pure black against skin at Y 150 and it is the per-strand
+   contrast, not the beard's mean value, that reads as dirt. Moustache and both
+   sideburns take the same treatment. `n` is unchanged everywhere, so the
+   vertex count does not move.
+
+   `tmp/shots/p4-fc/gladio-zoom.png` is the before.
 4. The ear's 16 mm; the cranium; the C7 → acromion yoke.
 
 ## 7. Closed as measured negatives this pass
