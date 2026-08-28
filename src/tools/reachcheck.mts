@@ -69,7 +69,38 @@ try {
 }
 
 const must: string[] = JSON.parse(await readFile(path.join(ROOT, 'project/must-run.json'), 'utf8'));
-const dead = must.filter((m) => !(out.reached[m] > 0));
+/**
+ * A METHOD THAT NO LONGER EXISTS IS NOT A METHOD THAT DID NOT RUN.
+ *
+ * `dead` used to be `!(reached[m] > 0)`, which folds two different verdicts into
+ * one row: *the feature is unreachable* — the thing this gate exists to catch —
+ * and *the entry names a method that was renamed, moved or deleted*, which is a
+ * stale line in `must-run.json` and says nothing about the game at all. They
+ * need opposite fixes, wire the feature against edit the roster, and the second
+ * reads as the first — which is how a wiring gate becomes a gate people learn
+ * to edit past.
+ *
+ * The instrumentation knows the difference and always did: a path it wrapped
+ * appears in `reached` or in `unreached`, and one it never saw appears in
+ * neither. Same lesson as `check.mts`'s VOID column and the ledger's `error`
+ * against `fail`, at a third grain.
+ *
+ * `GONE` means NOT INSTRUMENTED, which is two things and the row says so: the
+ * name was renamed or deleted, OR the class was never reached by the wrapper's
+ * bounded walk from the registered systems. The second is real —
+ * `BossFight.resolveStrike`, this tool's own headline example, is written and
+ * present and reads GONE, because a `BossFight` is constructed when a set piece
+ * starts and there is no instance to wrap at instrumentation time. Both need
+ * the roster or the exercise looked at, and neither is "the feature is dead".
+ *
+ * It matters more now that generator entry points are in the roster: those are
+ * private methods on files other lanes are actively rewriting, so a rename is
+ * the LIKELY failure here and it must not read as "the rocks stopped
+ * generating".
+ */
+const known = new Set<string>([...Object.keys(out.reached), ...out.unreached]);
+const dead = must.filter((m) => known.has(m) && !(out.reached[m] > 0));
+const missing = must.filter((m) => !known.has(m));
 
 console.log(`instrumented ${out.instrumented} methods; ${Object.keys(out.reached).length} ran, ${out.unreached.length} did not.`);
 if (out.errors.length) console.log(`page errors: ${out.errors.length}`);
@@ -82,12 +113,30 @@ if (argv.includes('--all')) {
 const jsonAt = argv.indexOf('--json');
 if (jsonAt >= 0 && argv[jsonAt + 1]) await writeFile(argv[jsonAt + 1], JSON.stringify(out, null, 2));
 
-console.log(`\nmust-run: ${must.length - dead.length}/${must.length} reached`);
-for (const m of must) console.log(`  ${out.reached[m] > 0 ? 'ok  ' : 'DEAD'}  ${m}${out.reached[m] > 0 ? `  (${out.reached[m]}x)` : ''}`);
+console.log(`\nmust-run: ${must.length - dead.length - missing.length}/${must.length} reached`);
+for (const m of must) {
+  const n = out.reached[m] ?? 0;
+  const said = n > 0 ? 'ok  ' : known.has(m) ? 'DEAD' : 'GONE';
+  console.log(`  ${said}  ${m}${n > 0 ? `  (${n}x)` : ''}`);
+}
 
+if (missing.length) {
+  console.log(`\nFAIL: ${missing.length} must-run path(s) were never INSTRUMENTED, so this run`);
+  console.log('cannot say whether they ran. Either the name is stale -- renamed, moved,');
+  console.log('deleted -- or the class is never reached by the wrapper walk from the');
+  console.log('registered systems, because nothing had constructed one yet. Correct the name');
+  console.log('in project/must-run.json, or reach the class in _reach/exercise.mts, and say');
+  console.log('which; deleting the row makes it green and unwatched.');
+  for (const m of missing) console.log(`  GONE  ${m}`);
+}
 if (dead.length) {
   console.log(`\nFAIL: ${dead.length} path(s) a human is supposed to reach did not run.`);
   console.log('Either wire it up, or delete it and remove it from project/must-run.json.');
-  process.exit(1);
 }
-console.log('\nreachcheck: every must-run path executed.');
+if (dead.length || missing.length) process.exit(1);
+console.log(`\nreachcheck: every must-run path executed (${must.length} of them).`);
+console.log('\nblind to: anything called only during init(). The instrumentation wraps the');
+console.log('          prototypes AFTER boot, so a generator that builds all its content at');
+console.log('          startup cannot appear here at all -- only its streaming path can.');
+console.log('          And to any class no registered system holds a reference to at the');
+console.log('          moment of instrumentation: those read GONE, not DEAD.');

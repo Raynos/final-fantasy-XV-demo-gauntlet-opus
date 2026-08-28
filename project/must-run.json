@@ -37,5 +37,22 @@
  "Ecology.groveScatter",
  "Ecology.scrubScatter",
  "Ecology.rockScatter",
- "Ecology.farSeat"
+ "Ecology.farSeat",
+ "Rocks._genCell",
+ "Rocks._genTor",
+ "Rocks._genOutcrop",
+ "Rocks._stack",
+ "PoiKits._make",
+ "Debris._genCell",
+ "RoadFurniture._buildChunk",
+ "Trees._makeTile",
+ "Trees._makeCanopyTile",
+ "Trees._writeImpostor",
+ "Bushes._makeTile",
+ "Bushes._makeMassTile",
+ "GrassField._makeTile",
+ "PartBuilder.build",
+ "Water.surfaceAt",
+ "Dungeons.interact",
+ "WorldMap.travel"
 ]
