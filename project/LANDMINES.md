@@ -1635,3 +1635,39 @@ time, on any file another lane could be in. If hunks you did not write are there
 either name them in your message or wait. On a document, waiting is usually
 right — the other lane is seconds from committing it themselves.
 
+
+## A probe that reads `Terrain.drawnHeightAt(x, z)` with no `cell` measures where the camera is parked, and the error grows with distance from it
+
+`drawnHeightAt`'s third argument is the ring spacing to model, and **omitting it
+does not mean "the true surface"** — it means "the highest ring that covers this
+point given where the clipmap is standing right now". A probe that poses no shot
+leaves the clipmap wherever boot left it, so every subject is measured against a
+lattice chosen by an accident of the harness, and the coarser that lattice the
+deeper the bilinear chord sags below the relief. `Terrain`'s own docstring prices
+it: **~0.37 m inside 144 m, 16 m at 1.2 km**.
+
+The failure mode is the nasty one, because it is **monotone in radius**: widen
+your sweep and the new subjects are all further from the parked camera, so they
+all read worse, and the result looks exactly like *"the far half of the world is
+broken"*. `probes/outcropjoint.mts` reported **1 floating of 2548** over a
+1 760 m sweep and **34 of 5488** over 2 464 m, and 33 of the 34 were the
+instrument. The worst of them: a block at (2366, −211) seated at y 161.6 with the
+analytic field at 163.4 and an uncelled `drawnHeightAt` at **135.4** — a 28 m
+disagreement on ground whose slope is 0.179.
+
+**The rule, and it is already written down in the code the probe was grading.**
+`Rocks`' `CULL` docstring says: *"it cannot be the live camera's spacing: a rock
+6 km from spawn is under the coarsest ring in the stack at build time and that
+has nothing to do with how it will be seen."* Every prop in this repo is seated
+against `terrain.clipSpacingForDistance(<the range it is culled at>)` — the
+finest ring it will ever be seen over. **Read its support on the same lattice**,
+or the two numbers are not comparable and the difference between them is the
+harness.
+
+With the lattice pinned, the rate stops depending on the radius, which is the
+property a rate is supposed to have: 4 of 2866 (0.14 %) at 1 760 m, 8 of 5490
+(0.15 %) at 2 464 m.
+
+Same shape as the `hullExtents` finding one file over — a gate composing through
+the same quantity it grades — and the same cure: **the instrument must not share
+a coordinate system with the thing it is measuring by accident.**
