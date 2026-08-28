@@ -151,6 +151,12 @@ export class Game {
   currentShot!: ApplicableShot | null;
   debug!: boolean;
   input!: Input;
+  /**
+   * Frames per second `start()`'s loop may draw; `0` free-runs at the display's
+   * refresh rate, as this loop did before the cap. Live — set it on
+   * `window.GAME` and the very next vsync obeys it. See `start()`.
+   */
+  maxFps!: number;
   onProgress!: (t: number, label: string | null) => void;
   paused!: boolean;
   post!: PostFX;
@@ -171,7 +177,19 @@ export class Game {
     this._registry = new Map();
     this.paused = false;
     this.state = 'boot';           // boot | field | combat | menu | cutscene
-    this.debug = new URLSearchParams(location.search).has('debug');
+    const qs = new URLSearchParams(location.search);
+    this.debug = qs.has('debug');
+    /**
+     * `?fps=` is a console/debugging hatch (`?fps=0` free-runs, `?fps=30`
+     * halves it) and deliberately NOT a harness door. No gate sets it: `perf`
+     * and `gameplay` step `frame()` by hand on a `?shoot=1` page that never
+     * calls `start()`, so they are frame-*cost* instruments the cap cannot
+     * reach, and `idlecpu` is supposed to measure the capped loop because the
+     * capped loop is what a player runs. A flag that let a gate off the cap
+     * would be the same blindfold `?shoot=1` already was.
+     */
+    const fps = Number(qs.get('fps'));
+    this.maxFps = qs.has('fps') && Number.isFinite(fps) && fps >= 0 ? fps : 60;
   }
 
   /**
@@ -311,11 +329,80 @@ export class Game {
     window.dispatchEvent(new CustomEvent('game-ready'));
   }
 
+  /**
+   * Free-run the game, drawing at most `maxFps` frames a second.
+   *
+   * **The cap is the whole cost of an idle tab, and it is not a bug fix.**
+   * `frame()` draws a full post-processed frame unconditionally — the world is
+   * never static (day cycle, water, wind, TAA all animate), so there is no
+   * render-on-demand path to take and never will be. Idle CPU is therefore
+   * `frame cost x frame rate`, and this loop used to take every vsync the
+   * display offered: measured at 96-105% of one core at 60 Hz, ~200% at 120 Hz
+   * and 113% at Retina pixel scale (`idlecpu --q high --dpr 1.5`, and
+   * `docs/BOOT_PERF.md` for the table). `stop()` cancels this rAF and nothing
+   * else, and the same page falls to 0.5-2.4%.
+   *
+   * So the second factor is the lever, and 60 is `BRIEF.md` rule 3's own
+   * target. This changes nothing a person sees on a 60 Hz panel — the loop was
+   * already drawing 60 a second there — and halves the cost on everything
+   * faster.
+   *
+   * ## Why a measured slack rather than a fixed one
+   *
+   * The naive `if (now - last < 1000 / 60) return` **halves the frame rate on
+   * the display it is meant to leave alone**: a 60 Hz vsync arrives at
+   * 16.67 ms minus a little jitter, that reads as "too early", and the next
+   * candidate is 33.3 ms away. 30 fps, on the exact hardware the cap was
+   * supposed to be invisible on.
+   *
+   * rAF fires once per vsync whether or not we draw, so the gap between two
+   * *callbacks* is the display's refresh interval, free and measured. Allowing
+   * a frame at `interval - period / 2` means "draw on whichever vsync lands
+   * nearest the target interval", which is the only pacing a vsync-locked loop
+   * can actually hit:
+   *
+   *     refresh   period   allow after   draws every   result
+   *      60 Hz    16.67       8.33         1 vsync     60.0 fps
+   *     120 Hz     8.33      12.50         2 vsync     60.0 fps
+   *     240 Hz     4.17      14.58         4 vsync     60.0 fps
+   *     144 Hz     6.94      13.20         2 vsync     72.0 fps
+   *      30 Hz    33.33       0.00         1 vsync     30.0 fps
+   *
+   * 144 Hz is not a multiple of 60 and 72 is the honest answer there: half its
+   * refresh, no judder, and still half of what it used to cost. A display
+   * *slower* than the cap keeps every frame it has, which is why the slack is
+   * half the measured period and not a constant — a constant cannot know that.
+   *
+   * `period` is seeded from the first callback-to-callback delta, never from
+   * the synchronous first `loop()` (which sits a fraction of a frame before the
+   * next vsync and would seed a lie). Until then the slack is half the target
+   * interval, which errs towards drawing.
+   */
   start() {
     if (this._running) return;
     this._running = true;
+    /** `performance.now()` of the last frame we actually drew. */
+    let lastDraw = -Infinity;
+    /** `performance.now()` of the previous rAF callback, drawn or skipped. */
+    let prevTick = 0;
+    /** EMA of the rAF callback interval, i.e. the display's refresh period. */
+    let period = 0;
     const loop = () => {
       this._raf = requestAnimationFrame(loop);
+      const now = performance.now();
+      if (prevTick) {
+        const d = now - prevTick;
+        // Reject a hidden tab's throttled ticks (Chrome drops rAF to ~1 Hz in a
+        // background tab) rather than letting one poison the estimate.
+        if (d > 0 && d < 100) period = period ? period + (d - period) * 0.1 : d;
+      }
+      prevTick = now;
+      const cap = this.maxFps;
+      if (cap > 0) {
+        const interval = 1000 / cap;
+        if (now - lastDraw < interval - (period > 0 ? period : interval) * 0.5) return;
+      }
+      lastDraw = now;
       this.frame();
     };
     loop();
