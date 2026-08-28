@@ -68,23 +68,6 @@ function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
 }
 
 /**
- * Angular rock mass — meteor shards and ruin rubble at scale.
- *
- * This was an `IcosahedronGeometry(r, 1)` warped by fbm: **eighty triangles**
- * for a three-hundred-and-thirty metre mass, with `computeVertexNormals`
- * averaging across every edge. Captured `zone_mencemoor` and read it, and the
- * Meteor of the Disc -- the landmark the whole Cauthess region is named for --
- * was a coarse faceted polyhedron with visible flat planes, a hard silhouette
- * and no surface at all. Ablating `--hide rock` proved it was not the boulder
- * system: it survived, so it was this.
- *
- * A shard is a rock, so it is built by the rock generator: the same conjugate
- * joint sets, the same chamfer-and-weather pass, the same strata that step the
- * outline, at a detail level the size actually justifies. Sharing the generator
- * rather than keeping a second one is the plan's own thesis -- archetype
- * families out of one recipe, not a second, worse recipe per scale.
- */
-/**
  * **Texture scale on the megastructure rock is stated in METRES PER TILE, not
  * in tiles per object.**
  *
@@ -125,6 +108,30 @@ const MASS_M_PER_TILE = 70;
 /** @see MASS_M_PER_TILE */
 const EJECTA_M_PER_TILE = 14;
 
+/**
+ * How far each Meteor mass follows the ground under its own feet, rather than
+ * the ground under the group's centre. See the loop in `_meteor` for why it is
+ * a fraction and not 1.
+ */
+const MASS_FOLLOW = 0.35;
+
+/**
+ * Angular rock mass — meteor shards and ruin rubble at scale.
+ *
+ * This was an `IcosahedronGeometry(r, 1)` warped by fbm: **eighty triangles**
+ * for a three-hundred-and-thirty metre mass, with `computeVertexNormals`
+ * averaging across every edge. Captured `zone_mencemoor` and read it, and the
+ * Meteor of the Disc -- the landmark the whole Cauthess region is named for --
+ * was a coarse faceted polyhedron with visible flat planes, a hard silhouette
+ * and no surface at all. Ablating `--hide rock` proved it was not the boulder
+ * system: it survived, so it was this.
+ *
+ * A shard is a rock, so it is built by the rock generator: the same conjugate
+ * joint sets, the same chamfer-and-weather pass, the same strata that step the
+ * outline, at a detail level the size actually justifies. Sharing the generator
+ * rather than keeping a second one is the plan's own thesis -- archetype
+ * families out of one recipe, not a second, worse recipe per scale.
+ */
 function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
   // A 330 m mass and a 5 m lump of rubble cannot carry the same triangle count.
   // `IcosahedronGeometry`'s `detail` subdivides each of the twenty faces into
@@ -757,9 +764,24 @@ export class Megastructures {
       // seed   r    stretch (pre-cut)      position           tilt
       [2201, 300, [0.98, 1.34, 0.90], [0, 150, 0], [0.30, 0.2, -0.26]],
       [2202, 265, [1.36, 0.94, 0.88], [-330, 80, 120], [-0.18, 1.15, 0.44]],
-      [2203, 235, [0.92, 1.42, 0.94], [305, 120, -150], [0.46, 2.25, 0.22]],
+      // 2203 is **the prow**. Screen-right in all three shots that judge this
+      // object, and the arithmetic says so rather than the eye: the
+      // `zone_mencemoor` camera looks along (-0.828, 0, -0.560), so screen-right
+      // in world is (0.560, 0, -0.828); this mass's local (305, -150) rotates
+      // through YAW to a world offset of (167, -296), which dots to **+339**
+      // against that — the only mass on that side by an order of magnitude.
+      // Leaned 0.46 rad (26°) a tall cleaved mass overhangs by construction, and
+      // that overhang lit against sky is what two judges read as an *arch*.
+      // 0.19 rad keeps the lean legible and takes the beak off; the mass behind
+      // it (2206) fills what is left of the undercut.
+      [2203, 235, [0.92, 1.42, 0.94], [305, 120, -150], [0.19, 2.25, 0.22]],
       [2204, 195, [1.28, 1.02, 0.88], [80, 45, 320], [-0.52, 0.45, 0.66]],
       [2205, 165, [0.90, 1.46, 0.90], [-150, 190, -290], [0.24, 3.05, -0.48]],
+      // A sixth, low and broad, sitting behind and under 2203's shoulder. Two
+      // jobs: it is the "rock behind it" half of the prow fix, filling the
+      // daylight the overhang used to hang over; and it is the only mass whose
+      // long axis is horizontal, so it widens the foot the other five taper to.
+      [2206, 215, [1.44, 0.72, 1.18], [235, -35, -35], [-0.12, 0.85, 0.15]],
     ];
     // The anisotropy is capped at about 1.5:1 and not the 2.4:1 the first pass
     // used, because `rockGeometry` normalises to a *bounding* radius: a 2.4:1
@@ -768,12 +790,30 @@ export class Megastructures {
     // right down — and the mass comes out a blade. One of these rendered as a
     // literal sail standing over the crater.
     for (const [seed, r, stretch, at, tilt] of MASS) {
-      // `at[1]` stays what it was authored as -- a height above the ground the
-      // group's centre stands on -- and the ground term carries it onto the
-      // ground under THIS mass. At the centre the term is zero, so mass A is
-      // bit-identical and the composition the last lane tuned is preserved.
+      // `at[1]` is a height above the ground the group's centre stands on, and
+      // the ground term carries it toward the ground under THIS mass — but only
+      // by `MASS_FOLLOW` of the way, and the fraction is the whole point.
+      //
+      // Following the ground *all* the way is what the previous round shipped,
+      // and it was right for the bug it fixed (a flat plane laid across three
+      // kilometres) and wrong for this landform. `discCrater` is a real crater:
+      // measured on the drawn field, the ground is **253 m at the centre, 3–56 m
+      // at 200–600 m out, and back up to 130–420 m on a rim at 800–1000 m**.
+      // The four outer masses stand at 320–360 m from the centre, i.e. squarely
+      // in the moat, so a full follow dropped every one of them by about 180 m
+      // and their crowns finished BELOW the rim that surrounds them. From
+      // outside the crater — which is every camera — four of the five masses
+      // were invisible and the fifth was a lone dome. That is the "one rounded
+      // outline owns the silhouette" the five masses were authored to cure,
+      // reintroduced by a seat.
+      //
+      // A shattered mass is one body. Its parts share an attitude; they do not
+      // each independently drape over the terrain. A third of the way is enough
+      // to keep the cluster from sitting on a plane and not enough to post them
+      // into the hole: at 0.35, mass B's foot is still 251 m under the moat
+      // floor (it was 308 m) and its crown clears the rim by 80 m.
       B.add(M.stone, meteorMass(seed, r, stretch),
-        mat4([at[0], at[1] + ground(at[0], at[2], r), at[2]], tilt));
+        mat4([at[0], at[1] + ground(at[0], at[2], r) * MASS_FOLLOW, at[2]], tilt));
     }
     // Midpoints between neighbouring masses: the mouths of the clefts.
     const CLEFT: Vec3[] = [
@@ -789,10 +829,13 @@ export class Megastructures {
       const a = rng.next() * Math.PI * 2;
       const gx = c[0] + rng.gauss(0, 22), gz = c[2] + rng.gauss(0, 22);
       B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(5, 13), rng.range(22, 64), 5),
-        mat4([gx, c[1] + 15 + rng.gauss(0, 55) + ground(gx, gz, 40), gz],
+        // The same partial follow the masses take. A cleft is a gap between two
+        // masses, so a glow slab that drapes onto the terrain while the masses
+        // it lights do not is a slab hanging in the daylight under them.
+        mat4([gx, c[1] + 15 + rng.gauss(0, 55) + ground(gx, gz, 40) * MASS_FOLLOW, gz],
           [rng.gauss(0, 0.20), a, rng.gauss(0, 0.24)]));
     }
-    // Ejecta ring around the impact.
+    // --- the apron: broken rock heaped against the masses' feet ------------
     //
     // A shard is seated so its centre stands `s * 0.3` over the ground beneath
     // IT. That was the intent before; what was written was a bare `s * 0.3`,
@@ -801,14 +844,63 @@ export class Megastructures {
     // 45 m was therefore entirely buried and the rest poked out a fraction of
     // what they were sized for, which is why no capture in this project has
     // ever shown a crater rim here.
-    for (let i = 0; i < 30; i++) {
+    //
+    // With the seat fixed the old 420-800 m ring became visible and still did
+    // nothing, because **it was in the wrong place**: 420-800 m is the moat
+    // floor at 3-56 m, and it is walled off from every camera by the crater's
+    // own 130-420 m rim at 800-1000 m. So the ring is split in two. This half is
+    // the apron — inside the moat, run in tight against the masses, sized so it
+    // reads as talus and not as boulders, and denser near the middle where the
+    // rock came off the mass. Its job is the transition: the eye needs
+    // *something* between a 900 m cliff and flat ground or it reads the cliff as
+    // cut out and pasted on.
+    for (let i = 0; i < 44; i++) {
       const a = rng.next() * Math.PI * 2;
-      const r = 420 + rng.range(0, 380);
-      const s = rng.range(20, 74);
+      // sqrt-biased so the count per unit area is roughly flat, then squared
+      // back toward the middle: 240-720 m, thickest at 350.
+      const t = Math.pow(rng.next(), 1.7);
+      const r = 240 + t * 480;
+      const s = rng.range(30, 96) * (1.25 - 0.5 * t);
       const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
       B.add(M.stone, shard(2300 + i, s, [1.3, 1.6, 1.0], 0.5),
         mat4([px, ground(px, pz, s) + s * 0.3, pz],
           [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
+    }
+
+    // --- the rim: what makes the Disc read as an impact ---------------------
+    //
+    // **Sized against `zone_mencemoor` and nothing else**, because that is the
+    // camera that looks straight at this object: it stands 1 714 m out on the
+    // 34° radial, and at fov 42 over 900 px a pixel there is 1.39 m. A 20-74 m
+    // shard is 14-53 px and reads as a pebble; the ring has to be built out of
+    // blocks big enough to be a landform. This is also why it is NOT sized
+    // against Longwythe, 3.5 km away — the same mistake in the other direction
+    // put a plinth under Insomnia that a 1.7 km camera then stood on top of.
+    //
+    // The radius is not free either. `discCrater`'s rim is already in the
+    // heightfield at **800-1000 m, 130-420 m above the moat**; blocks laid on it
+    // stand on the high ground and are seen against sky from outside, while the
+    // same blocks 300 m further out would be down the outer slope and hidden.
+    // So the ring is 790-1060 m, elliptical the same 0.8 as the apron, and
+    // **broken**: `gap` kills a run of three or four in two places, because a
+    // continuous ring of equal blocks is a wall, and a real rim is breached
+    // where the shock ran out.
+    for (let i = 0; i < 46; i++) {
+      const a = (i / 46) * Math.PI * 2 + rng.gauss(0, 0.035);
+      // two gaps, at roughly 1.9 and 4.6 radians, about 0.5 rad wide
+      const gap = Math.min(Math.abs(a - 1.9), Math.abs(a - 4.6)) < 0.26;
+      if (gap && rng.next() < 0.75) continue;
+      const r = 790 + rng.range(0, 270);
+      const s = rng.range(52, 155);
+      const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
+      // Leaned outward, away from the centre: uplifted rim strata dip away from
+      // the impact. `atan2` in the group frame, and the block is stretched along
+      // the ring rather than across it so the run reads as one raised rampart
+      // instead of as forty separate stones.
+      const out = Math.atan2(pz, px);
+      B.add(M.stone, shard(2500 + i, s, [1.55, 0.86, 1.05], 0.42),
+        mat4([px, ground(px, pz, s) + s * 0.16, pz],
+          [rng.gauss(0.18, 0.16), out + Math.PI / 2 + rng.gauss(0, 0.35), rng.gauss(0, 0.22)]));
     }
 
     const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'meteor' });
