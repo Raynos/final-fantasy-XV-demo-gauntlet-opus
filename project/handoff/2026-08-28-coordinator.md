@@ -182,3 +182,43 @@ Routed to `head` on 08-28. Route the rest as each lane launches.
 ## Results
 
 *(appended as lanes report)*
+
+### `materials` — DONE, 2026-08-28. A-WS2 and B-WS12b's programs half; character LOD handed back
+
+**271 shader programs -> 126**, `postfx+compile+warmup` **1776 ms -> 933 ms**
+(means of three loads each side), cold boot wall 8.15 -> 7.20 s on the same
+tree. `project/handoff/materials.md`, and the accounts in both plan sections.
+
+**Your static pass was right about the atmosphere patch and the finding is
+next door to it.** `'atmo1|'` is a constant and `uActorHaze` is a uniform, so
+the patch splits nothing — but 60 lit materials were compiled *before* it
+reached them, and each of those programs is dead the moment it does. The other
+85 are three keying **both** `outputColorSpace` and `toneMapping` on whether a
+render target is bound, while every scene pixel here goes through
+`EffectComposer`. **Not one of the 132 material construction sites was
+touched**, and the sites list would not have led here: the keys they write are
+honest, because `VegMaterial` and `rig/Materials` compile their tuning values
+into the GLSL as literals.
+
+Gate, in full: full-corpus cold diff **136 of 142 under floor**, the six
+exceptions all combat VFX and all `10c2688`'s (proven by diffing each of this
+lane's commits against its own parent on those six — every one under floor);
+`check` **19/19**; `nanscan` **0 of 142**; `perf` **PASS mean 226.3 fps,
+142/142**; `gameplay` **PASS**. And `progused.mts` shows
+`compiledDuringPoses` = **25** and `boundTotal` = **134** at 271, 211 *and*
+126 programs — the set a frame binds never changed, so nothing moved from boot
+into play and `LightBudget`'s constraint holds by construction.
+
+**Handed back, with numbers rather than a gap.** Character LOD was folded into
+B-WS12b so the 127 sites would not be touched twice; nothing touched them once,
+so it is a clean separate lane now: `town_forecourt` is 465 calls, **5 327 248
+triangles**, 272 buckets, 121 draws under 60 triangles, and one bucket —
+`SkinnedMesh`/`ShaderMaterial` — is 60 calls and **1 736 436 triangles, 28 940
+per draw, with no LOD**. The 16/16 texture-unit warning is likewise untouched.
+Both are headroom, not cost: the frame is 6.0-7.2 ms of a 16.7 ms budget.
+
+**Two things for whoever runs the next boot measurement.** `texc.bin.gz` was
+missing all session and `pnpm run build:full` failed to rebuild it
+(`texbake --canvas` got `ERR_CONNECTION_REFUSED` against its own build server
+under load), so every absolute boot number today is ~2.5 s inflated. And
+`project/STATUS.md` is **at its 150-line cap**, so this result is not in it.
