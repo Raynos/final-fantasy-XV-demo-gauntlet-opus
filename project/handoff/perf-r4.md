@@ -94,14 +94,47 @@ Two new `Warmup` steps, both in `src/engine/Warmup.ts`:
 Cost: the loading screen goes **150 -> 566 ms on that step, +9 programs**
 (126 -> 135). Boot time is not in `BRIEF.md`; the 33 ms rule is.
 
+## `tf_stoch` is measured, and it is free
+
+`?post=nostoch` (`73ae5f0`, `src/world/terrain/TerrainMaterial.ts`) collapses
+the Heitz-Neyret sampler to a single barycentric tap. `perf.mts` over six
+ground-dominant shots, both sides `RULER_VALID: true`: **0 of 6 shots moved by
+more than the 0.93 ms floor**, mean **239.0 fps against 239.5**, and the sign is
+inconsistent shot to shot — `zone_longwythe` is *slower* with the sampler off.
+`splat.md`'s highest-priority remaining item, and **the pre-planned
+`vTDist < 400 m` fallback should not be built.**
+
+Checked against `BRIEF.md` §6.1's null-ablation trap before believing it: the
+flag really does reach the shader. `zone_longwythe` moves **1.14 mean/255, max
+196, over 14.8% of pixels**, and a crop of the ground shows visibly different
+micro-detail. (`imgdiff.mts` refuses this pair — a `--post` flag does not change
+the sha, so both sides are the same build; diff the PNGs directly.)
+
+## The 16/16 texture-unit warning is three counting the wrong limit
+
+Carried as an open defect through three plans and used to close PCSS. It is the
+**terrain material**, on every clipmap ring, once per draw —
+`probes/texunits.mts` names it by hooking `console.warn` and correlating with
+the material inside `renderBufferDirect`, which is what `samplercount.mts` could
+not do because `material.program` is `undefined` in three 0.185.
+
+Then reading the linked program's active samplers back **by stage**:
+
+| | units |
+|---|---|
+| vertex (`uHeightTex`, `uFarHeightTex`, `uNormalTex`, `uFarNormalTex`) | **4** of 16 |
+| fragment (the other eleven, `directionalShadowMap` counting 3) | **15** of 16 |
+| combined | **17** of **32** |
+
+`LINK_STATUS` is true. three's `allocateTextureUnit` warns when its running
+total of allocated units reaches `capabilities.maxTextures`, which is
+`MAX_TEXTURE_IMAGE_UNITS` — the *fragment* limit — rather than
+`MAX_COMBINED_TEXTURE_IMAGE_UNITS`. **Nothing is starved and there is a fragment
+unit free.** PCSS is still closed on its other clause (the depth read
+`sampler2DShadow` cannot do), but not on this one.
+
 ## Still open
 
-- **`tf_stoch` has never been measured.** `?post=nostoch` now exists (`73ae5f0`,
-  `src/world/terrain/TerrainMaterial.ts`) and collapses the Heitz-Neyret
-  sampler to a single barycentric tap. Ablation only — the lattice comes
-  straight back. Price it with `perf.mts --post nostoch` against a plain run on
-  ground-dominant shots; the pre-planned fallback if it is expensive is to gate
-  it to `vTDist < ~400 m`.
 - **Draw-call headroom** (not a gate failure — the corpus is green):
   - `Water.lateUpdate` renders a **mirrored second view** whenever any body's
     *bounds box* intersects the frustum (`Water._visible`), with no
@@ -110,9 +143,10 @@ Cost: the loading screen goes **150 -> 566 ms on that step, +9 programs**
     globes cannot merge (independent gaze pivots); the **blobs across all NPCs
     could become one `InstancedMesh`**, and `NpcRig.setLod` already has the
     band structure to drop the globes earlier than 38 m.
-- **The 16/16 texture-unit warning** is still unaddressed and is printed on
-  every page.
-- **Wave 3's frame-cost split** (pixel-scaled vs fixed) — untouched.
+- **Wave 3's frame-cost split** (pixel-scaled vs fixed) — `post consolidation is
+  gated on its answer`, per the archived sibling-ports plan. Two `perf.mts` runs
+  at 800x450 and 1600x900 over the same shots give both terms directly:
+  `P = (hi - lo) / 3`, `F = lo - P`.
 - **Character LOD**, handed over by the `materials` lane: `town_forecourt` is
   465 calls / 5 327 248 triangles, one `SkinnedMesh`/`ShaderMaterial` bucket at
   60 calls / 1 736 436 tris / **28 940 per draw, no LOD**. Headroom, not cost —
@@ -128,3 +162,8 @@ Cost: the loading screen goes **150 -> 566 ms on that step, +9 programs**
   `VERDICT:` — just run them.
 - Both cache warnings (`texc.bin.gz`, `geo.bin.gz`) were live all session, so
   every absolute boot number here is inflated. The deltas hold.
+- **A co-lane's commit swept this lane's edit to the backlog into its own.**
+  The WS-6 close-out and the five new negatives are in `main` inside `7120d7f`
+  ("WS-3 closes"), not under a message of their own. The content is right; the
+  attribution is not. `CLAUDE.md` warns about the shared index in the other
+  direction — this is what it looks like from the far side.
