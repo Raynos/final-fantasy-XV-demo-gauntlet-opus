@@ -109,6 +109,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { harnessArgs, announceBuild, lease, pageOpts, runTool } from './harness.mts';
 import { decodePng, type DecodedPng } from './imgdiff.mts';
@@ -157,6 +158,31 @@ const LIMITS = {
  */
 const CONTROL_CEILING = 60;
 
+/**
+ * Window mean above which the pixel rows are VOID because the image cannot
+ * carry an answer.
+ *
+ * **Ablated, and this is the strongest single finding of the round-14 head
+ * lane.** Fill the entire face canvas with pure `#00ff00` and re-render: the
+ * shadow half comes back vivid green and **the lit half comes back WHITE.**
+ * The tonemapper desaturates a highlight far above 1.0, so on the blown half no
+ * texture of any kind survives — not a mouth, not a nostril, not a nasolabial
+ * fold, not a pore. Three corroborating measurements:
+ *
+ * - Darkening the mouth line from `rgba(78,42,44,0.72)` to `rgba(58,26,28,0.94)`
+ *   and its multiply shadow with it moved Noctis' `mouthRange` by **0.5**.
+ * - Dropping `SKIN_BASE` 0.88 -> 0.55 — which walks the face back down out of
+ *   the clip and changes nothing else — moved it **1.4 -> 12.3**.
+ * - Ablating the face material's `sheen` (0.17 -> 0) and `specularIntensity`
+ *   (0.35 -> 0.10) moved it by **nothing**, so the blown term is diffuse.
+ *
+ * Which half of a given hero is blown is decided by his yaw in the settled pose
+ * and nothing else. So a clipped window is not evidence that a head has no
+ * mouth; it is evidence that no measurement is possible there, and the gate
+ * says exactly that rather than blaming the sculpt for the exposure.
+ */
+const CLIP_CEILING = 212;
+
 /** One window's two scores. */
 interface Win { range: number, edge: number, mean: number, box: number[] }
 interface CharRow {
@@ -170,6 +196,55 @@ interface CharRow {
   jawWidthErr: number;
   widthProfile: number[];
   headHeightMm: number;
+}
+
+/** CRC table for the PNG writer below. */
+const CRC_T = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+
+/**
+ * Minimal RGBA8 PNG writer, so an annotated frame can go back out.
+ *
+ * `crop.mts` has the same twenty lines inline; they are here rather than shared
+ * because `crop.mts` is a script with its arguments at module scope and pulling
+ * a function out of it would run its `main` on import.
+ */
+function encodePng(img: DecodedPng): Buffer {
+  const raw = Buffer.alloc(img.h * (img.w * 4 + 1));
+  let q = 0;
+  for (let y = 0; y < img.h; y++) {
+    raw[q++] = 0;
+    for (let x = 0; x < img.w; x++) {
+      const i = (y * img.w + x) * img.ch;
+      raw[q++] = img.data[i]; raw[q++] = img.data[i + 1]; raw[q++] = img.data[i + 2];
+      raw[q++] = img.ch === 4 ? img.data[i + 3] : 255;
+    }
+  }
+  const crc32 = (buf: Buffer) => {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) c = CRC_T[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, body: Buffer) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(body.length);
+    const td = Buffer.concat([Buffer.from(type, 'ascii'), body]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(img.w, 0); ihdr.writeUInt32BE(img.h, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
+  ]);
 }
 
 /** Rec.709 luma of an sRGB byte triple. */
@@ -269,6 +344,7 @@ const g = window.GAME;
 const { SHOTS } = await import('/game/Shots.ts');
 const { FACE, HEAD_SEG_U, HEAD_SEG_V } = await import('/characters/rig/Face.ts');
 const HOUR = 16.2;
+const WEATHER = 'clear';
 const W = 1600, H = 900;
 
 const party = g.get('Party');
@@ -505,6 +581,7 @@ return {
         // height the fringe hangs into it and it scored the hair). x = 36 mm on
         // the mouth line is cheek, inside the outline and below every lock.
         cheekL: screen([-0.036, FACE.mouth[1], 0.070]), cheekR: screen([0.036, FACE.mouth[1], 0.070]),
+        eyeL: screen([-FACE.eye[0], FACE.eye[1], FACE.eye[2] + FACE.eyeR]), eyeR: screen([FACE.eye[0], FACE.eye[1], FACE.eye[2] + FACE.eyeR]),
         // The two blank patches the control is the *blanker* of. See the note
         // at their use.
         chinL: screen([-0.012, FACE.mouth[1] - 0.030, 0.077]), chinR: screen([0.012, FACE.mouth[1] - 0.030, 0.077]),
@@ -521,7 +598,7 @@ return {
 
 interface PageRow {
   name: string;
-  px: Record<'stomion' | 'chin' | 'noseTip' | 'subnasale' | 'cheekL' | 'cheekR' | 'chinL' | 'chinR' | 'sideL' | 'sideR', number[]>;
+  px: Record<'stomion' | 'chin' | 'noseTip' | 'subnasale' | 'cheekL' | 'cheekR' | 'eyeL' | 'eyeR' | 'chinL' | 'chinR' | 'sideL' | 'sideR', number[]>;
   pxPerMm: number;
   noseLeadMm: number;
   mouthReliefMm: number;
@@ -561,7 +638,6 @@ async function main() {
       if (!c) continue;
 
       const buf = await page.screenshot({ type: 'png' });
-      if (shotDir) await writeFile(path.join(shotDir, `${name}_facecheck.png`), buf);
       const img = decodePng(buf);
       const mmp = c.pxPerMm;
 
@@ -575,9 +651,9 @@ async function main() {
       const lR = scoreWindow(img, ...cheekBox(c.px.cheekR), mmp).mean;
       const litSign = lR >= lL ? 1 : -1;
 
-      /** A window on the lit half only, in millimetres of face from `p`. */
-      const win = (p: number[], x0: number, x1: number, y0: number, y1: number) => {
-        const a = p[0] + x0 * litSign * mmp, b = p[0] + x1 * litSign * mmp;
+      /** A window on one half of the face, in millimetres of face from `p`. */
+      const winOn = (sg: number) => (p: number[], x0: number, x1: number, y0: number, y1: number) => {
+        const a = p[0] + x0 * sg * mmp, b = p[0] + x1 * sg * mmp;
         return [Math.min(a, b), p[1] + y0 * mmp, Math.max(a, b), p[1] + y1 * mmp] as const;
       };
 
@@ -588,30 +664,46 @@ async function main() {
       // a corner and no mouth pass, which is the exact head this gate exists
       // for. It starts at 3 mm rather than 0 because the terminator is the
       // midline.
+      const win = winOn(litSign);
       const mouth = scoreWindow(img, ...win(c.px.stomion, 3, 20, -8, 8), mmp);
       // Nose: the alar wall and the shadow under the tip, between the two.
       const nCy = (c.px.noseTip[1] + c.px.subnasale[1]) / 2;
       const nose = scoreWindow(img, ...win([c.px.noseTip[0], nCy], 1, 15, -9, 9), mmp);
-      // ---- the control ------------------------------------------------------
-      // The blanker of two boxes of the SAME SIZE on the same lit half of the
-      // same face, because on a face there is no patch that is blank by
-      // definition and picking one by hand picked a feature twice:
-      //
-      //   - the first try, x = 48 mm on the mouth line, reached the silhouette
-      //     and scored the badlands behind it (range 224 on Gladiolus);
-      //   - the second, x = 34 mm at eye height, sat under the fringe and
-      //     scored hair (range 130, edge 51/mm);
-      //   - the third, x = 36 mm on the mouth line, contains the **nasolabial
-      //     fold**, which `Face.ts` itself calls "the strongest off-midline
-      //     value on the lower face at any angle other than dead-on".
-      //
-      // A control that is itself a feature makes the bar unpassable and, worse,
-      // makes it unpassable by an amount that depends on which feature. So:
-      // the chin plate below the mentolabial sulcus, and the cheek at the nose
-      // base above the fold's top — and whichever scores lower is the floor.
       const cChin = scoreWindow(img, ...win(litSign > 0 ? c.px.chinR : c.px.chinL, -8, 9, -7, 7), mmp);
       const cSide = scoreWindow(img, ...win(litSign > 0 ? c.px.sideR : c.px.sideL, -8, 9, -7, 7), mmp);
       const cheek = cChin.range <= cSide.range ? cChin : cSide;
+
+      // `--shots` writes the frame with the windows drawn on it. This is not
+      // decoration: the whole pixel half of this gate is an assertion about
+      // *where* a window landed, three hand-picked controls in a row turned out
+      // to be sitting on a feature, and a bench whose windows nobody can see is
+      // a bench nobody should believe. Look at one before quoting a number.
+      //
+      //   red = mouth   cyan = nose   green = the control
+      //   yellow + = stomion, magenta + = pronasale, orange + = pogonion
+      if (shotDir) {
+        const dot = (x: number, y: number, c: number[]) => {
+          if (x < 0 || y < 0 || x >= img.w || y >= img.h) return;
+          const i = (Math.round(y) * img.w + Math.round(x)) * img.ch;
+          img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2];
+        };
+        const outline = (b: number[], c: number[]) => {
+          for (let x = b[0]; x <= b[2]; x++) { dot(x, b[1], c); dot(x, b[3], c); }
+          for (let y = b[1]; y <= b[3]; y++) { dot(b[0], y, c); dot(b[2], y, c); }
+        };
+        outline(mouth.box, [255, 0, 0]);
+        outline(nose.box, [0, 255, 255]);
+        outline(cheek.box, [0, 255, 0]);
+        const marks: [number[], number[]][] = [
+          [c.px.stomion, [255, 255, 0]], [c.px.noseTip, [255, 0, 255]],
+          [c.px.chin, [255, 140, 0]], [c.px.subnasale, [255, 255, 255]],
+          [c.px.eyeL, [0, 0, 255]], [c.px.eyeR, [0, 0, 255]],
+        ];
+        for (const [v, col] of marks) {
+          for (let d = -5; d <= 5; d++) { dot(v[0] + d, v[1], col); dot(v[0], v[1] + d, col); }
+        }
+        await writeFile(path.join(shotDir, `${name}_facecheck.png`), encodePng(img));
+      }
 
       rows.push({
         name, litSign, pxPerMm: +mmp.toFixed(3), mouth, nose, cheek,
@@ -648,11 +740,13 @@ async function main() {
     const mR = r.mouth.range - r.cheek.range;
     const mE = r.mouth.edge - r.cheek.edge;
     const nR = r.nose.range - r.cheek.range;
-    const void_ = r.cheek.range > CONTROL_CEILING;
+    const clipped = r.mouth.mean > CLIP_CEILING;
+    const void_ = clipped || r.cheek.range > CONTROL_CEILING;
     console.log(`  ${pad(r.name, 9)}${pad(r.litSign > 0 ? 'R' : 'L', 5)}${num(r.pxPerMm, 2, 8)}` +
       `${num(mR, 1, 11)}${num(mE, 2, 11)}${num(nR, 1, 12)}` +
       `${`${r.cheek.range.toFixed(1)}/${r.cheek.edge.toFixed(2)}`.padStart(14)}` +
-      (void_ ? '   VOID — no blank patch on this face' : ''));
+      (clipped ? `   VOID — lit half clipped (mean ${r.mouth.mean})`
+        : void_ ? '   VOID — no blank patch on this face' : ''));
     if (void_) { voided++; continue; }
     if (mR < LIMITS.mouthRange) fails.push(`${r.name}: mouthRange ${mR.toFixed(1)} < ${LIMITS.mouthRange} — no mouth in the frame`);
     if (mE < LIMITS.mouthEdge) fails.push(`${r.name}: mouthEdge ${mE.toFixed(2)} < ${LIMITS.mouthEdge}/mm — the mouth is a ramp, not an edge`);
@@ -677,7 +771,7 @@ async function main() {
   }
   console.log(`\n  limits: ${JSON.stringify(LIMITS)}`);
   console.log('  * noseRange is reported, not gated — see the comment at its call site.');
-  if (voided) console.log(`  ${voided} head(s) VOID on the pixel rows: control range over ${CONTROL_CEILING}.`);
+  if (voided) console.log(`  ${voided} head(s) VOID on the pixel rows — see CLIP_CEILING / CONTROL_CEILING.`);
 
   if (jsonAt) {
     const p = path.isAbsolute(jsonAt) ? jsonAt : path.join(ROOT, jsonAt);
@@ -690,7 +784,8 @@ async function main() {
     for (const f of fails) console.log('  ' + f);
     process.exit(1);
   }
-  console.log(`\nPASS — ${rows.length} heads: a mouth and a nose read in the frame, and the nose leads the chin.`);
+  console.log(`\nPASS — ${rows.length} heads on the geometry rows`
+    + (voided ? `, ${rows.length - voided} of them measurable on the pixel rows and reading a mouth.` : ': a mouth reads in the frame.'));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
