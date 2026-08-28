@@ -635,11 +635,22 @@ function cache(): MaterialTextures {
   // tiles 9 x 13 over a head, which is ~55 mm of face per tile across, so a
   // texel is 0.21 mm and the three octaves below are 1.3 / 0.6 / 0.45 mm — skin
   // micro-relief and pores, at scales that survive their own mip chain.
+  //
+  // **The octave weights are where the "stucco" comes from, not the amplitude.**
+  // At 0.55 m — the range `LANDMINES.md` says face work must be judged at — the
+  // head is 3.1 px/mm, and the coarsest octave here is 1.6 mm of relief, i.e. a
+  // five-pixel bump repeated over every square millimetre of the face. Real skin
+  // has almost nothing at 1.6 mm; it has pores at 0.2-0.5. Weighted 0.5 / 0.3 /
+  // 0.22 the map's energy sat almost entirely in the octave a closeup resolves
+  // best, and the result reads as sandpaper on a dry orange rather than as skin.
+  // Re-weighted toward the two fine octaves at the same total: the grain that
+  // survives to `hero_portrait` range is unchanged, and what a 0.55 m framing
+  // gets is pores instead of stipple.
   const PORE = 256, PF = maxFreq(PORE);          // PF = 102
   const pore = normalFromHeight(PORE, (u: number, v: number) => (
-    0.5 * n.simplex2(u * PF * 0.39, v * PF * 0.39)
-    + 0.3 * n.simplex2(u * PF * 0.86, v * PF * 0.86)
-    + 0.22 * n.simplex2(u * PF, v * PF)
+    0.26 * n.simplex2(u * PF * 0.39, v * PF * 0.39)
+    + 0.36 * n.simplex2(u * PF * 0.86, v * PF * 0.86)
+    + 0.34 * n.simplex2(u * PF, v * PF)
   ), 1.9);
   pore.repeat.set(15, 23);
 
