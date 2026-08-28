@@ -683,6 +683,45 @@ texture-energy change from 0.06-0.09 of run noise on the same frames.
 
 `landmark_meteor` was not in the floors file at all until `d3a7041`.
 
+## On a shared trunk, a before/after corpus diff by sha measures every lane
+
+`imgdiff tmp/shots/<baseline sha> tmp/shots/HEAD` is the reflex, and on a trunk
+four lanes are committing to it is meaningless. Measured 2026-08-28: the memory
+lane diffed its own baseline against HEAD and got **129 of 142 shots over floor,
+worst mean 73.0/255** — from the peak cliff bands, the drainage incision, the
+tarn beds, the graded aprons and the meteor's fissure glow, none of which it had
+touched. Thirty commits from three other lanes landed inside its window.
+
+**Build an ablation tree instead**, and do it with plumbing so the shared
+worktree and the shared index are never touched:
+
+    GIT_INDEX_FILE=/tmp/x git read-tree HEAD
+    GIT_INDEX_FILE=/tmp/x git update-index --cacheinfo "100644,$(git rev-parse $BASE:$f),$f"
+    tree=$(GIT_INDEX_FILE=/tmp/x git write-tree)
+    commit=$(git commit-tree "$tree" -p HEAD -m ablation)
+
+`--build <commit>` takes any commit object, branch or not. First run
+`git log $BASE..HEAD -- <each file>` and check that the files you are about to
+revert carry **only** your commits; if one of them also carries somebody else's,
+reverting it puts their change in your diff too.
+
+## `texc.bin.gz` cannot survive a `bootprof --build <old sha>`
+
+`texbake --canvas` bakes from the **working tree**, and the daemon materialises a
+sha tree with `src/public/baked` **symlinked to the repo's**. So when
+`bootprof --build <sha>` runs a prod build of a sha whose face sources differ
+from the working tree, that build's vite plugin sees a hash it does not
+recognise and prunes the real file — and the arm you are measuring, plus every
+arm after it, boots with the painted-face cache cold.
+
+That is a ~135 MB difference in what you are measuring, in a report about
+memory. **A four-cache A/B is only possible between shas whose TEX/GEO sources
+agree**; between any others, the honest move is to delete the flapping cache
+before *every* arm, so absent-in-all is a controlled variable rather than
+present-in-some being a confound. `geo.bin.gz` needs the same treatment for a
+different reason: any lane touching a `GEO_SOURCES` file deletes it, and one run
+lost it *twice inside a single `bootprof` invocation*.
+
 ## `cleanup.mts` and the daemon disagree about whether a daemon exists
 
 Seen twice in one session: `cleanup.mts` printing *"no capture daemon registered
