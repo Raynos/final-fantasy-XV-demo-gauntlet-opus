@@ -290,8 +290,16 @@ varying vec2 vUv;
 varying float vAge;
 
 void main() {
-  float along = vUv.x;                       // 1 at the blade head
-  float across = vUv.y;
+  // CLAMPED, and pow() is why. GLSL leaves pow(x, y) undefined for x < 0 and
+  // this backend returns NaN there; a ribbon interpolates vUv.x a hair below
+  // zero along its own tail edge, and both pow(along, uHeadBias) and
+  // pow(along, 1.35) below take it as a base. The result is a NaN written into
+  // the scene target, which the grade shows as a thin diagonal line of pure
+  // black -- 15 to 50 pixels on every combat and warp shot that draws a trail
+  // (src/tools/probes/nanscan.mts finds them). Nothing else in this shader is
+  // unguarded: every other pow() here already clamps its base.
+  float along = clamp(vUv.x, 0.0, 1.0);      // 1 at the blade head
+  float across = clamp(vUv.y, 0.0, 1.0);
 
   float ageFade = clamp(1.0 - vAge / uLife, 0.0, 1.0);
   ageFade *= ageFade;
