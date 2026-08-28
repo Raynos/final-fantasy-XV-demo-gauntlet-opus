@@ -774,6 +774,41 @@ export class CombatSystem {
   }
 
   /**
+   * What a warp-strike's blow is worth, given the distance it covered.
+   *
+   * **The HUD has always said this and the code has never done it.** The
+   * call-out's own sub-line is "Damage scales with distance covered";
+   * `_tickWarp` used a flat `weaponMotion * 1.9` wherever it came from.
+   *
+   * Which is why the flat version failed on its own terms. It was cut from
+   * 2.9 to 1.9 to make warp "a strong opener, not an execute", and
+   * `fightshape` measured it afterwards at **51%, 64% and 66% of all damage
+   * dealt** in three fights — in the third round Noctis' melee share was 0%,
+   * because there is no reason to swing a sword at something one button
+   * deletes. `probes/dpsshare.mts` puts the blow at **1351-3380 against a
+   * sabertusk's 780 max HP**: 1.7x to 4.3x an execute, staggered or not.
+   *
+   * The flat multiplier is the defect. A warp-strike is two different moves
+   * wearing one name: a twenty-metre entrance from a cliff, which should be
+   * the biggest single blow in the game and is worth about one full combo
+   * delivered instantly; and a three-metre blink onto something already in
+   * front of you, which is a repositioning poke and was paying the same. The
+   * ramp between them is what makes the stagger punish a punish instead of a
+   * delete, and it costs the long-range opener nothing.
+   *
+   * Public because `probes/dpsshare.mts` reads it: a probe that re-derives
+   * the curve is a probe that can agree with a formula that has changed.
+   *
+   * @param dist metres between the launch point and the target
+   * @returns the motion value to hand `_applyDamage`
+   */
+  warpMotion(dist: number) {
+    const k = THREE.MathUtils.clamp(
+      (dist - WARP_NEAR_M) / (WARP_FAR_M - WARP_NEAR_M), 0, 1);
+    return this.weaponMotion * THREE.MathUtils.lerp(WARP_MOTION_NEAR, WARP_MOTION_FAR, k);
+  }
+
+  /**
    * Repositioning warp to a point (no strike).
    *
    * Perching is how you get MP back in FFXV: land on a vantage point and the
@@ -1524,6 +1559,52 @@ export class CombatSystem {
 
   /* -------------------------------------------------------- swings */
 
+  /**
+   * The attack step-in: while a swing is winding or active, close on the
+   * target rather than cutting the air in front of it.
+   *
+   * This is the missing half of "Noctis does 14% of the damage in his own
+   * fight". `probes/dpsshare.mts` puts his share at **64% at full uptime** —
+   * the motion values are not the problem — and `fightshape` measures him
+   * landing **2 blows in a 6-7 second fight, 0.3 per second**, against a
+   * combo cadence of 2.27. He is swinging almost continuously and hitting
+   * almost nothing, because the pack strafes and circles and the mean range
+   * to the nearest animal over a whole fight is **4.9-5.7 m** while the
+   * Engine Blade reaches 2.05.
+   *
+   * FFXV's answer is the one every action game uses: the attack itself
+   * carries you. Holding attack in FFXV slides Noctis onto whatever he is
+   * locked to; without that a third-person melee is a game about walking.
+   *
+   * It cannot disturb a capture. `update` returns at `scenarioLock` before
+   * `_tickSwing` is reached on every posed combat scenario, and the two live
+   * set pieces never start a swing because they take no input.
+   *
+   * @param dt seconds
+   */
+  _stepIn(dt: number) {
+    const p = this.player;
+    if (!p) return;
+    const t = this.lockTarget && !this.lockTarget.dead
+      ? this.lockTarget
+      : this.autoTarget(STEP_IN_RANGE);
+    if (!t || t.dead) return;
+    const dx = t.root.position.x - p.root.position.x;
+    const dz = t.root.position.z - p.root.position.z;
+    const flat = Math.hypot(dx, dz);
+    // Stop where the blade lands, not on top of the animal: its own footprint
+    // plus most of the weapon's reach.
+    const bite = (t.radius || 0.8) * (t.scale || 1)
+      + (this.weapon ? this.weapon.def.reach : 2) * 0.78;
+    if (flat <= bite || flat > STEP_IN_RANGE) return;
+    const step = Math.min(flat - bite, STEP_IN_SPEED * dt);
+    p.root.position.x += (dx / flat) * step;
+    p.root.position.z += (dz / flat) * step;
+    if (this.terrain) p.root.position.y = this.terrain.heightAt(p.root.position.x, p.root.position.z);
+    p.heading = Math.atan2(dx, dz);
+    p.root.rotation.y = p.heading;
+  }
+
   _tickSwing(dt: number) {
     const step = this.comboStep;
     if (!step) { this._endSwing(); this.state = 'idle'; return; }
@@ -1546,6 +1627,9 @@ export class CombatSystem {
         return;
       }
     }
+
+    // Close the gap the swing was aimed at — see `_stepIn`.
+    if (this.comboPhase !== 'rec') this._stepIn(dt);
 
     // swing pose: ease into the arc during wind, snap through it while active
     let ang;
@@ -1786,7 +1870,7 @@ export class CombatSystem {
          * the loop, and warp is still the best thing to punish it with.
          */
         this._applyDamage(w.enemy, w.from, {
-          motion: this.weaponMotion * 1.9, poise: 80, warp: true,
+          motion: this.warpMotion(w.from.distanceTo(w.to)), poise: 80, warp: true,
           blindside: !w.enemy.staggered && this._isBlindside(w.enemy),
         });
       }
@@ -1841,6 +1925,29 @@ const REST_POS = new THREE.Vector3(HAND_X, 1.05, 0.02);
 /* ---------------------------------------------------------- MP economy */
 /** Warping costs real MP; running the pool dry is what Stasis punishes. */
 const WARP_STRIKE_MP = 12;
+/**
+ * The warp-strike distance ramp — see {@link CombatSystem.warpMotion}.
+ *
+ * Below `WARP_NEAR_M` the blow is worth `WARP_MOTION_NEAR`, at or above
+ * `WARP_FAR_M` it is worth `WARP_MOTION_FAR`, linear in between. The near end
+ * is a repositioning poke that is still worth landing on a staggered target;
+ * the far end is about one full combo arriving instantly, which is what the
+ * signature move should be and roughly what the flat 1.9 was paying at every
+ * distance including three metres.
+ */
+/**
+ * The attack step-in — see {@link CombatSystem._stepIn}. Range is how far a
+ * swing will reach for a target at all; speed is how fast it closes, and over
+ * the 0.24 s a first Engine Blade swing spends winding and active it is worth
+ * about two metres.
+ */
+const STEP_IN_RANGE = 6.5;
+const STEP_IN_SPEED = 9.0;
+
+const WARP_NEAR_M = 3;
+const WARP_FAR_M = 20;
+const WARP_MOTION_NEAR = 0.55;
+const WARP_MOTION_FAR = 2.0;
 const WARP_POINT_MP = 8;
 const PHASE_MP_PER_SECOND = 22;
 const ARMIGER_MP = 9;
