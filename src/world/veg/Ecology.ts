@@ -402,6 +402,38 @@ export class Ecology {
   waterDepth(x: number, z: number) { return this.waterLevel(x, z) - this.height(x, z); }
 
   /**
+   * Is a plant rooted at `y` standing in a river or a tarn — asked per
+   * instance, because the density grids cannot see a six-metre river.
+   *
+   * `grassDensity` already returns 0 under water, but `GrassField` evaluates it
+   * on a 6x6 lattice per tile and bilerps: 2 m pitch on the blade ring, 4 on
+   * the clump ring and **8 on the far ring**, which is wider than most of this
+   * world's rivers. So the sampler said "no grass" at both ends of a cell the
+   * channel runs through the middle of, and the interpolation put grass back on
+   * the water. Measured after the level was fixed and before this existed: 1 251
+   * grass instances still standing in the Vannath reach at the wading pose,
+   * **328 of them in over 1.2 m** of it, and 7 000 in Swainsmere.
+   *
+   * It is the same predicate and the same 0.15 m threshold `grassDensity` uses,
+   * evaluated exactly instead of interpolated, so it can only remove leakage —
+   * it cannot strip anything the sampler says may grow.
+   *
+   * **Raised water only, and that is deliberate.** A body at exactly the sea
+   * plane fails `lv > seaLevel` and nothing changes for it, so the coast and
+   * the Vesperpool — a drowned forest with its floor 20 m below that plane —
+   * are untouched by construction rather than by a site list. Widening this to
+   * the sea is a separate change with its own counter-example to answer.
+   *
+   * @param y the height the plant is rooted at
+   */
+  standsInWater(x: number, z: number, y: number, margin = 0.15) {
+    const m = this._mask();
+    if (!m) return false;
+    const lv = m.levelAt(x, z);
+    return lv > WORLD.seaLevel && y < lv - margin;
+  }
+
+  /**
    * How far onto a **strandline** this point is: 1 at the waterline, 0 by
    * `band` metres of elevation above it — and zero anywhere that is not an
    * authored beach.

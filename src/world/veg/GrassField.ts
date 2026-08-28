@@ -736,6 +736,12 @@ export class GrassField {
         if (d < 0.02 || roll > d * 1.3) continue;
         const x = x0 + u * T, z = z0 + v * T;
         const y = bil(hg, HG, u, v);
+        // The density lattice is 6x6 per tile -- 2 m pitch here, 4 on the clump
+        // ring, 8 on the far one -- which is wider than most rivers in this
+        // world, so `grassDensity`'s own water test reads dry at both ends of a
+        // cell the channel runs through and the bilerp puts grass back on the
+        // water. Asked exactly, per tuft: see `Ecology.standsInWater`.
+        if (eco.standsInWater(x, z, y)) continue;
         const wet = bil(wg, CG, u, v);
         const hMul = bil(sg, CG, u, v);
         const deadFrac = bil(kg, CG, u, v);
