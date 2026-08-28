@@ -8,6 +8,14 @@ those), `src/characters/npc/`, `src/world/terrain/Clipmap.ts`, and by necessity
 Brief: `docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-6 and §WS-11's
 "Draw calls".
 
+## The gate, at `86ffe35`
+
+`pnpm run check:perf` — **21/21 gates passed in 1253.4 s**, both perf gates
+inside it: `perf` PASS `RULER_VALID: true`, `gameplay` PASS `RULER_VALID: true`,
+`drawcheck` PASS against the flat BRIEF budget with no debt file. Separately,
+three `gameplay.mts` runs of my own, the middle one stamped `VERDICT: quiet`:
+**total hitches 0**, `sprint+turn` worst frame **40.7 -> 7.6 ms**.
+
 ## Read this first: four of the eight items were already closed by other work
 
 The backlog's WS-6 text is a queue nobody re-read, and it is stale in four
