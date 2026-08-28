@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeTexture, makeDataMap, normalFromHeight } from '../util/TextureGen.ts';
+import { makeTexture, makeDataMap, normalFromHeight, dropTexelsAfterUpload } from '../util/TextureGen.ts';
 import type { TexelFn, ScalarFn, HeightFn, TextureOpts } from '../util/TextureGen.ts';
 import { encodePlanes8, decodePlanes8 } from '../world/terrain/FieldCodec.ts';
 
@@ -236,6 +236,7 @@ export function compactTexBake(): number {
 /** Apply the settings `makeTexture` would have applied, to a cache hit. */
 function dress(tex: THREE.DataTexture, {
   colorSpace = THREE.SRGBColorSpace, repeat = 1, anisotropy = 16, generateMipmaps = true,
+  keepTexels = false,
 }: TextureOpts) {
   tex.colorSpace = colorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -245,7 +246,9 @@ function dress(tex: THREE.DataTexture, {
   tex.minFilter = generateMipmaps ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
-  return tex;
+  // Same trade as the generator path: the texels the container just handed over
+  // are dead the instant the GPU has them. See `dropTexelsAfterUpload`.
+  return keepTexels ? tex : dropTexelsAfterUpload(tex);
 }
 
 /**

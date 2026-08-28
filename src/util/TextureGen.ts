@@ -15,6 +15,63 @@ export interface TextureOpts {
   repeat?: number;
   anisotropy?: number;
   generateMipmaps?: boolean;
+  /**
+   * Keep the CPU texels alive after the upload. Default false.
+   *
+   * Set it on the one texture in a hundred whose bytes are read back or
+   * re-uploaded — see {@link dropTexelsAfterUpload}, which is what the default
+   * does and why it is the default.
+   */
+  keepTexels?: boolean;
+}
+
+/**
+ * Free a `DataTexture`'s texels the moment the GPU has them.
+ *
+ * **A generated map is uploaded once and then read only by the sampler**, but
+ * the `Uint8Array` that fed it stays reachable from `texture.image.data` for
+ * the life of the session. Measured (`bootprof --mem --play --prod`): **103.0
+ * MB over 221 `DataTexture`s**, a whole second copy of the 198.9 MB the GPU
+ * already holds. Three's `onUpdate` fires at the end of `uploadTexture`
+ * (`WebGLTextures.js:1399`), which is the first instant the copy is provably
+ * redundant.
+ *
+ * **The context-loss story, because this is where it is decided.** Three
+ * restores a lost context on its own: `onContextLost` calls `preventDefault`,
+ * `onContextRestore` calls `initGLContext()`, and every texture then re-uploads
+ * from `texture.image` on next use. With the texels gone that re-upload writes
+ * an empty image and the world comes back with black material maps and no
+ * error. So the recovery moves up a level: `Renderer` watches for
+ * `webglcontextrestored` and reloads the page, which regenerates everything
+ * from the same generators. A lost context costs a reload instead of a seamless
+ * restore, and that is the trade this function makes — stated, not implied.
+ *
+ * The second failure it guards is quieter: a later `needsUpdate = true` would
+ * upload the same empty image. Nothing in the tree does that to a generated map
+ * today, so rather than trust the grep, the property is replaced with one that
+ * says so on the console. `keepTexels` is the opt-out for a caller that means
+ * it.
+ */
+export function dropTexelsAfterUpload<T extends THREE.Texture>(tex: T): T {
+  tex.onUpdate = (t: THREE.Texture) => {
+    t.onUpdate = null;
+    const img = t.image as { data?: ArrayBufferView | null } | null | undefined;
+    if (!img || !img.data) return;
+    img.data = null;
+    // `needsUpdate` is a prototype setter that bumps `version`. Shadowing it on
+    // the instance turns "the map went black and nobody knows why" into a line
+    // in the console naming the texture.
+    Object.defineProperty(t, 'needsUpdate', {
+      configurable: true,
+      get: () => false,
+      set: (v: boolean) => {
+        if (!v) return;
+        console.error(`[TextureGen] needsUpdate on ${t.name || 'a generated texture'} after its texels were freed`
+          + ' — pass keepTexels to the generator, or it uploads an empty image');
+      },
+    });
+  };
+  return tex;
 }
 
 /**
@@ -38,6 +95,7 @@ export function makeTexture(size: number, fn: TexelFn, {
   repeat = 1,
   anisotropy = 16,
   generateMipmaps = true,
+  keepTexels = false,
 }: TextureOpts = {}) {
   const data = new Uint8Array(size * size * 4);
   const c = [0, 0, 0];
@@ -60,7 +118,7 @@ export function makeTexture(size: number, fn: TexelFn, {
   tex.minFilter = generateMipmaps ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
-  return tex;
+  return keepTexels ? tex : dropTexelsAfterUpload(tex);
 }
 
 /** Single-channel (packed into RGB) map — for roughness / metalness / AO. */
@@ -155,7 +213,7 @@ export function radialSprite(size = 128, { power = 2.4, inner = 0.0, tint = [1, 
   tex.needsUpdate = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.generateMipmaps = true;
-  return tex;
+  return dropTexelsAfterUpload(tex);
 }
 
 /** Blue-noise-ish tileable dither texture, useful for TAA jitter and alpha-test. */

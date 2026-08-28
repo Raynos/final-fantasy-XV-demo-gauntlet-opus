@@ -84,6 +84,50 @@ export class Renderer {
 
     this._onResize = () => this.resize();
     window.addEventListener('resize', this._onResize);
+    this._wireContextLoss();
+  }
+
+  /**
+   * What happens when the GPU takes the context away.
+   *
+   * Three already handles this on its own and, until the memory pass, handled
+   * it *correctly*: `onContextLost` calls `preventDefault` so the browser will
+   * restore, `onContextRestore` calls `initGLContext()`, and every texture then
+   * re-uploads from `texture.image` the next time it is bound.
+   *
+   * That last step is the one that stopped being free. `dropTexelsAfterUpload`
+   * releases a generated map's `Uint8Array` the instant the GPU has it — 103 MB
+   * of the process — so on a restore three would re-upload an *empty* image and
+   * the world would come back with black albedo, black normals and no error
+   * anywhere. The same is true of the painted faces, whose canvas mip pyramids
+   * are shrunk after upload.
+   *
+   * So the recovery moves up a level: **a restored context reloads the page.**
+   * Every texture in this game is generated from code in the repo and cached in
+   * `baked/`, so a reload rebuilds all of it exactly, in the boot time the
+   * console already reports. A lost context costs a reload instead of a
+   * seamless restore, and that is the whole price of the 103 MB.
+   *
+   * Not under `?shoot=1`. That page is a determinism gate driven by the capture
+   * daemon over CDP, and a navigation it did not ask for destroys the execution
+   * context of whatever `page.evaluate` is in flight — which reads as a crash
+   * and is not one. There it logs, loudly, and `uxcheck` asserts on page errors.
+   */
+  _wireContextLoss() {
+    const el = this.renderer.domElement;
+    el.addEventListener('webglcontextlost', () => {
+      console.warn('[Renderer] WebGL context lost — waiting for the browser to restore it');
+    });
+    el.addEventListener('webglcontextrestored', () => {
+      if (new URLSearchParams(location.search).has('shoot')) {
+        console.error('[Renderer] WebGL context restored under ?shoot=1: generated texels were'
+          + ' freed after upload, so this page now draws empty maps. Reload it.');
+        return;
+      }
+      console.warn('[Renderer] WebGL context restored — reloading, because the CPU copies of the'
+        + ' generated textures were freed after upload and cannot be re-uploaded');
+      location.reload();
+    });
   }
 
   get domElement() { return this.renderer.domElement; }
