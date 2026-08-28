@@ -182,10 +182,12 @@ reconstructs Z, which also makes the neutral fill contribute exactly `N` — wha
 the code's own comment already claimed it did.
 
 `src/tools/probes/nanscan.mts` came out of it and poses all 142 shots counting
-NaN in `rtScene`: **7 shots carried NaN, now 5**. `zone_nebulawood` (3261 px)
-and `zone_malmalam` (314 px) are fixed; `combat_wide`, `combat_hud`,
-`combat_armiger`, `warp_strike` and `warp_wide` carry 15-50 px each from a
-different source and are **open work** — see `project/handoff/canopy.md`.
+NaN in `rtScene`: **7 shots carried NaN and the corpus is now at zero.**
+`zone_nebulawood` (3261 px) and `zone_malmalam` (314 px) were the terrain's;
+`combat_wide`, `combat_hud`, `combat_armiger`, `warp_strike` and `warp_wide`
+carried 15-50 px each from an unrelated cause in the same class — `TRAIL_FRAG`
+used a varying as the base of `pow()`, which GLSL leaves undefined below zero
+and this backend answers NaN (d27a0b6).
 
 Both fixed shots now carry measured floors (0.744 and 0.276, verified by a
 third cold capture at 0.496 and 0.188); `pnpm run check` is green. The two

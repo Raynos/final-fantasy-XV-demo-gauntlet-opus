@@ -31,10 +31,9 @@ in this file.
   8-bit output has no NaN, only 0,0,0. **Read `post.rtScene` — the linear HDR
   scene target — with `readRenderTargetPixels` and count the NaNs.** It is
   `HalfFloatType`, so decode `Uint16Array` yourself; exponent 31 with a non-zero
-  mantissa. `src/tools/probes/nanscan.mts` does it for all 142 shots and found
-  seven carrying NaN; five still are (`combat_wide`, `combat_hud`,
-  `combat_armiger`, `warp_strike`, `warp_wide` — tens of pixels each, a
-  different source). No gate catches this: a NaN is not a page error, does not
+  mantissa. `src/tools/probes/nanscan.mts` does it for all 142 shots. It found
+  **seven** carrying NaN from two unrelated causes, and the corpus is at **zero**
+  now; run it after anything that touches a shader. No gate catches this: a NaN is not a page error, does not
   move a draw count, and against a baseline holding the same hole it is not even
   a pixel diff.
 - **Every in-shader NaN test is folded away by the shader compiler here.**
@@ -51,6 +50,24 @@ in this file.
   And `outgoingLight` is summed in `meshphysical_frag` **before** `#include
   <opaque_fragment>`, so anything written to `totalEmissiveRadiance` at that
   anchor is already too late and silently does nothing.
+- **`pow(x, y)` is undefined for `x < 0` and this backend returns NaN.** A trail
+  ribbon interpolates its own `vUv.x` a hair below zero along its tail edge, and
+  `TRAIL_FRAG` used it as the base of two `pow()` calls — a thin diagonal line of
+  black on every combat and warp shot that draws a trail, 15-50 px each, five
+  shots. **Clamp the base of every `pow()` whose input is a varying**; the rest
+  of that shader already did. Same class as the `normalize()` of a zero vector
+  above: an operation that is undefined on its input, on hardware that answers
+  NaN rather than something harmless.
+- **A hide-walk of the scene graph must hide AFTER the pose, and on a VFX group
+  it must hide by MATERIAL.** `applyShot` rebuilds subtrees — `VFX` above all —
+  so hiding a child and *then* posing hands the pose a fresh set of children
+  with the hide undone: every child alibis while hiding the group still works,
+  and the walk blames the group and names nothing. And the VFX systems spawn new
+  children every frame, so even an object hidden after the pose has been
+  replaced by the time the next frame draws. Materials are pooled, so
+  `colorWrite = false` on one reaches the objects created after the ablation —
+  that took "no single child removes it" to `trail0` out of 41 materials in one
+  run. `src/tools/probes/nanwalk.mts` does it this way and says why.
 - **`0.0 * NaN` is NaN, so a zero blend weight does not contain a bad value.**
   `mix(planarN, rockN, 0.0)` carried the terrain's NaN rock normal onto ground
   that has no rock in it at all — which is why the defect appeared on a forest

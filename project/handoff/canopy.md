@@ -1,10 +1,16 @@
 # canopy — the black blob on the Nebulawood canopy (WS-4)
 
 **Status: done.** The blob is gone, the cause is named, both shots it affected
-carry a fresh measured floor, and `pnpm run check` is green.
+carry a fresh measured floor, and `pnpm run check` is green. The instrument it
+produced then found the same defect *class* in five more shots, and those are
+fixed too: **`nanscan` is 0 of 142**.
 
-Shas: **4384cff** (the fix), **154e8bf** (the new floors), plus the `nanscan`
-probe.
+Shas: **4384cff** (the terrain fix), **154e8bf** (the new floors), **ba2a26d**
+(`nanscan`, the landmines, the plan), **d27a0b6** (the trail `pow()` fix and
+`nanwalk`).
+
+**`nanscan.mts` is 0 of 142 shots.** Run it after anything that touches a
+shader; it is the only thing in the tree that can see this class of defect.
 
 ## What it was
 
@@ -76,14 +82,38 @@ Both are in `project/LANDMINES.md` now.
     warp_strike        20 px   still there
     warp_wide          15 px   still there
 
-**The remaining five are a different bug and are open work.** They are all
-combat/warp shots, they are tens of pixels rather than thousands, and the
-terrain fix does not touch them — so the source is almost certainly a VFX or
-character material, not the terrain. Worth an hour: the method above transfers
-directly (scan `rtScene`, hide-walk the graph, then bit-test the shader), and
-`nanscan.mts` is already the instrument. Nothing in the suite catches these:
-a NaN is not a page error, does not move a draw count, and against a baseline
-that has the same hole in it is not even a pixel diff.
+**The remaining five were a different bug, and are also fixed** — see below.
+`nanscan` is now **0 of 142**.
+
+## The other five: one unclamped `pow()` in the trail ribbon
+
+`TRAIL_FRAG` in `src/combat/Trails.ts` takes `vUv.x` as the base of two `pow()`
+calls, `pow(along, uHeadBias)` and `pow(along, 1.35)`. **GLSL leaves `pow(x, y)`
+undefined for `x < 0`**, this backend answers NaN, and a ribbon interpolates
+`vUv.x` a hair below zero along its own tail edge — so the NaN lands on a thin
+diagonal line, which is exactly the shape the pixels have: `combat_armiger`'s 48
+run from (257, 650) to (378, 616) at a constant slope. Every other `pow()` in
+that shader already clamps its base. `along` and `across` are clamped at the
+source now.
+
+**Two protocol traps found on the way, and they are worth more than the diff.**
+Both are in `nanwalk.mts`'s header:
+
+1. **Hide *after* the pose.** `applyShot` **rebuilds** the VFX group. Hide a
+   child and then pose, and the pose hands you a fresh set of children with the
+   hide undone — so every child alibis while hiding the *group* still works (a
+   hidden parent stays hidden however many children are added under it). The
+   walk blames the group and names nothing.
+2. **Hide by *material*, not by object.** The VFX systems spawn new children
+   every frame, so even an object hidden after the pose has been replaced by the
+   time the next frame draws. The materials are pooled, so `colorWrite = false`
+   on one reaches the objects created after the ablation. That took it from "no
+   single child removes it" straight to `trail0`, out of 41 materials, in one
+   run.
+
+Then four shader variants on `trail0`'s own material: a constant output clears
+it, clamping the alpha does not, clamping the colour does not, guarding `uLife`
+does not, and `pow(max(along, 1e-5), uHeadBias)` clears it outright.
 
 ## Blast radius, looked at
 
@@ -117,3 +147,21 @@ Neither shot had one; both were on `DEFAULT_LIMIT = 2.0`. Measured from two
 `facecheck`, and it is not this lane's: it fails identically at HEAD~2, before
 this fix, on all four heads (`transverseDropMm`, `jawWidthErr`, and no mouth on
 three of them). That is WS-1's gate and WS-1 is live in `src/characters/**`.
+
+
+## If you are picking this up
+
+There is nothing open in it. The two things worth carrying forward:
+
+- **`node src/tools/probe.mts src/tools/probes/nanscan.mts` after any shader
+  change.** It costs one boot and about four minutes, and it is the only
+  instrument here that sees a NaN. Two unrelated NaN bugs had been shipping in
+  seven of the thirty judged shots for weeks with every gate green.
+- **The class, not the two bugs.** Both were an operation undefined on its input
+  — `normalize()` of the zero vector, `pow()` of a negative base — on hardware
+  that answers NaN rather than something harmless, and in both cases the defect
+  reached the frame through a path that looks safe (`mix(a, b, 0.0)` does not
+  discard a NaN; a varying is not guaranteed to stay inside the range its
+  attribute was authored in). Grep for unguarded `normalize(` and `pow(` with a
+  varying base in the other shaders; this lane only cleared the ones the
+  instrument pointed at.

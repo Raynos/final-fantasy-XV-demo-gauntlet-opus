@@ -378,7 +378,7 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
   |---|---|---|
   | 156 | `src/characters/npc/` | 11 town NPCs, ~6 meshes each, casting individually |
   | 136 | `src/world/veg/` | three grass rings |
-  | ~106 | `src/engine/postfx/VelocityPass.ts` | motion-vector proxies — **`frustumCulled = false`, so off-screen movers still draw** |
+  | ~106 | `src/engine/postfx/VelocityPass.ts` | motion-vector proxies — was **`frustumCulled = false`, so off-screen movers still drew**; **FIXED in 4c57c1c**, which culls everything but skinned and instanced proxies and says why each exception stays |
   | 90 | `src/characters/` | the four party rigs |
   | 80 | `src/world/terrain/Clipmap.ts` | 28 clipmap rings |
   | 65 | `src/world/veg/` | trees |
@@ -390,8 +390,9 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
   The instrument that produced that table is a ten-line
   `renderBufferDirect` wrapper; `src/tools/probes/vegcensus.mts` is the nearest
   thing in the tree and it uses `traverseVisible`, which cannot see any of the
-  shadow or velocity work. **The single cheapest remaining win is the velocity
-  pass's missing frustum cull**, and the next is the same shadow-proxy merge
+  shadow or velocity work. **The velocity pass's missing frustum cull is done (4c57c1c)** —
+  this section still called it the cheapest remaining win a day after it landed,
+  which is what a queue costs when nobody re-reads it. The next one is the same shadow-proxy merge
   applied to the NPCs — see `shadowProxy` in `world/town/Hammerhead.ts` and
   `world/props/PoiKits.ts` (duplicated in both; it belongs on `PartBuilder`).
 - **A perf sign-off is owed on the menu scrim.** WS-9 made a full-screen 26 px
