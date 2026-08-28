@@ -46,6 +46,14 @@ previous number called good.** That is the whole method lesson of this lane.
 3. All three together chose **z = -1254**: hang -0.15, deep 6.2, proud 0.9. 6.2 m
    is an ordinary batter; `FILL_MAX` for a 34 m pad is 17.
 
+**Looked at, at the third seat, and it is right.** From the south-west the
+mausoleum stands on its stepped stylobate on a broad tan forecourt that runs
+continuously into the grass on a soft irregular boundary — no rim, no daylight,
+no curtain, nothing over the roofline, and the rune gateway on the crag lip
+beside it is deliberately on the brink and reads that way. From due east, looking
+up at the downhill face, the batter is an 8-10 m brown face with the vertical
+smear described below; that is the UV bug, not the seat.
+
 Both traps are in `project/LANDMINES.md`.
 
 **Closed with a measured reason, not landed:** `tomb_mystic2` keeps `deep = 26`.
