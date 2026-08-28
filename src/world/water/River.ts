@@ -420,6 +420,24 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     for (let i = 1; i < m; i++) wsl[i] = Math.min(wsl[i], wsl[i - 1]);
     // The surface may never sit under the ground it is drawn on.
     for (let i = 0; i < m; i++) wsl[i] = Math.max(wsl[i], bed[i] + 0.06);
+    // **...and it may never rise downstream, which the line above was doing.**
+    // The monotone clamp two lines up is undone by the bed clamp on every bump
+    // the traced thalweg crosses, and on ground with no channel it crosses one
+    // constantly. Measured on the built sheet over 1 931 consecutive in-reach
+    // station pairs (`tmp/t3-river/uphill.mts`): **497 of them climbed --
+    // 25.7% -- for 356 m of total ascent, with a single step of 8.17 m.** Two
+    // stations in eight, water flowing up a hill.
+    //
+    // A bed bump does not make water run uphill. It **ponds the reach behind
+    // it**, so the raise is carried back upstream instead of left as a step.
+    // Bounded to a metre and a bit of backwater above the reach's own nominal
+    // stage, because one bad sill must not turn a river into a lake: where the
+    // bound binds, the step survives and is honest about it.
+    const POND = 1.15;
+    for (let i = m - 2; i >= 0; i--) {
+      wsl[i] = Math.max(wsl[i],
+        Math.min(wsl[i + 1], bedMono[i] + 0.45 + POND + 2.20 * q[i]));
+    }
 
     // Waterlines and bank tops, per station, by first crossing.
     const wl = new Array<number>(m), wr = new Array<number>(m);
