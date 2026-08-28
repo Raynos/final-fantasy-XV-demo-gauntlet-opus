@@ -9,7 +9,7 @@ import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
 import { findTarns } from './water/Tarns.ts';
 import { buildShoreRibbon, type ShoreStats } from './water/Shore.ts';
 import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts';
-import { buildRivers, type RiverStats } from './water/River.ts';
+import { buildRivers, type RiverStats, type RiverJoin } from './water/River.ts';
 import { WaterMask } from './water/WaterMask.ts';
 import { makeRiverWaterMaterial, makeRiverBankMaterial, type RiverUniforms } from './water/RiverMaterial.ts';
 import type { Game } from '../game/Game.ts';
@@ -139,6 +139,14 @@ export class Water {
   riverMats!: THREE.ShaderMaterial[];
   riverStats!: RiverStats | null;
   /**
+   * Every confluence the routing found, with the width and depth on each arm.
+   *
+   * Published because a confluence is the one thing in this system that no
+   * corpus shot can show — every corpus shoreline is 250 m+ from camera — so
+   * the only way to look at one is for a probe to derive its pose from here.
+   */
+  riverJoins!: RiverJoin[];
+  /**
    * Where the water surface is, per point — the answer `Ecology` asks for.
    *
    * Built last, because it reads what everything above it produced: the bodies
@@ -167,6 +175,7 @@ export class Water {
     this.riverBank = null;
     this.riverMats = [];
     this.riverStats = null;
+    this.riverJoins = [];
     this.mask = null;
   }
 
@@ -229,6 +238,7 @@ export class Water {
   _buildRivers(game: Game, terrain: Terrain) {
     const built = buildRivers(terrain, { level: this.level, half: (terrain.size || 8192) * 0.5 });
     this.riverStats = built.stats;
+    this.riverJoins = built.joins;
     if (built.water) {
       const mat = makeRiverWaterMaterial(this.shoreNoise);
       const mesh = new THREE.Mesh(built.water, mat);
