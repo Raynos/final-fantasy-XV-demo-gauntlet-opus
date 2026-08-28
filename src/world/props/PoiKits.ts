@@ -2146,14 +2146,23 @@ export class PoiKits {
    * put its own origin on the beach. Signed, because the pin may be on either
    * side of it: `s` is measured along `yaw`, which always points AT the water.
    *
-   * `LIM` is 30 m and it is a definition rather than a tolerance. A waterside
-   * is a place you can stand and reach the water from; past thirty metres the
-   * pin is not one, whatever a 180 m ring walk found, and the camp is dry.
+   * **`LIM` is 60 m because `Tarns.findTarns` says so, not because 60 felt
+   * safe.** That function walks `worldMap.poisOfType('fishing')` and fits a
+   * basin **centred on the pin**, out to a 105 m disc — so a tarn pin is at the
+   * middle of its own pond *by construction*, and moving the pin moves the pond
+   * with it. There is no seat for those four pins that is not in the water, and
+   * the shore is 36–50 m out. A 30 m reach, tried first, rejected all four and
+   * built them a DRY camp on a lake bed 3.2–3.8 m under the surface, which is
+   * the same lie upside down. The kit has to be able to walk to the bank.
+   *
+   * Past sixty metres the pin is not a waterside at all, whatever a 180 m ring
+   * walk found: `malacchi_pond`'s nearest water is 134 m away and 28 m below
+   * it, and that camp is dry.
    *
    * @returns the heading whose local +z faces the water and the signed slide
    *          from the pin to the waterline, or null for nothing in reach
    */
-  _waterLine(x: number, z: number, level: number, LIM = 30): { yaw: number, s: number } | null {
+  _waterLine(x: number, z: number, level: number, LIM = 60): { yaw: number, s: number } | null {
     const t = this.eco.terrain;
     const cs = t && t.clipmap ? t.clipmap.cell0 : 1.5;
     const h = (px: number, pz: number) => (t && typeof t.drawnHeightAt === 'function'
@@ -2197,7 +2206,7 @@ export class PoiKits {
    * different job from deciding whether the place is a shore. It is not: a pier
    * that does not reach its water is the same lie as a pier with no water, and
    * measuring it found four more of them. {@link _waterLine} now answers the
-   * second question directly — is the water's edge within thirty metres, and
+   * second question directly — is the water's edge within sixty metres, and
    * which way — and the camp slides onto it, so 180 m is only the range at
    * which `_waterNear` is still willing to look for a surface height.
    *
