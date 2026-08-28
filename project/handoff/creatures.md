@@ -71,6 +71,34 @@ horns, a splayed ear, a dark eye in a socket.
 
 ---
 
+## 2b. The palette port, verified two ways
+
+Four files, not the five §WS-10 says: **Garula, Goblin, IronGiant, Sabertusk**.
+Coeurl, Dualhorn and Voretooth were converted when `Palette.ts` was written and
+are `const mix = mixc` aliases already.
+
+The failure this guards against is not a NaN — `geocheck` gates those at zero.
+It is a *finite but wrong* colour: two scratch registers cannot survive a
+nested blend, so the outer call blends a colour with itself and a body part
+comes back flat and dark with no error anywhere.
+
+- **Measured** (`_probe/blackverts.mts`, bare Node, fraction of vertices under
+  0.4% linear reflectance): sabertusk **0 of 6 770** — its head was black for
+  its entire existence before `Palette.ts` — garula 0.6%, irongiant 2.4%.
+- **Verified by eye**: `bestiary_sabertusk` and `bestiary_irongiant`. The
+  sabertusk's head, mask, tusks and orange eye all render; the Iron Giant's
+  warm oxidised plate and eye glow render.
+
+**Reported, not changed: the goblin is 24.5% under 0.4% linear** and it is
+pre-existing. The daemon-albedo pass that lifted hobgoblin, bussemand, arachne,
+necromancer, mesmenir, ronin and red giant ~1.6x — on the measurement that a
+daemon at 3-7% reflectance is a flat black cut-out in front of ~30% ground —
+did not include the goblin, whose `SKIN_DARK` is 0x191220, about 0.7% linear.
+It is a corpus-visible paint change and `bestiary_goblin` is a shot, so it
+wants its own capture round rather than a drive-by.
+
+---
+
 ## 3. Titan's fissure wedges — **closed, measured negative**
 
 The claim is that a dozen `fissure()` wedges float free above the terrain in
