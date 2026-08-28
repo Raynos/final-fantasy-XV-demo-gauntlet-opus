@@ -1804,3 +1804,27 @@ And `performance.memory` is not the only frozen in-page oracle: **nothing inside
 the page can see its own CPU.** `SystemInfo.getProcessInfo` over a browser-level
 CDP session is the only oracle that sees the GPU process, and the GPU process is
 half the number.
+
+## Do not diff the corpus across a *span* on this trunk — diff each commit against its own parent
+
+Every agent shares one trunk, and the trunk moves fast: **277 commits landed
+between the `confluence` lane opening and its own three going in**. Diffing the
+corpus across that span — the natural "before and after my work" — returned
+`hero_full` at a mean of **47.2/255 with 87.5% of pixels over 8/255**, and
+`vista_noon`, `regalia_road`, `zone_longwythe` and `zone_vannath` all in the
+tens. **None of it was that lane's.** It was other lanes' vegetation, water-mask
+and grass-density work, arriving in the same window.
+
+A number that size is not ambiguous-looking; it looks like a catastrophe you
+caused, and the reflex is to start reverting. The correct control is one
+capture pair **per commit, against that commit's own parent**:
+
+    node src/tools/shoot.mts <shots> --build <sha>^ --cold --out tmp/shots/a
+    node src/tools/shoot.mts <shots> --build <sha>  --cold --out tmp/shots/b
+    node src/tools/imgdiff.mts tmp/shots/a tmp/shots/b
+
+Taken that way the same four shots came back **0 of 4 over their own cold floor,
+twice** — and the two commits' columns agreed to three decimals, which is itself
+the tell that the residual is boot-to-boot TAA rather than anything either
+commit did. Cold on both sides, always: `--cold` is what makes the floors the
+measured cold floors.
