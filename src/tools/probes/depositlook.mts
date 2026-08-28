@@ -120,6 +120,36 @@ if (!only || only === 'fociaugh') {
       await look(`mouth_${e.id}_gentle`, [ax, terrain.heightAt(ax, az) + 1.7, az],
         [e.pos.x, e.pos.y + 1.4, e.pos.z], 52);
     }
+    // Oblique and elevated, off the door's own axis: a ramp down a fall line is
+    // edge-on and unreadable from the fall line itself, and the on-axis frames
+    // put the eye inside the ramp once the ramp exists.
+    {
+      const b = h + Math.PI / 2;
+      const ox = e.pos.x + Math.sin(b) * 26, oz = e.pos.z + Math.cos(b) * 26;
+      // High and behind, looking down the fall line: the only framing that
+      // clears whatever is standing between the door and every other vantage.
+      const hx = e.pos.x + Math.sin(h) * -30, hz = e.pos.z + Math.cos(h) * -30;
+      await look(`mouth_${e.id}_above`, [hx, e.pos.y + 34, hz], [e.pos.x, e.pos.y - 3, e.pos.z], 56);
+      // Tight on the fall line itself, which is where a collapse ramp lives.
+      const rx = e.pos.x + Math.sin(h) * -18, rz = e.pos.z + Math.cos(h) * -18;
+      await look(`mouth_${e.id}_ramp`, [rx, e.pos.y + 15, rz],
+        [e.pos.x + Math.sin(h) * -7, e.pos.y - 5, e.pos.z + Math.cos(h) * -7], 58);
+      const cam = [ox, Math.max(terrain.heightAt(ox, oz) + 3, e.pos.y + 6), oz];
+      const at = [e.pos.x, e.pos.y - 2.0, e.pos.z];
+      await look(`mouth_${e.id}_oblique`, cam, at, 50);
+      // The oblique frame at Fociaugh is filled by a smooth, untextured beige
+      // dome that nothing in `Portal.ts` builds. Ablate the two candidates by
+      // name and photograph each: whichever frame loses the dome owns it.
+      for (const owner of ['TerrainClipmap', `${e.id}-entrance`, 'megastructures']) {
+        const hid = [];
+        for (const top of g.scene.children) {
+          if ((top.name || '') === owner && top.visible) { hid.push(top); top.visible = false; }
+        }
+        if (!hid.length) continue;
+        await look(`mouth_${e.id}_no_${owner}`, cam, at, 50);
+        for (const t of hid) t.visible = true;
+      }
+    }
     for (const d of [8, 20]) {
       const ax = e.pos.x + Math.sin(h) * -d, az = e.pos.z + Math.cos(h) * -d;
       const ay = terrain.heightAt(ax, az) + 1.7;

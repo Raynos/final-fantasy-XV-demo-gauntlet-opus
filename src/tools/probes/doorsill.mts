@@ -87,4 +87,40 @@ for (const s of sites) {
   out.push(`  profile out of the door: ${prof.join('  ')}`);
 }
 
+/* ---- what else is built on top of each door --------------------------- */
+// The frame from 8 m out at Fociaugh is dominated by large beige slabs that
+// nothing in `Portal.ts` builds. A door's problem is not always its own
+// geometry, and no grade number can say so.
+out.push('');
+out.push('=== every scene mesh within 40 m of a door, nearest first, by owner');
+for (const s of sites) {
+  const near = new Map();
+  const y0 = terrain.heightAt(s.x, s.z);
+  for (const top of g.scene.children) {
+    const label = top.name || top.type;
+    top.updateMatrixWorld(true);
+    top.traverse((o) => {
+      if (!o.isMesh && !o.isInstancedMesh) return;
+      // A MERGED mesh has its origin at the world origin, so `getWorldPosition`
+      // is nowhere near the thing it draws — the first version of this census
+      // reported one neighbour at Keycatrich and none at all at the other two,
+      // on doors that photograph as walled in. Ask the bounding box.
+      const geo = o.geometry;
+      if (!geo) return;
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const bb = geo.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      const dx = Math.max(bb.min.x - s.x, 0, s.x - bb.max.x);
+      const dz = Math.max(bb.min.z - s.z, 0, s.z - bb.max.z);
+      const d = Math.hypot(dx, dz);
+      if (d > 40) return;
+      const k = `${label} / ${o.name || o.type}`;
+      const cur = near.get(k);
+      if (!cur || d < cur.d) near.set(k, { d, y: bb.max.y - y0 });
+    });
+  }
+  const rows = [...near.entries()].sort((a, b) => a[1].d - b[1].d).slice(0, 12);
+  out.push(`  [${s.id}]`);
+  for (const [k, v] of rows) out.push(`     ${v.d.toFixed(1).padStart(5)} m  dy ${v.y.toFixed(1).padStart(6)}  ${k}`);
+}
+
 return out.join('\n');
