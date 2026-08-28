@@ -523,20 +523,46 @@ ps -eo pid,ppid,command | grep '[v]ite/bin/vite.js' | awk '$2==1{print $1}' | xa
 PPID 1 is the discriminator — a live daemon's servers are its children, so a
 parentless one is always an orphan and is always safe to kill.
 
-## `--hide` renders less than its control, whatever you hide
+## An ablation photographed one frame later is photographed on a different shadow phase — FIXED in `da7bfe2`
 
 Reconciling a **7.6x** disagreement between two instruments measuring the same
 frame: hiding **one waymark** — 4 meshes and 1,334 triangles, counted in-page —
 removed **301 draws and 4.50 M triangles**, within 12 draws of hiding the entire
-POI system.
+POI system. Every `--hide` frame rendered about **320 draws and 4.5 M triangles
+less than its control, whatever you hid**, so no single `--hide` delta in this
+repo before `da7bfe2` was a cost, and the workaround was to difference two
+ablations so the offset cancels.
 
-Every `--hide` frame renders about **320 draws and 4.5 M triangles less streamed
-content than its control, whatever you hide.** The ablation perturbs streaming,
-not just visibility. So a single `--hide` difference is not a cost, and **every
-cost ever attributed this way is inflated by that offset**.
+It was read as the ablation perturbing streaming. **It was one frame.**
 
-Differencing *two* ablations cancels it, and the two instruments then agree to
-within two draws: the POI kits cost **~30 draws** at `town_forecourt`, not 349.
+`Sky._updateCascades` refreshes the three shadow cascades on a stride of
+**[1, 2, 4]** at `ultra`, keyed on `game.time.frame`, and `Clouds.renderShadow`
+on `frame & 3`. The near cascade is 183 draws, the middle +148, the far +298.
+`applyShot` calls `resetClock()`, so the pose always ends on frame **8** — a
+multiple of 4, the phase on which all three cascades *and* the cloud shadow are
+due, the most expensive frame of the cycle. One held pose at `town_forecourt`
+(`src/tools/_probe/hidephase.mts`):
+
+    frame  8   9   10  11  12  13  14  15  16
+    calls  791 612 690 612 791 612 690 612 791
+
+The hide pass hid its objects and then stepped **one more frame**. Control on 8,
+ablation on 9 — and the gap between two phases of the shadow schedule was
+reported as the cost of the object. The fix spends the last settle frame on the
+ablation rather than adding one after it, so both arms photograph frame 8.
+Measured after, `--raw`, same shot, same page: control **1193**, one waymark
+**1188** (5 draws), `poi_kits` **1160** (33 draws) — and 1188 − 1160 = **28**,
+which is exactly what the differencing workaround used to recover. The offset is
+gone and the number the workaround was reaching for is now reported directly.
+
+**The general shape, and it outlives this bug: a frame is not a scalar function
+of the world, it is a function of the world *and* the frame index.** Anything in
+this renderer on a stride — cascades, cloud shadows, the env probe, TAA history
+— makes two frames of an identical world differ by hundreds of draws. Any A/B
+that does not run the two arms to the *same frame count* is measuring the
+schedule. That is the same root as `resetClock()` in the pose (period-2 spreads
+of 20 draws) and as `drawcheck` gating "the expensive phase, comparable, not
+average".
 
 ## Every recorded `imgdiff` noise floor is a COLD floor, and nobody captures cold
 
