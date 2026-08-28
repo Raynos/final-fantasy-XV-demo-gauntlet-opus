@@ -216,3 +216,45 @@ lane's final report.
   on things that are not walls — a camp boulder (`c2e2295`) and a
   seventy-metre earthwork (here). Check whether the mesh has world-scale UVs
   before invoking it: if it does, the stretch objection does not apply.
+
+---
+
+## Gates at HEAD
+
+**`pnpm run check` 19/19 PASS**, 136.3 s. Both gates this lane had to keep green
+are green and both moved the right way or not at all:
+
+- **`floatcheck` PASS** — `poiFloating` 0/0, `poiBuried` 0/0, `instBuried`
+  **855** against a baseline of 861.
+- **`silrocks` PASS** — no new collapsed silhouettes; `rock:tor:pinnacle`
+  distinct **23.4/24** (floor 14), variety 1.37 (floor 0.9).
+- `drawcheck`, `uxcheck` 93/93 with no page errors, `integration`, `combatloop`
+  31/31, `geocheck`, `reachcheck`, `driftcheck`, `orphans`, `anycheck` all PASS.
+
+One honest caveat, the same one `landmarks-r3` recorded: it ran against the
+**dirty tree** — another lane's `src/world/terrain/Field.ts` was live — so the
+verdict is not attributable to this lane's commits alone. The two perf gates were
+not run; `check --perf` wants a quiet box.
+
+All four baked caches rebuilt after the generator edits: `pnpm run build:full`,
+then `texbake --geo` and `texbake --canvas` again by hand, because a co-lane's
+`vite build` deleted `texc.bin.gz` twice while this was running.
+
+## The two binding shots, looked at, at HEAD
+
+`tmp/shots/p4-final/`.
+
+- **`poi_tomb`: the ellipsoids are gone.** Where a featureless grey dome stood
+  there is now a corbelled portal on a rubble mound, with the lintel, the
+  relieving course and the reveal all reading, stone on the shoulder, and an
+  apron that has grain in it. The temple reads at the left of frame. **The least
+  resolved thing left in that frame is the apron's own broad flank**, which is
+  better than it was and is still the largest single-value surface in the shot.
+- **`zone_mencemoor`: no, the Disc does not read as a meteorite.** It reads as a
+  large pale rock dome: convex silhouette with a stepped crown and genuine
+  angular cleave facets at 2x (`tmp/p4/disc.png`), but low in chroma, lighter in
+  value than every ridge in front of it, and with **no warm accent anywhere**.
+  Both levers WS-13 named for that were tried and both are measured negatives
+  above — `tintNorm` is a re-tint, and the fissure glow is entombed and would be
+  sub-pixel even seated correctly. What it needs is named in Row 1 and is in the
+  final report, not in a queue.
