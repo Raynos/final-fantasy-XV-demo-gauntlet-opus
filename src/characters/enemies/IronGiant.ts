@@ -9,6 +9,7 @@ import { clamp01, smooth, decelerate } from '../rig/CreatureAnim.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
+import { mixc } from './Palette.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -387,13 +388,6 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
 
-const _ic = new THREE.Color(), _id = new THREE.Color();
-/** sRGB mix accepting a hex or an already-mixed Colour at either end. */
-function mix(a: number, b: number, t: number) {
-  if (typeof b === 'number') _id.setHex(b, THREE.SRGBColorSpace); else _id.copy(b);
-  if (typeof a === 'number') _ic.setHex(a, THREE.SRGBColorSpace); else if (a !== _ic) _ic.copy(a);
-  return _ic.lerp(_id, t < 0 ? 0 : t > 1 ? 1 : t);
-}
 
 /**
  * Paint a plate with age.
@@ -419,7 +413,7 @@ function aged(geo: THREE.BufferGeometry, base: number, amount: number = 1) {
     const bloom = Math.max(0, streak) * (0.35 + 0.65 * run) * amount;
     // the underside of everything sits in its own shadow
     const shade = Math.max(0, -Math.sin(y * 3.1 + z * 4.7)) * 0.25;
-    const c = mix(base, RUST, bloom * 0.55);
+    const c = mixc(base, RUST, bloom * 0.55);
     arr[i * 3] = c.r * (1 - shade); arr[i * 3 + 1] = c.g * (1 - shade); arr[i * 3 + 2] = c.b * (1 - shade);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));

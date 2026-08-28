@@ -3,6 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.ts';
+import { mixc } from './Palette.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -114,7 +115,7 @@ function buildPrototype() {
   const skull = place(blob(0.155, 0.145, 0.170, 12, 9), { pos: [0, 1.20, 0.02] });
   // dark over the cranium, sallow down the muzzle and under the cheekbones, so
   // the brow shelf and the jaw separate instead of being one purple egg
-  rig.attach(paint(skull, (x, y, z) => mix(goblinSkin(x, y, z - 1.10),
+  rig.attach(paint(skull, (x, y, z) => mixc(goblinSkin(x, y, z - 1.10),
     SKIN_DARK, Math.max(0, (y - 1.22) * 4.5))), 'head');
   const brow = place(slab(0.26, 0.055, 0.11, 0.02), { pos: [0, 1.238, 0.13], rot: [0.28, 0, 0] });
   rig.attach(tint(brow, SKIN_DARK), 'head');
@@ -124,7 +125,7 @@ function buildPrototype() {
     rig.attach(tint(zyg, SKIN, 0.05), 'head');
   }
   const snout = place(blob(0.078, 0.058, 0.078, 8, 6), { pos: [0, 1.155, 0.17] });
-  rig.attach(paint(snout, () => mix(SKIN_PALE, SKIN_DARK, 0.55)), 'head');
+  rig.attach(paint(snout, () => mixc(SKIN_PALE, SKIN_DARK, 0.55)), 'head');
 
   // grin: a dark slot with a row of teeth
   const mouth = place(slab(0.19, 0.045, 0.06, 0.01), { pos: [0, 1.105, 0.145] });
@@ -138,7 +139,7 @@ function buildPrototype() {
   // A lantern jaw, undershot and half the width of the skull — the goblin's
   // one memorable feature, and it was previously smaller than its own ear.
   const jawG = place(blob(0.125, 0.058, 0.105, 10, 6), { pos: [0, 1.070, 0.118] });
-  rig.attach(paint(jawG, (x, y, z) => mix(SKIN_PALE, SKIN_DARK, 0.42 + Math.max(0, (1.09 - y) * 6))), 'jaw');
+  rig.attach(paint(jawG, (x, y, z) => mixc(SKIN_PALE, SKIN_DARK, 0.42 + Math.max(0, (1.09 - y) * 6))), 'jaw');
   for (const s of [-1, 1]) {
     const tusk = place(spike(0.016, 0.062, 5), { pos: [0.072 * s, 1.098, 0.135], rot: [-0.18, 0, -0.12 * s] });
     rig.attach(tint(tusk, CLAW), 'jaw');
@@ -198,7 +199,7 @@ function buildPrototype() {
     rig.attach(tint(knee, SKIN_DARK, 0.05), `kn${n}`);
     const lo = tube([P(0.135 * s, 0.33, 0.09), P(0.137 * s, 0.255, 0.062), P(0.135 * s, 0.18, 0.04), P(0.135 * s, 0.07, 0.01)],
       [0.046, 0.056, 0.042, 0.030], { radialSeg: 8 });
-    rig.attachBlend(paint(lo, (x, y, z) => mix(goblinSkin(x, y, z), SKIN_DARK, Math.max(0, (0.30 - y) * 2.2))), `kn${n}`, `ft${n}`, 1.0);
+    rig.attachBlend(paint(lo, (x, y, z) => mixc(goblinSkin(x, y, z), SKIN_DARK, Math.max(0, (0.30 - y) * 2.2))), `kn${n}`, `ft${n}`, 1.0);
     const foot = place(blob(0.055, 0.035, 0.085, 7, 5), { pos: [0.135 * s, 0.038, 0.055] });
     rig.attach(tint(foot, SKIN_DARK), `ft${n}`);
     for (let c = -1; c <= 1; c++) {
@@ -342,7 +343,6 @@ class GoblinEnemy extends Enemy {
 }
 
 
-const _pc = new THREE.Color(), _pd = new THREE.Color();
 /**
  * Per-vertex colour from bind-pose position.
  *
@@ -368,13 +368,6 @@ function paint(geo: THREE.BufferGeometry, fn: (x: number, y: number, z: number) 
   return geo;
 }
 
-/** sRGB mix that accepts a hex or an already-mixed Colour at either end. */
-function mix(a: number | THREE.Color, b: number | THREE.Color, t: number): THREE.Color {
-  if (typeof b === 'number') _pd.setHex(b, THREE.SRGBColorSpace); else _pd.copy(b);
-  if (typeof a === 'number') _pc.setHex(a, THREE.SRGBColorSpace); else if (a !== _pc) _pc.copy(a);
-  return _pc.lerp(_pd, t < 0 ? 0 : t > 1 ? 1 : t);
-}
-
 /**
  * The goblin's skin at a bind-pose point: sallow underneath, bruised on top,
  * black at the extremities, blotched everywhere. `down` is how far under the
@@ -385,7 +378,7 @@ function goblinSkin(x: number, y: number, z: number, ext = 0): THREE.Color {
   const n = Math.sin(x * 23.7 + y * 11.3) * 0.5 + Math.sin(y * 17.1 - z * 13.9) * 0.35
     + Math.sin(z * 29.3 + x * 7.7) * 0.25;
   const belly = Math.max(0, (z - 0.02) * 2.6) * Math.max(0, 1 - Math.abs(x) * 3.2);
-  const c = mix(SKIN, SKIN_PALE, Math.min(0.85, belly * 0.9));
-  const withBlotch = mix(c, BLOTCH, Math.max(0, n) * 0.45);
-  return mix(withBlotch, SKIN_DARK, ext);
+  const c = mixc(SKIN, SKIN_PALE, Math.min(0.85, belly * 0.9));
+  const withBlotch = mixc(c, BLOTCH, Math.max(0, n) * 0.45);
+  return mixc(withBlotch, SKIN_DARK, ext);
 }

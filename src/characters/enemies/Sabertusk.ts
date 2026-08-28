@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
 import type { Part } from './RigBuilder.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
@@ -6,6 +5,7 @@ import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
+import { mixc } from './Palette.ts';
 import { clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
 
 /* A predator has to read as one shape from thirty metres and as an animal from
@@ -157,9 +157,9 @@ function buildPrototype() {
       // the saddle is deepest over the shoulders and rump, lighter over the loin
       const saddle = clamp01((b + 0.02) / 0.50) * (0.72 + 0.28 * Math.cos((u - 0.5) * 5.2));
       const pale = clamp01((-b - 0.28) / 0.5);
-      const flank = blend(FUR, FUR_MID, tick);
-      if (pale > 0) return blend(flank, BELLY, pale * pale * 0.92);
-      return blend(flank, FUR_DARK, saddle * 0.95);
+      const flank = mixc(FUR, FUR_MID, tick);
+      if (pale > 0) return mixc(flank, BELLY, pale * pale * 0.92);
+      return mixc(flank, FUR_DARK, saddle * 0.95);
     },
     matAt: (th) => (backline(th) < -0.5 ? M_BELLY : M_FUR),
   });
@@ -185,7 +185,7 @@ function buildPrototype() {
       // the ruff is the darkest thing on the animal except the mask, so the
       // head reads as a separate shape from the shoulders at any distance
       const under = clamp01((-Math.cos(th) - 0.10) / 0.55);
-      return blend(blend(RUFF, FUR, 0.30 + 0.34 * (Math.sin(th * 9 + u * 4) * 0.5 + 0.5)),
+      return mixc(mixc(RUFF, FUR, 0.30 + 0.34 * (Math.sin(th * 9 + u * 4) * 0.5 + 0.5)),
         BELLY, under * 0.85);
     },
     matAt: () => M_FUR,
@@ -219,8 +219,8 @@ function buildPrototype() {
       const bridge = clamp01(1 - Math.abs(p.x) / 0.05) * clamp01((p.z - 1.02) / 0.10) * clamp01((p.y - 0.80) / 0.06);
       const cheek = clamp01((0.845 - p.y) / 0.06) * clamp01(1 - Math.abs(Math.abs(p.x) - 0.09) / 0.07);
       const under = clamp01((0.805 - p.y) / 0.06);
-      const base = blend(FUR, BELLY, Math.max(cheek * 0.65, under * 0.8));
-      return blend(base, FUR_DARK, clamp01(Math.max(mask, bridge)) * 0.9);
+      const base = mixc(FUR, BELLY, Math.max(cheek * 0.65, under * 0.8));
+      return mixc(base, FUR_DARK, clamp01(Math.max(mask, bridge)) * 0.9);
     },
     matAt: (u, v, p) => (p.z > 1.19 ? M_WET : M_FUR),
   });
@@ -251,7 +251,7 @@ function buildPrototype() {
         { p: [0.125 * s, 1.005, 0.815], rx: 0.020, rz: 0.012 },
       ],
       steps: 7, seg: 9, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.5,
-      colorAt: (th, u) => blend(FUR_DARK, 0x1a1512, u * 0.6),
+      colorAt: (th, u) => mixc(FUR_DARK, 0x1a1512, u * 0.6),
       matAt: () => M_FUR,
     });
     // upper canine
@@ -356,8 +356,8 @@ function buildPrototype() {
       // near legs from the two far ones when the animal is side-on
       colorAt: (th, u) => {
         const inner = clamp01(Math.sin(th) * s * -1) * clamp01((0.5 - u) / 0.4);
-        const top = blend(FUR, BELLY, inner * 0.45);
-        return blend(top, FUR_DARK, clamp01((u - 0.42) / 0.30) * 0.95);
+        const top = mixc(FUR, BELLY, inner * 0.45);
+        return mixc(top, FUR_DARK, clamp01((u - 0.42) / 0.30) * 0.95);
       },
       matAt: () => M_FUR,
     });
@@ -388,8 +388,8 @@ function buildPrototype() {
       },
       colorAt: (th, u) => {
         const inner = clamp01(Math.sin(th) * s * -1) * clamp01((0.5 - u) / 0.4);
-        const top = blend(FUR, BELLY, inner * 0.45);
-        return blend(top, FUR_DARK, clamp01((u - 0.42) / 0.30) * 0.95);
+        const top = mixc(FUR, BELLY, inner * 0.45);
+        return mixc(top, FUR_DARK, clamp01((u - 0.42) / 0.30) * 0.95);
       },
       matAt: () => M_FUR,
     });
@@ -417,7 +417,7 @@ function buildPrototype() {
       + smooth((u - 0.45) / 0.35) * (1 - smooth((u - 0.85) / 0.15)) * 0.55,
     // brush tail: dun at the root, black at the tip, so the tail reads against
     // the body when it is held out and against the ground when it is down
-    colorAt: (th, u) => blend(FUR, FUR_DARK, clamp01((u - 0.25) / 0.45) * 0.95),
+    colorAt: (th, u) => mixc(FUR, FUR_DARK, clamp01((u - 0.25) / 0.45) * 0.95),
     matAt: () => M_FUR,
   });
   P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2', 'tail3']] });
@@ -464,23 +464,6 @@ function resetB(B: CBuilder) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-/**
- * sRGB blend, returned as a working-space Colour.
- *
- * Either end may be a hex literal *or* an already-blended Colour, which is the
- * point: layering counter-shading over ticking over a mask is three blends
- * deep, and the previous version only accepted numbers. `Color.setHex` runs
- * `Math.floor` on its argument, so handing it a Colour produced `NaN` and the
- * surface came out black with no error anywhere — which is what the sabertusk's
- * head has been doing.
- *
- */
-function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
-  if (typeof b === 'number') _c2.setHex(b, THREE.SRGBColorSpace); else _c2.copy(b);
-  if (typeof a === 'number') _c1.setHex(a, THREE.SRGBColorSpace); else if (a !== _c1) _c1.copy(a);
-  return _c1.lerp(_c2, clamp01(t));
-}
 
 class SabertuskEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */

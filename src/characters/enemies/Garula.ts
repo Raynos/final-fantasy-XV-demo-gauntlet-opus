@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
 import type { BoneWriter, Part } from './RigBuilder.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
@@ -6,6 +5,7 @@ import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
+import { mixc, colc } from './Palette.ts';
 import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.ts';
 
 const SHAG = 0x6b5335;
@@ -147,9 +147,9 @@ function buildPrototype() {
     colorAt: (th, u) => {
       const b = Math.cos(th);
       const shaggy = clamp01((b + 0.15) / 0.9) * smooth((u - 0.30) / 0.40);
-      if (b < -0.55) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.45) * 0.85);
-      const base = mix(HIDE, HIDE_DARK, 0.35 + 0.2 * Math.sin(u * 19 + th * 4));
-      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 6 + u * 5) * 0.5 + 0.5)), shaggy);
+      if (b < -0.55) return mixc(BELLY, HIDE_DARK, clamp01((b + 1) / 0.45) * 0.85);
+      const base = mixc(HIDE, HIDE_DARK, 0.35 + 0.2 * Math.sin(u * 19 + th * 4));
+      return mixc(base, mixc(SHAG, SHAG_LIT, Math.sin(th * 6 + u * 5) * 0.5 + 0.5), shaggy);
     },
     matAt: (th, u) => (Math.cos(th) > -0.1 && u > 0.30 ? M_SHAG : M_HIDE),
   });
@@ -202,7 +202,7 @@ function buildPrototype() {
     horn(B, {
       from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
       curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
-      colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+      colorAt: (th, u) => mixc(mixc(SHAG_DARK, SHAG, (i % 5) / 5),
         SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
@@ -226,8 +226,8 @@ function buildPrototype() {
         + Math.sin(th * 9) * 0.06 * Math.max(0, b);
     },
     colorAt: (th, u) => (Math.cos(th) > -0.1
-      ? mix(SHAG_DARK, SHAG_LIT, 0.30 + 0.45 * (Math.sin(th * 9) * 0.5 + 0.5))
-      : mix(HIDE, BELLY, smooth((u - 0.2) / 0.6) * 0.6)),
+      ? mixc(SHAG_DARK, SHAG_LIT, 0.30 + 0.45 * (Math.sin(th * 9) * 0.5 + 0.5))
+      : mixc(HIDE, BELLY, smooth((u - 0.2) / 0.6) * 0.6)),
     matAt: (th) => (Math.cos(th) > -0.1 ? M_SHAG : M_HIDE),
   });
   P.push({ geo: B.build(), bind: ['chain', ['chest', 'neck', 'head']] });
@@ -254,8 +254,7 @@ function buildPrototype() {
       const nose = clamp01((p.z - 2.06) / 0.12);
       const face = clamp01((p.z - 1.90) / 0.16) * clamp01((p.y - 1.70) / 0.14);
       const top = clamp01((p.y - 2.02) / 0.14);
-      return mix(mix2(HIDE, PLATE, face * 0.85), NOSE, nose * 0.9)
-        .lerp(hex(SHAG_DARK), top * 0.55);
+      return mixc(mixc(mixc(HIDE, PLATE, face * 0.85), NOSE, nose * 0.9), SHAG_DARK, top * 0.55);
     },
     matAt: (u, v, p) => {
       if (p.z > 2.08) return M_WET;
@@ -278,14 +277,14 @@ function buildPrototype() {
     }
     sweep(B, {
       nodes: rimNodes, steps: 26, seg: 7, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.4,
-      colorAt: () => col(PLATE), matAt: () => M_PLATE,
+      colorAt: () => colc(PLATE), matAt: () => M_PLATE,
     });
   }
   for (const s of [-1, 1]) {
     B.glow(EYE, 1.6);
     sculptBlob(B, {
       center: [0.315 * s, 1.945, 1.845], scale: [0.055, 0.048, 0.042], segU: 10, segV: 7,
-      colorAt: () => col(0x160b02), matAt: () => M_WET,
+      colorAt: () => colc(0x160b02), matAt: () => M_WET,
     });
     B.glow(null);
     // small mobile ear, half lost in the mane
@@ -296,13 +295,13 @@ function buildPrototype() {
         { p: [0.48 * s, 2.03, 1.28], rx: 0.018, rz: 0.009 },
       ],
       steps: 6, seg: 7, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.5,
-      colorAt: (th, u) => mix(SHAG_DARK, HIDE, u * 0.4), matAt: () => M_HIDE,
+      colorAt: (th, u) => mixc(SHAG_DARK, HIDE, u * 0.4), matAt: () => M_HIDE,
     });
     // brow tuft over the eye
     horn(B, {
       from: [0.30 * s, 2.03, 1.82], dir: [0.28 * s, 0.72, 0.62], len: 0.22,
       curve: [0, -0.06, -0.04], r0: 0.050, r1: 0.005, flat: 0.30, seg: 5, steps: 3,
-      colorAt: () => col(SHAG_DARK), matAt: () => M_SHAG,
+      colorAt: () => colc(SHAG_DARK), matAt: () => M_SHAG,
     });
   }
   emit(['bone', 'head']);
@@ -317,7 +316,7 @@ function buildPrototype() {
     ],
     steps: 8, seg: 12, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.5,
     shape: (th) => 1 + Math.max(0, -Math.cos(th)) * 0.34,
-    colorAt: (th) => (Math.cos(th) < -0.2 ? col(BELLY) : col(HIDE_DARK)),
+    colorAt: (th) => (Math.cos(th) < -0.2 ? colc(BELLY) : colc(HIDE_DARK)),
     matAt: () => M_HIDE,
   });
   // The tusks. Out of the lower lip, forward, then hooking hard up — the one
@@ -327,14 +326,14 @@ function buildPrototype() {
       from: [0.30 * s, 1.58, 1.88], dir: [0.52 * s, 0.02, 0.85], len: 1.15,
       curve: [0.10 * s, 1.05, -0.30], r0: 0.115, r1: 0.012, taper: 0.70,
       seg: 8, steps: 9, flat: 0.90,
-      colorAt: (th, u) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
+      colorAt: (th, u) => mixc(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
       matAt: () => M_TUSK,
     });
     // second, smaller tusk inboard of it
     horn(B, {
       from: [0.16 * s, 1.55, 1.94], dir: [0.26 * s, 0.14, 0.95], len: 0.50,
       curve: [0.06 * s, 0.34, -0.16], r0: 0.055, r1: 0.006, seg: 6, steps: 5,
-      colorAt: () => col(TUSK), matAt: () => M_TUSK,
+      colorAt: () => colc(TUSK), matAt: () => M_TUSK,
     });
   }
   // chin beard
@@ -342,7 +341,7 @@ function buildPrototype() {
     horn(B, {
       from: [(i - 3) * 0.06, 1.50, 1.74 + (i % 2) * 0.07], dir: [0, -1, -0.22],
       len: 0.26 + (i % 3) * 0.07, r0: 0.045, r1: 0.005, flat: 0.36, seg: 5, steps: 3,
-      colorAt: () => mix(SHAG_DARK, HIDE_DARK, (i % 3) / 3), matAt: () => M_SHAG,
+      colorAt: () => mixc(SHAG_DARK, HIDE_DARK, (i % 3) / 3), matAt: () => M_SHAG,
     });
   }
   emit(['bone', 'jaw']);
@@ -374,8 +373,7 @@ function buildPrototype() {
       },
       colorAt: (th, u) => {
         const feather = (1 - smooth((u - 0.30) / 0.28));
-        return mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9)
-          .lerp(hex(SHAG_DARK), feather * 0.7);
+        return mixc(mixc(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9), SHAG_DARK, feather * 0.7);
       },
       matAt: (th, u) => (u < 0.35 ? M_SHAG : M_HIDE),
     });
@@ -406,8 +404,7 @@ function buildPrototype() {
       },
       colorAt: (th, u) => {
         const feather = (1 - smooth((u - 0.26) / 0.26));
-        return mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9)
-          .lerp(hex(SHAG_DARK), feather * 0.65);
+        return mixc(mixc(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9), SHAG_DARK, feather * 0.65);
       },
       matAt: (th, u) => (u < 0.32 ? M_SHAG : M_HIDE),
     });
@@ -431,7 +428,7 @@ function buildPrototype() {
     steps: 12, seg: 8, ref: [0, 1, 0], capStart: false, capEnd: 0.5,
     shape: (th, u) => 1 + smooth((u - 0.55) / 0.25) * (1 - smooth((u - 0.92) / 0.08)) * 1.6
       + Math.sin(th * 8) * 0.14 * smooth((u - 0.55) / 0.3),
-    colorAt: (th, u) => mix(HIDE_DARK, SHAG_DARK, clamp01((u - 0.45) / 0.4)),
+    colorAt: (th, u) => mixc(HIDE_DARK, SHAG_DARK, clamp01((u - 0.45) / 0.4)),
     matAt: () => M_SHAG,
   });
   P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2']] });
@@ -460,12 +457,12 @@ function hoof(B: CBuilder, x: number, y: number, z: number) {
         { p: [x + i * 0.072 * s, y - 0.135, z + 0.11], rx: 0.045, rz: 0.062 },
       ],
       steps: 6, seg: 9, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.4,
-      colorAt: (th, u) => mix(HOOF, 0x4e463c, u * 0.45), matAt: () => M_HOOF,
+      colorAt: (th, u) => mixc(HOOF, 0x4e463c, u * 0.45), matAt: () => M_HOOF,
     });
   }
   horn(B, {
     from: [x, y - 0.02, z - 0.16], dir: [0, -0.5, -0.87], len: 0.095,
-    r0: 0.036, r1: 0.010, seg: 5, steps: 3, colorAt: () => col(HOOF), matAt: () => M_HOOF,
+    r0: 0.036, r1: 0.010, seg: 5, steps: 3, colorAt: () => colc(HOOF), matAt: () => M_HOOF,
   });
 }
 
@@ -475,22 +472,6 @@ function reset(B: CBuilder) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _c3 = new THREE.Color();
-/** Blend two sRGB hexes into the shared working colour. */
-function mix(a: number, b: number, t: number) {
-  _c1.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c1.lerp(_c2, clamp01(t));
-}
-/** Same blend, but returns a hex so it can be fed back into `mix`/`hex`. */
-function mix2(a: number, b: number, t: number) {
-  _c3.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c3.lerp(_c2, clamp01(t)).getHex();
-}
-/** A second scratch colour, so a `.lerp` target does not clobber `mix`. */
-function hex(h: number) { return _c2.setHex(h, THREE.SRGBColorSpace); }
-function col(h: number) { return _c1.setHex(h, THREE.SRGBColorSpace); }
 
 class GarulaEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
