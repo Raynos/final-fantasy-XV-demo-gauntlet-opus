@@ -54,6 +54,49 @@ const COARSE_CELL = (HALF * 2) / COARSE;
 const SEA = WORLD.seaLevel;
 
 /**
+ * One authored stretch of sand coast — see {@link Field._beachShelf}.
+ *
+ * `fore`/`sub` are gradients in metres per metre: 0.075 puts four metres of
+ * rise 53 m back from the waterline, which is the run-out the water lane's own
+ * measurement asked for ("a 30-60 m sand shelf at the POI").
+ */
+interface BeachSite {
+  id: string;
+  /** Centre and reach of the site, world metres. */
+  x: number; z: number; r: number;
+  /** Foreshore gradient, m/m. */
+  fore: number;
+  /** Submarine gradient, m/m — Galdin's "turquoise shallows". */
+  sub: number;
+  /** Full authority within this many metres of the waterline... */
+  hold: number;
+  /** ...released back to the original ground by this many. */
+  out: number;
+  /** Discs inside the site that must keep their own profile. */
+  keep: { x: number, z: number, r: number }[];
+}
+
+/**
+ * The beaches. One, deliberately.
+ *
+ * `WorldMap`'s own copy for the Galdin zone is *"The southern shore. Turquoise
+ * shallows, a pier hotel, Angelgard offshore"*, and `galdin_quay` is a resort
+ * built on a strand. Nothing else on this map is written as a beach: Cape Caem
+ * is a headland, the Vesperpool and Alstor are wetland, and the tarns are
+ * hollows in upland. Adding a second entry is authoring a second beach, which
+ * is a content decision rather than a tuning one.
+ */
+const BEACHES: BeachSite[] = [
+  {
+    id: 'galdin', x: 2420, z: 2620, r: 900,
+    fore: 0.075, sub: 0.055, hold: 60, out: 165,
+    // Angelgard rises sheer out of the water and is not landable; a strand
+    // around its foot would read as a sandbar and lose the silhouette.
+    keep: [{ x: 2960, z: 3080, r: 300 }],
+  },
+];
+
+/**
  * Resolution of the hydrology grid — the erosion pass's own outputs, kept for
  * *placement* rather than for the splat. 16 m, deliberately coarser than the
  * 4 m height grid: a scatterer asks "is there a wash here", not "where exactly
@@ -383,6 +426,9 @@ export class Field {
   _apronMeanM!: number;
   _inciseCells!: number;
   _inciseMeanM!: number;
+  /** Cells the beach grade reshaped, and the mean metres it moved them. */
+  _beachCells = 0;
+  _beachMeanM = 0;
   /** Metres the talus pass moved into each cell. Freed by `_derive`. */
   screeD!: Float32Array | null;
   sed!: Float32Array | null;
@@ -449,6 +495,11 @@ export class Field {
     // `rachsia_bridge` — a bridge — among them. The basins hold the corridor
     // back instead, so a road crosses a tarn on a causeway.
     this._tarnBasins();
+    // After the basins and after the road carve, for the same reason they are:
+    // it re-grades the ground either side of a waterline and must be the last
+    // word on the land it touches. Nothing downstream reads the heights it
+    // changes except `_derive`'s normals and hydrology, rebuilt from them.
+    this._beachShelf();
 
     this._derive();
     this.stats = {
@@ -1824,6 +1875,135 @@ export class Field {
     }
     this._tarnCount = carved;
     this._tarnSkipped = skipped;
+  }
+
+  /**
+   * Sand shelves: the stretches of coast the fiction says are a beach.
+   *
+   * **The measurement this exists for.** `probes/beachrun.mts` walks inland
+   * from the waterline and records the horizontal metres it takes to gain 4 m
+   * of elevation. Before this pass the Galdin Quay strand ran a **median of
+   * 14 m** and 0.9% of it was gentler than 40 m — the transect through
+   * `zone_galdin`'s own view axis reads `14.2  14.1  11.3  6.3  -1.9  -10.6
+   * -17.0` at 8 m steps, which is not a beach, it is a twenty-metre bluff with
+   * grass on top of it. The water lane fixed the foam lace and then said
+   * exactly this: *"the land behind it is grass running to the water. There is
+   * no beach anywhere I looked."*
+   *
+   * A beach is a **profile**, not a texture, so no amount of splat or ribbon
+   * work reaches it. What is wanted is the real thing: a foreshore at a few
+   * centimetres per metre, a submarine shelf at about the same, and a low bank
+   * behind that carries the ground back up to the hinterland it belongs to.
+   *
+   * ### How
+   *
+   * A signed distance to the waterline, by two-pass chamfer inside the site's
+   * own box, and then the ground is pulled toward `SEA + d * grade`. Distance
+   * rather than elevation, because remapping elevation cannot make a beach:
+   * it lowers the ground at a fixed horizontal position, so the run-out only
+   * lengthens by however much of the *hinterland* you are willing to sink —
+   * worked through and rejected before this was written.
+   *
+   * The waterline itself is a fixed point of the map (`target(0) === SEA`, at
+   * full weight), which is what keeps `Water`'s basin extent, `Shore.ts`'s
+   * contour and the chart raster where they already are. This moves the land
+   * behind the water, not the water.
+   *
+   * **Sited, not global.** Cape Caem is *correctly* steep and the water lane
+   * said so; a world-wide beach grade would flatten every cliff that meets the
+   * sea. Each entry is one authored stretch with its own keep-outs — Angelgard
+   * is a sheer prison island standing straight out of the water and must not
+   * acquire a strand.
+   */
+  _beachShelf() {
+    const h = this.h, n2 = this.n2;
+    const INF = 1e9;
+    let cells = 0, moved = 0;
+    for (const B of BEACHES) {
+      const box = this._box(B.x, B.z, B.r);
+      const bw = box.i1 - box.i0 + 1, bh = box.j1 - box.j0 + 1;
+      const d = new Float32Array(bw * bh).fill(INF);
+      // Seed: every cell with a neighbour on the other side of the sea plane,
+      // at the linearly interpolated crossing rather than at 0, so a 4 m grid
+      // does not quantise the foreshore into 4 m terraces.
+      for (let j = box.j0; j <= box.j1; j++) {
+        for (let i = box.i0; i <= box.i1; i++) {
+          const a = h[j * N + i]! - SEA;
+          let best = INF;
+          for (let e = 0; e < 4; e++) {
+            const ii = i + (e === 0 ? 1 : e === 1 ? -1 : 0);
+            const jj = j + (e === 2 ? 1 : e === 3 ? -1 : 0);
+            if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+            const b = h[jj * N + ii]! - SEA;
+            if ((a >= 0) === (b >= 0)) continue;
+            best = Math.min(best, CELL * Math.abs(a) / Math.max(1e-4, Math.abs(a - b)));
+          }
+          if (best < INF) d[(j - box.j0) * bw + (i - box.i0)] = Math.min(best, CELL);
+        }
+      }
+      // Two-pass chamfer, 3x3 mask, (1, sqrt2) x CELL. One linear sweep each
+      // way is exact enough for a field that is then smoothstepped.
+      const S = CELL, D = CELL * Math.SQRT2;
+      const relax = (bi: number, from: number, wgt: number) => {
+        const v = d[from]! + wgt;
+        if (v < d[bi]!) d[bi] = v;
+      };
+      for (let j = 0; j < bh; j++) {
+        for (let i = 0; i < bw; i++) {
+          const bi = j * bw + i;
+          if (j > 0) {
+            relax(bi, bi - bw, S);
+            if (i > 0) relax(bi, bi - bw - 1, D);
+            if (i < bw - 1) relax(bi, bi - bw + 1, D);
+          }
+          if (i > 0) relax(bi, bi - 1, S);
+        }
+      }
+      for (let j = bh - 1; j >= 0; j--) {
+        for (let i = bw - 1; i >= 0; i--) {
+          const bi = j * bw + i;
+          if (j < bh - 1) {
+            relax(bi, bi + bw, S);
+            if (i > 0) relax(bi, bi + bw - 1, D);
+            if (i < bw - 1) relax(bi, bi + bw + 1, D);
+          }
+          if (i < bw - 1) relax(bi, bi + 1, S);
+        }
+      }
+      for (let j = box.j0; j <= box.j1; j++) {
+        const z = -HALF + j * CELL;
+        for (let i = box.i0; i <= box.i1; i++) {
+          const x = -HALF + i * CELL;
+          const rr = Math.hypot(x - B.x, z - B.z);
+          if (rr > B.r) continue;
+          const dist = d[(j - box.j0) * bw + (i - box.i0)]!;
+          if (dist >= INF) continue;
+          const idx = j * N + i;
+          let m = 1 - smoothstep(B.r * 0.74, B.r, rr);
+          for (const K of B.keep) m *= smoothstep(K.r * 0.55, K.r, Math.hypot(x - K.x, z - K.z));
+          // The carriageway is solved and carved by now; a beach that eats the
+          // road is the failure `_tarnBasins` guards against one pass earlier.
+          m *= 1 - Math.min(1, (this.roadMask ? this.roadMask[idx]! : 0) * 1.6);
+          if (m < 0.004) continue;
+          const s = (h[idx]! >= SEA ? dist : -dist);
+          const w = m * (1 - smoothstep(B.hold, B.out, Math.abs(s)));
+          if (w < 0.004) continue;
+          // Ripple, so the shelf is not a machined cone: berm ridges at ~90 m
+          // and a decimetre of drift on top of them, faded to nothing at the
+          // waterline itself so the swash line stays a line.
+          const rip = n2.fbm2(x * 0.011 - 40.0, z * 0.011 + 8.0, 2) * 0.95
+                    + n2.fbm2(x * 0.035 + 12.7, z * 0.035 - 3.1, 3) * 0.42;
+          const target = SEA + s * (s >= 0 ? B.fore : B.sub)
+                       + rip * Math.min(1, Math.abs(s) / 26);
+          const before = h[idx]!;
+          h[idx] = before + (target - before) * w;
+          cells++;
+          moved += Math.abs(h[idx]! - before);
+        }
+      }
+    }
+    this._beachCells = cells;
+    this._beachMeanM = cells ? +(moved / cells).toFixed(2) : 0;
   }
 
   /**

@@ -43,6 +43,8 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *                    ablation and never a shipping mode.
  *
  *   `?post=nodry`  — the tier-D dry-cover term removed.
+ *   `?post=noshore` / `shoremax` — the strandline sand band off, and at full
+ *     weight on every gentle surface regardless of height above the sea.
  *   `?post=drymax` — the same term forced to full cover. It is a product of
  *                    seven gates, so a weak reading is ambiguous between gentle
  *                    endpoints and a conjunction that never fires; this
@@ -595,6 +597,30 @@ void tf_shade() {
            0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * sedi);
   // a road can never read as a pale scar up a cliff face, whatever the mask says
   w[5] = road * 5.5 * (1.0 - smoothstep(0.30, 0.55, slope));
+
+  // ---- the strandline -----------------------------------------------------
+  //
+  // Sand at the water's edge, over the region's own greenery. Everything above
+  // decides the ground from the CLIMATE — bioGreen, dryness, altitude —
+  // and on a beach the climate is not what decides it, the swash is. Galdin's
+  // zone is authored moist 0.62, so w[4] was reading 1.3 + 3.2 * bioGreen
+  // right down to the waterline and w[0] was being cut 80% by the same
+  // number: grass to the water, which is exactly what the water lane looked at
+  // and reported.
+  //
+  // Gated on **slope**, hard, so this cannot repaint a coast that is a cliff —
+  // Cape Caem is correctly steep and must stay rock. slope here is 1 - N.y,
+  // which for a gradient g is about g^2/2, so 0.012 is a 9 deg face and 0.05 is
+  // 18: a beach is gentler than the first and nothing is a beach past the
+  // second. It is a band in height as well, a couple of metres of it, because a
+  // strandline is where the water has actually been.
+  float shoreSand = (1.0 - smoothstep(1.2, 8.0, abs(alt - uEnv.x)))
+                  * (1.0 - smoothstep(0.012, 0.050, slope));
+  ${ABLATE.has('noshore') ? 'shoreSand = 0.0;' : ''}
+  ${ABLATE.has('shoremax') ? 'shoreSand = 1.0 - smoothstep(0.012, 0.050, slope);' : ''}
+  w[0] += 3.20 * shoreSand;
+  w[4] *= 1.0 - 0.92 * shoreSand;
+  w[1] *= 1.0 - 0.55 * shoreSand;
 
   // sharpen before normalising: without this every layer averages into mud
   float wsum = 0.0;
