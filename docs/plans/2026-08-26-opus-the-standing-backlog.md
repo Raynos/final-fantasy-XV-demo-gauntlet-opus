@@ -299,6 +299,99 @@ free** and the residual dusk fringing would go with it. Its own lane calls this
   because `overcast`/`storm` run `uAmbientBoost` at 0.30 and the term barely
   reaches them.
 
+### WS-4 result, 2026-08-28 (`sky-clouds` lane)
+
+Four of the five items resolved; two of them as measured negatives. Shas
+`abb11ac`, `e8529a3`, `c757019`, `a432996`, `f2fabc5`.
+Full numbers in `project/handoff/sky-clouds.md`.
+
+**The "free win first" is a negative and the premise was false. TAA IS already
+accumulating the cloud buffer.** `?post=nocloudjitter` (new) holds the march's
+own sub-texel Halton offset at zero while leaving TAA and the camera jitter
+alone, which `?post=notaa` cannot do because it clears the view offset as well.
+On `vista_dusk` and `vista_noon` it moves the sky band **12.8 and 16.0 mean/255
+over 31-37% of it**, and at 5x the jitter-off frame shows precisely the artefact
+the ablation was written to detect: cloud silhouettes come through as
+square-cornered blocks on the march's texel grid, with the small detached puffs
+rendering as literal rectangles, where the jitter-on frame has smooth edges and
+wisps. The shipped frame already *is* the 8x supersample this asked for.
+
+The stated mechanism was separately wrong. The field scrolls at `wind` 7.5 m/s
+at 5-30 km, which is 1.25e-5 rad/frame against a pixel of 4.4e-4 rad — **0.03
+px per frame, thirty-five times below one pixel** — and a posed capture holds
+the camera still. A neighbourhood clamp cannot reject a history over motion it
+cannot resolve. This also explains, in one stroke, three of `clouds.md`'s own
+negatives: the dither decorrelation fix changing nothing visible, full-resolution
+marching changing almost nothing, and 448 loop iterations reading bit-identical
+are all what you see when accumulation already works.
+
+**Aerial perspective converged 24 levels under the sky it joins.**
+`?post=aerialmax --ablate noexp` on `zone_vannath` read the converged colour at
+**#99bbd2, luma 182, R-B -57**; the sky band directly above the same ridge in
+the same frame reads **#c3d6d9, luma 210**, and §2's measured FFXV ridge is
+**#bad2e4, luma 206**. The 0.10 rise and 0.12 zenith mix left over from
+`297bd09` were kept on the argument that a few kilometres of ground haze is not
+the infinite column the horizon sample integrates — which does not survive
+arithmetic, since `uHazeBase` at 2.4e-4/m is about **seven times** the sky LUT's
+own near-ground extinction and four kilometres of it *is* the horizon column.
+Rise 0.03, mix 0.05; converged colour now **#c4d5d6, luma 209, R-B -18**.
+
+**`daycycle_dawn`'s magenta: the cause recorded above is backwards.** Measured
+on the cloud crop at free exposure, B is **143 in all of** base, `nocloudsun`,
+`nocloudamb` and `noambbury` — to the level — so the blue is the sky behind plus
+the `uCloudHaze` wash and neither march arm puts it there. What the ablations
+move is *red*: turning the burial off adds 22 levels of it at p90. The burial's
+cost at dawn is **warmth**, so the fix is a hue and not a strength — what
+survives the burial arrived through the cloud's sides, so it is tinted toward
+`skyHz` rather than left at `mix(skyHz, skyUp, hf)`. Near-free at noon; the
+strength is untouched.
+
+**`uAmbBury` keyed on `d`: landed**, `AMB_BURY_REF = 0.021`.
+
+**Cloud internal dynamic range: still open, and it is the top of the next
+list.** Looked at 1:1 and 4x: a noon cumulus's crown and self-shadowed base
+differ by well under a stop and its interior has no structure at all. The 15-20
+px edge is geometric, not filtering — a 2.25 km cloud at 20 km subtends ~160 px
+and its density ramp is 10% of that — so neither `uCloudTap` nor `MARCH_SCALE`
+is the lever. `cloudDensity`'s remap steepness and the `uCloudSunGain` /
+`uCloudMaxRad` pair are.
+
+**The ground cloud-shadow patch size: still open.** `shadowScale` 3.5 maps
+9.45 km of cloud field onto a 2.7 km ground tile, so the patches are **3.5x
+smaller than the clouds casting them** — left over from before `3ccde18` shrank
+the clouds. Taking the scale to 1.0 alone puts about one patch in the visible
+world, so the tile has to move with it. Separately, `zone_vannath`'s shadowed
+band is **26% of the sunlit band in linear** where a real cumulus shadow under
+clear sky is about 11%, so the shadow is if anything too *shallow*. Do not
+deepen it.
+
+**`zone_mencemoor`'s massif is not an atmosphere item.** The frame is 6.92
+stops against `FFXV-field`'s 9.79 with `p0.1` 21.8, and `?post=noaerial` takes
+it to 11.69 — but the bottom of that frame is **434 m** from a camera at 286 m
+(42° fov, target 107 m above the eye), which at `clear`'s haze is a **10%
+blend**, exactly §2's own "300 m at 10%". A 10% blend of a luma-209 inscatter
+onto a black surface is 17 levels of floor, which is `p0.1` 21.8 to within the
+measurement. The haze is on spec; **the frame has no foreground** — every pixel
+is sky or terrain at 400 m-plus, so its darkest quartile is hazed distance by
+construction. Content and framing, not sky.
+
+### The fourth handover, mid-session: the auto-exposure meter
+
+`src/engine/postfx/Exposure.ts`, routed to this lane by the coordinator.
+`probes/expmeter.mts` is new and reports, per shot, the ratio of the multiplier
+the integrator settles on to the scene exposure the Sky publishes from sun and
+sky irradiance. **Before: median 1.361, spread 0.700-1.899, and six of twenty
+poses on a rail** — a third of the corpus's stop decided by the edge of the
+band rather than by either model. **After: median 0.944**, with the four
+rail-bound dark scenes unmoved.
+
+Eight-shot day slice against `FFXV-field`, session start -> shipped:
+`sh(R-B)` **-9.8 -> -5.1**, `meanL` **109.8 -> 104.4** (ref 102.3), `p0.1`
+**0.8 -> 1.8**, `p50` **92.6 -> 95.0**, `hi230%` **8.84 -> 5.19** (ref 6.20),
+`clip%` **1.12 -> 0.20** (ref 0.50), `stops` **11.52 -> 10.74** (ref 9.79).
+Seven of eleven columns improved; `R-B` and `hi(R-B)` moved about a level the
+wrong way and both are sky-fraction-confounded.
+
 ## WS-5 — The Meteor, the landmarks, and massing
 
 The single most-named object in the judge's rounds, across five handoffs that
@@ -818,6 +911,12 @@ without opening the handoff it lived in.
 | **WS-5: the near half of `zone_longwythe` has no rock in it** | **it is the framing, not the field.** Neutralising the carriageway sweep and the POI pad *entirely* buys **5 instances and zero legible ones** — the count of stones ≥ 20 px does not move at all (4 either way). The camera stands **30 m from a 33.4 m tor and points 48° away from it**: twelve outcrop/tor knots sit within 400 m and every one is behind the camera or 48–80° off-axis against a 35.7° half-fov. Per hectare of *visible* ground the near band is the densest in the frame (7.4 drawn/ha against 3.1 mid and 1.2 far); it just subtends 1.7% of it. Dollying back 80 m along the view axis takes drawn instances 16 → 38 and median on-screen height **10.7 px → 73.0 px**. The change belongs in `Shots.ts`, which is the coordinator's. **Do not raise `rockD`** |
 | **WS-5: the 124 POI aprons are still cake stands** | **half-stale.** `gradePad` already replaced the faceted drum with a real cut-and-fill earthwork. What reads as a cake stand at `poi_haven` is not the apron at all — it is `_haven`'s **own two-course shelf drum** with a hard circular rim, which is a different object in a different function |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
+| **WS-4: TAA is not accumulating the cloud buffer, and fixing it supersamples the layer 8x for free** | **it already is.** `?post=nocloudjitter` holds the march's sub-texel offset at zero with TAA and the camera jitter untouched: the sky band moves **12.8-16.0 mean/255 over 31-37%** of it and the jitter-off frame renders cloud silhouettes as square-cornered blocks on the march's texel grid, small puffs as literal rectangles. The stated mechanism is also arithmetically impossible — the field scrolls **0.03 px per frame**, 35x below a pixel, and a posed capture holds the camera still. It is what makes sense of three of `clouds.md`'s own negatives at once |
+| **The auto-exposure excursion is the meter's centre weighting** | **three percent of it.** Removing the centre weight outright moves `hero_portrait` **1.361 -> 1.327** and the corpus median **1.361 -> 1.344** against a 36% excursion. It is that a log-average is dominated by its darkest members: log2(0.056), a black coat, is -4.16 where log2(0.5), a sunlit hillside, is -1.0. Area times log-depth, reaching from anywhere in the frame. The fix is a Naka-Rushton weight `l / (l + key*0.63)` on each pixel's vote |
+| **The corpus median luma gap is 100.2 against FFXV's 70.2** | **that is the comparison `imagestats`' own header warns against.** 70.15 is the median of the whole 53-plate corpus — midday plains, night VFX, menus and studio portraits together. Against the scene-matched `FFXV-field` our day slice read `meanL` 109.8 and `p50` **92.6 against 100.9**: we were *darker* than the reference where it counts. The meter was still wrong; this was not the reason |
+| **`zone_mencemoor`'s bare massif is an aerial-perspective defect** | **the haze is on spec and the frame has no foreground.** The bottom of frame is 434 m from a camera at 286 m altitude, which at `clear`'s haze is a 10% blend — exactly §2's "300 m at 10%" — and 10% of a luma-209 inscatter on a black surface is the 17 levels of floor that `p0.1` 21.8 measures. Every pixel in the shot is sky or terrain at 400 m-plus, so its darkest quartile is hazed distance by construction |
+| **`daycycle_dawn`'s magenta is the burial removing the blue that desaturated the sun tint** | **backwards.** B reads **143 in all of** base, `nocloudsun`, `nocloudamb` and `noambbury`, to the level, so the blue is the sky behind plus the `uCloudHaze` wash. What the ablations move is red — `noambbury` adds 22 levels of it at p90. The burial's cost at dawn is warmth |
+| `clear`'s `haze` 0.00024 was only compensating for a converged colour a third too dark, so it can come down once the colour is right | **half true and not worth taking.** With the colour fixed, 0.00016 is better on all four colour columns and worse on all five range columns, and `hi230%`/`clip%`/`stops` at 0.00024 land within 0.19/0.06/1.11 of `FFXV-field` where the cut takes them to 2.09/0.17/1.88. Looked at on `zone_three_valleys`, the cut also brings the far mountain forward to the near ridge's value. The 6x raise is carrying the frame's depth separation as well |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 | **WS-7: seven fishing pins have no water and it is a `Water.ts` / `WorldMap.ts` + re-bake job** | **Four of the six had water 6 m away.** `Fishing._survey` tested `terrain.heightAt(x,z) < water.level` — the *global* −6.5 m — after `Water` stopped having one global level: `_findTarns` and `Field._tarnBasins` had already given every inland pin its own body at +36.9 to +80.5 m. One predicate, no re-bake. 4 live holes -> **8**. `2b344e7` |
 | **WS-8: the near-field foam's handles are the shore ribbon's `lace` threshold and the `brk` shore-break term** | **Neither can touch it.** Ablated at the third-gentlest beach on the map: hide `shoreRibbon` entirely, and separately set its `uFoam` to 0 — the white patch is unchanged both times. It is the **lake surface's** own depth-derived margin in `Water._makeMaterial`, where `uFoamBand` is 1.35 m of *depth* and therefore four-plus metres of *ground* on anything that shelves. `5531bd9` |
