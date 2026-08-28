@@ -1487,3 +1487,51 @@ so the head looked whole and merely wrong. Moving to `FrontSide` was correct and
 is what made the defect visible as a missing surface. Expect the same order of
 events anywhere else `DoubleSide` is masking geometry: **fixing the material is
 step one, and step two is checking the winding it was hiding.**
+
+## A GLSL compile or link failure is invisible on a warm page, and the pre-commit hook cannot see it either
+
+**2026-08-28: the river water surface was not drawn at all for a whole day**, in
+every frame, and every gate stayed green. One line of a fragment shader:
+
+```glsl
+vec3  body = (bed * Tr + uScatter * (1.0 - Tr)) * downwelling;   // line 167
+float body = smoothstep(0.02, 0.55, depth);                      // line 223
+```
+
+Same scope, same name — `ERROR: 0:335: 'body' : redefinition`. The fragment
+shader never compiled, `riverWater`'s program never linked, and the pale strip in
+every river frame was the **bank decal alone**.
+
+**Why nothing caught it.** A program is compiled once per page, and the daemon
+clears a slot's errors per run — so the failure is charged to whichever run
+happened to cold-boot that page, and every warm capture after it is silent.
+**Only `--cold` can see this class of fault.** The pre-commit hook builds; it does
+not link GLSL, so it cannot see it either. **After any shader edit, take one cold
+capture.** It is the only oracle.
+
+**Two false leads, both measured.** The sampler budget was not involved. And
+`VALIDATE_STATUS false` on a *linked* program means nothing here — about **120 of
+271** programs report it, because that is what `validateProgram` says when called
+outside a draw. **Only `LINK_STATUS === false` is real.** Find the material with
+`renderer.info.programs` plus `LINK_STATUS`, not with `material.program`, which
+is `undefined` in three 0.185 — that is why `probes/samplercount.mts` returned an
+empty list.
+
+**`shoot.mts` was throwing the diagnosis away.** It printed `e.split('\n')[0]`,
+which for a shader failure is the one useless line, while the `Material Name:`
+and `ERROR: 0:335:` that follow were captured and discarded. It prints the
+diagnostic lines now.
+
+## A pre-commit hook that builds the working tree does not prove the commit builds
+
+`0560b83` swept another lane's in-flight `src/world/Water.ts` into its own commit.
+Nothing was lost, but that commit's tree imports `./water/Tarns.ts`, which did not
+exist in it — **so the commit does not build**, while its pre-commit passed,
+because the hook builds the *working tree* rather than the tree the commit
+creates. On a shared trunk those are different objects.
+
+This is the shared-index hazard `CLAUDE.md` warns about, seen from the other
+side: the damage is not only to the lane whose work is swept, it is a broken
+commit in the history under someone else's name. **Commit with an explicit
+pathspec, always, and never let a pathspec widen to a directory another lane is
+editing.**
