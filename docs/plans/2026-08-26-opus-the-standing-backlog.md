@@ -1146,11 +1146,16 @@ directory boundary it did not own.
 
 ### The map and the two dry pins (from `water-content`)
 
-- **`Chart.ts` uses one global sea level, so the world map draws no blue under
-  the four tarns** that now have water. Same bug class as the survey predicate
-  that hid them, and it **costs a chart re-bake**.
-- **`PoiKits` still builds a jetty at the two genuinely dry pins.** They are
-  drawn dead on the map now, but the jetty is still in the world.
+- ~~**`Chart.ts` uses one global sea level**~~ — **DONE `e67eef8`** (`water-fix`).
+  The arithmetic moved to `src/world/water/Tarns.ts`, which takes ground as a
+  function so it runs in the game *and* inside the Node-side chart bake, and is
+  in **both `TEX_SOURCES` and `GEO_SOURCES`**. All four tarns read 50–63% wet on
+  the sheet, from 0.
+- ~~**`PoiKits` still builds a jetty at the two dry pins**~~ — **DONE `1d41cf4`,
+  `5ca25f5`** (`water-fix`). They take a dry camp instead of a pier on grass, and
+  the fix turned up a second defect nobody had seen: **four tarn jetties had
+  their decks 1.5–2.1 m under water.** The dry variant tripped `floatcheck` 0→2
+  and needed a sunk sill.
 
 ### Landmarks and props (from `landmarks`)
 
@@ -1160,10 +1165,13 @@ directory boundary it did not own.
 - **`_haven`'s own shelf** is what reads as a cake stand at `poi_haven`;
   `gradePad` already replaced the drum, so that half of the plan's claim is
   stale. — **DONE `b119dd3`** (`basaltColumns`).
-- **`_genOutcrop` is ungraded** and needs the plan/seat split `_genTor` got.
-  The *joint* half of this is already landed (`d3b4ba9`'s sunk-position rule is
-  in the course loop); what is left is the pure-function extraction and a
-  `rock:outcrop` family in `silhouette.mts --set rocks`.
+- ~~**`_genOutcrop` is ungraded**~~ — **CLOSED as a measured negative by
+  `props-r4`, agreeing with `rockseat`.** "Ungraded" stopped being true:
+  `probes/outcropjoint.mts` grades 5 490 courses at **0.15% open, zero visible**
+  (and fixing *that instrument twice* mattered — it read support off
+  `drawnHeightAt(x,z)` with no `cell`, so **33 of its 34 "floats" were the
+  harness**). The pure-function extraction would renumber every outcrop in the
+  world to bench a generator that now has a bench.
 - ~~**One unexplained levitating boulder in `poi_imperial`**~~ — **EXPLAINED and
   fixed, `911f99d`.** It is not in `Rocks.ts` at all: it is the kit's own
   masonry seated on the deck plane and scattered *past* the deck, plus the
@@ -1179,11 +1187,20 @@ directory boundary it did not own.
   the four tarn decks now sit 1.5 m *over* their water, not 1.5–2.1 m under),
   but `_fishing` sets one `deck` from the water and then puts the **shack, rod
   stands, bench and crate** on it as well, and those stand on the bank.
-- **The Meteor is a good landmark and not yet a beautiful one** — one dark
-  monolith rather than a cluster of angular peaks, low in chroma against a bright
-  sky. The untried lever: normalise the rock generator's vertex-colour bake to
-  mean 1.0 and turn `vertexColors` on for `M.stone`. Touches a shared generator;
-  needs its own before/after.
+- ~~**The Meteor is not yet a beautiful landmark**~~ — **CLOSED, both levers are
+  measured negatives, and the frame is honestly still not right.** `tintNorm` for
+  the rock field was built, priced over **two cold 142-shot corpora one commit
+  apart**, and reverted (`b921642`): no shot moves above its own floor, and the
+  arithmetic is the finding — bake means run 0.8731–0.9270, so it is a **uniform
+  ×1.1153 lift wearing a normalisation's name** on a material already calibrated
+  with that factor. At 3× it looks *worse*, because normalising to the mean lifts
+  the cavity as much as the ledge. And **the fissure glow has never rendered from
+  any camera**: at ×40 emissive, not one lit pixel — `_meteorParts` places the
+  cleft at the midpoint of two mass *centres* and the masses overlap, so all 22
+  slabs are entombed. The placement fix was built and reverted too: a slab sunk
+  in a crack stands ~0.6 m proud and one pixel at 1.7 km is 1.53 m. **The Disc
+  reads as a pale rock dome and making it read as a meteorite needs an art round**
+  — put to the human, who did not fund it.
 
 ### Seen in a frame, owner unknown (from the coordinator, 2026-08-28)
 
