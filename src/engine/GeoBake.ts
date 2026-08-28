@@ -127,6 +127,18 @@ const CTORS: Record<string, new (n: ArrayBufferLike | number, o?: number, l?: nu
  */
 const VARIANT = typeof location !== 'undefined'
   ? (new URLSearchParams(location.search).get('q') || 'high') : 'high';
+/**
+ * The tier `texbake.mts --geo` bakes, which is the tier the 188 cold boots of a
+ * suite cycle use.
+ *
+ * A page on any other tier would otherwise fetch 35 MB, inflate it to 165 MB
+ * and then miss on every key — paying the whole cost of the cache for none of
+ * its benefit. `combatloop` and `integration` boot at `q=low` and run for
+ * minutes, so that transient is not free. Skipping the fetch outright is the
+ * only version of this that costs nothing: the container is one gzip member, so
+ * there is no way to read its index without inflating all of it.
+ */
+const BAKED_VARIANT = 'ultra';
 
 let store: { index: Map<string, GeoEntry>, body: Uint8Array, base: number } | null = null;
 let recorder: Map<string, { parts: Array<{ mat: string, geo: THREE.BufferGeometry }>, meta: unknown }> | null = null;
@@ -245,6 +257,8 @@ export function loadGeoBake(): Promise<boolean> {
     if (recorder) return false;
     if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return false;
     if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return false;
+    // Nothing in the artifact can match, so do not pay for it. See BAKED_VARIANT.
+    if (VARIANT !== BAKED_VARIANT) return false;
     const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
     try {
       const res = await fetch(base + GEO_BAKE_PATH);
