@@ -111,10 +111,15 @@ the plinth is gone).
   default `--seeds` it returns VOID** and says so — the floors are recorded at
   24×5 and have to be run there, which is worth knowing before reading a VOID
   as a failure.
-- **`pnpm run check` was still queued** behind other lanes' gates when this lane
-  stopped. Every commit here passed the pre-commit lane (build + both
-  typechecks + 4 cheap gates), and `floatcheck` and `silrocks` are the two the
-  brief named. **Run `check` before trusting the tree.**
+- **`pnpm run check` 19/19 PASS**, 501.8 s on a busy machine — including
+  `silrocks`, `floatcheck`, `drawcheck`, `uxcheck` (93/93, no page errors),
+  `integration`, `combatloop` (31/31), `driftcheck`, `geocheck` and `orphans`.
+  Two caveats on that run and both are honest limits rather than results: it
+  ran against the **dirty tree** (another lane's in-flight `Portal.ts` edit was
+  live, so the verdict is not attributable to this lane's commits alone), and
+  **the two perf gates were skipped** — `check` refuses them on a busy box,
+  correctly, because a perf number taken while five agents render is
+  meaningless. `check --perf` wants a quiet tree.
 
 ### The haven shelf, before and after — **VERIFIED BY EYE**
 
