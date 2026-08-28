@@ -452,7 +452,14 @@ const SHOT_TABLE = {
   zone_longwythe: {
     doc: 'Longwythe: the 445 m horn off to the right, the tutorial pan running under it',
     time: 8.2, weather: 'clear',
-    pos: [1250, 46.9, 240], target: [1080, 19.3, -140], fov: 44,
+    // Dollied 80 m toward the horn, on the framedepth/rockfield measurement
+    // from two lanes: the old stand was 30 m from a 33.4 m tor and pointed 48
+    // degrees away from it, so the near half of the frame was scrub by
+    // construction. Neutralising the road sweep and the pad ENTIRELY bought 5
+    // instances and zero legible ones -- it was never a density defect. The
+    // dolly takes drawn instances 16 -> 38 and median on-screen height
+    // 10.7 px -> 73.0 px.
+    pos: [1282.6, 52.2, 312.9], target: [1080, 19.3, -140], fov: 44,
   },
   zone_three_valleys: {
     doc: 'The Three Valleys: hogback fins running away from the Insomnia skyline',
