@@ -324,20 +324,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     // the same section describes. It is only safe to raise because the colour
     // it converges toward was wrong until this commit; at the old navy the
     // strong setting made distant ranges muddy.
-    //
-    // 2026-08-28, and this is the second half of the same trade. abb11ac took
-    // the converged colour from luma 182 to 209 -- the value the sky above the
-    // ridge actually has -- and a veil that is 27 levels brighter lifts the
-    // near field by 27 levels of whatever k is there. Measured on the eight-shot
-    // day slice: p0.1 went 0.8 -> 1.7 (good, the reference is 3.4) but
-    // zone_three_valleys went 3.0 -> 7.1 and zone_longwythe 4.9 -> 6.4, both
-    // now PAST it, and their dynamic range fell to 8.74 and 8.89 stops against
-    // a reference of 9.79. The density was raised 6x in 297bd09 to make a ridge
-    // read against a colour that was a third too dark; with the colour right it
-    // buys the same ridge for less. 0.00016 puts 4 km at 47% and 8 km -- which
-    // is what a real skyline range is from a ground camera -- at 72%, still
-    // inside §2's 70-80%, and hands the near field back its blacks.
-    fogDensity: 0.00013, fogHeight: 200, haze: 0.00016, sunMul: 1.0,
+    fogDensity: 0.00013, fogHeight: 200, haze: 0.00024, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
     overcast: 0.0, skyDim: 1.0, shadowScale: 3.5,
   },
