@@ -31,6 +31,19 @@ p99 7.4, **max 7.4, zero hitches** in both. The full-screen 26 px
 nothing a frame budget can see. This was the live unmeasured risk and it is
 closed.
 
+### `perfmenurepro` needs a quiet box, and it will lie loudly on a busy one
+
+Run while `check:perf` had the machine, it reported **14 hitches with the menu
+open, max 938 ms and 428 ms** — which reads as a catastrophic live regression
+and is entirely contention. Re-run with the suite finished: **0 hitches, max
+14.0 and 21.7 ms**, closed-menu passes unchanged at 0 either way. The
+closed-menu control does *not* protect you here, because it runs first and the
+load arrives during the open pass.
+
+The probe prints no `VERDICT:` of its own — `perf`/`gameplay` do, and that is
+the difference. Treat any `perfmenu*` number taken while another lane holds the
+box as void.
+
 ## The one remaining 33 ms breach: found, and it was neither candidate
 
 `sprint+turn` spiked **40.4 / 40.7 ms at frame 35** and **34.9 / 33.1 ms at
