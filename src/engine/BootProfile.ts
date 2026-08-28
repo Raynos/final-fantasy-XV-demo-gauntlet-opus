@@ -62,8 +62,17 @@ export interface BootProfile {
   nav: number;
   /** When this module was evaluated, in page time. */
   moduleEval: number;
-  /** One entry per timed phase, in the order they finished. */
-  marks: { name: string, ms: number }[];
+  /**
+   * One entry per timed phase, in the order they finished.
+   *
+   * `progs` is `renderer.info.programs.length` at the moment the phase ended.
+   * It is here because a shader program compiled during a system's `init()` —
+   * before `Sky`'s `MaterialPatch` has claimed the material — is compiled a
+   * SECOND time once the patch lands, and the first one is then dead for the
+   * life of the page. Wall-clock alone cannot see that; a running program
+   * count against the phase list names the system responsible.
+   */
+  marks: { name: string, ms: number, progs?: number }[];
   /** Total `init()` duration, filled in when init resolves. */
   total: number;
   /** Page time at which the game reported ready. */
@@ -84,6 +93,8 @@ export function installBootProfile(game: Game): BootProfile {
   const add = game.add.bind(game);
   /** Page time the last system's `init()` finished, for the tail mark. */
   let last: number | null = null;
+  /** Programs held right now. Nullable until the renderer exists. */
+  const progs = () => game.renderer?.info?.programs?.length ?? 0;
   game.add = <K extends SystemKey>(system: SystemRegistry[K] & System, name?: K): SystemRegistry[K] => {
     const key: string = name || 'anon';
     const sys = add(system, name);
@@ -94,7 +105,7 @@ export function installBootProfile(game: Game): BootProfile {
         try {
           return await orig(g);
         } finally {
-          profile.marks.push({ name: key, ms: +(now() - t0).toFixed(1) });
+          profile.marks.push({ name: key, ms: +(now() - t0).toFixed(1), progs: progs() });
           last = now();
         }
       };
@@ -108,7 +119,7 @@ export function installBootProfile(game: Game): BootProfile {
     profile.marks.push({ name: '(page → init)', ms: +(t0 - 0).toFixed(1) });
     const r = await init();
     const end = now();
-    if (last != null) profile.marks.push({ name: 'postfx+compile+warmup', ms: +(end - last).toFixed(1) });
+    if (last != null) profile.marks.push({ name: 'postfx+compile+warmup', ms: +(end - last).toFixed(1), progs: progs() });
     profile.total = +(end - t0).toFixed(1);
     profile.ready = +end.toFixed(1);
     const warm = game.post && game.post.warmupReport;
