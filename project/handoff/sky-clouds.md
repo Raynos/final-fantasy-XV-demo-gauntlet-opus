@@ -201,3 +201,22 @@ still wrong; the corpus-wide luma claim was not the reason.
 - **`imgdiff` refuses two captures of the same sha**, so it cannot compare two
   `--settle` values or two `--ablate` arms. And `--settle` is not in the frame
   cache key: `--settle 60` and `--settle 64` came back byte-identical.
+
+## Not mine, but found here and it is a hard BRIEF rule-5 failure
+
+**Every cold boot at `main` raises `THREE.WebGLProgram: Shader Error 0 -
+VALIDATE_STATUS false`, and `shoot.mts` exits non-zero on it.** Bisected on
+four shots with `--cold`, four cold boots each:
+
+    ccc371e  clean
+    abb11ac  clean     (sky-clouds, aerial perspective)
+    b237dc6  ERROR     ("The river bank was painting a 26 m wet apron ...")
+    c757019  ERROR
+    a432996  ERROR
+    HEAD     ERROR
+
+It is `b237dc6`, the **water** lane. It is not shot-specific — `vista_overcast`,
+`storm`, `vista_fog` and `daycycle_dusk` each raise it alone on a cold page — so
+it is a program compiled at boot, which points at the river material. A warm
+page does not raise it again, which is why it reads as intermittent and why it
+survived a commit hook.
