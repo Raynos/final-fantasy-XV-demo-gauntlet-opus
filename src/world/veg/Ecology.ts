@@ -8,6 +8,7 @@ import { vegAt, zoneMoist, pickFrom } from './Biomes.ts';
 import { WORLD, worldMap } from '../map/WorldMap.ts';
 import type { Game } from '../../game/Game.ts';
 import type { ErosionSample } from '../terrain/Field.ts';
+import { beachMask } from '../terrain/Field.ts';
 import { maternScatter } from './Cluster.ts';
 import { PAD_R } from '../props/PoiKits.ts';
 import type { ClusterPoint } from './Cluster.ts';
@@ -355,6 +356,41 @@ export class Ecology {
    */
   waterDepth(x: number, z: number) { return WORLD.seaLevel - this.height(x, z); }
 
+  /**
+   * How far onto a **strandline** this point is: 1 at the waterline, 0 by
+   * `band` metres of elevation above it — and zero anywhere that is not an
+   * authored beach.
+   *
+   * Every population here grew to the water's edge and stopped, because the
+   * only water test any of them had was `waterDepth > 0.15` (`0.3` for a tree)
+   * — a predicate about being *submerged*. On a coast that shelved twenty
+   * metres in twenty that was invisible. Now that `Field._beachShelf` has given
+   * Galdin Quay a real foreshore — 4 m of rise over 78 m of sand, measured by
+   * `probes/beachrun.mts` — it is not invisible at all: the tree line came out
+   * standing IN the swash, because the ground a tree wants is a few centimetres
+   * above the sea for the whole width of the beach.
+   *
+   * A strand is not a place plants are drowned. It is a place they are salted,
+   * scoured and buried, and the real signature is a **zonation**: bare wet
+   * sand, then dune tussock, then scrub, then trees well back from the water.
+   * So this is an elevation ramp per population, not one reject for all three.
+   *
+   * **Gated on `Field.beachMask`, and that is the load-bearing part.** Height
+   * above the sea plane cannot tell a foreshore from the margin of the
+   * Vesperpool, which is authored as a *drowned forest* and whose floor is
+   * 20 m below the water plane — a world-wide rule in these units would strip
+   * the trees out of it to fix Galdin. The site list is the only thing that
+   * knows which coast is sand, and it is one array in `Field.ts`.
+   *
+   * @param band metres of elevation above the sea plane this population needs
+   */
+  strand(x: number, z: number, band: number) {
+    const b = beachMask(x, z);
+    if (b <= 0.001) return 0;
+    return b * (1 - THREE.MathUtils.clamp(
+      (this.height(x, z) - WORLD.seaLevel) / band, 0, 1));
+  }
+
   /** Local patchiness — the thing that stops scatter looking uniform. */
   patch(x: number, z: number, scale = 0.02, oct = 3) {
     return this.nPatch.fbm2(x * scale, z * scale, oct) * 0.5 + 0.5;
@@ -601,6 +637,9 @@ export class Ecology {
     // road corridor
     const rd = this.roadDist(x, z);
     d *= THREE.MathUtils.smoothstep(rd, 2.4, 10.5);
+    // The strand: a sward does not close on wet sand. Thinned to a fifth at
+    // the waterline and back to full three metres up — dune tussock, not lawn.
+    d *= 1 - 0.80 * this.strand(x, z, 3.0);
     // `cleared`, not `siteBlock` — see the note on {@link cleared}. This was
     // `siteBlock` alone and grass grew across every town plaza in the world.
     d *= 1 - this.cleared(x, z);
@@ -631,6 +670,9 @@ export class Ecology {
     const p = this.patch(x - 300, z + 220, 0.017, 3);
     d *= THREE.MathUtils.smoothstep(p, 0.3, 0.72);
     d *= THREE.MathUtils.smoothstep(this.roadDist(x, z), 3.4, 13);
+    // Thorn gets a little further down the beach than grass does, and no
+    // further: see {@link strand}.
+    d *= 1 - 0.90 * this.strand(x, z, 2.2);
     // As {@link grassDensity}: this was `siteBlock` alone, and scrub grew
     // through the outpost pads.
     d *= 1 - this.cleared(x, z);
@@ -651,6 +693,9 @@ export class Ecology {
     const slope = this.slope01(x, z);
     if (slope > 0.5) return 0;
     if (this.waterDepth(x, z) > 0.3) return 0;
+    // Nothing woody on a foreshore. `waterDepth` alone let the tree line stand
+    // in the swash the moment Galdin got a real beach — see {@link strand}.
+    if (this.strand(x, z, 4.5) > 0.5) return 0;
     const b = vegAt(x, z);
     const m = this.moisture(x, z);
     const grove = this.nGrove.fbm2(x * 0.0055, z * 0.0055, 3) * 0.5 + 0.5;

@@ -97,6 +97,32 @@ const BEACHES: BeachSite[] = [
 ];
 
 /**
+ * How much of a **beach** this point is on, 0..1 — the same site mask
+ * {@link Field._beachShelf} grades with, published so the vegetation can agree
+ * with the ground.
+ *
+ * It exists because a strand is not decided by elevation. `Ecology` cannot
+ * tell a foreshore from the margin of the Vesperpool — a *drowned forest*,
+ * where trees standing in the water are the whole point — from height above
+ * the sea plane alone, and a world-wide rule stated that way would strip the
+ * one to fix the other. The authored site list is the only thing that knows,
+ * and it is one array in one file rather than two lists that drift.
+ *
+ * Deliberately NOT the road term `_beachShelf` also carries: that one is about
+ * not re-grading a solved carriageway, and a road across a beach should still
+ * be a road across a beach as far as the plants are concerned.
+ */
+export function beachMask(x: number, z: number): number {
+  let m = 0;
+  for (const B of BEACHES) {
+    let w = 1 - smoothstep(B.r * 0.74, B.r, Math.hypot(x - B.x, z - B.z));
+    for (const K of B.keep) w *= smoothstep(K.r * 0.55, K.r, Math.hypot(x - K.x, z - K.z));
+    if (w > m) m = w;
+  }
+  return m;
+}
+
+/**
  * Resolution of the hydrology grid — the erosion pass's own outputs, kept for
  * *placement* rather than for the splat. 16 m, deliberately coarser than the
  * 4 m height grid: a scatterer asks "is there a wash here", not "where exactly
