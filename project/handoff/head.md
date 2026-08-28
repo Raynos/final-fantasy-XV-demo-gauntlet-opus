@@ -1,215 +1,170 @@
-# Handoff — `head` (round 14, pass 5): the shell was inside out
+# Handoff — `head` (round 15, pass 6): the sculpt was authored blind, and it shows
 
-Owns `src/characters/**`. Inherited a lane that had built `facecheck.mts`, then
-spent passes 3 and 4 turning "the mouth is missing" into measured negatives —
-the paint, the mip chain, an occluding surface, the uv attribute, the head's
-pitch, `SKIN_BASE`, the socket brushes. Pass 4's parting hypothesis was a UV
-pole at the menton.
+Owns `src/characters/**`. Pass 5 found the structural defect — `buildHead`'s
+skull grid was wound inside out, the face material is `FrontSide`, and the near
+surface of the face was culled from **every frame this repo has ever captured**.
+It fixed the winding and stopped there.
 
-**It was none of those. `buildHead`'s skull grid was wound inside out, the face
-material is `FrontSide`, and every front view ever captured of this game was
-the inside of the back of the skull.** Fixed in `d866db7`.
-
----
-
-## 1. The bug, and why five lanes could not see it
-
-In `buildHead`, `u` increases with theta and so with `+x` at the front; `v`
-increases with phi and so with `-y`. The quad was
-`(a,b,c) = ((u,v), (u+1,v), (u+1,v+1))`, so
-
-    (b - a) x (c - a) = x_hat x (x_hat - y_hat) = -z_hat
-
-— every triangle on the shell pointed **into the head**. `FrontSide` culled the
-near surface on every frame. What drew was the far surface's interior: a smooth
-ovoid, with the lids, lashes, ears and hair — `blob`/`ribbon`/`buildLid`, all
-correctly wound — floating in front of it.
-
-Read the four rounds of judging against that and every sentence is literal:
-
-- *"an egg with two eyes stuck in it"* — an inside-out occiput, plus the eye
-  geometry, which is separate and was never culled.
-- *"no mouth geometry or mouth texture on the mouth's location"* — the mouth is
-  on the culled surface.
-- *"the chin projects further forward than the nose"* — on the inside of the
-  back of a skull, the lowest forward point is the chin.
-- The **profile** always read better because a silhouette is the same surface
-  whichever way it is wound.
-- `head-r3.md` §5's *"8 mm of added lip relief moved the rendered mouth by 1 of
-  255"* — every bench in this repo reads the **position** buffer, which was
-  always correct, and the frame never contained the surface they measured.
-- The hard vertical hairline down the midline of every front view, which three
-  lanes named and none explained: it is the inside of the occiput's own crown
-  line. It is gone.
-
-### The instruments, and how to re-run the finding
-
-- **`src/tools/probes/facewind.mts`** — the decisive one. Geometric normal
-  `(b-a) x (c-a)` on the front-most triangles, plus **signed volume**
-  `sum dot(a, b x c)/6` per mesh, which is positive for an outward-wound closed
-  mesh with no convexity assumption. Before: **0.0%** of the head's 1 155
-  front-most triangles had a `+z` geometric normal. After: **100.0%**.
-- **`facenrm.mts`** — 91% of the shell's normals on the wrong side.
-- `_det`-style readout (folded into `facewind`): the mesh's max-z vertex is the
-  nose tip at `uv = (0.500, 0.372)` and carried `n = (0.01, 0.35, -0.94)`.
-- The confirming picture was `faceMat.side = BackSide` on the *shipped* tree.
-
-**Do not "fix" this with `material.side`.** The ears, lids and lashes share the
-mesh and are wound correctly; `BackSide` breaks them. The chin cap is flipped
-with the grid — it had already been "fixed" once *to match the inverted grid*,
-which is how a hole under the jaw got closed by making the cap inside out too.
-
-### What it did to the gate
-
-`facecheck`, same tree, before and after the winding fix:
-
-    char      mouthRange        mouthEdge         cheek range
-    noctis     2.9 ->  101.3    -14.5 -> 107.3     29.9 -> 111.0
-    ignis     21.9 ->  135.5     16.3 ->  91.3     22.8 ->  58.4
-    prompto  -18.9 ->  189.0     -8.6 -> 101.6     38.5 ->  50.0
-
-Limits are 14 and 3. Both "lit half clipped" VOIDs are gone. The **lit half
-swapped sides on every head**, which is the same fact seen from the shading.
-
-`facecheck`'s control window was re-derived against the fixed face (`9f5a937`)
-and **`CONTROL_CEILING = 60` survives**. The worry was that a face with form has
-no blank patch left — Noctis' control went 29.9 -> 111.0 in the same commit that
-gave him a mouth. It is not that: Ignis reads 58.3 and Prompto 50.0 on the same
-frame with the same boxes. What puts Noctis over is a **hard-edged fringe shadow
-across his lit cheek**, and Gladiolus is still his beard. A third control on the
-masseter was tried at two positions and won neither. Both VOIDs are now honest
-statements about the picture.
+**This pass's one sentence: pass 5 fixed the winding and did not go back and
+re-judge the things that were authored *during* the culled window — which is
+nearly the whole head.** A brush whose result you cannot see gets pushed until
+something shows in the frame, and the only thing that showed was the silhouette,
+so the entire feature set came in 30-50% hot and `paintFace` had to *be* every
+feature the geometry was not delivering. Both are now walked back, together,
+with the evidence in the source.
 
 ---
 
-## 2. Also landed this pass
+## 0. The two instruments that did all the work
 
-### `7b2d4ce` — the nose was the right length and had nothing to be long against
+Neither is new. Both were under-used.
 
-Found before the winding, still correct, and independently worth having.
-`src/tools/probes/facesect.mts` prints the surface as a **section** — `z(x)` at
-each landmark height plus the median profile — instead of as one extremum, and
-the shipped head read, at pronasale height:
+- **`framecam.mts --probe src/tools/probes/facefront_flat.mts`** — flat albedo,
+  **no normal map**, hair hidden, head pinned. Anything left in the frame is the
+  **sculpt**. This is the frame that says the face is fifty years old: a brow
+  ridge throwing a hard black shelf across both eyes, the mouth framed by two
+  raised arcs like a marionette's jaw, an 11 mm rail under each eye. No amount
+  of map work fixes any of that and four passes of map work proved it.
+- **A face-map dump.** `probe.mts` on a five-line probe that draws
+  `faceMat.map`'s image into a 512 canvas and returns `toDataURL`. One image
+  settles "is this mark paint?" for good. `probes/facemap.mts` tries to do this
+  with a DOM overlay and the overlay does not reach the screenshot.
 
-    x mm      0     4     8    12    16    20    26    32    40
-    z mm   67.3  66.0  62.8  59.6  59.8  59.0  53.5  52.2  50.6
+Also: `--hide Noctis_hair`, `--hide Noctis_shadow`, and `--ablate
+nogtao|nocontact|nocas|noexp|nodof` are all cheap and all decisive. `--raw` is
+**not** a post ablation — it skips the whole chain including the tonemap, so a
+`--raw` frame differs from every graded frame for reasons that have nothing to
+do with the token you passed. Two of my ablations were wasted learning that.
 
-4.5 mm of relief at 8 mm out, 16.7 mm at 40, where a head does 35-45. The
-section at *eye* level fell away faster than the section at the nose.
-`noseLeadMm` was right all along: pronasale minus subnasale on the midline is
-20.5 mm against Farkas' 21. **The nose is the right length; it had no cheek to
-be long against.** Two causes:
+## 1. What landed
 
-1. `FACE_FLAT = 1.30` was applied at every height. It was derived at the
-   upper-lip line, where a maxilla is broad and flat; at the nose line it is a
-   cheek at z = 89.3 mm instead of 78.7. Now ramped off between the nose tip and
-   the mouth line by `faceFlat(yn)`, so the gate it was derived for is
-   untouched.
-2. The two dorsum brushes had `r_x` of 17.5 and 16.5 mm — a 34 mm bridge, wider
-   than a real nose at the wings. Narrowed to 10-12, amounts raised, plus
-   lateral nasal walls, a doubled alar crease and a deeper nostril.
+`5ff2cbc` · **the cranium.** Round 15's #1 was "far too large and too tall,
+roughly 1.6:1 at the brow where a head is 1:1". Measured, **every vertical
+landmark is inside 0.005 of Farkas** and the width profile inside 0.01 from the
+cheekbone down. A lateral vault taper fitted to the four samples that *are* out
+lands them all inside 0.04 and makes the head a **bullet** — recorded as a
+measured negative in `Face.ts` with its arithmetic, because it is exactly the
+shape pass 5 fixed one axis over. What was wrong is that the vault is a
+**featureless surface of revolution**: one smooth convex sweep from brow to
+vertex with no event on it, and a blank dome reads bigger than a modelled one
+of the same size. Added the zygomatic arch (a thin rail, malar to tragus), the
+temporal fossa above it, the temporal line, a **parietal eminence** so the front
+silhouette has a shoulder instead of widening all the way to the cheekbone, two
+frontal eminences, and a step back above the brow ridge. `head-r2.md` §8.2 named
+the arch and the hollow as open in round 12; they are closed.
 
-Plus: `profileW`'s upper half was `sqrt(1 - yn^2)`, a hemisphere — 0.60 of full
-depth at 0.8 of the way to the vertex where a braincase holds ~0.75. Bald, the
-head came to a **point**. Same power family as the lower half now.
+Same commit: **`occiputDepth`** (13% off the back of the vault above the equator
+only — `cephalicIndex` 72.9 vs 79 and `ear.zFromFront` 0.563 vs 0.50 are two
+statements that there is too much skull behind the ear), the **ear rebuilt**
+(§WS-1's oldest open item — it was a 16 mm-thick slab with a 31 mm bowl bored
+through it and painted dark; now 9 mm, 60 x 31, leaned back 16°, concha halved
+and lit, plate re-seated 2.7 mm *inside* the skull, which closes the dark seam
+behind it), and the **chin** (the "duck lips" are a weak chin: `muzzleMm` 8.13
+against 3-6 but `eLineLs`/`eLineLi` both inside Ricketts' band, because the
+pogonion stood 3.24 mm proud of its own sulcus against an adult 4-6).
 
-After: tip minus x=8 is 10.1 mm, tip minus x=40 is 27.2. Geometry rows:
-noseLead 26.8 -> 29.8, mouthRelief 5.80 -> 6.56, jawWidthErr 0.0175 -> 0.0095,
-transverseDrop 7.2 -> 8.8 against a limit of 12. All four heads still PASS.
+`c2a23d7` · **the crown band and the stucco**, both named by round 15 and
+neither where anyone looked. The band is `paintFace`'s fringe-shadow gradient
+starting at full alpha on its **first** stop: the map stepped from clean skin to
+45% dark across one texel. The stucco is the pore map's **coarsest octave**
+carrying half the energy at 1.6 mm, which at 3.1 px/mm is a five-pixel bump per
+square millimetre of skin; re-weighted to the two fine octaves at the same total.
 
-### `3523898` — Gladiolus' beard, and pass 4's patch as a negative
+`11fbf18` · **the sculpt and the occlusion stack, together.** Brow ridge, the
+crease under it, the cheekbone hollow, the mouth corners, the nasolabial, the
+lower orbital rim and the alar crease all softened 30-45%. `paintFace`'s `ao()`
+damped 0.80 -> 0.52 with the two big planar blobs cut hardest, the brows off
+their greasepaint, the upper lip's multiply shadow 0.78 -> 0.44 and the mouth
+line off `rgba(58,26,28,0.94)`. **And the socket**: see §2. Plus Noctis' fringe,
+whose three guides landed their tips in equal parts across and down and buried
+one eye — a sweep is a ratio, not a length.
 
-Pass 4's `width 0.9 -> 1.5 mm` was applied, captured and judged: **negative**.
-1 068 roots at 1.5 mm read as black birds on his jaw — a wider strand is a more
-legible *object*, not a denser mass — and the control patch moved 221.3 ->
-213.9 of 255. That is two measured negatives on the same defect (doubling the
-count, pass 3; widening the strand, pass 4). Neither count nor size is the
-lever.
+`pnpm run check` **19/19**. `facecheck` PASS 4/4 on the geometry rows, two heads
+measurable on the pixel rows and reading a mouth. The cheek control falls
+57.7 -> 44.3 (Ignis) and 49.8 -> 48.9 (Prompto) — that is the map getting
+quieter, which is the point — while every mouth row holds.
 
-What landed instead: **contrast against the beard shadow the map already
-paints** (`paintFace`'s stubble block, `look.stubble` 0.88). Short enough not to
-be objects (2.4-3.4 mm, down from 20 px to 9-12), thin again (0.9 mm), splayed
-wider, and lifted to roughly the value of the painted mass (0x6d5942 /
-0x8f7a5e). `n` unchanged, so no extra vertices. 221.3 -> 200.2 and he is still
-VOID; on the lit half it now reads as stubble, on the shadow half the strands
-are still silhouetted black. Better, not fixed.
+## 2. The one worth reading twice
 
-`tmp/head-p4-beard.patch` is now applied-and-superseded, and `stash@{0}`
-("head-p4: Gladiolus beard, unverified") is **stale — drop it or ignore it**.
+The loudest mark on `hero_portrait` is a broad dark groove from each inner
+canthus out and down across the cheek with a lit ridge above it. Pass 5 called
+it the fringe's cast shadow and made it this pass's first item. **It is not.**
+Ablated in order, every one negative and every one captured:
 
----
+| ablation | result |
+|---|---|
+| `--hide Noctis_hair` | every mark survives |
+| `hair.castShadow = false` | every mark survives |
+| `--hide Noctis_shadow` (the merged proxy) | every mark survives |
+| `--ablate nogtao` / `nocontact` / `nocas` / `noexp` / `nodof` | every mark survives |
+| **`paintFace`'s whole `ao()` stack × 0** | **frame visibly identical** |
+| the face map dumped off `faceMat.map` | nothing at all in that position |
 
-## 3. State, and what I looked at
+The only thing that moves it is the **eye-socket brush's y-radius** — narrow it
+and the groove moves and sharpens, which is what identifies it. It is the
+socket crater's inferior wall: a −30 mm brush with a 24 mm y-radius whose
+falloff lands in the middle of the cheek. −21.2 mm, plus the infraorbital plane
+a real face has between the orbital rim and the malar so the socket ends in a
+slope rather than an edge. In `hero_portrait` the eyes read as open eyes for the
+first time.
 
-HEAD = `d866db7` (+ `pnpm run check` clean at the time of writing). `facecheck`
-PASSes 4/4 on the geometry rows with two heads measurable on the pixel rows.
+**The general lesson, and the reason this pass spent an hour on the wrong axis
+first: on this head, a statistic that is inside its norm is not evidence that
+the feature is right, and a mark on a face is a shading event until an ablation
+says otherwise.** Every landmark on this skull measures correct and it still
+reads as a dome; the paint stack measures as the obvious cause of a painted-
+looking face and is not.
 
-Frames, described because `tmp/` gets pruned:
+## 3. Where it actually stands — I looked, and this is what I see
 
-- **`tmp/shots/p5-fixed/noctis_front.jpg`** — bald, 0.55 m, on the head's own
-  axis, hour 14.5, after the winding fix. **It is a face.** Nose, nostrils,
-  philtrum, lips with a vermilion border, a mental crease, a chin, brow ridges,
-  eye sockets, cheekbones, a jaw line. The midline hairline is gone.
-- `tmp/shots/p5-corpus/hero_portrait.jpg` — the judged frame. A face with a
-  mouth and modelling where the handoff before this one had "a pale blown mask".
-  The lit half is no longer clipped, because the face is no longer a flat plate.
-- `tmp/shots/p5-corpus/hero_full.jpg` — no regression; four bodies read as
-  bodies.
-- `tmp/shots/p5-hours/`, `p5-s1/` — the before/after ladder at hours 9, 12, 14.5
-  and 16.2, hair hidden.
+`tmp/shots/p6-done/` (committed HEAD) and `tmp/shots/p6-z/` (facecam, 0.55 m).
 
-**Say plainly which one this pass is: this is the fix, not another "better".**
-The face items that follow are ordinary sculpt notes on a head that now has a
-face, not another round of hunting a missing one.
+**Better, honestly and visibly.** `hero_portrait`: the eyes are open and read as
+eyes, the mouth is warm lips instead of a black bar cut in a mask, the cheeks
+are skin instead of hard slashes, the ear is an ear. `noctis_face` at 0.55 m is
+a young face with soft planes where round 14's was a mask and round 15's was a
+mannequin. `hero_full` is unregressed.
 
----
+**Not yet beautiful, and here is what a harsh critic still gets:**
 
-## 4. Next, in order
+1. **The fringe still covers most of the far eye.** It sweeps now instead of
+   hanging, and more brow shows, but the locks are still long enough to land on
+   the eye after the sweep. The next move is `len`, not direction. This is the
+   single biggest remaining item on the judged frame.
+2. **A dark diagonal still crosses the mid-face** on the shadow side. It is the
+   same socket wall, at a third of what it was, read against a raking key on the
+   unlit half. Another 20-25% off the socket is available but starts to close
+   the aperture — check `facecheck`'s `mouthEdge` and look at the eye.
+3. **The lower face is still heavy and wide for a slim twenty-year-old.**
+   `euEu` 162.5 mm against a real adult male's 152 and a breadth-over-height of
+   0.71 against 0.66. `headWidth` is 0.97 for Noctis and the shell's `HR[0]`
+   is shared; narrowing either moves the eye separation ratio with it, so this
+   wants one careful commit, not a nudge.
+4. **The hair is flat painted ribbons** at 0.55 m — Van Gogh brush strokes, not
+   strands. `dfad601`'s alpha cards are the right idea and the cards are too
+   wide and too opaque at this range.
+5. **Ignis is still one black column** (no hem, no lapel thickness, no collar
+   break), the sleeve cut, the skull print smear at 0.95 m, the collar hole and
+   `_probe/hands.mts`'s `_palm*` framings sitting inside the geometry are all
+   untouched. §WS-11's character list is where `dress` picks up.
+6. **The eyes are asymmetric** in a bald front framing — one reads narrower than
+   the other at the same `eyeOpen`. Not investigated.
 
-1. **The fringe throws hard-edged black stripes across the face.** They read as
-   scratches on `hero_portrait`, they are the loudest thing left on the judged
-   frame, and they are also what keeps `facecheck` from asserting Noctis'
-   `mouthRange` of 100.7 against a limit of 14 — no 17 x 14 mm box on his lit
-   half can dodge the stripe, so the control VOIDs. `Hair.ts` plus whatever
-   casts them; a softer/attenuated fringe shadow fixes the picture and the gate
-   at once. **Start here.**
-3. **Re-judge every open head item against the fixed shell.** Most of the
-   backlog was written about a frame that did not contain the face:
-   - the **ear's 16 mm** — still a flat scoop standing off the head, visible in
-     `p5-fixed`. `WIP` commits `10d8c42`, `6397de1`.
-   - the **fringe length** `Shots.ts` asks for.
-   - the cranium and the C7 -> acromion shoulder yoke.
-   - the mouth reads a little "duck-lipped" now that it is visible; the lips
-     were pushed up this pass and may now be one step too far.
-4. **`Noctis_body`, `Noctis_hair`, `Noctis_outfit` and both eye meshes all have
-   negative signed volume** (`facewind.mts`'s new block). Hair and outfit are
-   `DoubleSide` so it cannot show; the **body is `FrontSide`** and its bare arms
-   and hands look correct in `hero_full`, so this is most likely just an
-   open-sweep artifact of the statistic. **It is not proven.** The cheap check
-   is a `--hide outfit` capture of a bare torso, and it is worth 10 minutes
-   given what the same statistic just found on the head.
-5. §WS-11's untouched character list: Ignis is still one black column; the
-   sleeve cut; Noctis's skull print at 0.95 m; the hole at the collar;
-   `_probe/hands.mts`'s `_palm*` framings sitting inside the geometry.
+## 4. Still open from pass 5, unaddressed here
 
-## 5. Closed as measured negatives this pass
+**`facewind`'s negative signed volume for `Noctis_body`, `_hair`, `_outfit` and
+both eye meshes.** Pass 5 flagged it, estimated ten minutes and did not do it;
+neither did I. Given that the same statistic on the *head* is what found the
+inside-out shell, it is still worth the ten minutes. The cheap check is a
+`--hide outfit` capture of a bare torso.
 
-- **Widening Gladiolus' beard strands** (0.9 -> 1.5 mm): 221.3 -> 213.9 of 255,
-  and it reads *worse*. §2.
-- **`FACE_FLAT` as a whole-head constant**: it buries the nose. Ramped, not
-  removed — 1.30 is right where it was derived.
-- Everything the midline hairline was blamed on, each by its own capture and
-  none of them the cause: **the hour** (9/12/14.5/16.2), **the painted map**
-  (`facefront_flat.mts`; and `facemapscan.mts` shows the texels are smooth
-  across u = 0.485..0.515 at every row), **the pore normal map**, **the mip
-  chain and anisotropy**, **the shell's normals** (negated, and replaced with a
-  radial field), and **the character's own shadow**. It was the winding.
-- Inherited and still standing: `SKIN_BASE`, mip selection, an occluding
-  surface, `patchSkin`'s uv, the head's pitch, the mouth line's blur and value,
-  the face material's `sheen` and `specularIntensity`.
+## 5. Method notes for whoever is next
 
-**Retired hypothesis:** pass 4's UV pole at the menton. The fan is real —
-`uvOf`'s `atan2(x, z)` does converge under the jaw — but it is *below* the chin,
-`v` is linear in `y` and registers, and the mouth's absence was the culling. Do
-not spend a pass on it; if the lower-face paint ever needs a better chart, that
-is a quality item, not a defect.
+- **Look at `facefront_flat` before touching `paintFace`.** Four passes have now
+  re-tinted a map to fix something the sculpt was doing.
+- **`--raw` is not an ablation of a post *stage*.** Use the tokens.
+- `probe.mts` prints its return value as JSON, so a downscaled `toDataURL` round
+  trips fine and costs one boot. That is the cheapest way to look at any
+  generated texture in this repo.
+- Do not `git checkout` a file to undo a diagnostic edit. It cost me half an
+  hour of uncommitted sculpt work; commit the diagnostic, or edit it back.
