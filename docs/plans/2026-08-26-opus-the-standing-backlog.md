@@ -1070,17 +1070,31 @@ directory boundary it did not own.
 
 ### Landmarks and props (from `landmarks`)
 
-- **Seven kits still build from bare `BoxGeometry`** — `_imperial`, `_tomb`,
-  `_landmark`, `_dungeon`, `_chocobo`, `_menace`, `_haven`. **The tomb first:**
-  it is a 40-px grey box and its own docstring says it *"most has to read from a
-  kilometre away"*. `_block` and `_hut` are the templates.
+- ~~**Seven kits still build from bare `BoxGeometry`**~~ — **CLOSED as a
+  measured negative by `landmarks-r2`, see the negatives table.** Counted:
+  three of the seven have none, and the tomb's two are its rune glyphs.
 - **`_haven`'s own shelf** is what reads as a cake stand at `poi_haven`;
   `gradePad` already replaced the drum, so that half of the plan's claim is
-  stale.
+  stale. — **DONE `b119dd3`** (`basaltColumns`).
 - **`_genOutcrop` is ungraded** and needs the plan/seat split `_genTor` got.
-- **One unexplained levitating boulder in `poi_imperial`**, pixel-identical
-  across all three joint fixes, so it is a **fourth mechanism** and not the
-  un-sunk-plan bug.
+  The *joint* half of this is already landed (`d3b4ba9`'s sunk-position rule is
+  in the course loop); what is left is the pure-function extraction and a
+  `rock:outcrop` family in `silhouette.mts --set rocks`.
+- ~~**One unexplained levitating boulder in `poi_imperial`**~~ — **EXPLAINED and
+  fixed, `911f99d`.** It is not in `Rocks.ts` at all: it is the kit's own
+  masonry seated on the deck plane and scattered *past* the deck, plus the
+  graded apron cantilevering over a crest. See the negatives table.
+- **The POI aprons: `probes/padhang.mts` and 90 of 91 toes in the air** —
+  `bb78cee` + `911f99d` took that to 50, mean toe `+1.13 m -> -1.30 m`. Still
+  open: **`fort_vaullerey` 24.8 m, `tomb_fierce` 21.1 m, `tomb_mystic2`
+  13.6 m** — three pins whose footprint straddles a brink, where the answer is
+  probably the *pin*, in `WorldMap.ts`, and not the earthwork.
+- **Four fishing camps stand 4.8–5.6 m above their own bank**, and
+  `vesperpool_dock`'s jetty piles hang **21 m** — `probes/fishdeck.mts`. The
+  water lane's two fixes both verified (the two dry pins take `_fishingDry`;
+  the four tarn decks now sit 1.5 m *over* their water, not 1.5–2.1 m under),
+  but `_fishing` sets one `deck` from the water and then puts the **shack, rod
+  stands, bench and crate** on it as well, and those stand on the bank.
 - **The Meteor is a good landmark and not yet a beautiful one** — one dark
   monolith rather than a cluster of angular peaks, low in chroma against a bright
   sky. The untried lever: normalise the rock generator's vertex-colour bake to
@@ -1177,6 +1191,10 @@ without opening the handoff it lived in.
 | **WS-5: the POI kits publish `_exclusions` and something downstream is not reading them at pad radius** | **the premise is false.** `PoiKits._exclusions` is a POI-versus-POI *placement* ban list (dungeon mouths at 130 m, `sameOnly`) and has never had a vegetation meaning; `Ecology.ts:192` already said so. What leaks is that `Ecology._layoutClearings` authors a clearing as a **linear cone** whose zero is the settlement's *catchment* radius, and grass is the only population with no hard reject — only a density multiply and a `d < 0.02` cut. 4 000 uniform samples per pad: every other population is rejected on **100%** of the pad, grass passes on **97–99%**, standing up to **0.57 m proud** of the kit's own top surface. Plus `FRAC` has ten keys against twelve POI types, so `tomb` (10) and `landmark` (23) — **33 of 123 POIs** — get no clearing at all (`cleared` = 0.000 at `tomb_just`). The fix is a plateau-plus-skirt in `Ecology.poiClear` and belongs to **`src/world/veg/`**; `PoiKits.PAD_R` now publishes the twelve pad radii for it |
 | **WS-5: grass grows through the town plaza** | **false at HEAD.** `cleared > 0.06` rejects **100.0%** of samples on the Hammerhead deck and mean `grassDensity` there is **0.067** against 0.627 in open country; `town_forecourt` and `town_wide` show clean asphalt with a hard pad edge. Only the *POI aprons* leak. Galdin Quay and Lestallum are map pins with a `_town` kit, not plazas |
 | **WS-5: the near half of `zone_longwythe` has no rock in it** | **it is the framing, not the field.** Neutralising the carriageway sweep and the POI pad *entirely* buys **5 instances and zero legible ones** — the count of stones ≥ 20 px does not move at all (4 either way). The camera stands **30 m from a 33.4 m tor and points 48° away from it**: twelve outcrop/tor knots sit within 400 m and every one is behind the camera or 48–80° off-axis against a 35.7° half-fov. Per hectare of *visible* ground the near band is the densest in the frame (7.4 drawn/ha against 3.1 mid and 1.2 far); it just subtends 1.7% of it. Dollying back 80 m along the view axis takes drawn instances 16 → 38 and median on-screen height **10.7 px → 73.0 px**. The change belongs in `Shots.ts`, which is the coordinator's. **Do not raise `rockD`** |
+| **WS-13: seven kits still build from bare `BoxGeometry` — `_imperial`, `_tomb`, `_landmark`, `_dungeon`, `_chocobo`, `_menace`, `_haven`, and the tomb first because it is a 40-px grey box** | **stale, counted.** `new THREE.BoxGeometry` in `PoiKits.ts`: `_fishing` 17, `_restStop` 10, `_parking` 5, `_outpost` 4, `_imperial` 4, `_tomb` 2, `_chocobo` 2, `_dungeon` 1 — and **`_landmark`, `_menace` and `_haven` have none at all**. `_tomb`'s two are its emissive rune glyphs; the kit itself has been a full `BuildKit` temple (crepidoma, entasis, entablature, pediment, cella, `bakeTone`) since the kits round. **And the 40-px grey box is the framing, not the kit**: `poi_tomb` poses the camera 321 m out with **two thirds of the temple behind a ridge**. On a clear sightline at the same range the colonnade, the pediment and the stylobate all read — `tmp/shots/lr2-tomb/tomb_320.jpg`. Same shape of finding as the closed `zone_longwythe` row above |
+| **WS-13: one unexplained levitating boulder in `poi_imperial`, pixel-identical across all three joint fixes, so it is a fourth mechanism** | **it is a fourth mechanism and it is not a rock.** It was never in `Rocks.ts`, which is why `floatcheck`, `probes/stackjoint.mts` and three joint fixes all said nothing. Two things, both in the POI layer: (1) **the graded apron cantilevers over a crest** — `probes/padhang.mts` measured the toe ring against `Terrain.drawnHeightAt` and found **90 of 91 aprons ending above the ground**, `tomb_conqueror2` by 22.1 m, invisible to `floatcheck` because its gate 1 is `min over MESHES` and its own blind list says so; (2) **`_tomb` scatters its fallen blocks and column drums at `d` 7–13 through a `world` matrix scaled 1.4**, i.e. at **11.9–18.2 world metres** against a 13 m deck that retreats to 9.75. Fixed at `bb78cee`/`911f99d`; `tmp/shots/lr2-tombp/float.png` -> `tmp/shots/lr2-a3/float.png` |
+| **`gradePad`'s `cliff` branch: where the 1:3 line never catches the ground there is no embankment, so take the kerb and let the terrain hold the pad up** | **1:3 is eighteen degrees and Leide is not.** The test fired on ordinary hillside: on `tomb_conqueror2` **11 of 36 bearings took the kerb and 4 more took the plunge clamp** while the ground fell 11.7 m mean / 41.6 m worst, `alstor_haven` 22 of 36. Solve for the gentlest face that lands instead. **But the first cut of that fix was better arithmetic and a worse picture** — an unbounded reach drew three smooth 46 m tan cones across a red cliff (`tmp/shots/lr2-a1j/tomb_320.jpg`), so the fill is capped at 10–18 m as a *composition* limit and the deep bearings fall through to a kerb that now grows a **retaining wall** down to the ground rather than stopping in air |
+| **WS-7/WS-8: `PoiKits` still builds a jetty at the two dry pins, and four tarn jetties have their decks 1.5–2.1 m under water** | **both already fixed at HEAD, and verified** (`probes/fishdeck.mts`). `caem_shore` and `rachsia_bridge` find no water within 180 m and take `_fishingDry` — no deck, no piles, no handrail. The four tarn pins sit *in* their water (`dist = 0`) with decks 4.97–5.53 m over a base 3.5–4.0 m under the surface, i.e. **1.5 m proud** where they were 1.5–2.1 m under. The open half is new and is the other direction: the same `deck` also carries the shack, the rod stands, the bench and the crate, which stand on the **bank** — 4.8–5.6 m of air at four pins and **9.8 m** at `vesperpool_dock`, whose jetty piles hang **21 m** |
 | **WS-5: the 124 POI aprons are still cake stands** | **half-stale.** `gradePad` already replaced the faceted drum with a real cut-and-fill earthwork. What reads as a cake stand at `poi_haven` is not the apron at all — it is `_haven`'s **own two-course shelf drum** with a hard circular rim, which is a different object in a different function |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | **WS-4: TAA is not accumulating the cloud buffer, and fixing it supersamples the layer 8x for free** | **it already is.** `?post=nocloudjitter` holds the march's sub-texel offset at zero with TAA and the camera jitter untouched: the sky band moves **12.8-16.0 mean/255 over 31-37%** of it and the jitter-off frame renders cloud silhouettes as square-cornered blocks on the march's texel grid, small puffs as literal rectangles. The stated mechanism is also arithmetically impossible — the field scrolls **0.03 px per frame**, 35x below a pixel, and a posed capture holds the camera still. It is what makes sense of three of `clouds.md`'s own negatives at once |
