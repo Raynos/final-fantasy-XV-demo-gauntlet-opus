@@ -10,8 +10,7 @@ is where every number before today lives), `vegetation.md`, `grass.md`.
 written and is re-verified; one is landed and measured today; one is a measured
 negative on its stated cause, with the defect relocated to a different band and
 an instrument left behind. `perf` PASS with 0 of 5 shots over the floor,
-`gameplay` PASS, `nanscan` not re-run (no shader on a NaN path was touched —
-see "what I did not do").
+`gameplay` PASS, `nanscan` 0 of 142.
 
 Shas: `95a34c0` (spatial CAS), `46c72a1` (`probes/leaftexel.mts`), `7120d7f`
 (the backlog's WS-3 result and three negatives rows).
@@ -278,11 +277,12 @@ as well as after.
 
 ## What I did not do
 
-- **`nanscan` was not re-run.** Nothing I wrote is on a NaN path: no `pow()` on
-  a varying, no division that can reach zero (`max(rng, 1e-4)`,
-  `max(zc, 1.0)`), and the pass is a fullscreen filter with no vertex data. The
-  repo's own note stands anyway — `isnan()`/`isinf()`/`(x>=0||x<0)` are all
-  folded away by this backend and only `floatBitsToUint` sees a NaN.
+- **`nanscan`: 0 of 142**, run after the change. Nothing I wrote is on a NaN
+  path anyway — no `pow()` on a varying, no division that can reach zero
+  (`max(rng, 1e-4)`, `max(zc, 1.0)`), and the pass is a fullscreen filter with
+  no vertex data. The repo's own note stands regardless:
+  `isnan()`/`isinf()`/`(x>=0||x<0)` are all folded away by this backend and only
+  `floatBitsToUint` sees a NaN.
 - **No `side`/`DoubleSide` change**, so `probes/facewind.mts` was not needed.
 - **`check`**: 18/19 on the first run, failing `anycheck` with 2 `any` in one
   file — another lane's transient uncommitted edit. `anycheck` run directly a
