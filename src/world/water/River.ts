@@ -76,6 +76,36 @@ export interface Reach {
   joinedInto: number;
 }
 
+/**
+ * One confluence, in the numbers that say whether it reads as one.
+ *
+ * A junction that is topologically correct and visually a T of two equal
+ * ribbons is not a confluence, so what this records is the SIZE on both sides
+ * of it: the trunk above, the tributary arriving, and the trunk below.
+ */
+export interface RiverJoin {
+  /** Where, in world xz. */
+  x: number;
+  z: number;
+  /** Angle the tributary arrives at, degrees; 0 would be running alongside. */
+  angleDeg: number;
+  /** Trunk surface width above the junction, the tributary's, and below. */
+  widthAbove: number;
+  widthTrib: number;
+  widthBelow: number;
+  /** Trunk depth above the junction and below, metres. */
+  depthAbove: number;
+  depthBelow: number;
+  /** Metres of unique channel the tributary contributed before it landed. */
+  tribMetres: number;
+  /** Metres of trunk left below the junction. */
+  belowMetres: number;
+  /** The discharge proxy on each arm: trunk above, tributary, trunk below. */
+  qAbove: number;
+  qTrib: number;
+  qBelow: number;
+}
+
 /** What the build measured. */
 export interface RiverStats {
   sources: number;
@@ -125,6 +155,31 @@ const LIPSCHITZ = 0.6;
  * width is a tight meander, which is a river; above it, it is a spiral.
  */
 const MIN_LOOP = 20;
+/**
+ * Stations a tributary's water is ramped into its trunk over — 12 is 36 m.
+ *
+ * The junction is a real step in discharge and it should show, but the water
+ * surface is monotone-clamped downstream and a single-station step in `q` is
+ * simply erased by that clamp. Over a dozen stations the bed has fallen enough
+ * to carry it.
+ */
+const JOIN_RAMP = 12;
+/**
+ * Ceiling on the summed discharge proxy.
+ *
+ * 1.6 is `halfWidthCap` 24.9 m, a 50 m channel, against the widest unmerged
+ * reach on this map at 28.3 m. Above that the sheet is a lake, and the map does
+ * not have the catchment for one.
+ */
+const Q_MAX = 1.6;
+/** Fraction of the lateral offset to the wettest cell the walk takes per step. */
+const NET_PULL = 0.55;
+/** Metres either side the walk looks for that cell. */
+const NET_REACH = 14;
+/** Metres of fall per 120 m below which the walk is called stalled. */
+const STALL_DROP = 0.3;
+/** …unless `accum` here is at least this, in which case there is still a channel. */
+const STALL_ON_NET = 0.90;
 const AREA_FLOOR = 1e-7;
 
 /** Options; `level` is the sea surface, where a reach stops. */
@@ -132,7 +187,7 @@ export interface RiverOpts {
   level: number;
   /** World half-extent to search for sources. */
   half: number;
-  /** How many reaches to trace at most. */
+  /** How many reaches to trace at most. Default 10. */
   maxReaches?: number;
   /** Accumulation percentile a source must beat. */
   sourceAccum?: number;
@@ -143,9 +198,21 @@ export interface RiverOpts {
    * all, so it is an option rather than a literal. At the original 700 m the
    * seven traces' *closest* approach to one another was **782 m** — no two of
    * them came within thirty times the truncation radius, so the join logic
-   * below was unreachable code from the day it was written.
+   * below was unreachable code from the day it was written. Default 260, with
+   * `maxReaches` 10: the smallest pair of numbers on this map that gives two
+   * confluences, both of which come out wider below than either arm above.
    */
   sourceSep?: number;
+  /**
+   * Ablation control: set false to route confluences but NOT sum their
+   * discharge, so a probe can price the summation on its own. Default true.
+   */
+  sumDischarge?: boolean;
+  /**
+   * Metres of trunk that must survive below a junction for it to count as a
+   * confluence. Default 90.
+   */
+  minJoinRun?: number;
   debug?: boolean;
 }
 
@@ -160,9 +227,9 @@ export interface RiverOpts {
  */
 export function traceReaches(ground: RiverGround, opts: RiverOpts): { reaches: Reach[], stats: Partial<RiverStats> } {
   const half = opts.half;
-  const maxR = opts.maxReaches ?? 7;
+  const maxR = opts.maxReaches ?? 10;
   const minAccum = opts.sourceAccum ?? 0.93;
-  const sep2 = (opts.sourceSep ?? 700) ** 2;
+  const sep2 = (opts.sourceSep ?? 260) ** 2;
   const e: ErosionSample = { accum: 0, deposit: 0, scree: 0, wet: 0, rock: 0, flowX: 0, flowZ: 0 };
 
   // Coarse scan for candidate sources.
@@ -236,8 +303,30 @@ export function traceReaches(ground: RiverGround, opts: RiverOpts): { reaches: R
         if (hh < best) { best = hh; bestT = t; }
       }
       x += px * bestT * 0.55; z += pz * bestT * 0.55;
+      // **And half a step toward the drainage network**, which is not the same
+      // place as the lowest ground across the channel and is the thing a
+      // tributary has to stay on to find its trunk. Measured over 24 sources:
+      // 17 of them stalled, and they stalled with a mean `accum` of 0.78 and
+      // individual ends at 0.24, 0.40 and 0.47 — the walk had left the network
+      // and was on an open hillside, where of course the ground stops falling.
+      // With this term: stalls 17 -> 13, mean trace 814 -> 1 230 m, and pairs of
+      // traces that come within a channel width of each other 6 -> 8.
+      if (NET_PULL > 0) {
+        let bA = -1, bT = 0;
+        for (let t = -NET_REACH; t <= NET_REACH; t += 1) {
+          ground.erosionAt(x + px * t, z + pz * t, e);
+          if (e.accum > bA) { bA = e.accum; bT = t; }
+        }
+        x += px * bT * NET_PULL; z += pz * bT * NET_PULL;
+      }
       if (k % 15 === 14) {
-        if (lastDrop - h < 0.8) { stale++; if (stale >= 2) break; } else stale = 0;
+        // A reach on a floodplain falls slowly and is still a reach. The stall
+        // test is there to catch a walk that has wandered off into a hollow, so
+        // it asks whether the walk is still ON the network before it fires.
+        ground.erosionAt(x, z, e);
+        if (lastDrop - h < STALL_DROP && e.accum < STALL_ON_NET) {
+          stale++; if (stale >= 2) break;
+        } else stale = 0;
         lastDrop = h;
       }
     }
@@ -456,25 +545,107 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     lines.push(p);
   }
 
-  // Confluences: truncate a reach where it meets one already accepted, so a
-  // tributary stops at the trunk instead of running down it as a second river.
+  /**
+   * Confluences: a tributary stops where it reaches the trunk's waterline, and
+   * hands the trunk its water.
+   *
+   * **Longest first, and that ordering is the whole rule about which one
+   * survives.** Whichever line is accepted first keeps running past the
+   * junction; the other is truncated at it. Accepting in trace order picks by
+   * source accumulation, which on this map put a 300 m stub ahead of a 1.3 km
+   * trunk and would have cut the trunk in half at its own tributary's mouth.
+   * Channel length is the available proxy for catchment.
+   *
+   * **The meeting radius is the two channels' own half-widths, not a constant.**
+   * A fixed 26 m left the tributary's mouth up to twenty metres short of water
+   * it was supposed to be flowing into. Tangent edges make one wetted surface.
+   */
+  lines.sort((a, b) => b.length - a.length);
   const accepted: number[][] = [];
+  const hwOf: Float64Array[] = [];
+  /** For each accepted reach: which reach it flows into, and at which station. */
+  const trunkOf: number[] = [];
+  const trunkStation: number[] = [];
   for (const p of lines) {
-    let cut = p.length / 2;
-    for (const q of accepted) {
-      for (let i = 0; i < p.length / 2; i++) {
-        let hit = false;
-        for (let j = 0; j < q.length / 2; j += 2) {
-          const dx = p[i * 2] - q[j * 2], dz = p[i * 2 + 1] - q[j * 2 + 1];
-          if (dx * dx + dz * dz < 26 * 26) { hit = true; break; }
+    const hw = Float64Array.from(dischargeAlong(p, ground, e), halfWidthCap);
+    let cut = p.length / 2, tk = -1, ts = -1;
+    for (let a = 0; a < accepted.length; a++) {
+      const t = accepted[a], th = hwOf[a], tn = t.length / 2;
+      for (let i = 0; i < cut; i++) {
+        let bj = -1, bd = Infinity;
+        for (let j = 0; j < tn; j++) {
+          const dx = p[i * 2] - t[j * 2], dz = p[i * 2 + 1] - t[j * 2 + 1];
+          const d = dx * dx + dz * dz;
+          if (d < bd) { bd = d; bj = j; }
         }
-        if (hit) { if (i < cut) { cut = i; } break; }
+        const r = hw[i] + th[bj];
+        if (bd < r * r) { cut = i; tk = a; ts = bj; break; }
       }
     }
-    if (cut < p.length / 2) stats.confluences++;
     const t = p.slice(0, Math.max(0, cut) * 2);
+    // A tributary that contributes less than a reach of its own channel before
+    // it lands is not a tributary, it is the same channel traced twice from two
+    // sources on it. Dropping it is deduplication, and it must not be counted
+    // as a confluence.
     if (t.length / 2 < MIN_REACH / STATION) { stats.dropped++; continue; }
+    // A tributary landing on the last stations of its trunk is two reaches
+    // meeting end to end at the sea, not a confluence: there is no downstream
+    // channel left for the summed water to be bigger in. It still truncates --
+    // the sheets must not overlap -- it is just not counted, and not fed.
+    if (tk >= 0 && ts >= accepted[tk].length / 2 - (opts.minJoinRun ?? 90) / STATION) { tk = -1; ts = -1; }
+    if (tk >= 0) stats.confluences++;
     accepted.push(t);
+    hwOf.push(hw.subarray(0, Math.max(0, cut)));
+    trunkOf.push(tk);
+    trunkStation.push(ts);
+  }
+
+  /**
+   * Discharge is what makes a confluence mean anything, so it is summed here,
+   * before any width or stage is derived from it.
+   *
+   * Channel width goes as the **square root** of discharge (Leopold's hydraulic
+   * geometry), so the quantity that adds at a junction is width², and two equal
+   * arms make a trunk 1.41× wider rather than 2×. That is what a confluence
+   * looks like, and it is why summing `q` itself would have been wrong.
+   *
+   * **And the sum is taken in CHANNEL WIDTH, not in `q`, and that is a measured
+   * choice rather than a stylistic one.** `q` is
+   * `clamp((accum - 0.88) / 0.115)`, which is zero on everything below the 88th
+   * percentile of wet cells — measured on the built sheet, the `accum` term is
+   * what binds the discharge on **85.8%** of stations, and at both real
+   * confluences on this map it is **0.00 on the arriving tributary**. Summing
+   * `q²` there is arithmetically a no-op, and was: the ablation
+   * (`sumDischarge: false`) produced byte-identical widths. `halfWidthCap`'s
+   * 2.5 m floor is the channel a reach has when the percentile says nothing,
+   * and two of those joining still make a bigger one.
+   *
+   * Reverse acceptance order, because a trunk is always accepted before its own
+   * tributaries: by the time a reach hands its mouth discharge upward, every
+   * tributary of its own has already been folded into it.
+   */
+  const qOf = accepted.map((p) => dischargeAlong(p, ground, e));
+  for (let a = accepted.length - 1; a >= 0; a--) {
+    const tk = trunkOf[a];
+    if (tk < 0 || opts.sumDischarge === false) continue;
+    const qa = qOf[a];
+    // The mean of the last five stations, NOT `qa[qa.length - 1]`. The smoother
+    // in `dischargeAlong` runs `1 .. m-2`, so the final station is the only raw
+    // sample in the array; on the tributary at (-1369, -2594) it read 0 against
+    // a 0.11 mean over its mouth, and the confluence added exactly nothing.
+    let mouth = 0;
+    for (let i = Math.max(0, qa.length - 5); i < qa.length; i++) mouth += qa[i] / Math.min(5, qa.length);
+    const addW2 = halfWidthCap(mouth) ** 2;
+    const qt = qOf[tk];
+    // Ramped in over a few stations rather than stepped: the junction should
+    // read as the channel opening out, not as one quad twice the width of its
+    // neighbour. `limitSlope` bounds the drawn width anyway; this keeps the
+    // WATER SURFACE, which is monotone-clamped and cannot step up, smooth too.
+    for (let i = trunkStation[a]; i < qt.length; i++) {
+      const ramp = Math.min(1, (i - trunkStation[a]) / JOIN_RAMP);
+      const w = Math.sqrt(halfWidthCap(qt[i]) ** 2 + addW2 * ramp);
+      qt[i] = Math.min(Q_MAX, Math.max(qt[i], (w - 2.5) / 14.0));
+    }
   }
 
   const wPos: number[] = [], wUv: number[] = [], wRiver: number[] = [], wFlow: number[] = [], wIdx: number[] = [];
@@ -482,8 +653,12 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
   /** [folded, degenerate, kept] per mesh, so the gate can be per mesh. */
   const wFold = [0, 0, 0], bFold = [0, 0, 0];
   let widthSum = 0, depthSum = 0, widthN = 0;
+  type Built = { wl: number[], wr: number[], wsl: Float64Array, bed: Float64Array, tx: Float64Array, tz: Float64Array, m: number };
+  const built: (Built | undefined)[] = new Array(accepted.length);
+  const joins: RiverJoin[] = [];
 
-  for (const p of accepted) {
+  for (let a = 0; a < accepted.length; a++) {
+    const p = accepted[a];
     const m = p.length / 2;
     stats.reaches++;
     stats.stations += m;
@@ -491,7 +666,11 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
 
     const nx = new Float64Array(m), nz = new Float64Array(m);
     const tx = new Float64Array(m), tz = new Float64Array(m);
-    const bed = new Float64Array(m), q = new Float64Array(m), wsl = new Float64Array(m);
+    const bed = new Float64Array(m), wsl = new Float64Array(m);
+    // Already computed, and already carries every tributary's water — see the
+    // confluence pass above. Recomputing it here would silently throw the
+    // summed discharge away, which is the one thing a confluence is.
+    const q = qOf[a];
     for (let i = 0; i < m; i++) {
       const i0 = Math.max(0, i - 1), i1 = Math.min(m - 1, i + 1);
       let ax = p[i1 * 2] - p[i0 * 2], az = p[i1 * 2 + 1] - p[i0 * 2 + 1];
@@ -499,23 +678,6 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       tx[i] = ax / l; tz[i] = az / l;
       nx[i] = -tz[i]; nz[i] = tx[i];
       bed[i] = ground.heightAt(p[i * 2], p[i * 2 + 1]);
-      ground.erosionAt(p[i * 2], p[i * 2 + 1], e);
-      // `accum` is a percentile of the cells that carry water, so this reads
-      // "wetter than 88% of them" rather than any absolute discharge — which is
-      // the property that makes it survive a change of resolution or of erosion
-      // tuning. It is a proxy for discharge and it is named one.
-      // Discharge also GROWS downstream, and leaving that out was visible: the
-      // percentile is already high at the source of a traced reach, so every
-      // river came out full width from its first metre and a headwater looked
-      // like an estuary. A river gathers its catchment as it runs.
-      const grow = 0.12 + 0.88 * Math.min(1, (i * STATION) / 850);
-      q[i] = Math.min(grow, Math.max(0, Math.min(1, (e.accum - 0.88) / 0.115)));
-    }
-    // Smooth the discharge: the percentile field is noisy at 3 m and a river
-    // that changes width every station reads as a rope, not as water.
-    for (let pass = 0; pass < 6; pass++) {
-      const s = Float64Array.from(q);
-      for (let i = 1; i < m - 1; i++) q[i] = s[i - 1] * 0.25 + s[i] * 0.5 + s[i + 1] * 0.25;
     }
 
     // Water surface.
@@ -604,9 +766,54 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       stats.maxDepth = Math.max(stats.maxDepth, d);
     }
 
+    built[a] = { wl, wr, wsl, bed, tx, tz, m };
     emitWater(p, m, tx, tz, nx, nz, wsl, wl, wr, froude, q);
     emitBank(p, m, nx, nz, wsl, wl, wr, bl, br, froude, -1);
     emitBank(p, m, nx, nz, wsl, wl, wr, bl, br, froude, 1);
+  }
+
+  // The confluence report. Written after the geometry so every number in it is
+  // the number the sheet was actually built from, not the one it was asked for.
+  for (let a = 0; a < accepted.length; a++) {
+    const tk = trunkOf[a], ts = trunkStation[a];
+    if (tk < 0) continue;
+    const T = built[tk], A = built[a];
+    if (!T || !A) continue;
+    // Averaged over a 75 m window on each side rather than read off one
+    // station. A single station is the local bed bump, not the reach: the first
+    // version of this report sampled ts+24 and made a junction look like it
+    // NARROWED the river because that one station happened to sit on a riffle.
+    const win = (lo: number, hi: number) => {
+      let w = 0, d = 0, n = 0;
+      for (let i = Math.max(0, lo); i <= Math.min(T.m - 1, hi); i++) {
+        w += T.wl[i] + T.wr[i]; d += T.wsl[i] - T.bed[i]; n++;
+      }
+      return n ? { w: w / n, d: d / n } : { w: 0, d: 0 };
+    };
+    const up = win(ts - 30, ts - 3), dn = win(ts + 3, ts + 30);
+    const dot = Math.abs(A.tx[A.m - 1] * T.tx[ts] + A.tz[A.m - 1] * T.tz[ts]);
+    let tw = 0;
+    for (let i = Math.max(0, A.m - 10); i < A.m; i++) tw += (A.wl[i] + A.wr[i]) / Math.min(10, A.m);
+    const qm = (arr: Float64Array, lo: number, hi: number) => {
+      let v = 0, n = 0;
+      for (let i = Math.max(0, lo); i <= Math.min(arr.length - 1, hi); i++) { v += arr[i]; n++; }
+      return n ? v / n : 0;
+    };
+    joins.push({
+      belowMetres: Math.round((T.m - 1 - ts) * STATION),
+      qAbove: +qm(qOf[tk], ts - 30, ts - 3).toFixed(3),
+      qTrib: +qm(qOf[a], A.m - 10, A.m - 1).toFixed(3),
+      qBelow: +qm(qOf[tk], ts + 3, ts + 30).toFixed(3),
+      x: +accepted[tk][ts * 2].toFixed(1),
+      z: +accepted[tk][ts * 2 + 1].toFixed(1),
+      angleDeg: +(Math.acos(Math.min(1, dot)) * 180 / Math.PI).toFixed(1),
+      widthAbove: +up.w.toFixed(2),
+      widthTrib: +tw.toFixed(2),
+      widthBelow: +dn.w.toFixed(2),
+      depthAbove: +up.d.toFixed(2),
+      depthBelow: +dn.d.toFixed(2),
+      tribMetres: Math.round((A.m - 1) * STATION),
+    });
   }
 
   if (widthN) { stats.meanWidth = +(widthSum / widthN).toFixed(2); stats.meanDepth = +(depthSum / widthN).toFixed(2); }
@@ -620,7 +827,7 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
   stats.bankTris = bIdx.length / 3;
   stats.downFacing = (water ? downFacing(water).downFacing : 0) + (bank ? downFacing(bank).downFacing : 0);
   stats.ms = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
-  return { water, bank, stats };
+  return { water, bank, stats, joins };
 
   /** Shared triangle emitter: drops folds, counts them, keeps the buffer clean. */
   function pushTri(pos: number[], idx: number[], i0: number, i1: number, i2: number) {
