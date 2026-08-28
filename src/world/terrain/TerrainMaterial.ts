@@ -43,6 +43,10 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *                    ablation and never a shipping mode.
  *
  *   `?post=nodry`  — the tier-D dry-cover term removed.
+ *   `?post=noiao` / `iaomax` — the terrain's IN-MATERIAL occlusion of
+ *     indirect diffuse off, and at full occlusion. WS-2d's own ablation pair.
+ *   `?post=nomeso` / `mesomax` — the tier-C 4-30 m mesorelief off, and at
+ *     2.5x, which is what prices the whole band in one capture.
  *   `?post=noshore` / `shoremax` — the strandline sand band off, and at full
  *     weight on every gentle surface regardless of height above the sea.
  *   `?post=drymax` — the same term forced to full cover. It is a product of
@@ -1665,6 +1669,79 @@ void tf_shade() {
   rgh = mix(rgh, min(1.0, rgh * 1.14 + 0.06), dryCover);
   ao *= mix(1.0, 0.78, dryCover * (1.0 - tuft));
 
+  // ---- tier-C mesorelief: the 4-30 m band, which nothing occupied ----------
+  //
+  // The dry-cover block above names this hole and then does not fill it: it
+  // computes cvB1 (7 m) and cvB2 (22 m) and spends them on how MUCH cover there
+  // is, never on what the ground itself looks like at that size. The two
+  // measurements either side of it say the same thing from opposite ends:
+  //
+  //   reliefstat, ground ROI, ours (median of 4) against FFXV-ground (n=6)
+  //     d1  11.2 / 11.3      d8  11.8 / 18.4
+  //     d2  12.0 / 15.5      d16 12.1 / 21.2
+  //     d4  11.3 / 16.8      d32 13.3 / 21.8
+  //
+  // ...and ?post=drymax, which is the tier-D term at FULL cover everywhere it
+  // fires, lands d1 16.4 and d2 23.3 -- 45-50% OVER the reference -- while
+  // leaving d8-d32 flat. Turning the sub-metre mat up is a measured negative
+  // and it is in the plan's negatives table. The energy has to go into the
+  // bands that are short, and the only way to put it there is a field whose
+  // own wavelength is in that band.
+  //
+  // 4-30 m is what carries a hillside at 150-400 m, which is the bottom third
+  // of every establishing shot in this corpus, and it is what a badland floor
+  // actually has on it: desiccation pans a few tens of metres across, gravel
+  // lag between them, and the braided threads of a wash system.
+  //
+  // Two axes, because one of them alone is a known failure.
+  //
+  //  - **Value.** A pale pan against darker gravel lag. The endpoints are a
+  //    matched pair about 1.0, so this adds contrast without moving the
+  //    frame's mean luma or its saturation off the grade's checks.
+  //  - **Relief.** 0.52 m of height at 22 m of wavelength is an 8 deg tilt, so
+  //    every pan gets a lit side and a shaded side and the contrast comes out
+  //    of the sun rather than out of a stain. The tier-D block reached the same
+  //    conclusion one octave down and wrote it out: "it is a HEIGHT, not a
+  //    stain. A flat multiply adds value range without adding structure."
+  //
+  // Band-limited per octave on the screen footprint, not on distance, and
+  // ramped in past ~22 m so it never doubles up on the near-field maps that
+  // already own everything below 4 m.
+  float mesoAmt = smoothstep(22.0, 70.0, vTDist)
+                * (1.0 - smoothstep(0.42, 0.72, slope))
+                * (1.0 - 0.92 * road)
+                // Where the region is genuinely green the sward and the grass
+                // rings carry this band themselves; this is for open ground.
+                * (0.55 + 0.45 * (1.0 - bioGreen));
+  float mzA = cvB1 * tf_lodW(7.0, tfPx);
+  float mzB = cvB2 * tf_lodW(22.0, tfPx);
+  // Lineaments. A ridged field is a NETWORK OF LINES rather than a field of
+  // blobs -- which is what a braided wash reads as from above, and is the one
+  // shape the two blob octaves cannot draw however hard they are turned up.
+  // tf_sabs rather than abs: the crease of a true absolute value is a pixel
+  // wide and aliases, and the gully field above pays for the same lesson.
+  float mzL = 1.0 - tf_sabs(tf_snoise(P.xz * 0.088 + 63.0));
+  mzL = clamp(mzL, 0.0, 1.0);
+  mzL = mzL * mzL * tf_lodW(11.0, tfPx);
+  float mesoH = (0.16 * mzA + 0.52 * mzB - 0.34 * mzL) * mesoAmt;
+  ${ABLATE.has('nomeso') ? 'mesoAmt = 0.0; mesoH = 0.0;' : ''}
+  ${ABLATE.has('mesomax') ? 'mesoAmt = min(1.0, mesoAmt * 2.5); mesoH *= 2.5;' : ''}
+  Nw = tf_bump(Nw, P, mesoH, tfBumpOk);
+  // Committed rather than hovering: mostly pan or mostly lag, with the change
+  // happening over metres. The same discipline macroField uses, for the same
+  // reason -- a blend that sits near a half everywhere is the flat wash.
+  float mesoPan = smoothstep(-0.40, 0.44, 0.62 * mzB + 0.38 * mzA);
+  // Dust pan: paler and warmer. Gravel lag: darker and cooler, because a lag
+  // surface is the coarse fraction left behind after the fines have blown out
+  // of it, and coarse rock here is the rust-grey the strata are.
+  vec3 mesoPale = vec3(1.15, 1.13, 1.06);
+  vec3 mesoLag  = vec3(0.86, 0.87, 0.90);
+  col *= mix(vec3(1.0), mix(mesoLag, mesoPale, mesoPan), mesoAmt);
+  // The wash itself: damp fines, darker than either, and narrow.
+  col *= mix(1.0, 0.82, mzL * mesoAmt * 0.85);
+  rgh = mix(rgh, rgh * 1.10, mesoAmt * (1.0 - mesoPan) * 0.6);
+  ao *= mix(1.0, 0.90, mzL * mesoAmt);
+
   // ---- macro tinting -------------------------------------------------------
   // three overlapping colour fields at 600 m / 140 m / 40 m: the thing that
   // makes a procedural surface stop reading as one material.
@@ -1795,6 +1872,8 @@ float tfSun = mix(1.0, tf_horizonSun(vTW.xz, 0.035),
 reflectedLight.directDiffuse *= tfSun;
 reflectedLight.directSpecular *= tfSun;
 float tfAmb = tfAO * mix(1.0, tfSkyAo, uHorizonMix.y);
+${ABLATE.has('noiao') ? 'tfAmb = 1.0;' : ''}
+${ABLATE.has('iaomax') ? 'tfAmb = 0.0;' : ''}
 reflectedLight.indirectDiffuse *= mix(1.0, tfAmb, 0.85);
 reflectedLight.indirectSpecular *= mix(1.0, tfAmb, 0.95);
 `;
