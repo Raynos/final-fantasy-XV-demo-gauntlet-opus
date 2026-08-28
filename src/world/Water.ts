@@ -282,15 +282,25 @@ export class Water {
     this.normalA = normalFromHeight(256, (u: number, v: number) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
     this.normalB = normalFromHeight(256, (u: number, v: number) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
 
-    // Two independent noise channels for the shoreline swash: .x is the slow
+    // Three independent noise channels for the shoreline swash: .x is the slow
     // group envelope that decides which wave trains run furthest, .y is the
-    // lace of foam sliding back down the sand. Independent on purpose -- one
-    // channel driving both correlates the envelope with the foam and the beach
-    // comes out banded.
+    // lace of foam sliding back down the sand, .z is the fine break-up that
+    // turns a run-up *line* into cusps and tongues. Independent on purpose --
+    // one channel driving two of them correlates the envelope with the foam and
+    // the beach comes out banded.
+    //
+    // .z is new and it is the answer to "the near-field foam is a flat white
+    // patch rather than a lace". The other two are sampled at along-shore
+    // wavelengths of 43-113 m, which are the wavelengths the ribbon's own phase
+    // attribute carries; every structure the shader could make was therefore
+    // longer than the foam patch itself, so the run-up arrived as one straight
+    // contour and every term painted the same solid stripe along it. This one is
+    // an octave set sampled at a few metres, which is the scale swash actually
+    // breaks at.
     this.shoreNoise = makeTexture(256, (u: number, v: number, c: number[]) => {
       c[0] = 0.5 + 0.5 * n.fbm2(u * 5 + 31, v * 5 + 17, 4, 2.1, 0.55);
       c[1] = 0.5 + 0.5 * n.fbm2(u * 13 - 5, v * 13 + 41, 3, 2.4, 0.5);
-      c[2] = 0;
+      c[2] = 0.5 + 0.5 * n.fbm2(u * 29 + 77, v * 29 - 13, 4, 2.2, 0.52);
     }, { colorSpace: THREE.NoColorSpace, repeat: 1 });
 
     // Subtle caustic-ish sub-surface texture for shallow water.
@@ -681,7 +691,26 @@ export class Water {
           // single clearest tell that a shoreline was stamped, not simulated —
           // so two noise scales beat on each other and the band is required to
           // clear both. One scale alone still reads as a piped edge.
-          float edge = 1.0 - smoothstep(0.0, uFoamBand, dropDown);
+          //
+          // **The band is a distance along the BEACH, and it was a depth.** A
+          // fixed 1.35 m of depth is a hand's width of ground on a cliff and
+          // four-plus metres of it on a shelving beach, so precisely where a
+          // shoreline is worth looking at, the margin stopped being a margin and
+          // became a flat white area with a shaped edge. Ablated at the third-
+          // gentlest beach on the map (tmp/water/foamab.mts): with the shore
+          // ribbon hidden entirely and again with its own uFoam at zero, the
+          // white patch is unchanged. It was never the ribbon's lace. It is
+          // this.
+          //
+          // Two extra bed taps give the local bed slope, and the band becomes
+          // the depth that corresponds to about three and a half metres of
+          // beach — capped by the authored one, so a cliff and a tarn behave
+          // exactly as they did. (No backticks: this is inside a glsl template.)
+          float bedU = wf_bed(vWorld.xz + vec2(1.5, 0.0));
+          float bedV = wf_bed(vWorld.xz + vec2(0.0, 1.5));
+          float bedSlope = max(0.035, length(vec2(bedY - bedU, bedY - bedV)) / 1.5);
+          float band = min(uFoamBand, max(0.10, 3.5 * bedSlope));
+          float edge = 1.0 - smoothstep(0.0, band, dropDown);
           float churn = texture2D(uNormalB, vWorld.xz * 0.085 + w * 0.03).x;
           float churn2 = texture2D(uNormalA, vWorld.xz * 0.022 - w * 0.011).y;
           float foam = smoothstep(0.34, 0.92, edge * (0.35 + 0.8 * churn + 0.5 * churn2));

@@ -124,6 +124,15 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
         // the beach runs to the same line.
         float env = texture2D(uNoise, vec2(vPhase.z * 0.37, uTime * 0.011)).x;
         float runup = mix(0.05, 0.52, (0.5 + 0.5 * sum) * mix(0.55, 1.0, env));
+        // Cusps. Everything above runs at the ribbon's own along-shore
+        // wavelengths -- 43, 71 and 113 m -- so the run-up line was straight
+        // over every metre of beach anyone stands on, and a Gaussian around a
+        // straight line is a painted stripe. Beach cusps are a 4-8 m
+        // phenomenon; vPhase.x is in cycles of 43 m, so x 7.2 puts one noise
+        // period on six metres of shore. Advected slowly, because a cusp field
+        // migrates along a beach rather than standing still.
+        float cusp = texture2D(uNoise, vec2(vPhase.x * 7.2, uTime * 0.008)).z;
+        runup *= 0.74 + 0.52 * cusp;
 
         // Wet below the run-up line, plus the capillary fringe that never dries.
         float swashWet = 1.0 - smoothstep(runup - 0.05, runup + 0.10, elev);
@@ -145,7 +154,15 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
         // The bright line at the top of the run-up, where the sheet thins and
         // the bubbles are left standing.
         float d = (elev - runup) / 0.055;
-        float lip = exp(-d * d) * (0.55 + 0.45 * env);
+        // Tongues. The lip is the brightest term in the shader at 0.80 and it
+        // was the flat white patch: an unmodulated Gaussian around an
+        // unmodulated contour. Broken by a two-metre field advected up and down
+        // the beach, it comes apart into the fingers a real sheet of swash
+        // leaves. Floored at 0.18 rather than 0, because a swash edge is
+        // continuous -- it thins, it does not have holes punched in it.
+        vec2 tu = vec2(vPhase.x * 21.5, vShore.y * 0.42 - uTime * 0.10);
+        float tongue = 0.18 + 1.05 * smoothstep(0.34, 0.80, texture2D(uNoise, tu).z);
+        float lip = exp(-d * d) * (0.55 + 0.45 * env) * tongue;
 
         // The lace of foam sliding back down behind it. Advected in offset, so
         // it travels up and down the beach rather than along it.
@@ -162,9 +179,24 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
         // Broken water in the last metre of depth: the shore break itself.
         float shoal = smoothstep(-0.95, -0.08, elev) * (1.0 - smoothstep(-0.05, 0.10, elev));
         float bore = texture2D(uNoise, vec2(vPhase.x * 0.9 + uTime * 0.02, vShore.y * 0.03)).x;
-        float brk = shoal * smoothstep(0.58, 0.90, bore * (0.62 + 0.38 * (0.5 + 0.5 * s1)));
+        // The bore also needs breaking up, and for the same reason: shoal spans
+        // the last metre of *depth*, which on the gentle beaches this term
+        // exists for is ten-plus metres of ground, and an unbroken mask over
+        // ten metres of ground is a sheet of white.
+        float fine = texture2D(uNoise, vec2(vPhase.y * 16.0 + uTime * 0.05, vShore.y * 0.28)).z;
+        float brk = shoal * smoothstep(0.58, 0.90, bore * (0.62 + 0.38 * (0.5 + 0.5 * s1)))
+          * (0.22 + 1.15 * smoothstep(0.30, 0.78, fine));
 
         float foam = clamp(lip * 0.80 + lace * 0.42 + brk * 0.45, 0.0, 1.0) * uFoam;
+        // Grain, last. Every term above is a smooth function of two smooth
+        // fields, so wherever two of them overlap the sum saturates and the
+        // result is a solid white area with a shaped *edge* and no interior --
+        // which is what a close-up of the swash showed even after the edge was
+        // broken into cusps. Foam is bubbles: at half a metre it is mottled,
+        // and a photograph of it has grain everywhere, not only at its rim.
+        // Advected across the beach so it moves with the sheet.
+        float grain = texture2D(uNoise, vec2(vPhase.x * 34.0, vShore.y * 0.75 - uTime * 0.16)).z;
+        foam *= 0.46 + 0.86 * grain;
 
         // A foam band thinner than a pixel can only alias, and a white confetti
         // line along every far shore is the cheapest way to lose a blind test.
