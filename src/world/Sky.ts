@@ -716,6 +716,15 @@ export class Sky {
       // The upsample filter, as a dial. `cloudtap0` is a single bilinear
       // fetch; `cloudtapmax` restores the 1.4 the tree shipped with, so the
       // two ends of the billboard question can be captured from one build.
+      // The march's own sub-texel Halton offset, off. This is the instrument
+      // for "is TAA accumulating the cloud buffer": with the jitter dead the
+      // buffer is bit-stable frame to frame, so every low-res texel keeps its
+      // own grid and a 2x2 staircase returns along every cloud edge -- IF the
+      // history is being averaged. If it is not, the shipped frame is one
+      // jittered sample either way and the two differ by an offset, not by a
+      // filter. Leaves TAA and the camera jitter alone, which is what
+      // ?post=notaa cannot do.
+      if (this.clouds) this.clouds.jitterOff = this._ablate.has('nocloudjitter');
       if (this._ablate.has('cloudtap0')) u.uCloudTap.value = 0;
       if (this._ablate.has('cloudtapmax')) u.uCloudTap.value = 1.4;
       // The sky-ambient fill's lateral occlusion, off. This restores the

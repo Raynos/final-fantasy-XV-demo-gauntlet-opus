@@ -319,9 +319,40 @@ void main() {
       // keeps the blue-white the atmosphere lane measured against
       // duscae-plains-lake-01 (cumulus at R-B -45); the core, which is metres
       // of water droplets away from any sky, stops being lit by it.
-      float fill = clamp(d / max(uCloudDensity, 1e-6), 0.0, 1.0);
-      float bury = exp(-uAmbBury * fill);
-      vec3 amb = mix(skyHz * 0.55, skyUp, hf) * uAmbientBoost
+      // Keyed on d, not on the normalised fill.
+      //
+      // WS-4's last bullet. e -- d / uCloudDensity -- is 0 at the silhouette
+      // and 1 in the core WHATEVER the preset's density is, so a storm cloud
+      // half again as dense buried exactly as much sky light as a fair-weather
+      // one at the same normalised depth. Optical depth is what occludes, and
+      // optical depth is d. AMB_BURY_REF is clear's own uCloudDensity, so this
+      // reproduces clear to the bit and lets the heavy presets scale.
+      const float AMB_BURY_REF = 0.021;
+      float bury = exp(-uAmbBury * d * (1.0 / AMB_BURY_REF));
+      // What survives the burial came in through the SIDES.
+      //
+      // The burial models lateral occlusion and it is right, but it was
+      // applied as a scalar to a fill whose *colour* stayed the rim's:
+      // mix(skyHz*0.55, skyUp, hf), which high in a cloud is the zenith. Light
+      // that reaches the core of a cumulus did not come from the zenith --
+      // there are metres of droplets that way. It came in horizontally, so
+      // what is left of it is the horizon's colour.
+      //
+      // At noon this is close to a no-op: skyHz and skyUp differ by value more
+      // than by hue. At dawn it is the whole of daycycle_dawn's magenta.
+      // Measured on that shot, cloud crop x 0.83-0.95 / y 0.05-0.20, free
+      // exposure: p90 was #8a488f, R-B -5, with B = 143. B is 143 in every one
+      // of ?post=nocloudsun, ?post=nocloudamb and ?post=noambbury as well --
+      // identical to the level -- so the blue is the sky behind and the
+      // cloud-haze wash, and neither arm of the march puts it there. What the
+      // ablations DO move is red: noambbury takes p90 to #a0538f, R-B +17, and
+      // p99 from R-B +18 to +38. So the burial's cost at dawn is that it
+      // removes WARMTH, not that it removes the blue that was desaturating the
+      // sun tint -- which is the opposite of what the backlog recorded, and it
+      // is why the fix is a hue and not a strength.
+      vec3 ambCol = mix(skyHz * 0.55, skyUp, hf);
+      ambCol = mix(skyHz, ambCol, bury);
+      vec3 amb = ambCol * uAmbientBoost
                * (0.22 + 0.78 * hf) * (0.12 + 0.88 * occ) * bury;
 
       // Roll the sun highlight off. A thin cloud edge between the camera and a
@@ -415,6 +446,8 @@ void main() {
  * composites, plus a tiling ground-shadow bake that every lit surface samples.
  */
 export class Clouds {
+  /** `?post=nocloudjitter`: hold the march's sub-texel offset at zero. */
+  jitterOff = false;
   /** The original `render`, while `Dungeons` has the sky stubbed out. */
   __dungeonStub?: Clouds['render'] | null;
   renderer!: THREE.WebGLRenderer;
@@ -524,7 +557,8 @@ export class Clouds {
     u.uInvViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();
     u.uFrame.value = frame % 64;
     const h = HALTON[frame % HALTON.length];
-    u.uJitter.value.set((h[0] - 0.5) / this.rt.width, (h[1] - 0.5) / this.rt.height);
+    if (this.jitterOff) u.uJitter.value.set(0, 0);
+    else u.uJitter.value.set((h[0] - 0.5) / this.rt.width, (h[1] - 0.5) / this.rt.height);
     const r = this.renderer;
     const prev = r.getRenderTarget();
     r.setRenderTarget(this.rt);
