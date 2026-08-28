@@ -81,7 +81,7 @@ import type { JobRecord } from './ledger.mts';
  * tell was the clock: `creaturecheck` came back in 1.4 s, which is not enough
  * time to boot anything. If a client could notice the difference, bump it.
  */
-export const PROTOCOL = 13;
+export const PROTOCOL = 14;
 
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
@@ -1992,7 +1992,11 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
          * `applyShot/settle/applyShot/settle` — only the boundary between them
          * moves from the socket into the loop.
          */
-        if (countsOnly) {
+        // The batched path poses and counts and does nothing else: it has no
+        // ablation arm. `hide`/`raw` therefore fall through to the per-shot
+        // loop below, which handles `countsOnly` too — answering an ablation
+        // with an unablated count is the one wrong answer worth guarding.
+        if (countsOnly && !hide.length && !raw) {
           const metas = await page.evaluate((
             [names, s]: [string[], number],
           ) => {
@@ -2088,11 +2092,51 @@ async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
        */
       g.settle(s);
       g.applyShot(n);          // re-anchor follow shots after settling
-      g.settle(8);
-      // Ablate AFTER settling: hiding a mesh must not change what the sim did,
-      // only what the frame contains. Anything else and the two sides of the
-      // diff are different worlds, not the same world minus one object.
+      /**
+       * AN ABLATION IS PHOTOGRAPHED ON THE SAME FRAME INDEX AS ITS CONTROL.
+       *
+       * This is the tail of the pose, and the ONE frame of difference between
+       * the two arms used to be worth **179 draw calls and 3.75 M triangles**
+       * — an offset so large it swamped every cost `--hide` has ever been
+       * asked for. Hiding one waymark removed 301 draws in `handoff/seating.md`
+       * and LANDMINES §"`--hide` renders less than its control"; the waymark
+       * was never the reason.
+       *
+       * The reason is the shadow cascades. `Sky._updateCascades` refreshes
+       * them on a stride of **[1, 2, 4]** at `ultra`, keyed on
+       * `game.time.frame`, and `Clouds.renderShadow` on `frame & 3`; the near
+       * cascade is 183 draws, the middle +148, the far +298 (`drawcheck.mts`'s
+       * header). `applyShot` calls `resetClock()`, so the pose always ends on
+       * frame **8** — a multiple of 4, i.e. the phase on which all three
+       * cascades AND the cloud shadow are due, the most expensive frame of the
+       * cycle. Measured, one held pose at `town_forecourt`:
+       *
+       *     frame  8  9 10 11 12 13 14 15 16
+       *     calls  791 612 690 612 791 612 690 612 791
+       *
+       * The old hide pass hid, then stepped ONE MORE frame — so the control was
+       * photographed on 8 (the peak) and the ablation on 9 (the trough), and
+       * the difference between two phases of the shadow schedule was reported
+       * as the cost of the object. Two ablations differenced against each other
+       * cancelled it, which is why that workaround worked and why it was needed.
+       *
+       * So spend the LAST settle frame on the ablation instead of adding one
+       * after it: identical step count, identical frame index, identical
+       * cascade and cloud-shadow phase, and the only difference between the two
+       * arms is the object. Measured on the fix, same shot, same page:
+       *
+       *     null ablation        786 calls   10.7351 M
+       *     --hide poi_kits      772         10.7319 M   ->  14 draws
+       *     --hide grass         650         10.5946 M   -> 136 draws
+       *
+       * against −179 / −193 / −263 for the same three under the old pass. The
+       * probe is `src/tools/_probe/hidephase.mts`.
+       *
+       * The hide still lands AFTER the sim has settled — 7 of the 8 tail frames
+       * — so it changes what the frame contains and not what the sim did.
+       */
       const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
+      g.settle(hideList.length ? 7 : 8);
       if (hideList.length) {
         const want = hideList.map((h) => h.toLowerCase());
         g.scene.traverse((o) => {
