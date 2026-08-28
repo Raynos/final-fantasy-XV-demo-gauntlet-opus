@@ -4,8 +4,30 @@ Contract: `docs/plans/2026-08-25-opus-after-phase3.md` §WS-3 and
 `docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-12a — the same work.
 Evidence behind both: `project/archive/handoff/boot-memory.md` §"what is left".
 
-**Status: the three named items are cache reads and the codec pays 5:1.**
-Correctness (full-corpus cold diff) is the open item at the time of writing.
+**Status: the three named items are cache reads, the codec pays 5:1, and the
+cache is byte-identical to the generators over 4.6 M vertices.**
+
+## Correctness
+
+    node src/tools/probe.mts src/tools/probes/geoverify.mts --dirty
+    IDENTICAL — 145 parts, 4 624 052 vertices, byte for byte
+    (poiPrebuild 32.7 ms, so the cache was the thing doing the serving)
+
+`geoverify.mts` compares what the cache served at boot against what the
+generator produces when asked again — same page, same instant, every attribute
+and every index, byte for byte. Shore ribbon, all five megastructures, all eight
+prebuilt POI compounds, and the shadow proxies derived from them.
+
+**This, and not an image diff, is the argument.** A frame is a lossy, noisy
+projection: two boots of one build differ by 1.493/255 before anything changes.
+And the failure a geometry cache actually has is silent and *well-formed* — a
+stale POI compound is correctly wound, contract-clean, `assertAttributeContract`
+green, and standing on a heightfield that has moved. An image diff would have to
+be lucky to see it; the array comparison sees it by construction. It is the
+standard phase 3 held the relief chart to.
+
+It is also the only comparison that survives this trunk. See "what went wrong
+the first time" below.
 
 ## The headline
 
@@ -146,6 +168,32 @@ during `init()` — which is released at the end of `Props.init`.
   carries the hash and the key list; **`keys: []` means the bake recorded
   nothing**, which is the one silent way this can be worthless.
 - `?nobake=1` takes all four caches out of the loop for one page load.
-- The correctness comparison is **`1bb7910` (codec, no call sites) against
-  `0560b83` (call sites)**, both cold, both full-corpus: the only difference
-  between those two trees is whether the geometry comes out of the container.
+- The image half of the correctness pass is
+  `scratchpad/ab2.sh`'s shape: **both corpora at ONE committed sha**, with
+  `geo.bin.gz` moved aside between them, and a `geoboot` probe either side
+  proving the cache was and then was not serving. Never two dirty runs.
+
+## What went wrong the first time, and why it is worth knowing
+
+The first correctness pass was two full-corpus runs on the **live tree**,
+minutes apart, artifact present then absent. It was worthless, twice over, and
+both reasons are structural rather than bad luck:
+
+1. **A co-agent's commit prunes your artifact.** `pre-commit` runs `vite build`,
+   which runs the bake plugin, which deletes a geometry artifact whose sources
+   have moved — and `GEO_SOURCES` is wide, so *any* lane touching `Terrain.ts`,
+   `Ecology.ts`, `PoiKits.ts`, `Water.ts` or now `water/Tarns.ts` invalidates it.
+   Two water-lane commits landed inside the first run's window and the "cache
+   live" side may have booted with no cache at all.
+2. **Two dirty runs are two different worlds.** The water lane was editing
+   `PoiKits.ts` — the fishing kit — between the two runs. Nothing about the
+   output says so.
+
+Both are answered by pinning a sha: an already-booted page keeps the container
+it inflated, so a mid-run prune is harmless, and a sha cannot drift. And
+`geoverify` answers both outright, because both of its sides come from one page
+at one instant.
+
+**Three lanes were live in `src/world/` while this landed**, despite the brief
+saying otherwise — water/chart in `PoiKits.ts`, `Water.ts` and `map/Chart.ts`,
+and characters in `src/characters/`. Re-run `texbake --geo` after they settle.
