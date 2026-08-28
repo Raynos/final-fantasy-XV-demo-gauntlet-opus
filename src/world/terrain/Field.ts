@@ -2401,9 +2401,22 @@ export class Field {
     }
 
     // share of drained cells | depth | how far the shoulder reaches
+    //
+    // **The bottom band is set by where a RIVER starts, not by taste.**
+    // `River.ts` sources a reach at `accum` percentile 0.88 and ramps its
+    // discharge over `(accum - 0.88) / 0.115`; this pass used to start at
+    // 0.940, so the whole lower half of every reach the water lane draws was
+    // running over ground this pass had never touched. Measured on the built
+    // sheet against `Terrain.heightAt` (`tmp/t3-river/channel.mts`, 1 744
+    // stations): **`bankRise@5m` p50 +0.03 m, mean +0.00 m** -- five metres
+    // from the centre of the median river the ground was exactly at the water
+    // surface -- with 48.2% of stations having ground *below* the water at
+    // +/-5 m. A 4.35 m wide, 39 cm deep sheet on ground with no banks is the
+    // "damp streak" verdict, and it is arithmetic rather than taste.
     const BANDS = [
-      { lo: 0.940, hi: 0.985, depth: 1.6, shoulder: 2 },
-      { lo: 0.985, hi: 0.996, depth: 4.0, shoulder: 5 },
+      { lo: 0.885, hi: 0.945, depth: 1.3, shoulder: 3 },
+      { lo: 0.940, hi: 0.985, depth: 2.8, shoulder: 4 },
+      { lo: 0.985, hi: 0.996, depth: 5.0, shoulder: 6 },
       { lo: 0.996, hi: 0.9995, depth: 9.0, shoulder: 9 },
     ];
 
@@ -2425,7 +2438,17 @@ export class Field {
         if (a <= BANDS[0].lo) continue;
         const gx = (h[k + 1] - h[k - 1]) / (2 * CELL);
         const gz = (h[k + N] - h[k - N]) / (2 * CELL);
-        let gate = smoothstep(0.02, 0.06, Math.hypot(gx, gz));
+        // **A trunk stream gets a channel on a pan too.** The slope gate is
+        // right for the headwater nicks -- a 2% gradient is the difference
+        // between a rill and a puddle -- but it is exactly backwards for the
+        // reaches that carry a river: a channel on a 30-degree hillside is
+        // redundant, because the valley is already there, while a channel on a
+        // flat floodplain is the whole point. `smoothstep(0.02, 0.06, |g|)`
+        // evaluated to **zero** on precisely the ground the rivers cross, so
+        // the pass cut nothing where the sheet needed a bank. The top ~4.5% of
+        // drained cells now floor the gate regardless of local slope.
+        let gate = Math.max(smoothstep(0.02, 0.06, Math.hypot(gx, gz)),
+          smoothstep(0.955, 0.992, a));
         if (gate <= 0) continue;
         const xc = -HALF + i * CELL;
         for (const b of basins) {
@@ -2437,7 +2460,12 @@ export class Field {
         for (const b of BANDS) {
           if (a <= b.lo) continue;
           const t = smoothstep(b.lo, b.hi, a);
-          if (b.depth * t > d) { d = b.depth * t; w = b.shoulder * t; }
+          // The shoulder keeps 45% of its reach at the band's own floor. It
+          // used to scale with `t` alone, so a cell in the middle of a band
+          // got `round(shoulder * 0.5)` = **one cell**, and the widening loop
+          // then feathered 0.8 m to nothing inside 4 m. A channel that is one
+          // cell wide is not a channel, it is a scratch.
+          if (b.depth * t > d) { d = b.depth * t; w = b.shoulder * (0.45 + 0.55 * t); }
         }
         cut[k] = d * gate;
         wid[k] = w * gate;
@@ -2460,6 +2488,17 @@ export class Field {
             const ii = i + di; if (ii < 1 || ii >= N - 1) continue;
             const r = Math.hypot(di, dj) / (R + 0.5);
             if (r >= 1) continue;
+            // **MEASURED NEGATIVE: a trapezoid does not put a bank here.**
+            // `d * (1 - r^2)` has no wall anywhere, so the obvious move is
+            // full depth over the inner 40% and a steep flank out to the
+            // shoulder. Tried, baked and measured on the built sheet: the
+            // thalweg is traced live off the post-incision gradient, so the
+            // river simply moves down into the trench and `bankRise@5m` p50
+            // went 0.032 -> **-0.054**, i.e. the wrong way. It also cost a
+            // whole reach (7 -> 6, `dropped 1`), 15% of the river network
+            // (5 211 -> 4 428 m) and tripled `pushTri`'s fold rejections
+            // (632 -> 1 549), because a strip fitted to a steep-walled slot
+            // self-intersects. **You cannot make a bank by cutting the bed.**
             const v = d * (1 - r * r);
             const o = jj * N + ii;
             if (v > wide[o]) wide[o] = v;
