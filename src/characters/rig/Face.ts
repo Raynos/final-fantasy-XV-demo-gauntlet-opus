@@ -113,7 +113,12 @@ export const FACE = {
   // 0.056 — 7 mm too long and 10 mm too low, which on a bare head reads as an
   // elf. `headprop.mts` measures both off the ear geometry itself, not off this
   // anchor. Raised 10 mm; every piece of the ear in `buildHead` is 0.906x in y.
-  ear: [0.0725, -0.0160, -0.006],
+  // ...and it also sat too far **forward**: `headprop.mts`'s `ear.zFromFront`
+  // read 0.563 of glabella-to-opisthocranion against a real 0.50, which is one
+  // of the two statements that there is too much skull behind the ear (the
+  // other is `cephalicIndex` 72.9 against 79). Half of that gap is answered by
+  // `occiputDepth` pulling the vault in behind; this is the other half.
+  ear: [0.0725, -0.0160, -0.0135],
   yMin: -0.122,
   yMax: 0.116,
 };
@@ -136,6 +141,48 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0, 0.104, 0.02], r: [0.10, 0.06, 0.10], amt: -0.005, dir: 'normal' });
   add({ p: [0.072, 0.048, 0.028], r: [0.044, 0.062, 0.058], amt: -0.006, dir: 'normal', mirror: true });
   add({ p: [0.064, 0.014, 0.050], r: [0.038, 0.038, 0.048], amt: -0.005, dir: 'normal', mirror: true });
+
+  /**
+   * **The temporal fossa, the zygomatic arch and the parietal shoulder — the
+   * three things that stop a braincase being a balloon.**
+   *
+   * `head-r2.md` §8.2 named the arch and the hollow as open and they still
+   * were. This pass tried to answer *"the cranium is far too large"* with the
+   * radius instead (see the measured negative on `crownTaper` above) and the
+   * radius is not what is wrong: every vertical landmark is inside 0.005 of
+   * Farkas and the width profile below the cheekbone inside 0.01. What the
+   * frame actually shows is a **surface of revolution** — one smooth convex
+   * sweep from the brow to the vertex with no event on it anywhere — and a
+   * featureless dome reads as a bigger dome than a modelled one of the same
+   * size, because there is nothing in it to give the eye a scale.
+   *
+   * So: a hollow between the brow and the ear (bounded below by an arch and
+   * above by the temporal line), a shoulder at the parietal eminence so the
+   * front silhouette has a corner instead of widening monotonically from the
+   * crown to the cheekbone, two frontal eminences, and a step back above the
+   * brow ridge so the ridge reads as a ridge rather than as the leading edge of
+   * the forehead.
+   *
+   * The parietal brush also moves `zyZy/euEu`, which reads **0.994** against an
+   * adult male's 0.89 — the cheekbone is currently the widest part of the head,
+   * which no skull is. It moves it the *cheap* way, by putting the maximum
+   * where it belongs, rather than by narrowing the face.
+   */
+  // zygomatic arch: malar -> tragus, thin in y so it reads as a rail
+  add({ p: [0.0620, -0.0100, 0.0300], r: [0.0210, 0.0105, 0.0290], amt: 0.0055, dir: 'normal', mirror: true });
+  add({ p: [0.0685, -0.0110, 0.0075], r: [0.0165, 0.0095, 0.0215], amt: 0.0042, dir: 'normal', mirror: true });
+  // temporal fossa: the hollow the arch is the floor of
+  add({ p: [0.0660, 0.0130, 0.0130], r: [0.0300, 0.0360, 0.0380], amt: -0.0078, dir: 'normal', mirror: true });
+  // temporal line: its upper edge, running up and back from the lateral brow
+  add({ p: [0.0555, 0.0400, 0.0470], r: [0.0150, 0.0300, 0.0310], amt: 0.0034, dir: 'normal', mirror: true });
+  add({ p: [0.0655, 0.0455, 0.0120], r: [0.0150, 0.0280, 0.0300], amt: 0.0030, dir: 'normal', mirror: true });
+  // parietal eminence: the widest point of a real skull, and the corner in the
+  // front silhouette that says "braincase" rather than "egg"
+  add({ p: [0.0700, 0.0560, -0.0210], r: [0.0360, 0.0420, 0.0460], amt: 0.0036, dir: 'normal', mirror: true });
+  // frontal eminences, and the step back above the brow ridge that makes the
+  // ridge an edge instead of the front of the forehead
+  add({ p: [0.0240, 0.0520, 0.0740], r: [0.0270, 0.0310, 0.0350], amt: 0.0036, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0290, 0.0300, 0.0805], r: [0.0400, 0.0155, 0.0400], amt: -0.0034, dir: [0, 0, 1], mirror: true });
 
   // brow ridge + glabella
   add({ p: [0.030, 0.0155, 0.079], r: [0.048, 0.017, 0.052], amt: 0.0125 + 0.006 * brow, dir: [0, 0, 1], mirror: true });
@@ -333,7 +380,15 @@ export function brushes(look: Look): SculptBrush[] {
   // stands 4 mm further forward — the pogonion measured **1.0 mm** proud of the
   // sulcus against an adult 4-6, i.e. the chin was there as mass and absent as
   // a feature.
-  add({ p: [0, -0.0820, 0.0790], r: [0.022, 0.0095, 0.024], amt: -0.0040, dir: [0, 0, 1] });
+  // **The "duck-lipped, protruding mouth" is a weak chin.** `headprop.mts`'s
+  // tilt-independent sagittal block: `muzzleMm` 8.13 against an adult 3-6 and
+  // `mentolabialMm` 7.3 against 2-6, but `eLineLsMm` -3.85 and `eLineLiMm` -0.7
+  // are both *inside* Ricketts' band — the lips are where they belong relative
+  // to the nose and the chin, and the chord they are measured against is tilted
+  // because the pogonion stands only **3.24 mm** proud of its own sulcus where
+  // an adult is 4-6. Pulling the lips back would have moved two numbers that
+  // are already right; the chin is the one that is wrong.
+  add({ p: [0, -0.0820, 0.0790], r: [0.022, 0.0095, 0.024], amt: -0.0030, dir: [0, 0, 1] });
   // 0.0240 overshot: the chin came out 11.4 mm proud of its own mentolabial
   // sulcus against an adult 4-6, and in three-quarter it read as a muzzle.
   // Lower and shorter in y, not further forward. The midline outline showed the
@@ -342,10 +397,10 @@ export function brushes(look: Look): SculptBrush[] {
   // projection down to the pogonion and only then turns under. The prominence
   // was already right (7.9 mm out of its own sulcus against an adult 4-6); what
   // was missing was the wall under it.
-  add({ p: [0, -0.1010, 0.0700], r: [0.032, 0.0330, 0.045], amt: 0.0155 + 0.005 * jaw, dir: [0, 0.05, 1] });
+  add({ p: [0, -0.1010, 0.0700], r: [0.032, 0.0330, 0.045], amt: 0.0180 + 0.005 * jaw, dir: [0, 0.05, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
-  add({ p: [0.0165, -0.0975, 0.0690], r: [0.0155, 0.0180, 0.028], amt: 0.0080 + 0.008 * jaw, dir: [0, 0.05, 1], mirror: true });
+  add({ p: [0.0165, -0.0975, 0.0690], r: [0.0155, 0.0180, 0.028], amt: 0.0092 + 0.008 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
   //
   // **The `jaw` coefficients here are *lateral*** — these brushes push along the
@@ -455,6 +510,55 @@ function jawTaper(yn: number) {
 }
 
 /**
+ * **Measured negative — do not re-derive this.** `headprop.mts`'s half-width
+ * profile, vertex to menton, normalised by its own maximum, against an adult
+ * male's:
+ *
+ *     got   0.529 0.771 0.869 0.935 0.975 0.996 1.000 0.951 0.831 0.699 0.523 0.339
+ *     want  0.40  0.64  0.80  0.91  0.98  1.00  0.98  0.92  0.82  0.70  0.53  0.32
+ *
+ * Everything from the cheekbone down is inside a hundredth — `jawTaper` works —
+ * and the **top four samples read 32%, 20%, 9% and 3% too wide**, which is a
+ * tidy statistical account of *"above the brow it is a huge bulbous dome"*. A
+ * lateral-only multiplier `1 - 0.286 * s^1.5` (fitted to those four deviations,
+ * not chosen) lands all four inside 0.04 of the norm and makes the head **much
+ * worse**: captured bald at 0.55 m it is a **bullet**, a rounded cone with the
+ * face on the front of it, because the vault's *height* did not change and
+ * narrowing the top of a tall dome only sharpens it. The same shape pass 5
+ * fixed in the sagittal axis, re-introduced in the lateral one.
+ *
+ * The lesson, which cost this pass an hour: every vertical landmark on this
+ * head is already within 0.005 of Farkas (`err.nasion` 0.003, `err.eye` -0.001,
+ * `err.subnasale` 0.004, `err.stomion` 0.005, `err.earLen` 0.001) and the width
+ * profile below the cheekbone is inside 0.01. **The cranium does not read big
+ * because it is mis-proportioned; it reads big because it is a featureless
+ * surface of revolution** — no temporal hollow, no frontal eminence, no
+ * parietal shoulder, one smooth convex curve from the brow to the vertex. The
+ * fix is relief, not radius. Do not spend another pass moving the radius.
+ */
+
+/**
+ * How much shallower the **back** of the vault is than `profileW` makes it.
+ *
+ * Second half of the same defect, in the other axis. `headprop.mts`:
+ * `cephalicIndex` (breadth over length) reads **72.9** where an adult male is
+ * **79**, and `ear.zFromFront` **0.558** where it is 0.50 — two statements that
+ * there is too much skull *behind* the ear. In profile that is exactly what
+ * shows: the occiput balloons up and back, and it is the mass that makes the
+ * cranium read as much bigger than the face even though every vertical landmark
+ * on this head is within 0.005 of Farkas.
+ *
+ * Only the back (`cos theta <= 0`) and only above the equator: `profileW`'s
+ * fullness *below* the equator is what stops the neck pushing out through the
+ * jaw, and the ramp is what stops the two meeting in a crease. The face, the
+ * midline profile and the ear anchor are all in front of theta = +/-90 and
+ * cannot see this.
+ */
+function occiputDepth(yn: number) {
+  return 1 - 0.13 * smooth(clamp01((yn - 0.05) / 0.45));
+}
+
+/**
  * How much flatter across the front the transverse section is than an ellipse,
  * as an addition to the superellipse exponent at theta = 0.
  *
@@ -532,7 +636,8 @@ function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3
   // sample matters here because `skullPoint` calls this four times per grid
   // vertex, on a 145 x 121 grid, for every character and every NPC at boot.
   const ff = faceFlat(yn);
-  if (ct <= 0 || ff <= 0) return out.set(x, yn * rr[1], w * ct * rr[2]);
+  if (ct <= 0) return out.set(x, yn * rr[1], w * ct * rr[2] * occiputDepth(yn));
+  if (ff <= 0) return out.set(x, yn * rr[1], w * ct * rr[2]);
   const n = 2 + ff * ct;
   const zu = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(st), n)), 1 / n);
   return out.set(x, yn * rr[1], w * zu * rr[2]);
@@ -844,7 +949,10 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
   const earAnchorX = Math.abs(earSnap([FACE.ear[0] * hw, FACE.ear[1], FACE.ear[2]])[0]);
   for (const sg of [1, -1]) {
     const e = FACE.ear;
-    const ex = sg * (earAnchorX + 0.006);
+    // 0.006 was the offset for a **16 mm-thick** plate; at 9 mm it would leave
+    // the medial face 1.5 mm clear of the skull, which is the visible dark seam
+    // behind the ear that §WS-1 has carried since round 3. 2.7 mm inside.
+    const ex = sg * (earAnchorX + 0.0018);
     const c = put([ex, e[1], e[2]]);
     // Every piece of the ear pins to one texel of the face map — the ear's own.
     // A blob whose UV spans 0..1 samples the whole painted face, so the old ear
@@ -860,18 +968,30 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     B.mat(0.46, 0, 0.5);
     B.color(0xcdb4a6);
     // the auricular plate — the sheet the ridges sit on
+    // **The plate was a slab.** 8.0 mm of *half*-thickness on an ear whose whole
+    // cartilage is 3-4 mm, 55 mm long and 38 mm deep against a real 60 x 32,
+    // and standing near-vertical where a real auricle leans back 15-20 degrees
+    // off the vertical. That is the whole of §WS-1's "the ear is a flat scoop
+    // standing off the head": at 0.55 m in profile it reads as a prosthetic
+    // disc, and no amount of ridge detail on it helps, because the object it is
+    // detailing is the wrong object. 4.5 mm half-thick, 60 x 31, leaned back.
     blob(B, {
-      center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0276 * scale, 0.0192 * scale],
-      rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9, uv: eUV,
+      center: [c.x, c.y, c.z], scale: [0.0045 * scale, 0.0298 * scale, 0.0156 * scale],
+      rot: [0.28, sg * 0.30, sg * 0.12], segU: 12, segV: 9, uv: eUV,
     });
     B.color(0xffffff);
     // concha: the bowl in front of the canal, in shadow at almost every angle
-    const c2 = put([ex * 1.02, e[1] - 0.0036, e[2] + 0.003]);
-    // the concha is a bowl and it is in shadow from every angle a head is seen at
-    B.color(0x8e8078);
+    const c2 = put([ex * 1.015, e[1] - 0.0040, e[2] + 0.0030]);
+    // The concha is a bowl and it is in shadow from every angle a head is seen
+    // at — but it was a **31 x 20 mm** bowl on a 60 mm ear, i.e. half the whole
+    // auricle, and painted 0x8e8078, so in profile the ear read as a pale disc
+    // with a black hole bored through it. A real concha is ~20 x 14 and its
+    // floor is skin, not a shadow: the darkness has to come from the bowl's own
+    // occlusion, not from the albedo.
+    B.color(0xb09a8e);
     blob(B, {
-      center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0154 * scale, 0.0098 * scale],
-      rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7, uv: eUV,
+      center: [c2.x, c2.y, c2.z], scale: [0.0034 * scale, 0.0104 * scale, 0.0072 * scale],
+      rot: [0.28, sg * 0.35, sg * 0.12], segU: 10, segV: 7, uv: eUV,
     });
     B.color(0xffffff);
 
@@ -902,11 +1022,15 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // it is supposed to roll over, so the ear rendered as a smooth almond with
     // no rim, no Y and no canal at any distance. Both ridges now clear the
     // plate.
-    ridge(1.02, -2.55, 0.0256, 0.0176, 0.0000, -0.0010, 0.150, 0.0023, 11);
+    // `out` is a fraction of `ex` and the plate is now 4.5 mm half-thick on a
+    // ~74 mm `ex`, i.e. 0.061 of it. 0.150 rolled the rim 11 mm proud of a plate
+    // it only has to clear by 3; on the thinner plate that reads as a wire hoop
+    // held off the ear. 0.105 / 0.085 clear it by 3.3 and 1.9 mm.
+    ridge(1.02, -2.55, 0.0272, 0.0148, 0.0000, -0.0010, 0.105, 0.0023, 11);
     // antihelix — the inner Y, set back from the rim and shallower
-    ridge(0.72, -1.90, 0.0161, 0.0102, -0.0014, 0.0026, 0.118, 0.0018, 9);
+    ridge(0.72, -1.90, 0.0170, 0.0088, -0.0014, 0.0022, 0.085, 0.0018, 9);
     // tragus — the flap over the canal, pointing back into the concha
-    const tg = put([ex * 1.045, e[1] - 0.0050, e[2] + 0.0135]);
+    const tg = put([ex * 1.030, e[1] - 0.0050, e[2] + 0.0118]);
     blob(B, {
       center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0056 * scale, 0.0032 * scale],
       rot: [0, sg * 0.5, 0], segU: 8, segV: 6, uv: eUV,
@@ -916,9 +1040,9 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // skull and stopped being hidden by it: an ellipsoid narrows fastest at its
     // poles, so a lobe placed level with the plate's bottom edge meets nothing
     // there. Raised into the plate's body and grown a little so the two merge.
-    const lb = put([ex * 1.030, e[1] - 0.0237, e[2] + 0.0026]);
+    const lb = put([ex * 1.020, e[1] - 0.0252, e[2] + 0.0042]);
     blob(B, {
-      center: [lb.x, lb.y, lb.z], scale: [0.0064 * scale, 0.0083 * scale, 0.0072 * scale],
+      center: [lb.x, lb.y, lb.z], scale: [0.0050 * scale, 0.0080 * scale, 0.0062 * scale],
       rot: [0, sg * 0.25, 0], segU: 8, segV: 6, uv: eUV,
     });
     B.mat(0.5, 0, 0);
@@ -1903,13 +2027,24 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
       const fs = look.fringeShadow ?? 0.55;
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
+      // **This rect's top edge was the hard horizontal tone band across the
+      // crown**, named by the round-15 judge as *"a seam, not shading"* and
+      // blamed in turn on the scalp shell, on tiling and on the mip chain. It
+      // is none of those: the gradient started at full `fs` (0.55 multiply) on
+      // its **first** stop and the rect simply began there, so the map went from
+      // untouched skin to 45%-darkened skin across one texel, at canonical
+      // y = 0.078 — which on a sphere of radius 0.113 foreshortens to a band
+      // right across the top of the dome in any front view. Ramp in as well as
+      // out and give it room to do it in.
       const [, hy] = px([0, 0.048, 0.082]);
-      const g = ctx.createLinearGradient(0, hy - 0.030 * PY, 0, hy + 0.040 * PY);
-      g.addColorStop(0, `rgba(58,40,44,${fs})`);
-      g.addColorStop(0.5, `rgba(96,70,68,${fs * 0.5})`);
+      const top = hy - 0.062 * PY, span = 0.102 * PY;
+      const g = ctx.createLinearGradient(0, top, 0, top + span);
+      g.addColorStop(0.00, 'rgba(58,40,44,0)');
+      g.addColorStop(0.36, `rgba(58,40,44,${fs})`);
+      g.addColorStop(0.62, `rgba(96,70,68,${fs * 0.5})`);
       g.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = g;
-      ctx.fillRect(0, hy - 0.030 * PY, S, 0.070 * PY);
+      ctx.fillRect(0, top, S, span);
       ctx.restore();
     }
   });
