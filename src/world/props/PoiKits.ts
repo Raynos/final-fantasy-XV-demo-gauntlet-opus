@@ -2113,6 +2113,24 @@ export class PoiKits {
   ): KitResult {
     const M = this.mats, { rng } = ctx;
     void world;
+    /*
+     * A sunk sill under the shack, and it is not decoration.
+     *
+     * `floatcheck`'s POI gate is the **minimum** float over a compound's
+     * meshes: at least one thing has to be in the ground. The wet kit satisfies
+     * that without trying, because its jetty piles run 3.4 m below the deck.
+     * Take the jetty away and the lowest thing left is the shack, sitting on a
+     * deck plane that `_base` seats on a ring *average* — so on the roll at
+     * `caem_shore` the camp came up **0.38 m proud** and `poiFloating` went
+     * 0 -> 2 on the first run of the suite after this kit changed.
+     *
+     * Four stub piles fixed the number and looked wrong: at 0.38 m proud the
+     * shack came back standing on visible legs with daylight under it, on a
+     * lawn. A sill reaches the same 1.3 m down, fills that gap instead of
+     * framing it, and leaves `deckSink` and `stands` untouched — so it cannot
+     * trade a float for a burial either.
+     */
+    put(M.plank, new THREE.BoxGeometry(4.6, 1.6, 3.8), [3.6, deck - 0.5, -3.5]);
     // tackle shack
     put(M.plank, new THREE.BoxGeometry(4.4, 2.8, 3.6), [3.6, deck + 1.2, -3.5]);
     put(M.roof, new THREE.BoxGeometry(5.0, 0.3, 4.2), [3.6, deck + 2.7, -3.5], [0, 0, 0.09]);
