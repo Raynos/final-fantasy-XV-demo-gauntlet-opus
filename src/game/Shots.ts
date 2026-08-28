@@ -648,7 +648,12 @@ const SHOT_TABLE = {
   poi_tomb: {
     doc: 'A royal tomb: the Tomb of the Wise site under the Keycatrich rim (pad only)',
     time: 8.6, weather: 'clear',
-    pos: [330, 95.8, -1330], target: [90, 124.6, -1470], fov: 44,
+    // Rotated around the pin into the clear sector. rockseat measured this
+    // shot seeing 2.8 m of a 13 m temple -- 21% -- with the eye 32.5 m BELOW
+    // the deck, at bearing 35 deg, five degrees inside the only blocked
+    // sector. Anything from 150 to 250 deg sees the whole temple at the same
+    // range with no lift, so this is the same distance at 200 deg.
+    pos: [-171.1, 95.8, -1565.0], target: [90, 124.6, -1470], fov: 44,
   },
   poi_chocobo: {
     doc: 'A chocobo post: the Wiz paddock prairie in the Malacchi Hills (pad only)',
