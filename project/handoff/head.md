@@ -1,305 +1,249 @@
-# Handoff — `head` (round 14): the pixel bench, and the two shapes it found
+# Handoff — `head` (round 14, pass 4): the clip is the jacket, and the paint is not on the face
 
-Owns `src/characters/**`. Started from round 14's 3.0 and the judge's costed
-advice — *"fix the head, and only the head. Nothing in the environment can buy a
-point while that frame exists"* — against the defect sentence
+Owns `src/characters/**`. Inherited a lane that had built `facecheck.mts` (the
+first gate here that scores a *rendered* face), landed two real shapes, and
+ended on one hypothesis: **the lit half of a face is clipped, and `SKIN_BASE`
+0.88 → 0.55 is the fix.** This pass was told to land that corpus-wide.
 
-> the chin projects further forward than the nose ... no mouth geometry or mouth
-> texture on the mouth's location.
-
-**Three lanes have been sent at that sentence and each time a measurement agreed
-while the picture did not.** This one starts by explaining why, and the
-explanation is not subtle.
+**It should not be landed.** Two measurements say so, and a third found something
+larger underneath. Nothing in `src/characters/` changed this pass; what changed
+is that four questions that had been argued for four rounds now have numbers.
 
 ---
 
-## 1. Every head instrument in this repo reads the position buffer
+## 1. The clip is real, and its cause is the party's own black clothing
 
-`headprop.mts` says it about itself. So do `headprofile.mts`, `brushsurvive.mts`
-and `hairstand.mts`. The judge reads pixels, and `head-r3.md` §5 is the proof
-that the two are genuinely different questions rather than the same one measured
-sloppily: **8 mm of added lip relief, an overhanging mouth line and a lip rolled
-to face the sky moved the rendered mouth by 1 of 255** — below what two fresh
-boots differ by. A vertex bench scored that change as a success. The frame did
-not contain it. Nothing in the suite could tell the difference.
+`src/tools/probes/faceclip.mts` reads the **HDR scene buffer** rather than the
+JPEG — `PostFX.rtScene`, half-float, decoded in the page — plus the 1×1 adapted
+exposure target and the band the integrator is allowed to sit in.
 
-### `src/tools/facecheck.mts` — landed, `cc0958f` + `1e2ef93`, wired into `check.mts`
+`hero_portrait`, at HEAD:
 
-Renders each hero's face at 0.55 m (the range `LANDMINES.md` says face work must
-be judged at) and asks the image. Two pixel rows per window, four geometry rows.
+| region | HDR linear (pre-exposure) | × E = 1.3037 |
+|---|---|---|
+| chin | 0.904 0.468 0.259 | **1.179** 0.610 0.338 |
+| neck | 0.814 0.408 0.224 | 1.061 0.532 0.292 |
+| ground | 0.364 0.228 0.117 | 0.474 0.298 0.152 |
+| jacket | 0.056 0.052 0.049 | 0.074 0.068 0.064 |
 
-**It failed on HEAD before a line of `Face.ts` moved — 13 of 24 rows — which is
-the whole point of landing it first.**
+The face's **red channel enters an ACES tonemapper at 1.18**, and the grade's
+warm highlight arm finishes it. Out of the PNG: the chin box reads **mean R
+253.6** with a p97−p03 luma spread of **19 of 255**. There is no mouth in that
+box because there is nothing in that box.
 
-Three things make the pixel rows mean anything, and each one cost a run to find:
+### The albedo is not the cause — this is the measured negative
 
-- **A plane is removed from every window before it is scored.** The terminator,
-  the fringe's cast shadow and the falloff across a curved cheek are all smooth
-  ramps, and a raw p97−p03 scores every one of them as a feature: a blank cheek
-  came back at `range` 157 and `edge` 74/mm, both larger than the mouth's.
-  Least squares `a + bx + cy` is exactly what a ramp is and exactly what a lip
-  is not.
-- **Every window is on the lit half only**, chosen at runtime by comparing the
-  two cheeks. `head-r3.md` §8 measured that the shadow half sits at a flat
-  Y 65–100 with no detail of any kind, identical with the normal map ablated.
-- **The control is the blanker of two boxes on the same face in the same light,
-  not a hand-picked one.** Three hand-picked patches in a row turned out to be
-  features: x = 48 mm reached the silhouette and scored the badlands (224 of
-  255); x = 34 mm at eye height sat under the fringe and scored hair (130); x =
-  36 mm on the mouth line contains the **nasolabial fold**, which `Face.ts`
-  itself calls the strongest off-midline value on the lower face.
+`look.skin` 0xb58c70 × `SKIN_BASE` 0.88 is linear **(0.351, 0.199, 0.122)**,
+which is a *correct* skin albedo; published diffuse reflectance for skin is
+0.35–0.45 in red. And the Sky's own published scene exposure is **0.9789**, at
+which the same face lands at R 230.6 and the same chin box carries **115 of
+255** — six times the structure, no clip, and a value a portrait should have.
 
-**`noseLeadMm` is in it and it passes at 26 mm.** That is deliberate: nothing in
-this repo had ever asserted that the nose must lead the chin, which is the gap
-the plan names, and it is the number that went the wrong way when a previous
-lane pulled the mid-face back. It is a ratchet, not a finding.
+So `SKIN_BASE` is being asked to compensate for a metering error, and the price
+would be every character's skin being wrong in the many frames where the meter
+behaves. **Closed. Do not cut `SKIN_BASE`.**
 
-**`noseRange` is reported and NOT gated.** Its window sits where Noctis' and
-Prompto's fringe casts its shadow, so no control can be matched in light for it;
-across the cast it swung −131 to +121 with no sculpt change between the four.
-The nose is gated on the geometry side instead.
+### The metering, and the ablation that names it
 
-**Gladiolus comes back VOID on the pixel rows, and that is a finding rather than
-a tolerance.** His beard is ~350 loose black slivers scattered over the whole
-lower face — at 0.55 m they read as flies stuck to his jaw — so both candidate
-controls land on it at 224 of 255. No measurement of a mouth is possible under
-that, by this gate or by an eye. **Fixing the beard is what un-voids him**, and
-it is an open item below.
+`faceclip.mts` hides the party and re-meters the identical pose:
 
-`jawWidthErr` was `mentonWidthFrac` for two runs and that version was wrong:
-the menton is not the mesh's lowest vertex — the shell wraps under the jaw into
-the neck and any closed surface tapers to nothing there. `1e2ef93` replaces it
-with the mean absolute error of the four mandible samples of the vertex-to-menton
-half-width profile against Farkas, with the menton found the way `headprop.mts`
-finds it. **Validated against `headprop.mts`: 11 of its 12 samples come back
-identical.**
-
----
-
-## 2. What the bench found, and what moved (`4430771`)
-
-| row | HEAD | after | limit |
+| shot | adapted | party hidden | Sky's `base` |
 |---|---|---|---|
-| `transverseDropMm` noctis | **18.6** | **7.2** | 12 (a head does ~7) |
-| `transverseDropMm` gladio / ignis / prompto | 17.4 / 18.8 / 17.6 | 6.2 / 7.3 / 6.7 | |
-| `jawWidthErr` noctis | **0.0665** | **0.0130** | 0.05 |
-| `jawWidthErr` ignis / prompto | 0.0995 / 0.0640 | 0.0125 / 0.0113 | |
-| `jawWidthErr` gladio | 0.1240 | **0.0450** (see 2.3) | |
-| `noseLeadMm` (all) | 26.2–26.8 | **unchanged to 0.1 mm** | ≥ 12 |
-| `mouthReliefMm` (all) | 5.8–6.1 | unchanged | ≥ 2 |
+| `hero_portrait` | 1.3037 | **0.8711** (−33.2%) | 0.9789 |
+| `hero_profile` | 1.2900 | 1.0420 (−19.2%) | 0.9789 |
+| `hero_full` | 1.1865 | 1.0146 (−14.5%) | 0.9349 |
 
-### 2.1 `shellPoint` swept a pure ellipse, and that is three of the judge's words
+`Exposure`'s metering is centre-weighted — `mix(0.45, 1.0, smoothstep(0.55,
+0.06, dot(q,q)))` — and in a portrait the centre of the frame is a black jacket
+at HDR 0.056. It drags the log-average down, the integrator runs to **1.33× the
+scene exposure the Sky published**, and skin, the highest-albedo large surface
+in the shot, is the first thing to clip.
 
-The transverse section is the item `head-r3.md` §4 measured and explicitly left
-undone as *"a lane, not an afternoon"*. It is an afternoon.
+That also explains the thing round 14 could only describe: *which* half of a
+hero blows is decided by his yaw, because yaw decides how much black coat and
+how much lit skin fall inside the meter's centre weight.
 
-`shellPoint`'s cross-section was an ellipse in theta — 53 mm across and 87 deep
-at the mouth line — so the surface fell away from the midline as `cos(theta)`:
-**18.6 mm of fall-back by x = 30 mm where a head does about 7.** That single
-number is what *"the cheek is a blank plane at every angle but profile"*,
-*"flat sockets"*, *"a wedge"* and the hard vertical terminator down the midline
-of every front view in this repo's history all are. An ellipse has no *turn* in
-it, so there is no cheek plane for a mouth corner or a nasolabial fold to sit
-on, and a key from either side splits the face instead of drawing it.
+**This is `src/engine/postfx/Exposure.ts` and this lane does not own it.**
+`faceexp.mts` is the picture: the same portrait with the adaptation band closed
+onto `base`. It is better everywhere, not only on the face — `imagestats` puts
+today's two head shots at **median luma 100.2 against the FFXV corpus's 70.2**,
+and the excursion is most of that gap. Hand it to whoever owns the post chain;
+the shape of the fix is a metering statistic that a large dark subject cannot
+dominate (a percentile rather than a log-average), or a tighter `rangeHi` than
+today's 1.9.
 
-The fix is a superellipse `|x/a|^n + |z/c|^n = 1` blended to `n = 2` by
-`max(0, cos theta)`, so the occiput is untouched. **`x` is not touched at all**,
-so eu-eu, zy-zy, go-go, the whole half-width profile and every landmark height
-are provably unmoved; and at theta = 0 the exponent is irrelevant, so the entire
-midline — `muzzleMm`, `noseLeadMm`, the whole sagittal bench — cannot move.
-Measured: it does not. What moves is only the mass between the midline and the
-silhouette, which is the thing that was missing.
-
-**One free side effect worth knowing.** `paintFace` places every stroke through
-`fx(x, y) = px([x, y, 0.085 − 2.6·x²])` — a *hardcoded* z profile, not the real
-shell. At the mouth corner the real shell used to be at z = 71 mm against `fx`'s
-assumed 83, which put the painted corner ~4 mm inboard of the geometric one. The
-new section is at 82 mm there. The map is better registered than it was and
-nobody has to do anything.
-
-### 2.2 The jawline undercut *was* the chin
-
-`facecheck` gates the mandible's four width samples. Noctis read
-`0.900 0.753 0.476 0.241` against an adult's `0.82 0.70 0.53 0.32` — wide at
-the gonion, then shaved to a point. **A cone seen from below is a chin that
-leads the face**, which is the judge's own sentence.
-
-The brush at fault is one line, and its own comment is the tell: a previous pass
-caught it reaching *forward* past the chin in z and fixed that axis. At
-`r_x = 0.046` centred on `x = 50 mm` it reached **x = 4 mm — the midline** —
-and nobody measured that, because until `facecheck.mts` the width profile was
-printed and never gated. Measured contribution: **−4.2 mm of half-width at the
-mandible body and −6.6 mm at the chin**, which is the entire gap on the two
-lowest samples.
-
-Narrow in x and set outboard, plus the lateral `jaw` coefficients cut a third
-time (they widen the *skull*; a heavy jaw is a squarer corner and a broader
-chin, which is where Gladiolus' now goes). Noctis, Ignis and Prompto land at
-`0.818 0.675 0.505 0.328` against `0.82 0.70 0.53 0.32`.
-
-### 2.3 Gladiolus' `cheek` was inflating his mandible, and it is not obvious
-
-He was the only hero whose half-width profile peaked **below the temple** —
-`0.884 0.816` at the gonion after the brush work above. The non-obvious half:
-the profile is normalised by its own maximum, which lands at the zygomatic, so
-his `cheek: -0.20` shrank the **denominator** and inflated every mandible sample
-under it. It was buying "gaunt veteran" by making his whole lower face read
-wide. `jaw: 0.85 → 0.55`, `cheek: -0.20 → 0.10`, and he lands at 0.045.
-
-One trap for the next person while you are in there: **`headWidth` scales the
-shell but not the brush table**, whose centres are absolute canonical x. Every
-brush therefore sits at a different fraction of a wide head than of a narrow
-one, and Gladiolus is the only character with `headWidth: 1.04`.
+`facecheck` already VOIDs a window above mean 212 and now the VOID has a cause
+rather than a hypothesis.
 
 ---
 
-## 3. The mouth — the mechanism, ablated, and it is not the mouth
+## 2. The paint is not landing on the face, and this is bigger than the clip
 
-`facecheck` after the two shape fixes, on the lit half:
+Nothing here had ever put **the map's own coordinates on the rendered face**.
+`facebar.mts` does: it rebuilds a canvas from the shipped map's mip 0, replaces
+its contents with eight 45°-wide stripes in u (one blue, so `u = 0.5` is
+identifiable) plus a red latitude at the mouth's own v, and hands it back as the
+material's `map` with the **shipped sampler state** (anisotropy 16, the
+hand-built 11-level chain's filters — an unmatched sampler was a real confound
+on the first run and cost a capture).
 
-| | mouthRange (limit 14) | mouthEdge (limit 3/mm) | window mean |
-|---|---|---|---|
-| noctis | +2.8 | −2.0 | **227.3** |
-| prompto | −18.3 | −9.6 | **234.4** |
-| ignis | **+20.3 PASS** | **+19.4 PASS** | 175.3 |
-| gladio | VOID (beard) | VOID | 105.9 |
+Frames in `tmp/shots/p4-str/`, `p4-bin2/`, `p4-uv3/`. What they say:
 
-**Fill the entire face canvas with pure `#00ff00` and re-render: the shadow half
-comes back vivid green and the lit half comes back WHITE.** The tonemapper
-desaturates a highlight far above 1.0, so on the blown half of a face **no
-texture of any kind survives** — not a mouth, not a nostril, not a nasolabial
-fold, not a pore. That ablation is the finding of this lane and it explains
-every result three lanes have had on this mouth.
+- **v registers.** The red latitude at the mouth's v crosses the face at mouth
+  height; the same at the nose. `paintFace` is not drawing the mouth at the
+  wrong height, and that closes one live theory.
+- **u does not.** Measured across the head at eye height, hair hidden, camera on
+  the head bone's own forward axis: the band θ ∈ [−45°, +45°] — which on this
+  shell covers **89% of the head's width**, both eyes inside it — renders as
+  **45 px of a 580 px head, 7.8%**. Worse, the stripes at the *silhouette*
+  render widest and the stripe facing the camera narrowest, which is the
+  opposite of what a convex head under a frontal camera does.
+- **And the vertex buffer disagrees with both.** `faceattr.mts` reads the
+  attribute directly: the front-most vertex — the nose tip at z = +0.115 — has
+  `uv = (0.5000, 0.3821)`; the back-most has `u = 1.0`; the mean position of
+  every vertex with `u ∈ [0.46, 0.54]` is z = **+0.083** and of every vertex
+  near the seam z = **−0.034**. At the mouth's v, 172 vertices have
+  |u − 0.5| < 0.04 and they span x = −22.4 … +22.3 mm. **The mesh's UVs are
+  correct, unmirrored, and the seam is at the back where `buildHead` puts it.**
 
-Three levers corroborate it, each of which should have worked and did not:
+Three candidates were named for that. **Two are now closed and the third is
+where the answer is:**
 
-| tried | moved `mouthRange` |
-|---|---|
-| mouth line `blur` 1.8 → 0.5 (head-r3 §7's own next action, never done before) | 2.1 → 2.6 |
-| mouth line + its multiply shadow **much darker** (`rgba(78,42,44,.72)` → `rgba(58,26,28,.94)`) | 1.4 → 2.6 |
-| face material `sheen` 0.17 → 0 and `specularIntensity` 0.35 → 0.10 | **nothing** — so the blown term is diffuse, not a highlight lobe |
-| **`SKIN_BASE` 0.88 → 0.55**, which walks the face down out of the clip | **1.4 → 12.3** |
+1. ~~A second surface drawn over the face.~~ **Closed.** `faceocclude.mts`:
+   `<name>_shadow` is 40 385 verts of `MeshBasicMaterial`, but it carries
+   `colorWrite = false` and cannot reach the frame. Every other mesh on a
+   character is `MeshPhysicalMaterial` with `colorWrite = true` and none of them
+   overlaps the head shell.
+2. ~~Something between the attribute and `vMapUv`.~~ **Closed.**
+   `faceuvshade.mts` wraps `patchSkin`'s own `onBeforeCompile` and writes
+   `fract(vMapUv * 8.0)` straight to `gl_FragColor` — no sampler, no mip chain,
+   no colour space, no canvas. Over the brow, eyes, cheeks and mid-face the
+   bands come out **even, symmetric about the midline, and about the width the
+   vertex buffer predicts.** The attribute reaching the fragment is fine.
+3. **The parameterisation itself — and `faceuvshade`'s frame shows it.** Below
+   the mouth line the UV collapses into a **radial fan converging on the
+   menton**: the u isolines all run into one point at the chin and the v
+   isolines become nested arcs around it. That is the `atan2(x, z)` cylinder's
+   pole, at the exact place where the shell tapers toward its own axis under the
+   jaw, and **the mouth sits inside it.** `paintFace` draws the mouth as a
+   horizontal band in a rectangular (u, v) canvas; the lower face samples that
+   canvas along a fan, so the band arrives on the mesh as a curve smeared around
+   the chin — which is what `facebar`'s latitude stripe looks like in
+   `tmp/shots/p4-bar3/`, a "smile" that dips at the midline rather than a line.
 
-Which half of a hero is blown is decided by his **yaw in the settled pose** and
-nothing else, which is why Ignis passes and Noctis does not on identical
-geometry and identical paint. So `facecheck` now **VOIDs** the pixel rows above
-a window mean of 212 and says why, rather than failing the sculpt for the
-exposure — a gate that blamed the sculpt here would be the fourth instrument in
-this repo to agree with a number and disagree with the picture.
+So the remaining question is not *where is the paint* but **what does the fan do
+to it**, and the fix, if this is it, is in `buildHead`'s projection rather than
+in `paintFace`: give the face band its own non-singular chart (a planar or
+cylindrical-about-x projection over the front, blended to the existing wrap at
+the ears) instead of running a pole through the chin. That is a real piece of
+work and it is the *first* thing on this head that is both measured and
+mechanically explains four rounds of a missing mouth.
 
-**This reframes `head-r3.md` §5 rather than contradicting it.** Its conclusion —
-geometry cannot move this mouth, the paint carries it — is right. Its *reason*
-was incomplete: at `hero_portrait` it measured the mouth at 133 against skin 210
-(ratio 0.63, the FFXV plate's own) and concluded we were at the plate. At 0.55 m
-front-on under the same hour the same mouth arrives at a ratio of **0.93**. The
-mouth is not missing from the map. It is being clipped out of the image.
+Two cautions for whoever takes it. `facebar`'s stripe-width numbers above were
+read off a frame by hand and my run-length classifier was picking up background
+on the same rows; treat the 7.8% as indicative, and re-derive it from
+`faceuvshade`, which needs no texture and no classifier. And the vertical tear
+down the midline in `faceuvshade`'s frame is `fract()`'s own cycle boundary at
+`u = 0.5` — an artefact of the visualisation, not evidence of a seam.
 
-**Do not darken the mouth line further.** It has now been tried and measured;
-head-r3's plate constraint still stands, and the change bought 0.5 of 255.
+**`facemark.mts` was written to answer this question and never could.** It
+stamps through `map.mipmaps[i].getContext('2d')` and the shipped chain's levels
+are ImageBitmaps, so every level failed the guard, the loop `continue`d, and
+sixteen captures came back with no magenta because none was ever drawn — 17
+magenta pixels in one profile, zero in any frontal. It now counts what it drew
+and throws. `drawImage` *does* work on those levels, which is how `facebar`
+gets at mip 0.
 
-### The next move, and it is one number
+---
 
-`SKIN_BASE = 0.88` on `look.skin`, shared with `Body.ts`. **It is the single
-highest-value untried thing on this head** and the measurement above is its
-justification. It was not taken here because it moves fifteen characters across
-142 shots and needs a corpus cold diff and a real look, which did not fit in
-this lane's budget. Note that 0.55 — a big cut — still only reached
-`mouthRange` 12.3 against a limit of 14, so **albedo alone may not be enough and
-the real lever may be the frame's exposure**, which is not `src/characters/`.
-Whoever takes it should start by asking why a face's lit half clips while the
-ground four metres behind it does not.
+## 3. Two things three documents say that are not true
 
-## 4. What I looked at, and what is wrong that no number covers
+- **"The head is pitched down in the settled pose."** `Shots.ts`, `head-r3` and
+  two handoffs. `headaim.mts` measures the posed skeleton: the head bone's own
+  +Z sits at **−5.5°** of pitch and the `hero_portrait` camera at **+2.0°**, so
+  the face is seen from 7.5° below its own normal and the face-to-camera angle
+  is **15.1°**. That is a relaxed head in a near-frontal portrait. Whatever
+  makes `hero_portrait` read as a foreshortened downward wedge, it is not eight
+  degrees of neck. Per-bone: `spine03` carries −10.8° of world pitch and the
+  neck gives 6.4° of it back, exactly as `evalIdle`'s comment claims.
+- **"The hard vertical line down the midline is the fringe's cast shadow."** It
+  is present with the hair hidden (`tmp/shots/p4-bin2/`), in every hero, in
+  every framing, and the `u = 0.5` blue stripe lands on it. Whatever it is, it
+  is not the fringe.
 
-Frames: `tmp/shots/head-r4-base/` (HEAD corpus, before), `tmp/shots/head-r4-fc/`
-(`facecam.mts` framings, before), `tmp/shots/r4-after/` (corpus, after),
-`tmp/shots/fc-final/` (annotated `facecheck` frames, after),
-**`tmp/shots/fc-fill/` (the green-fill ablation — keep this one if you keep
-any)**. Describing them, because `tmp/` gets pruned:
+## 4. What I looked at, and the frame that matters
 
-- **`hero_portrait` is a low camera looking up at a head that is pitched down**,
-  so the face is foreshortened into a downward wedge. `Shots.ts`'s own comment
-  predicted it and said the fix is *"a head-pitch change in the settled pose or
-  a shorter fringe, both in `src/characters/`"*. **Neither has been done. Both
-  are still open and both are in this lane's directory.** The pitch is *spinal*,
-  not the head bone — `head-r3` §8 confirmed that and `facecam`'s `PIN_HEAD`
-  does not remove it, so even a "front" studio framing here is a shallow
-  three-quarter.
-- **The fringe blacks out half the face.** At 0.55 m Noctis' fringe covers one
-  whole eye and throws a hard-edged shadow across the nose and cheek. **That
-  shadow is the "hard sub-pixel vertical line down the midline" three handoffs
-  reported.** It is a *cast shadow*, which is why it is hard and why head-r3 was
-  right that it survives a normal-map ablation — the ablation the plan asked for
-  comes back "geometry, but the hair's, not the face's". `Cast.ts`'s crown tuft
-  is `len: 0.080`; a retired WIP commit cut it to 0.050 for making "a black ball
-  twice the width of his head" and the tree today is *longer* than the state it
-  was complaining about.
-- **Gladiolus' beard reads as flies stuck to his jaw** — ~350 loose black
-  slivers over bare skin, individually legible at 0.55 m, the loudest thing on
-  any hero's face. It is why he is VOID in the gate.
-- **The ear is a flat pink scoop standing off the head**, its top at brow level,
-  with a crescent hole. `headprop.mts`: `ear.lateralMm` **97.7** against a head
-  half-breadth of 81.7 — 16 mm past the widest part of the skull. Not touched:
-  the ear has been buried once and un-buried twice in this repo's history and it
-  is not a change to make without room to iterate.
-- **Noctis' hair now reads black** rather than slate. Verified by eye at 0.55 m
-  and in `hero_portrait`: it was the cheapest win on the head and it landed.
-- **Both eyes now read in `hero_portrait`.** Before, one was a blank; the socket
-  depth relative to the lid margin moved with the section change.
+`tmp/shots/p4-base/` (`hero_portrait`, `hero_profile`, `hero_face` at HEAD),
+`p4-fc/` (annotated `facecheck`), `p4-exp/` (the exposure ladder, with
+`crop-shoot.png` the shipped frame and `crop-base.png` the same at `base`),
+`p4-map/` (the painted canvas), `p4-bin2/` and `p4-str/` (the UV readouts).
+Describing them, because `tmp/` gets pruned:
 
-## 5. State, and the exact next step
+- **`hero_portrait` at 1:1 is not "a pale blown mask".** Both eyes read and are
+  the best thing on the head. The lower two-thirds of the face is a smooth
+  balloon: no nose, no nostril, no philtrum, no mouth, no mental crease. There
+  is one soft diagonal crease where a nasolabial fold would be. The ear stands
+  off the head at brow level, exactly as the ear item says.
+- **`tmp/shots/p4-bin2/noctis_bar.png` is the frame this repo has needed for
+  four rounds**: the head with the hair hidden, at 0.55 m, on the head's own
+  axis. It is an **egg with two eyes stuck in it**. Not "a weak nose" — no nose.
+  The judge's *"no mouth geometry or mouth texture on the mouth's location"* is
+  a literal description of it, and so is *"the chin projects further forward
+  than the nose"*, because on an egg the lowest forward point is the chin.
+- **Gladiolus' beard is ~350 loose black slivers over bare skin** and at 0.55 m
+  they read as flies. `p4-bar2/gladio-zoom.png` shows it over a flat green face,
+  which is the clearest picture of it anyone has taken.
+- `hero_profile` **does** show lips, a nose and a chin. Whatever destroys the
+  front view spares the profile, which is itself a clue for §2.
 
-| sha | what |
-|---|---|
-| `6a14da5` | `framecam.mts` stops swallowing `--dirty` (six handoffs asked); takes `--jpeg` |
-| `cc0958f` | **`facecheck.mts`** — the pixel gate, wired into `check.mts`. Failed 13 of 24 rows on the tree it landed against |
-| `1e2ef93` | `jawWidthErr` replaces the mis-normalised `mentonWidthFrac` |
-| `4430771` | **the superellipse section, the jaw, Gladiolus' look, the hair colour, the mouth line** |
-| `59260d0` | `facecheck` VOIDs a clipped window; `--shots` draws the windows on the frame |
+## 5. State
 
-The tree is clean. `facecheck` is green on every geometry row for all four
-heroes, with three of the four VOID on the pixel rows and the reason named.
+Tree at `dec74c4` plus one commit of probes (below). **No `src/characters/` file
+was changed this pass.** `facecheck` at HEAD is unchanged and still PASS:
 
-**Cross-checked against the independent instrument.** `headprop.mts` at HEAD
-against `head-r3.md`'s table: `transverse.dropMm.stomion`
-`[0, 3.3, 19.0, 42.3]` → `[0, 0.3, 8.5, 26.5]` (a head: `[0, 2, 7, 18]`); the
-width profile's mandible `0.900 0.753 0.476 0.241` → `0.804 0.677 0.507 0.328`
-against Farkas' `0.82 0.70 0.53 0.32`; `err.goOverEu` 0.139 → 0.061;
-`muzzleMm` 6.46 → 6.26, i.e. **the midline did not move**, exactly as the
-superellipse's construction says it cannot.
+```
+noctis   mouthRange   2.3  VOID — lit half clipped (mean 227.3)
+gladio                     VOID — no blank patch on this face (the beard)
+ignis    mouthRange  21.0  PASS
+prompto  mouthRange -17.4  VOID — lit half clipped (mean 234.4)
+geometry rows: 4/4 heads pass — noseLead 26.5-27.5, transDrop 5.5-7.3,
+               jawWidthErr 0.0122-0.0450
+```
 
-**Next, in order:**
+New in `src/tools/probes/`: **`faceclip`** (HDR readout + the party-hidden
+metering ablation), **`faceexp`** (the exposure ladder as pictures),
+**`headaim`** (where the head actually points, and which bone points it),
+**`faceuvshade`** (`vMapUv` drawn straight to the frame, no texture in the path
+— ***start here***), **`facebar`** (the map's own coordinates on the face),
+**`faceattr`** (the head mesh's uv attribute and its mesh/material list),
+**`faceocclude`** (is anything drawn over the face — no), **`faceuv`** (a
+lat/long grid version of `facebar`), **`facemip`** (the mip-selection ablation;
+the shipped map already has anisotropy 16, so that theory is closed).
 
-1. **`SKIN_BASE` / the exposure (§3).** Everything else on this face is being
-   measured through a clipped image.
-2. **The settled head pitch and the fringe length (§4).** `Shots.ts` has been
-   asking for two rounds and both are one-line changes in this directory. Judge
-   them on `hero_portrait`, which is the frame the score comes from.
-3. **Gladiolus' beard** — it is the ugliest thing on a hero's face and it is
-   what un-VOIDs a quarter of the gate.
-4. The ear's 16 mm; the cranium above the brow; the shoulder yoke's C7 →
-   acromion slope.
-5. `facecheck`'s `noseRange` can be gated the moment the fringe stops shadowing
-   the nose window.
+## 6. Next, in order
 
-## 6. Closed as measured negatives
+1. **The chin's UV pole (§2.3).** Two of the three candidates are closed and
+   this is the one left standing, with a picture of it. Every other item on this
+   head is being judged through it.
+2. **Hand §1 to the post lane.** It is a one-file change they own and it is
+   worth more than any sculpt item here.
+3. **Gladiolus' beard.** Ugliest thing on any hero's face, un-VOIDs a quarter of
+   `facecheck`, and entirely inside this lane.
+4. The ear's 16 mm; the cranium; the C7 → acromion yoke.
 
-- **The mouth line's blur and value.** Sharpening (head-r3 §7's own proposal)
-  and darkening it each moved the rendered mouth by **0.5 of 255**. Both changes
-  stayed because they are right in every frame that is not clipped, but neither
-  is the fix, and neither should be tried again.
-- **The face material's `sheen` and `specularIntensity`.** Ablated to 0 and 0.10:
-  the blown lit half did not move. The clipped term is diffuse.
-- **The eight unreachable `WIP:` commits from 2026-08-21 are all absorbed.**
-  Audited claim by claim: of ~30 specifics only four are genuinely unlanded and
-  none is a head *shape* item — Noctis' crown-spike length (`Cast.ts`
-  `len: 0.080` where the WIP wanted 0.050, and today's tree is longer than the
-  state that commit was complaining about), `Hair.ts:293`'s `shellC` spread,
-  `Materials.ts:797`'s hair specular exponents, and Prompto's hair albedo.
-  `6454bb6`'s nasion / mandible body / mental tubercles and `1a5fa03`'s entire
-  eye rebuild are present, usually verbatim with the commit message preserved as
-  the comment. **Do not go looking there again.**
-- **The midline was never the problem.** The superellipse moves
-  `transverseDropMm` by 11 mm and `noseLeadMm` by less than 0.1 mm on all four
-  heads. Everything three lanes measured on the midline was true, and none of it
-  was the defect.
+## 7. Closed as measured negatives this pass
+
+- **`SKIN_BASE`.** Not the cause of the clip; the albedo is a correct skin
+  value and the frame is correct at the Sky's own published exposure. §1.
+- **Mip selection on the face map.** The shipped painted map already ships at
+  `anisotropy = 16` with `minFilter` LinearMipmapLinear and a hand-built
+  11-level chain, and at 0.55 m the face is *magnified*, not minified. Not it.
+- **A second surface drawn over the face.** `<name>_shadow` carries
+  `colorWrite = false`. §2.1.
+- **`patchSkin` mangling the uv on its way to the fragment.** `fract(vMapUv*8)`
+  written straight to `gl_FragColor` comes out even and symmetric over the whole
+  mid-face. §2.2.
+- **"The head is pitched down."** −5.5°. §3.
+- **"The midline line is the fringe's shadow."** Present with the hair off. §3.
+- Inherited and still standing: the mouth line's blur and value, the face
+  material's `sheen` and `specularIntensity`, and the eight `WIP:` commits.
