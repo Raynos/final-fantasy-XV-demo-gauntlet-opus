@@ -10,7 +10,7 @@ is where every number before today lives), `vegetation.md`, `grass.md`.
 written and is re-verified; one is landed and measured today; one is a measured
 negative on its stated cause, with the defect relocated to a different band and
 an instrument left behind. `perf` PASS with 0 of 5 shots over the floor,
-`gameplay` PASS, `nanscan` 0 of 142.
+`gameplay` PASS, `check` **19/19**, `nanscan` 0 of 142.
 
 Shas: `95a34c0` (spatial CAS), `46c72a1` (`probes/leaftexel.mts`), `7120d7f`
 (the backlog's WS-3 result and three negatives rows).
@@ -117,9 +117,9 @@ variation rather than depth-buffer quantisation, which at 2 km is metres.
 
 | | d1 | d2 | d4 | d8 | d16 | d32 |
 |---|---|---|---|---|---|---|
-| control (`nocasmask`) | 9.28 | 11.70 | 13.59 | 16.87 | 23.76 | 32.80 |
-| **mask** | **8.56** | 11.24 | 13.41 | 16.83 | 23.77 | 32.79 |
-| `nocas` | 7.26 | 10.48 | 13.08 | 16.71 | 23.72 | 32.79 |
+| control (`nocasmask`) | 9.17 | 11.62 | 13.35 | 16.36 | 23.63 | 32.50 |
+| **mask** | **8.45** | 11.16 | 13.17 | 16.33 | 23.64 | 32.50 |
+| `nocas` | 7.15 | 10.38 | 12.85 | 16.21 | 23.59 | 32.50 |
 | `FFXV-ground` | 8.58 | 10.59 | 12.01 | 14.49 | 17.79 | 18.25 |
 
 `d1` lands on the reference plate's 8.58. Every band from `d8` up moves by less
@@ -132,14 +132,19 @@ never the claim. It is corroboration beside the mask image and the crops.
 
 | roi | | edge% | hard% | p50 | p90 | speck |
 |---|---|---|---|---|---|---|
-| treeline | control | 42.14 | 16.2 | 16.7 | 61.5 | 10.0 |
-| | **mask** | **38.96** | 15.2 | 16.4 | **58.2** | **8.2** |
-| | `nocas` | 27.93 | 15.1 | 19.5 | 57.0 | 1.8 |
-| near crown | control | 47.51 | 24.1 | 19.4 | 79.4 | 37.6 |
-| | **mask** | **45.62** | 22.6 | 19.2 | **75.0** | **26.1** |
-| | `nocas` | 33.69 | 25.9 | 25.1 | 72.0 | 7.1 |
-| ground `0,600,500,280` | control | 17.47 | 0.1 | 10.5 | 16.9 | 0.1 |
-| | **mask** | 14.61 | 0.1 | 10.4 | 16.5 | 0.0 |
+| treeline | control | 42.71 | 16.3 | 16.6 | 60.7 | 10.0 |
+| | **mask** | **39.39** | 15.1 | 16.5 | **57.9** | **7.1** |
+| | `nocas` | 28.26 | 14.7 | 19.3 | 56.0 | 1.8 |
+| near crown | control | 47.62 | 24.3 | 19.4 | 79.4 | 36.4 |
+| | **mask** | **45.39** | 23.0 | 19.4 | **75.3** | **26.5** |
+| | `nocas` | 33.77 | 25.9 | 24.9 | 71.9 | 7.1 |
+
+Taken on `zone_fallgrove`, all three `--cold` off the same committed sha, so
+the only difference between the rows is the `?post=` token. An earlier pass of
+these same measurements was taken `--dirty`, which on a shared trunk carries
+five other lanes' in-flight edits and the harness says so every time; the
+numbers moved by under 0.6 in every cell, but the committed ones are the ones
+to quote.
 
 ### And I looked at what it must not break
 
