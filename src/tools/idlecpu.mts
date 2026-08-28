@@ -5,6 +5,9 @@
  *   node src/tools/idlecpu.mts                 # 15 s of idle free-run, per-subsystem table
  *   node src/tools/idlecpu.mts --secs 30       # a longer window
  *   node src/tools/idlecpu.mts --no-ablate     # the running arm only
+ *   node src/tools/idlecpu.mts --hidden        # add a background-tab arm
+ *   node src/tools/idlecpu.mts --q high        # what a PERSON opens; the harness default is ultra
+ *   node src/tools/idlecpu.mts --dpr 1.5       # add a Retina-resolution arm (headless reports dpr 1)
  *
  * **This is the gate-shaped hole `docs/BOOT_PERF.md` names.** `?shoot=1` is a
  * determinism gate and also a blindfold: `main.ts` does not call `game.start()`
@@ -78,6 +81,11 @@ interface FrameProfile {
   frameMs: number;
   visibility: string;
   running: boolean;
+  dpr: number;
+  pixelRatio: number;
+  drawW: number;
+  drawH: number;
+  quality: string;
 }
 
 /**
@@ -135,6 +143,16 @@ const READ = `(() => {
     rows, frameMs,
     visibility: document.visibilityState,
     running: !!g._running,
+    // The pixel count is half the cost and headless does not have the human's
+    // display. A Retina panel reports devicePixelRatio 2, and Renderer.ts then
+    // asks for min(dpr, 1.5) at 'high' and min(dpr, 2) at 'ultra' -- so the
+    // same loop draws 2.25x or 4x the pixels on the machine the complaint came
+    // from. Quoting a headless percentage without this line understates it.
+    dpr: window.devicePixelRatio,
+    pixelRatio: g.renderer.getPixelRatio(),
+    drawW: g.renderer.getContext().drawingBufferWidth,
+    drawH: g.renderer.getContext().drawingBufferHeight,
+    quality: g.rnd ? g.rnd.quality : (g.renderer.quality || '?'),
   };
 })()`;
 
@@ -223,6 +241,8 @@ function report(arms: Arm[]) {
       + `= ${(f.frames / (f.wallMs / 1000)).toFixed(1)} fps, `
       + `${(f.frameMs / f.frames).toFixed(2)} ms per frame inside Game.frame(), `
       + `visibility ${f.visibility}`);
+    console.log(`  q=${f.quality} · devicePixelRatio ${f.dpr} · renderer pixelRatio ${f.pixelRatio}`
+      + ` · drawing buffer ${f.drawW}x${f.drawH} = ${(f.drawW * f.drawH / 1e6).toFixed(2)} Mpx`);
     const rows = Object.entries(f.rows).sort((x, y) => y[1] - x[1]);
     // `post.render` nests nothing; the system rows nest nothing; but every row
     // sits INSIDE `__frame`, so the remainder is real and worth naming.
@@ -245,6 +265,7 @@ async function main() {
   const SECS = num('--secs', 15);
   const ABLATE = !flag('--no-ablate');
   const HIDDEN = flag('--hidden');
+  const DPR = num('--dpr', 0);
   printContention();
   const pw = powerWarning();
   if (pw) console.log(pw);
@@ -267,12 +288,6 @@ async function main() {
   try {
     const installed = await page.evaluate(INSTALL);
     console.log(`[idlecpu] instrument ${installed}; page is ${await page.evaluate('!!window.GAME._running') ? 'RUNNING' : 'STOPPED'}`);
-    if (HIDDEN) {
-      const ok = await perfCdp.send('Emulation.setPageVisibilityOverride' as never, { hidden: true } as never)
-        .then(() => true).catch(() => false);
-      console.log(`[idlecpu] visibility override: ${ok ? 'hidden' : 'UNSUPPORTED by this build'}`);
-    }
-
     const run = async (name: string, pre?: () => Promise<unknown>) => {
       if (pre) await pre();
       await page.evaluate(ZERO);
@@ -289,11 +304,53 @@ async function main() {
       await run('stopped', () => page.evaluate('window.GAME.stop()'));
       await run('running2', () => page.evaluate('window.GAME.start()'));
     }
+    /**
+     * The background-tab arm, which is the cheapest discriminator there is.
+     *
+     * Chrome throttles `requestAnimationFrame` in a hidden tab and does NOT
+     * throttle a timer, so an idle cost that survives being hidden is
+     * timer-driven and one that collapses is the render loop. Half the search
+     * space for the price of one window.
+     */
+    if (HIDDEN) {
+      const ok = await perfCdp.send('Emulation.setPageVisibilityOverride' as never, { hidden: true } as never)
+        .then(() => true).catch(() => false);
+      console.log(`[idlecpu] visibility override: ${ok ? 'hidden' : 'UNSUPPORTED by this build'}`);
+      if (ok) await run('hidden');
+    }
+    /**
+     * The Retina arm, and the reason a headless percentage understates this.
+     *
+     * Headless reports `devicePixelRatio` 1, so the drawing buffer is 1600x900
+     * = 1.44 Mpx. The machine the complaint came from reports 2, and
+     * `Renderer.ts` then asks for `min(dpr, 1.5)` at `q=high` and `min(dpr, 2)`
+     * at `q=ultra` — 3.24 Mpx and 5.76 Mpx, 2.25x and 4x the pixels of what a
+     * headless run measures. `post.render` is three quarters of the frame and
+     * scales with pixels, so this is not a rounding term.
+     *
+     * `setPixelRatio` + `resize()` is the supported path: `PostFX` re-sizes its
+     * whole chain off `rnd.onResize`, which is what a window resize does
+     * anyway.
+     */
+    if (DPR > 0) {
+      await run(`dpr${DPR}`, () => page.evaluate((r) => {
+        const g = window.GAME as unknown as { rnd: { renderer: { setPixelRatio: (n: number) => void }, resize: () => void } };
+        g.rnd.renderer.setPixelRatio(r); g.rnd.resize();
+      }, DPR));
+    }
   } finally {
     report(arms);
-    const after = contention();
-    if (after.busy) console.log(`\n!! CONTENDED by the end — ${after.trees.join(', ')}. Not a baseline.`);
+    // Release FIRST. `contention()` counts headless chromiums and load average,
+    // and the browser this tool is measuring is one of each -- checking before
+    // the lease is given back reports our own instrument as somebody else's
+    // load, which is how a clean run prints "CONTENDED" with an empty list of
+    // worktrees.
     await leased.release();
+    const after = contention();
+    if (after.busy) {
+      console.log(`\n!! CONTENDED by the end — load ${after.load1.toFixed(2)}`
+        + `${after.trees.length ? `, live worktrees: ${after.trees.join(', ')}` : ''}. Not a baseline.`);
+    }
   }
 }
 
