@@ -132,7 +132,11 @@ if (args.includes('--by-file')) {
   console.log('');
 }
 
-console.log(`anycheck: ${total} \`any\` across ${counts.length} files (ceiling ${CEILING})`);
+// The SCANNED population is printed, not just the hits. `0 across 0 files`
+// reads as a scanner that found nothing because it walked nothing, which is
+// the one way this gate could pass while checking nothing -- the same shape as
+// the unbounded ceiling the header records.
+console.log(`anycheck: ${total} \`any\` in ${counts.length} of ${files.length} files scanned (ceiling ${CEILING})`);
 if (total > CEILING) {
   console.log(`\nFAIL: ${total - CEILING} more than the ceiling. The goal is zero; the number only goes down.`);
   console.log('      Run with --by-file to see where.');
