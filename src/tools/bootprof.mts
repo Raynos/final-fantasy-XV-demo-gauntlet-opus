@@ -384,11 +384,12 @@ async function reportMemory(PORT: number, nobake: boolean, variants: MemVariant[
     console.log(`  unattributed          ${MB(rss.total - idle - m.heapUsed - gpu)}`
       + '   (process overhead, shader binaries, and under a software\n'
       + '                        rasteriser a host-memory copy of every GPU resource)');
-    summary.push(`  ${v.name.padEnd(22)} ${MB(rss.total).padStart(10)} total · ${MB(idle - base).padStart(9)} browser floor · `
-      + `${MB(rss.total - idle).padStart(9)} the world · ${MB(m.heapUsed).padStart(9)} JS heap`);
+    // `rss.total` counts node too. The browser is what the human sees.
+    summary.push(`  ${v.name.padEnd(22)} ${MB(rss.total - base).padStart(10)} browser · ${MB(idle - base).padStart(9)} of it the floor · `
+      + `${MB(rss.total - idle).padStart(9)} the world · ${MB(gpu).padStart(9)} GPU-side`);
     await browser.close();
   }
-  console.log('\n=== the whole number, per variant (RSS of the browser process tree)');
+  console.log('\n=== the whole number, per variant (RSS of the browser process tree, node excluded)');
   for (const s of summary) console.log(s);
 }
 
