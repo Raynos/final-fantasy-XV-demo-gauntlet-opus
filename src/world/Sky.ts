@@ -3,6 +3,7 @@ import { CSM } from 'three/examples/jsm/csm/CSM.js';
 import { Atmosphere } from './sky/Atmosphere.ts';
 import { Clouds } from './sky/Clouds.ts';
 import { MaterialPatch } from './sky/MaterialPatch.ts';
+import { guardCompile } from '../engine/CompileGuard.ts';
 import { SkyProbe } from './sky/SkyProbe.ts';
 
 /**
@@ -631,12 +632,14 @@ export class Sky {
     this.fill = { color: new THREE.Color(0x9fc0ee), intensity: 0.18 };
 
     this.patch = new MaterialPatch(this.csm, this.u);
-    // Every `renderer.compile()` from here on scans first. `Game.init()`
-    // compiles the scene, and renders one warm frame, before `Warmup` gets to
-    // run a scan of its own -- so without this, every lit material visible at
-    // that moment builds a program with no CSM and no atmosphere, which the
-    // patch then immediately obsoletes. 60 dead programs, measured.
-    this.patch.guardCompile(renderer);
+    // Every `renderer.compile()` from here on scans first AND runs with a
+    // render target bound, which is what a real frame does. Without the scan,
+    // `Game.init()`'s own compile builds a program with no CSM and no
+    // atmosphere for every visible lit material, which the patch immediately
+    // obsoletes; without the target, it builds the canvas flavour of every
+    // one, which `EffectComposer` means nothing ever binds. Sixty dead
+    // programs each, measured -- see `engine/CompileGuard.ts`.
+    guardCompile(renderer, (s) => this.patch.scan(s));
 
     this.pmrem = new THREE.PMREMGenerator(renderer);
     this.envScene = new THREE.Scene();

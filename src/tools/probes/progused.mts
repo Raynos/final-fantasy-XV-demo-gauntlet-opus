@@ -24,15 +24,28 @@ const SHOTS = String(window.__PU_SHOTS || [
   'party_walk', 'boss_astral', 'daycycle_dawn',
 ].join(',')).split(',').filter(Boolean);
 
-/** cacheKey -> the fields we want to attribute an unused program with. */
+/**
+ * cacheKey -> the fields we want to attribute an unused program with.
+ *
+ * `rt` is the one that matters most: three keys BOTH `outputColorSpace` and
+ * `toneMapping` on whether a render target was bound at compile time, so every
+ * material compiled to the canvas is a twin of the same material compiled to a
+ * target. This game renders every scene pixel through `EffectComposer`, which
+ * owns a target, so `rt: 0` should never be bound by a real frame.
+ */
+const PREC = { highp: 1, mediump: 1, lowp: 1 };
 function tag(p) {
   const k = String(p.cacheKey);
-  const head = k.split(',highp,')[0];
+  const t = k.split(',');
+  let base = -1;
+  for (let i = 0; i < t.length - 52 + 1; i++) if (PREC[t[i]] && (t.length - i) >= 52) { base = i; break; }
+  const head = base >= 0 ? t.slice(0, base).join(',') : k.split(',highp,')[0];
   return {
     name: p.name || '',
     kind: head.split(',')[0],
     csm: /USE_CSM/.test(k) ? 1 : 0,
     atmo: /atmo1\|/.test(k) ? 1 : 0,
+    rt: base >= 0 ? (t[base + 1] === 'srgb-linear' && t[base + 44] === '0' ? 1 : 0) : -1,
     used: p.usedTimes,
   };
 }
@@ -68,7 +81,7 @@ const usedRows = [], unusedRows = [];
 for (const p of after) (bound.has(p.program) ? usedRows : unusedRows).push(tag(p));
 
 const xtab = (rows, fn) => { const h = {}; for (const r of rows) { const k = fn(r); h[k] = (h[k] || 0) + 1; } return h; };
-const cls = (r) => r.kind + (r.csm ? '+csm' : '') + (r.atmo ? '+atmo' : '');
+const cls = (r) => r.kind + (r.csm ? '+csm' : '') + (r.atmo ? '+atmo' : '') + (r.rt ? '+rt' : '+canvas');
 
 return {
   programsAtStart: before.length,
