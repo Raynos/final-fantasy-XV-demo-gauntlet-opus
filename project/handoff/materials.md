@@ -22,11 +22,18 @@ to be: **the program explosion was not material sprawl at all.**
 | cold boot wall | 8.15 s | **7.20 s** |
 | warm loads | 7.71 / 7.81 s | **7.04 / 7.03 s** |
 
+A fourth run after a `vite build`, same build, quiet: **918 / 943 / 954 ms** and
+7.46 / 7.03 / 6.90 s wall — so 933 ms is the settled figure and the effect is
+**-843 ms on that line, -47%**.
+
 The absolute boot numbers are high because **`paintedFaces` and `bakedGeometry`
 were both missing** for the whole session (`daemon.mts --health` says so; the
 `head` lane keeps editing files in `CANVAS_SOURCES`, which prunes `texc`), worth
-~2.5 s and ~1.2 s. Both arms paid it, so the delta stands; the absolute number
-does not. **Re-measure after `pnpm run build:full`.**
+~2.5 s and ~1.2 s. Both arms paid it, so the delta stands and the absolute does
+not. **`pnpm run build:full` was run and could not fix it**: `texbake --canvas`
+died on `page.goto ... ERR_CONNECTION_REFUSED` against its own build server
+while the box was under three lanes' load. Worth one retry on a quiet machine —
+it is not a code fault and nothing here depends on it.
 
 ## The finding, because the plans point the wrong way
 
