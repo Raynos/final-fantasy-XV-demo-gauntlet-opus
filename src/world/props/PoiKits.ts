@@ -2282,13 +2282,19 @@ export class PoiKits {
      * whatever it lands on.
      */
     const wl = water.level - ctx.base;
-    let shackZ = -5, bank = -1e9;
+    // The FIRST ground out of the water, not the highest of the seven stations.
+    // Taking the highest walked the shack up onto whatever hummock stood in the
+    // fourteen metres behind the beach and left the ramp reaching for it across
+    // the hollow in between. The highest is only the fallback for a bay with no
+    // dry ground behind it at all.
+    let shackZ = -5, bank = -1e9, bestZ = -5, best = -1e9;
     for (let k = 0; k < 7; k++) {
       const z = -5 - k * 2;
       const gy = groundAtLocal(3.6, z);
-      if (gy > bank) { shackZ = z; bank = gy; }
-      if (gy > wl + 0.3) break;
+      if (gy > best) { bestZ = z; best = gy; }
+      if (gy > wl + 0.3) { shackZ = z; bank = gy; break; }
     }
+    if (bank === -1e9) { shackZ = bestZ; bank = best; }
     /**
      * **Every pile is as long as the water under it is deep.**
      *
