@@ -53,10 +53,14 @@ export class Exposure {
     this._reset = true;
 
     this.logMat = fsMaterial({
-      uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2() } },
+      uniforms: {
+        tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2() },
+        uKey: { value: 0.19 }, uDark: { value: 0.63 },
+      },
       fragmentShader: /* glsl */`
         precision highp float;
         uniform sampler2D tDiffuse; uniform vec2 uTexel;
+        uniform float uKey, uDark;
         varying vec2 vUv;
         ${CHUNK_COLOR}
         void main() {
@@ -68,6 +72,24 @@ export class Exposure {
           vec2 q = vUv - 0.5;
           float meter = mix(0.45, 1.0, smoothstep(0.55, 0.06, dot(q, q)));
           float l = 0.25 * (luma(a) + luma(b) + luma(c) + luma(d));
+          // Expose for the light, not for the subject.
+          //
+          // A log-average is dominated by its darkest members -- log2(0.056)
+          // is -4.16 where log2(0.5) is -1.0 -- so a black coat is worth four
+          // times a sunlit hillside per pixel. Measured with probes/expmeter:
+          // the four hero and party poses metered 1.36 to 1.44 times the scene
+          // exposure the Sky publishes from sun and sky irradiance, and hiding
+          // the party re-metered hero_portrait down 33%. This is the term that
+          // stops it: a Naka-Rushton weight that rolls a pixel's vote off as it
+          // goes dark, keyed on uKey so it scales with the grade preset's own
+          // middle grey rather than being a second constant beside it.
+          //
+          // NOT the centre weight, and that was measured, not assumed:
+          // removing the centre weighting entirely moves hero_portrait 1.361 ->
+          // 1.327 and the corpus median 1.361 -> 1.344. Three percent of a
+          // thirty-six percent excursion. The centre box is where the jacket
+          // is, but it is not why the jacket wins -- area times log-depth is.
+          meter *= max(l / (l + uKey * uDark), 0.02);
           gl_FragColor = vec4(log2(max(l, 1e-4)) * meter, meter, 0.0, 1.0);
         }
       `,
@@ -173,6 +195,7 @@ export class Exposure {
     const src = this.chain[0];
     this.logMat.uniforms.tDiffuse.value = srcTexture;
     this.logMat.uniforms.uTexel.value.set(0.25 / src.width, 0.25 / src.height);
+    this.logMat.uniforms.uKey.value = this.key;
     blit(renderer, this.logMat, src);
 
     for (let i = 1; i < this.chain.length; i++) {
