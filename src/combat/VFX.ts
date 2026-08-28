@@ -654,8 +654,8 @@ export class VFX {
     this.flare({ pos: origin, color: 0x8fd8ff, size: 1.5 * scale, life: 0.30, t0, intensity: 2.4 });
     this.flash({ pos: origin, color: 0x53b6ff, intensity: 16, distance: 10, life: 0.34, t0, priority: 2 });
     if (terrain) {
-      this.ground.ring({ pos: origin, terrain, radius: 1.9 * scale, color: 0x2f8fe0, life: 0.7, intensity: 0.7, opacity: 0.5, age: this.clock - t0 });
-      this.ground.pool({ pos: origin, terrain, size: 3.6 * scale, color: 0x2f8fe0, life: 0.9, intensity: 0.9, opacity: 0.6, age: this.clock - t0 });
+      this.ground.ring({ pos: origin, terrain, radius: 1.9 * scale, color: 0x2f8fe0, life: 0.7, intensity: 0.55, opacity: 0.4, age: this.clock - t0 });
+      this.ground.pool({ pos: origin, terrain, size: 3.6 * scale, color: 0x2f8fe0, life: 0.9, intensity: 0.55, opacity: 0.34, age: this.clock - t0 });
     }
     // vertical light column collapsing into the launch point
     const column = this.acquireBeam();
@@ -807,7 +807,10 @@ export class VFX {
     if (terrain) {
       const gp = target.clone();
       gp.y = terrain.heightAt(gp.x, gp.z);
-      this.shockwave({ pos: gp, terrain, radius: 6.5 * scale, color: 0x5fb0e8, t0: impactT, intensity: 1.1, dust: false });
+      // The ground rings are light on dirt, not a decal: at 1.1 the outer
+      // ring clipped to a hard white torus six metres across and read as the
+      // brightest object in a daylight frame.
+      this.shockwave({ pos: gp, terrain, radius: 6.5 * scale, color: 0x5fb0e8, t0: impactT, intensity: 0.62, dust: false });
       this.ground.decal({
         pos: gp, terrain, size: 4.6 * scale, map: this.tex.crack,
         color: 0x1a2026, opacity: 0.85, life: 30, rotate: rng.next() * 6.28,

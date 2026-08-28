@@ -87,8 +87,11 @@ export class CrystalShards {
 
     this.uniforms = {
       uTime: { value: 0 },
-      uIntensity: { value: 1.05 },
-      uRim: { value: new THREE.Color(0xa8e6ff) },
+      uIntensity: { value: 0.95 },
+      // Cyan-blue, per BRIEF's "a streak of cyan-blue crystal shards". A
+      // paler rim reads as white the moment the burst lands on sunlit sand,
+      // because the blending is additive and the ground is already bright.
+      uRim: { value: new THREE.Color(0x74cdff) },
       uLightDir: { value: new THREE.Vector3(-0.5, 0.75, 0.42).normalize() },
     };
     // **Additive and front-faced**, which is what makes these read as crystal
@@ -328,11 +331,11 @@ void main() {
   // ring index along the crystal -- 0 at the tail point, 1 at the tip -- so the
   // tip carries a near-white cyan core and the body stays a deep blue glass.
   float tip = smoothstep(0.30, 1.0, vFacet);
-  vec3 core = mix(vColor, uRim, 0.62);
+  vec3 core = mix(vColor, uRim, 0.44);
   vec3 body = vColor * (0.16 + 0.52 * facetLight);
   vec3 col = mix(body, core * 1.9, tip * 0.72);
-  col = mix(col, uRim * 2.4, fres * 0.8);              // lit facet edges
-  col += uRim * pow(fres, 5.0) * 2.2;                  // the rim itself
+  col = mix(col, uRim * 2.0, fres * 0.74);             // lit facet edges
+  col += uRim * pow(fres, 5.0) * 1.9;                  // the rim itself
   col += core * pow(tip, 3.0) * 1.4;                   // the hot tip
   col *= uIntensity;
 
