@@ -179,9 +179,29 @@ describes without naming its sha.
 
 Routed to `head` on 08-28. Route the rest as each lane launches.
 
-## Results
+## Results — CLOSED
 
-*(appended as lanes report)*
+**Twelve lanes ran, all reported, all graduated. ~225 commits.** Both plans are
+wrapped up: `2026-08-25-opus-after-phase3` closed 4 of 4 and is in
+`archive/plans/`; the standing backlog closed all twelve of its original
+workstreams and stays live because §WS-13 is now the queue.
+
+`pnpm run check` **19/19 in 78.1 s** at close. `nanscan` 0 of 142. Both perf
+gates certified under the perf lane with `RULER_VALID: true`, and **`BRIEF.md`'s
+33 ms rule is met for the first time**.
+
+The full account is in `project/journal/2026-08-28-both-plans.md`; the snapshot
+is `STATUS.md`; the vitals a human asked for are `docs/BOOT_PERF.md`.
+
+**The one thing a successor should read first:** six of the two plans' premises
+were false and two more were stale, so roughly 60% of what closed came back as a
+measured negative or a corrected premise rather than a landed change. The
+generalisation is in `LANDMINES.md` — *when a metric agrees and the frame
+disagrees, suspect a property no metric in the tree reads.*
+
+**Open, and deliberately:** §WS-13 is the queue. The head is short of `BRIEF.md`'s
+bar and was closed by the human after six passes. The 309 MB memory win is not a
+one-line call and the reason is written next to it.
 
 ### `materials` — DONE, 2026-08-28. A-WS2 and B-WS12b's programs half; character LOD handed back
 
