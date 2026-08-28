@@ -1,19 +1,43 @@
-import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
+import type { Part } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
-import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
+import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
+import { clamp01, smooth } from '../rig/CreatureAnim.ts';
+import { mixc } from './Palette.ts';
 
-const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+/* A pale animal on pale ground has only one thing going for it: value
+ * structure. A gazelle's is three bands and they are not decoration — dun
+ * above, a hard near-black lateral stripe, cream below — and it is the stripe
+ * that does the work, because it puts a hard edge between the two values the
+ * sun would otherwise flatten into one. Everything here is authored against
+ * that: the saddle is a stop darker than the flank, the belly a stop and a
+ * half lighter, and the stripe sits exactly on the seam between them. */
+const DUN = 0xb2946a;         // flank, the animal's base value
+const DUN_MID = 0x9a7d55;     // the ticking's other end
+const DUN_DEEP = 0x7d6440;    // saddle over the topline
+const DUN_DARK = 0x4f3f28;    // nuchal crest, facial blaze, ear rim
+const BAND = 0x241b12;        // the lateral stripe and the tail tuft
+const CREAM = 0xe0d2b0;       // belly, throat, inner leg
+const CREAM_HI = 0xf2e9d0;    // rump patch and muzzle band
+const SOCK = 0x35291d;        // black points from the knee down
+const HORN = 0x796850;
+const HORN_DARK = 0x39301f;
+const HOOF = 0x141110;
+const HOOF_TOP = 0x342b23;
+const NOSE = 0x1d1611;
+const GLAND = 0x231a12;
+const EYE_DARK = 0x0d0906;
+const EYE_GLOW = 0x2a1d0c;
 
-const DUN = 0xb59b70;
-const DUN_DARK = 0x8a7350;
-const CREAM = 0xe5d8b8;
-const SOCK = 0x3a3026;
-const HORN = 0x6f6047;
-const HORN_DARK = 0x4c4131;
-const HOOF = 0x1c1712;
-const EYE = 0x140f0a;
+/* A grazer's coat is short and slightly slick, not the sabertusk's matted
+ * guard hair, and horn and hoof are keratin — both a good deal glossier than
+ * anything else on the animal. One draw call, five surfaces. */
+const M_HIDE = [0.88, 0];
+const M_BELLY = [0.83, 0];
+const M_HORN = [0.42, 0.03];
+const M_HOOF = [0.30, 0.04];
+const M_WET = [0.13, 0.0];
 
 /**
  * Anak — the stilt-legged grazer of the Leide highlands. Three metres tall
@@ -58,6 +82,33 @@ export const ANAK = {
   make(opts: SpawnOpts) { return new AnakEnemy(opts); },
 } satisfies SpeciesDef;
 
+/* Shoulder 2.35 m, horn tips 3.14 m, nose at z = 1.04, rump at z = -0.72.
+ *
+ * Rebuilt from `GeoKit` primitives to `CBuilder`/`sweep`, the way the sabertusk
+ * is built. The old sculpt was 2,770 triangles — a tenth of every other
+ * quadruped in the roster — and the **only species with no `colorAt`
+ * anywhere**: every part carried one flat `tint()` plus 4 % jitter, which is
+ * why the animal read as a single sheet of cream however the palette was
+ * tuned. A `markings()` pass that walked the finished buffers and painted
+ * three bands by world height half-landed, because a height threshold cannot
+ * tell a belly from a thigh — they occupy the same band — and it could not
+ * reach the four specific defects the review named:
+ *
+ *   * legs ending in round brown balls rather than hooves
+ *   * a tail that was a flat card sticking out sideways
+ *   * a visible box where the shoulder met the neck
+ *   * a faceted body
+ *
+ * All four are geometry, not paint. The body, neck, both pairs of legs and the
+ * tail are now continuous shaped sweeps; the skull is a brushed blob; each
+ * foot is a **cloven hoof** of two keratin toes with a flat sole and a pair of
+ * dewclaws; and the value structure is authored per vertex in the sweep's own
+ * `(theta, u)` rather than stamped on afterwards.
+ *
+ * The skeleton is unchanged, bone for bone and metre for metre, so every pose
+ * in `AnakEnemy.pose` and all nine `creaturecheck` poses address exactly the
+ * geometry they addressed before.
+ */
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
@@ -82,179 +133,374 @@ function buildPrototype() {
     rig.bone(`bho${n}`, `bhk${n}`, [0.24 * s, 0.07, -0.26]);
   }
 
-  /* ---- the small barrel of a body, hung high between the legs ---- */
-  const torso = tube([
-    P(0, 1.90, -0.58), P(0, 1.97, -0.28), P(0, 2.03, 0.02),
-    P(0, 2.07, 0.28), P(0, 2.06, 0.46),
-  ], [0.175, 0.255, 0.285, 0.255, 0.185], { radialSeg: 10, flat: 0.86 });
-  rig.attachBlend(tint(torso, DUN, 0.05), 'hips', 'chest', 1.6);
+  const B = new CBuilder();
+  const P: Part[] = [];
 
-  const belly = tube([P(0, 1.80, -0.30), P(0, 1.79, 0.02), P(0, 1.84, 0.30)],
-    [0.16, 0.185, 0.155], { radialSeg: 8, flat: 0.8 });
-  rig.attachBlend(tint(belly, CREAM, 0.04), 'hips', 'chest', 1.6);
+  /* ---------------------------------------------------------- torso ----
+   * One sweep from the pin bones to the base of the neck. `ref: [0,1,0]` with
+   * a centreline running along +Z puts theta 0 on the spine and theta pi on
+   * the belly, so `cos(theta)` is the dorsal-ventral axis and every band below
+   * is written in it. */
+  B.group(1);
+  const backline = (th: number) => Math.cos(th);
+  const torsoColour = (th: number, u: number) => {
+    const b = backline(th);
+    // Ticking first, so no zone is a flat field. Held to ~3 cycles axially on
+    // a 30-step sweep and 3 around a 26-segment ring: anything finer than
+    // about six samples per cycle stops being a coat and becomes streaking.
+    const tick = 0.44 + 0.30 * Math.sin(u * 19 + th * 3) + 0.14 * Math.sin(u * 11 - th * 5);
+    const flank = mixc(DUN, DUN_MID, tick);
+    // A gazelle's three bands, in the order the light finds them: a deeper
+    // saddle over the topline, a hard near-black lateral stripe exactly where
+    // dun meets cream, and the cream underside below it. The stripe sits ON
+    // the boundary rather than beside it, so even where the ring can only
+    // spare two segments for it the two values it separates still read.
+    let c = mixc(flank, DUN_DEEP, clamp01((b - 0.12) / 0.62) * 0.78);
+    c = mixc(c, CREAM, Math.pow(clamp01((-b - 0.30) / 0.34), 2) * 0.94);
+    c = mixc(c, BAND, Math.exp(-Math.pow((b + 0.44) / 0.26, 2)) * 0.85);
+    // and the pale rump the tail flags against
+    return mixc(c, CREAM_HI, clamp01((0.11 - u) / 0.11) * 0.62);
+  };
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.94, -0.68], rx: 0.126, rz: 0.136 },   // pin bones, under the tail
+      { p: [0, 1.965, -0.46], rx: 0.198, rz: 0.218 },  // croup
+      { p: [0, 1.975, -0.22], rx: 0.194, rz: 0.246 },  // loin — narrow, deep, tucked
+      { p: [0, 1.995, 0.02], rx: 0.204, rz: 0.262 },
+      { p: [0, 2.02, 0.24], rx: 0.222, rz: 0.286 },    // girth, the deepest section
+      { p: [0, 2.05, 0.42], rx: 0.186, rz: 0.238 },    // shoulder
+      { p: [0, 2.085, 0.53], rx: 0.126, rz: 0.158 },   // base of the neck
+    ],
+    steps: 30, seg: 26, ref: [0, 1, 0],
+    capStart: 0.65, capEnd: 0.15,
+    shape: (th, u) => {
+      const b = backline(th);
+      const side = Math.abs(Math.sin(th));
+      let m = 1;
+      // a flat back and a keeled brisket — the vertical section is an egg
+      m += b > 0 ? -0.05 * b * b : 0.11 * b * b * smooth(1 - Math.abs(u - 0.70) * 2.4);
+      // the tuck behind the ribs, which is most of what makes a grazer look
+      // light on its feet rather than like a barrel on sticks
+      m -= smooth((u - 0.18) / 0.28) * (1 - smooth((u - 0.52) / 0.22)) * 0.13 * clamp01(-b);
+      // haunch and shoulder blade push out sideways
+      m += side * 0.13 * Math.exp(-Math.pow((u - 0.16) / 0.15, 2));
+      m += side * 0.10 * Math.exp(-Math.pow((u - 0.80) / 0.13, 2));
+      // hip points — a gazelle in condition still shows them
+      m += clamp01(b - 0.15) * side * 0.06 * Math.exp(-Math.pow((u - 0.13) / 0.06, 2));
+      // withers, so the topline is not a bare cylinder into the neck
+      m += clamp01(b - 0.35) * 0.07 * Math.exp(-Math.pow((u - 0.78) / 0.10, 2));
+      // shallow rib banding on the lower flank, where raking light finds it
+      m += Math.sin(u * 22) * 0.008 * side * clamp01(-b + 0.4) * smooth((u - 0.45) / 0.2);
+      return m;
+    },
+    colorAt: torsoColour,
+    matAt: (th) => (backline(th) < -0.55 ? M_BELLY : M_HIDE),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['hips', 'spine', 'chest']] });
+  resetB(B);
 
+  /* ----------------------------------------------------------- neck ----
+   * Starts *inside* the chest — the old sculpt butted a neck tube against a
+   * torso tube and a shoulder blob, which is the visible box the review
+   * named. `ref: [0,0,1]` on a centreline running up-and-forward puts
+   * `cos(theta)` on the throat. */
+  B.group(2);
+  sweep(B, {
+    nodes: [
+      { p: [0, 2.04, 0.36], rx: 0.170, rz: 0.186 },   // buried in the chest
+      { p: [0, 2.20, 0.445], rx: 0.134, rz: 0.148 },
+      { p: [0, 2.42, 0.500], rx: 0.108, rz: 0.120 },
+      { p: [0, 2.62, 0.552], rx: 0.093, rz: 0.103 },
+      { p: [0, 2.78, 0.604], rx: 0.081, rz: 0.089 },
+      { p: [0, 2.87, 0.640], rx: 0.066, rz: 0.072 },  // into the skull
+    ],
+    steps: 20, seg: 18, ref: [0, 0, 1], capStart: false, capEnd: false,
+    shape: (th, u) => {
+      const f = Math.cos(th);
+      // the nuchal crest along the back of the neck
+      let m = 1 + clamp01(-f - 0.1) * 0.13 * smooth((u - 0.05) / 0.35) * (1 - smooth((u - 0.72) / 0.28));
+      // and the fullness of the throat where it leaves the chest
+      m += clamp01(f) * 0.09 * Math.exp(-Math.pow((u - 0.16) / 0.22, 2));
+      return m;
+    },
+    colorAt: (th, u) => {
+      const f = Math.cos(th);
+      const tick = 0.44 + 0.26 * Math.sin(u * 13 + th * 3);
+      let c = mixc(DUN, DUN_MID, tick);
+      // the cream throat runs the whole length of it — the field mark that
+      // separates the head from the shoulder at any distance
+      c = mixc(c, CREAM, clamp01((f - 0.22) / 0.58) * 0.88);
+      return mixc(c, DUN_DARK, clamp01((-f - 0.12) / 0.62) * 0.52 * (1 - smooth((u - 0.78) / 0.22)));
+    },
+    matAt: (th) => (Math.cos(th) > 0.35 ? M_BELLY : M_HIDE),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['chest', 'neck1', 'neck2', 'head']] });
+  resetB(B);
+
+  /* ------------------------------------------------------------ head ---
+   * A narrow deer skull: braincase, a brow shelf over deep-set eyes, cheek
+   * arches, and a long tapering muzzle — one brushed blob rather than a blob
+   * with a tube pushed into the front of it. */
+  B.group(3);
+  sculptBlob(B, {
+    center: [0, 2.792, 0.792], scale: [0.084, 0.094, 0.243], segU: 28, segV: 20,
+    brushes: [
+      { p: [0, 2.855, 0.625], r: [0.09, 0.075, 0.09], amt: 0.015, dir: [0, 1, -0.25] },      // braincase
+      { p: [0, 2.858, 0.705], r: [0.10, 0.042, 0.065], amt: 0.020, dir: [0, 1, 0.18] },      // brow shelf
+      { p: [0.070, 2.836, 0.738], r: [0.042, 0.040, 0.048], amt: -0.016, dir: 'normal', mirror: true }, // eye socket
+      { p: [0.070, 2.786, 0.706], r: [0.042, 0.050, 0.062], amt: 0.014, dir: [1, -0.15, 0], mirror: true }, // cheek arch
+      { p: [0, 2.752, 0.985], r: [0.10, 0.10, 0.14], amt: -0.044, dir: 'normal' },           // muzzle taper
+      { p: [0, 2.742, 1.032], r: [0.09, 0.09, 0.09], amt: -0.020, dir: 'normal' },           // and again at the tip
+      { p: [0, 2.792, 0.900], r: [0.030, 0.040, 0.09], amt: 0.010, dir: [0, 1, 0] },         // nasal bone
+      { p: [0, 2.722, 0.995], r: [0.05, 0.04, 0.06], amt: 0.010, dir: [0, -1, 0.3] },        // upper lip
+    ],
+    colorAt: (u, v, p) => {
+      const under = clamp01((2.778 - p.y) / 0.062);
+      const cheek = clamp01(1 - Math.abs(Math.abs(p.x) - 0.055) / 0.052) * clamp01((2.822 - p.y) / 0.072);
+      let c = mixc(DUN, CREAM, Math.max(under * 0.85, cheek * 0.5));
+      // the facial blaze: a dark stripe down the bridge, the thing that turns
+      // a pale wedge into a face
+      const blaze = clamp01(1 - Math.abs(p.x) / 0.046) * clamp01((p.z - 0.720) / 0.10)
+        * clamp01((1.005 - p.z) / 0.06);
+      c = mixc(c, DUN_DARK, blaze * 0.78);
+      // a pale muzzle band behind the nose leather
+      c = mixc(c, CREAM_HI, clamp01((p.z - 0.955) / 0.045) * 0.80);
+      // and the preorbital gland, a dark slit below the eye
+      const gland = Math.exp(-(
+        Math.pow((Math.abs(p.x) - 0.060) / 0.030, 2)
+        + Math.pow((p.y - 2.806) / 0.018, 2)
+        + Math.pow((p.z - 0.782) / 0.038, 2)));
+      return mixc(c, GLAND, gland * 0.72);
+    },
+    matAt: (u, v, p) => (p.z > 1.005 ? M_WET : M_HIDE),
+  });
+  // nose leather
+  sculptBlob(B, {
+    center: [0, 2.726, 1.036], scale: [0.040, 0.031, 0.026], segU: 12, segV: 8,
+    brushes: [
+      { p: [0.022, 2.732, 1.052], r: [0.016, 0.020, 0.024], amt: -0.008, dir: 'normal', mirror: true },
+    ],
+    colorAt: () => NOSE, matAt: () => M_WET,
+  });
   for (const s of [-1, 1]) {
-    const hn = place(blob(0.115, 0.165, 0.185, 9, 7), { pos: [0.145 * s, 1.96, -0.38] });
-    rig.attach(tint(hn, DUN, 0.05), 'hips');
-    const sh = place(blob(0.105, 0.150, 0.150, 9, 7), { pos: [0.155 * s, 2.02, 0.26] });
-    rig.attach(tint(sh, DUN, 0.05), 'chest');
-    // Cream flank flash, the field mark you spot it by at range. Dropped 8 cm
-    // so it sits *below* the lateral stripe `markings()` paints rather than
-    // straddling it — at 1.90 it read as a white lozenge stuck to the side.
-    const fl = place(blob(0.055, 0.11, 0.26, 8, 6), { pos: [0.235 * s, 1.82, -0.06] });
-    rig.attach(tint(fl, CREAM, 0.04), 'spine');
+    // The eye is this animal's whole character: a prey animal's is huge, dark,
+    // set high and wide enough on the skull to see behind itself. Radiance is
+    // low — a wet highlight, not the predator's lit iris.
+    B.glow(EYE_GLOW, 1.3);
+    sculptBlob(B, {
+      center: [0.0765 * s, 2.838, 0.756], scale: [0.032, 0.035, 0.028], segU: 12, segV: 9,
+      colorAt: () => EYE_DARK, matAt: () => M_WET,
+    });
+    B.glow(null);
+    // ear: a tall leaf, thin front-to-back, pale inside with a dark rim
+    sweep(B, {
+      nodes: [
+        { p: [0.068 * s, 2.872, 0.598], rx: 0.030, rz: 0.019 },
+        { p: [0.116 * s, 2.952, 0.545], rx: 0.052, rz: 0.017 },
+        { p: [0.161 * s, 3.028, 0.486], rx: 0.045, rz: 0.014 },
+        { p: [0.194 * s, 3.082, 0.438], rx: 0.015, rz: 0.008 },
+      ],
+      steps: 10, seg: 12, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.5,
+      shape: (th, u) => 1 + Math.max(0, Math.cos(th)) * 0.16 * smooth((u - 0.1) / 0.4),
+      colorAt: (th, u) => {
+        const inner = clamp01((Math.cos(th) - 0.05) / 0.7);
+        const rim = clamp01((Math.abs(Math.sin(th)) - 0.72) / 0.28);
+        return mixc(mixc(DUN_MID, CREAM, inner * 0.82), DUN_DARK, Math.max(rim * 0.7, clamp01((u - 0.7) / 0.3) * 0.5));
+      },
+      matAt: () => M_HIDE,
+    });
+    // backswept ribbed horn — the ribbing is in the sweep's own section, not
+    // five loose rings stacked beside it
+    sweep(B, {
+      nodes: [
+        { p: [0.050 * s, 2.884, 0.646], rx: 0.036, rz: 0.032 },
+        { p: [0.072 * s, 2.990, 0.576], rx: 0.030, rz: 0.027 },
+        { p: [0.093 * s, 3.074, 0.456], rx: 0.024, rz: 0.021 },
+        { p: [0.104 * s, 3.124, 0.306], rx: 0.017, rz: 0.015 },
+        { p: [0.101 * s, 3.136, 0.156], rx: 0.009, rz: 0.008 },
+        { p: [0.092 * s, 3.116, 0.056], rx: 0.004, rz: 0.0035 },
+      ],
+      steps: 26, seg: 10, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.6,
+      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 25)) * 0.17 * (1 - smooth((u - 0.58) / 0.34)),
+      colorAt: (th, u) => mixc(mixc(HORN_DARK, HORN, clamp01((u - 0.12) / 0.55)),
+        HORN_DARK, Math.max(0, -Math.sin(u * 25)) * 0.42),
+      matAt: () => M_HORN,
+    });
   }
-  // a low withers ridge so the topline is not a bare cylinder
-  const withers = place(blob(0.13, 0.075, 0.22, 8, 6), { pos: [0, 2.16, 0.20] });
-  rig.attach(tint(withers, DUN_DARK, 0.05), 'chest');
-  // Everything attached so far is the body; the neck, skull and legs follow.
-  // `markings()` works in world-space heights, and the upper leg spans
-  // y 1.34-2.02 — the same band as the belly — so it has to be handed the
-  // body parts explicitly rather than filtered by height. Painting all of
-  // them put white sleeves on the thighs.
-  const bodyParts = rig.parts.slice();
+  P.push({ geo: B.build(), bind: ['bone', 'head'] });
+  resetB(B);
 
-  /* ---- long neck ---- */
-  const nk1 = tube([P(0, 2.10, 0.34), P(0, 2.30, 0.47), P(0, 2.46, 0.52)],
-    [0.145, 0.120, 0.105], { radialSeg: 8, flat: 0.9 });
-  rig.attachBlend(tint(nk1, DUN, 0.05), 'chest', 'neck2', 1.2);
-  const nk2 = tube([P(0, 2.50, 0.53), P(0, 2.66, 0.58), P(0, 2.78, 0.61)],
-    [0.100, 0.088, 0.078], { radialSeg: 8, flat: 0.9 });
-  rig.attachBlend(tint(nk2, DUN, 0.05), 'neck2', 'head', 1.2);
-  // cream throat stripe running the length of it
-  const throat = tube([P(0, 2.14, 0.44), P(0, 2.40, 0.60), P(0, 2.64, 0.68)],
-    [0.055, 0.046, 0.038], { radialSeg: 6, flat: 0.7 });
-  rig.attachBlend(tint(throat, CREAM, 0.04), 'chest', 'head', 1.4);
+  /* ------------------------------------------------------------- jaw --- */
+  B.group(4);
+  sweep(B, {
+    nodes: [
+      { p: [0, 2.736, 0.700], rx: 0.058, rz: 0.050 },
+      { p: [0, 2.716, 0.840], rx: 0.044, rz: 0.038 },
+      { p: [0, 2.708, 0.958], rx: 0.032, rz: 0.028 },
+      { p: [0, 2.708, 1.020], rx: 0.021, rz: 0.019 },
+    ],
+    steps: 12, seg: 12, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.6,
+    shape: (th) => 1 + Math.max(0, -Math.cos(th)) * 0.16,
+    colorAt: (th, u) => mixc(Math.cos(th) < -0.15 ? CREAM : DUN_MID, CREAM_HI, clamp01((u - 0.55) / 0.45) * 0.55),
+    matAt: () => M_BELLY,
+  });
+  P.push({ geo: B.build(), bind: ['bone', 'jaw'] });
+  resetB(B);
 
-  /* ---- narrow deer skull ---- */
-  const skull = place(blob(0.085, 0.095, 0.145, 9, 7), { pos: [0, 2.82, 0.66] });
-  rig.attach(tint(skull, DUN, 0.04), 'head');
-  const muzzle = tube([P(0, 2.79, 0.74), P(0, 2.73, 0.90), P(0, 2.70, 1.00)],
-    [0.070, 0.055, 0.046], { radialSeg: 7, flat: 0.85 });
-  rig.attach(tint(muzzle, DUN, 0.04), 'head');
-  const nose = place(blob(0.048, 0.036, 0.030, 7, 5), { pos: [0, 2.695, 1.025] });
-  rig.attach(tint(nose, 0x2a221a), 'head');
-  const chin = place(blob(0.045, 0.030, 0.070, 7, 5), { pos: [0, 2.665, 0.94] });
-  rig.attach(tint(chin, CREAM, 0.04), 'jaw');
-  const jaw = tube([P(0, 2.71, 0.74), P(0, 2.67, 0.92)], [0.052, 0.040], { radialSeg: 6, flat: 0.85 });
-  rig.attach(tint(jaw, DUN_DARK, 0.04), 'jaw');
-
-  // big dark eyes, set wide on the sides of the skull — pure prey animal
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.042, 0.046, 0.036, 8, 6), { pos: [0.082 * s, 2.845, 0.72] });
-    rig.attach(glow(tint(e, EYE), 0x2a2018, 0.35), 'head');
-  }
-  // tall mobile ears
-  for (const s of [-1, 1]) {
-    const ear = tube([P(0.075 * s, 2.90, 0.58), P(0.155 * s, 3.00, 0.48), P(0.195 * s, 3.06, 0.38)],
-      [[0.045, 0.018], [0.052, 0.016], [0.020, 0.008]], { radialSeg: 6 });
-    rig.attach(tint(ear, DUN_DARK, 0.05), 'head');
-  }
-
-  /* ---- backswept ribbed horns ---- */
-  for (const s of [-1, 1]) {
-    const h = tube([
-      P(0.055 * s, 2.90, 0.62), P(0.080 * s, 3.02, 0.52), P(0.100 * s, 3.10, 0.36),
-      P(0.108 * s, 3.14, 0.18), P(0.100 * s, 3.13, 0.03),
-    ], [0.040, 0.034, 0.028, 0.021, 0.010], { radialSeg: 7 });
-    rig.attach(tint(h, HORN, 0.04), 'head');
-    // the ribbing: shallow rings stacked up the first two thirds
-    for (let i = 0; i < 5; i++) {
-      const t = i / 4;
-      const r = place(blob(0.040 - t * 0.012, 0.010, 0.040 - t * 0.012, 7, 4), {
-        pos: [(0.060 + t * 0.045) * s, 2.94 + t * 0.16, 0.58 - t * 0.36],
-        rot: [0.85 - t * 0.45, 0, 0],
-      });
-      rig.attach(tint(r, HORN_DARK), 'head');
-    }
-  }
-
-  /* ---- the legs: nearly two metres of them, thin as broom handles ---- */
+  /* ------------------------------------------------------------ legs ---
+   * Nearly two metres of leg each, and the whole species reads on them. One
+   * sweep per limb bound across all four bones, with radii that are
+   * deliberately **not** monotone: a real ungulate limb swells at the
+   * forearm, pinches hard at the carpus, runs down a thin cannon and swells
+   * again at the fetlock, and it is those changes of direction that stop a
+   * leg reading as a cone. */
+  const legColour = (s: number) => (th: number, u: number) => {
+    const inner = clamp01(-Math.sin(th) * s);
+    const top = mixc(DUN, CREAM, inner * clamp01((0.45 - u) / 0.35) * 0.6);
+    return mixc(top, SOCK, clamp01((u - 0.44) / 0.28) * 0.92);
+  };
+  const legShape = (backAmt: number) => (th: number, u: number) => {
+    const back = -Math.cos(th);
+    return 1 + Math.max(0, back) * backAmt * Math.exp(-Math.pow((u - 0.14) / 0.15, 2))
+      // the flexor tendon standing off the back of the cannon
+      + Math.max(0, back) * 0.11 * smooth((u - 0.56) / 0.16) * (1 - smooth((u - 0.86) / 0.12));
+  };
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const fu = tube([P(0.22 * s, 2.02, 0.26), P(0.23 * s, 1.68, 0.31), P(0.24 * s, 1.36, 0.34)],
-      [0.085, 0.068, 0.052], { radialSeg: 7 });
-    rig.attachBlend(tint(fu, DUN, 0.04), `fsh${n}`, `fkn${n}`, 0.9);
-    const fm = tube([P(0.24 * s, 1.36, 0.34), P(0.245 * s, 0.98, 0.28), P(0.25 * s, 0.62, 0.22)],
-      [0.048, 0.038, 0.032], { radialSeg: 7 });
-    rig.attachBlend(tint(fm, DUN_DARK, 0.04), `fkn${n}`, `fca${n}`, 0.9);
-    const fl = tube([P(0.25 * s, 0.62, 0.22), P(0.25 * s, 0.34, 0.25), P(0.25 * s, 0.10, 0.28)],
-      [0.030, 0.026, 0.024], { radialSeg: 6 });
-    rig.attachBlend(tint(fl, SOCK, 0.04), `fca${n}`, `fho${n}`, 0.9);
-    const fh = place(blob(0.036, 0.055, 0.048, 7, 5), { pos: [0.25 * s, 0.045, 0.30] });
-    rig.attach(tint(fh, HOOF), `fho${n}`);
 
-    const bu = tube([P(0.20 * s, 1.94, -0.40), P(0.215 * s, 1.62, -0.48), P(0.23 * s, 1.32, -0.54)],
-      [0.095, 0.075, 0.055], { radialSeg: 7 });
-    rig.attachBlend(tint(bu, DUN, 0.04), `bhp${n}`, `bst${n}`, 0.9);
-    const bm = tube([P(0.23 * s, 1.32, -0.54), P(0.235 * s, 0.96, -0.44), P(0.24 * s, 0.62, -0.32)],
-      [0.050, 0.038, 0.031], { radialSeg: 7 });
-    rig.attachBlend(tint(bm, DUN_DARK, 0.04), `bst${n}`, `bhk${n}`, 0.9);
-    const bl = tube([P(0.24 * s, 0.62, -0.32), P(0.24 * s, 0.34, -0.29), P(0.24 * s, 0.10, -0.26)],
-      [0.029, 0.025, 0.023], { radialSeg: 6 });
-    rig.attachBlend(tint(bl, SOCK, 0.04), `bhk${n}`, `bho${n}`, 0.9);
-    const bh = place(blob(0.035, 0.052, 0.046, 7, 5), { pos: [0.24 * s, 0.045, -0.24] });
-    rig.attach(tint(bh, HOOF), `bho${n}`);
+    B.group(5);
+    sweep(B, {
+      nodes: [
+        { p: [0.200 * s, 2.20, 0.235], rx: 0.098, rz: 0.108 },   // scapula, inside the shoulder
+        { p: [0.220 * s, 1.92, 0.276], rx: 0.082, rz: 0.092 },   // upper arm
+        { p: [0.234 * s, 1.62, 0.320], rx: 0.058, rz: 0.065 },   // forearm belly
+        { p: [0.241 * s, 1.36, 0.340], rx: 0.038, rz: 0.044 },   // carpus — the pinch
+        { p: [0.246 * s, 1.06, 0.300], rx: 0.030, rz: 0.034 },   // cannon
+        { p: [0.249 * s, 0.74, 0.250], rx: 0.027, rz: 0.031 },
+        { p: [0.250 * s, 0.60, 0.220], rx: 0.035, rz: 0.039 },   // fetlock
+        { p: [0.250 * s, 0.44, 0.236], rx: 0.024, rz: 0.028 },   // pastern
+        { p: [0.250 * s, 0.245, 0.264], rx: 0.021, rz: 0.025 },  // coronet
+      ],
+      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: 0.25,
+      shape: legShape(0.20), colorAt: legColour(s), matAt: () => M_HIDE,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fkn${n}`, `fca${n}`, `fho${n}`]] });
+    resetB(B);
+
+    B.group(6);
+    hoof(B, 0.250 * s, 0.276);
+    P.push({ geo: B.build(), bind: ['bone', `fho${n}`] });
+    resetB(B);
+
+    B.group(5);
+    sweep(B, {
+      nodes: [
+        { p: [0.182 * s, 2.16, -0.34], rx: 0.106, rz: 0.116 },   // pelvis, inside the haunch
+        { p: [0.203 * s, 1.86, -0.425], rx: 0.098, rz: 0.108 },  // thigh
+        { p: [0.221 * s, 1.58, -0.500], rx: 0.070, rz: 0.078 },  // gaskin, the drive muscle
+        { p: [0.231 * s, 1.30, -0.545], rx: 0.039, rz: 0.045 },  // stifle — the pinch
+        { p: [0.237 * s, 0.98, -0.455], rx: 0.031, rz: 0.035 },  // cannon
+        { p: [0.240 * s, 0.74, -0.375], rx: 0.027, rz: 0.031 },
+        { p: [0.240 * s, 0.60, -0.320], rx: 0.035, rz: 0.039 },  // hock fetlock
+        { p: [0.240 * s, 0.44, -0.296], rx: 0.024, rz: 0.028 },
+        { p: [0.240 * s, 0.245, -0.270], rx: 0.021, rz: 0.025 },
+      ],
+      steps: 26, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: 0.25,
+      shape: legShape(0.27), colorAt: legColour(s), matAt: () => M_HIDE,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bst${n}`, `bhk${n}`, `bho${n}`]] });
+    resetB(B);
+
+    B.group(6);
+    hoof(B, 0.240 * s, -0.258);
+    P.push({ geo: B.build(), bind: ['bone', `bho${n}`] });
+    resetB(B);
   }
 
-  /* ---- little flag of a tail ---- */
-  const t1 = tube([P(0, 1.92, -0.56), P(0, 1.82, -0.70)], [0.048, 0.034], { radialSeg: 6 });
-  rig.attachBlend(tint(t1, DUN, 0.04), 'tail1', 'tail2', 1.0);
-  const tuft = place(spike(0.055, 0.16, 6), { pos: [0, 1.79, -0.74], rot: [-2.5, 0, 0] });
-  rig.attach(tint(tuft, CREAM, 0.06), 'tail2');
+  /* ------------------------------------------------------------ tail ---
+   * It used to be a `spike` rotated 143 degrees off vertical and pinned to
+   * `tail2`: a flat white card standing out sideways from the rump, which is
+   * exactly what the review saw. It is now a swept tail that hangs, dark
+   * above and cream below, thickening into a tuft over its last third. */
+  B.group(7);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.945, -0.600], rx: 0.045, rz: 0.048 },
+      { p: [0, 1.870, -0.685], rx: 0.033, rz: 0.036 },
+      { p: [0, 1.775, -0.735], rx: 0.026, rz: 0.028 },
+      { p: [0, 1.680, -0.756], rx: 0.020, rz: 0.022 },
+      { p: [0, 1.600, -0.762], rx: 0.010, rz: 0.011 },
+    ],
+    steps: 16, seg: 10, ref: [0, 1, 0], capStart: false, capEnd: 0.6,
+    shape: (th, u) => 1
+      + smooth((u - 0.42) / 0.30) * (1 - smooth((u - 0.90) / 0.10)) * 0.90
+      + Math.sin(th * 5) * 0.10 * smooth((u - 0.40) / 0.30),
+    colorAt: (th, u) => {
+      const top = Math.cos(th);
+      const c = mixc(CREAM_HI, DUN_DEEP, clamp01((top + 0.15) / 0.7) * 0.9);
+      return mixc(c, BAND, clamp01((u - 0.50) / 0.35) * 0.85);
+    },
+    matAt: () => M_HIDE,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2']] });
+  resetB(B);
 
-  markings(bodyParts);
+  for (const p of P) {
+    if (p.bind[0] === 'chain') rig.attachChain(p.geo, p.bind[1], 0.95);
+    else rig.attach(p.geo, p.bind[1]);
+  }
 
   const mat = creatureMaterial({
-    roughness: 0.84, metalness: 0.0,
-    normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
+    roughness: 0.88, metalness: 0.0,
+    normalMap: organicNormal(), normalScale: 0.60, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.14, tick: 0.16, shade: 0.20, dust: 0.30, dustTop: 0.70 } });
+  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.12, tick: 0.14, shade: 0.18, dust: 0.30, dustTop: 0.55 } });
 }
 
 /**
- * Gazelle value structure, painted over the flat part tints.
+ * A cloven hoof: two keratin toes with a flat sole and a pair of dewclaws.
  *
- * This species is the oldest sculpt in the roster and the only one with no
- * `colorAt` anywhere: every piece is a single flat `tint()` plus 4-5 % of
- * jitter, so from ten metres the whole animal is one sheet of cream with a
- * white lozenge stuck on the flank. Nothing in the palette was wrong — there
- * was simply no *pattern*, and on a pale animal against pale Leide ground the
- * pattern is the entire read.
+ * The old sculpt ended every leg in a `blob(0.036, 0.055, 0.048)` — a round
+ * brown ball, which is the single defect the review named first. A hoof is not
+ * a ball: it is a wall of keratin that is widest at the coronet, splits down
+ * the middle, comes to a point at the toe and is **flat underneath**. The flat
+ * sole is the `shape` term; without it a hoof reads as a bead however it is
+ * coloured, because the ground contact is what the eye reads.
  *
- * Three bands, and they are the three a real gazelle has: a darker saddle over
- * the topline, a hard dark lateral stripe where dun meets belly, and the cream
- * underside below it. Applied over `rig.parts` before `Rig.build`, while the
- * geometry is still in bind-pose world space, so every threshold below is a
- * height in metres off the ground and means it. Gated on `z` so the neck and
- * skull — which live above the same heights as the saddle — are left alone.
+ * @param x lateral centreline of the leg
+ * @param z the coronet's z; the toes run forward from it
  */
-function markings(parts: THREE.BufferGeometry[]) {
-  const cl01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-  const dark = new THREE.Color().setHex(0x584730, THREE.SRGBColorSpace);
-  const saddle = new THREE.Color().setHex(0x8f7852, THREE.SRGBColorSpace);
-  const pale = new THREE.Color().setHex(0xe8dcc0, THREE.SRGBColorSpace);
-  for (const geo of parts) {
-    const pos = geo.attributes.position, cl = geo.attributes.color;
-    if (!pos || !cl) continue;
-    for (let i = 0; i < cl.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i);
-      let r = cl.getX(i), g = cl.getY(i), b = cl.getZ(i);
-      const flank = cl01((Math.abs(x) - 0.09) / 0.09);
-
-      const top = cl01((y - 1.99) / 0.22);
-      r += (saddle.r - r) * top * 0.72; g += (saddle.g - g) * top * 0.72; b += (saddle.b - b) * top * 0.72;
-
-      const under = cl01((1.83 - y) / 0.10);
-      r += (pale.r - r) * under * 0.80; g += (pale.g - g) * under * 0.80; b += (pale.b - b) * under * 0.80;
-
-      // the lateral stripe: narrow, hard-edged, and only on the sides
-      const band = Math.exp(-Math.pow((y - 1.875) / 0.038, 2)) * flank;
-      r += (dark.r - r) * band * 0.85; g += (dark.g - g) * band * 0.85; b += (dark.b - b) * band * 0.85;
-
-      cl.setXYZ(i, r, g, b);
-    }
+function hoof(B: CBuilder, x: number, z: number) {
+  for (const t of [-1, 1]) {
+    const ox = x + t * 0.0165;
+    sweep(B, {
+      nodes: [
+        { p: [ox, 0.250, z - 0.014], rx: 0.024, rz: 0.030 },              // coronet, swallowing the leg's end
+        { p: [ox + t * 0.002, 0.170, z + 0.002], rx: 0.024, rz: 0.033 },  // wall
+        { p: [ox + t * 0.003, 0.070, z + 0.028], rx: 0.020, rz: 0.031 },  // toe
+        { p: [ox + t * 0.003, 0.020, z + 0.058], rx: 0.008, rz: 0.013 },  // point
+      ],
+      steps: 9, seg: 10, ref: [0, 0, 1], capStart: false, capEnd: 0.35,
+      // the sole: flatten the underside so the foot meets the ground on a
+      // plane instead of on a tangent point
+      shape: (th, u) => 1 - clamp01(-Math.cos(th) - 0.1) * 0.30 * smooth(u * 1.4),
+      colorAt: (th, u) => mixc(HOOF_TOP, HOOF, clamp01((u - 0.08) / 0.5)),
+      matAt: () => M_HOOF,
+    });
+    // dewclaw, high on the back of the fetlock
+    horn(B, {
+      from: [x + t * 0.020, 0.470, z - 0.048], dir: [t * 0.15, -0.85, -0.50], len: 0.042,
+      curve: [0, -0.006, -0.010], r0: 0.011, r1: 0.002, seg: 6, steps: 4,
+      colorAt: () => HOOF, matAt: () => M_HOOF,
+    });
   }
+}
+
+/** Empty the builder between parts — each `build()` consumes what is in it. */
+function resetB(B: CBuilder) {
+  B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
+  B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
+  B.glow(null);
 }
 
 class AnakEnemy extends Enemy {

@@ -34,6 +34,10 @@ g.get('Director')?.play?.();
 g.get('Cinematics')?.stop?.({ skipped: true });
 g.get('Menus')?.setScreen?.(null);
 g.get('HUD')?.setVisible?.(false);
+// `HUD.setVisible(false)` does not reach the objective card, the tutorial
+// prompt or the quest toast — they are separate DOM under `uiRoot`, and one of
+// them sat across the subject's shoulders in the first capture taken here.
+if (g.uiRoot) g.uiRoot.style.display = 'none';
 g.get('Sky')?.setTimeOfDay?.(Number(window.__HOUR ?? 15.4));
 g.get('Weather')?.set?.(String(window.__WEATHER ?? 'clear'));
 step(20);
@@ -41,6 +45,11 @@ step(20);
 const rig = g.get('CameraRig');
 const species = String(window.__SPECIES ?? 'anak').split(',').filter(Boolean);
 const pose = String(window.__POSE ?? 'idle');
+/* `idle` is a *loop*, not a pose: the anak's grazes with its muzzle in the
+ * grass and lifts its head every few seconds, so the phase decides whether you
+ * photograph a neck or a face. 3.1 is what `creaturecheck` holds; 5.6 is the
+ * top of the lift. */
+const phase = Number(window.__PHASE ?? 3.1);
 
 /* The stage is the player's own footing — ground the harness already trusts —
  * with the party walked out of frame rather than hidden, because a hidden
@@ -56,6 +65,8 @@ const views = [
   { name: 'front34', bearing: Math.PI * 0.20, dist: 2.35, eye: 0.64, aim: 0.52, fov: 34 },
   { name: 'head', bearing: Math.PI * 0.26, dist: 0.95, eye: 0.96, aim: 0.93, fov: 30 },
   { name: 'feet', bearing: Math.PI * 0.42, dist: 1.25, eye: 0.20, aim: 0.15, fov: 32 },
+  // the read at the range a player actually meets one
+  { name: 'far', bearing: Math.PI * 0.34, dist: 5.0, eye: 0.62, aim: 0.48, fov: 30 },
 ];
 
 for (const key of species) {
@@ -65,7 +76,7 @@ for (const key of species) {
   try { e = enemies.spawn(key, { pos: base, heading: 0 }); }
   catch (err) { out.push(`${key}: SPAWN FAILED ${String(err).slice(0, 140)}`); continue; }
   e.stateTime = 0.42;
-  e.freeze(pose, 3.1);
+  e.freeze(pose, phase);
   enemies.frozen = true;
   step(6);
 
