@@ -460,7 +460,27 @@ floor 16%, mean 218.1 fps, worst 140, every shot over 60). What is left:
 
 ## WS-7 — Content holes that break a playthrough
 
-From `content-wire.md`, ranked there:
+### WS-7 result, 2026-08-28 (`water-content` lane) — 1, 3 and 4 closed, 2 and 5 untouched
+
+`2b344e7..b915af3`, handoff `project/handoff/water-content.md`.
+
+1. **Closed, and it was not the job this section describes.** Four of the six dry
+   pins had water six metres away; see the negatives table. `Fishing._survey` is
+   one predicate different and the count went **4 live holes -> 8**. The
+   remaining two — `caem_shore` (sea 246 m out and 100 m down) and
+   `rachsia_bridge` (no water within 600 m) — are genuinely dry ground and the
+   world map now draws them **dead**: glyph struck through, `does:` line struck
+   through, footer UNAVAILABLE IN THIS WORLD. The predicate asks the live
+   survey, so it cannot go stale.
+2. **Energy deposits: not started.** `src/world/props/`, outside this lane.
+3. **Fishing audio: landed.** `reelClick` per notch of line recovered rather
+   than looped, `lineStrain` gliding with tension, `castWhirr` plus a positional
+   `splash` at the float. Counted: `ui x2, warp x1, hit x2` before, `ui x2,
+   cast x1, splash x1, reel x6, line x34` after.
+4. **`setPiece`: already existed.** See the negatives table, twice.
+5. **Fociaugh's 1.26 bank: not started.** `src/world/dungeons/`, outside this lane.
+
+The original text follows, from `content-wire.md`, ranked there:
 
 1. **Seven of ten fishing pins have no water.** The largest content hole left and
    *"the most likely thing to break a 30-minute playthrough"*, because the world
@@ -477,6 +497,32 @@ From `content-wire.md`, ranked there:
 5. Fociaugh's cave mouth sits on a 1.26 bank.
 
 ## WS-8 — Water
+
+### WS-8 result, 2026-08-28 (`water-content` lane) — 1 landed but unverified, 2 closed, 3 handed on
+
+`b237dc6` `5531bd9` `73c19b7`, handoff `project/handoff/water-content.md`.
+
+1. **The width raise landed at the suggested `2.5 + 14 q` and is not what was
+   wrong.** See the negatives table. What *was* wrong at a reach is the **bank
+   decal**: 8.08 m mean per side against a 1.75 m water half-width, because
+   `firstCrossing` never reaches `bankH` on a valley floor. It is capped by
+   discharge now and the strip reads as a bank.
+2. **Closed by ablation, and neither named handle was involved** — the flat
+   white patch is the lake surface's own `uFoamBand` margin, which was a
+   **depth** where it needed to be a distance along the beach. Two extra bed
+   taps for the local slope and the margin is a margin again.
+3. **Handed to terrain and veg with numbers.** 698 of 6 280 shore points (11%)
+   have a run-out gentler than 4 m; the gentlest is 15 m. At Galdin the shore is
+   submerged rock with grass to the waterline, and the ribbon cannot manufacture
+   sand where the baked ground albedo is grass. Making Galdin a beach is a
+   `Field.ts` grade (a 30–60 m sand shelf at the POI) plus an `Ecology` grass
+   suppression below about +2 m there.
+
+Also landed here: `assertConsistentWinding` has its build-time call sites in both
+water generators (`73c19b7`), the harness lane's hand-off — 329 833 interior
+edges on the ribbon, 0 flipped.
+
+The original text follows.
 
 1. **The rivers are now too narrow** — mean width **3.09 m**, max 12.71, mean
    depth 0.36 m. A brook, over-correcting the old 64 m sheet. Raise the
@@ -706,6 +752,12 @@ without opening the handoff it lived in.
 | **WS-5: the 124 POI aprons are still cake stands** | **half-stale.** `gradePad` already replaced the faceted drum with a real cut-and-fill earthwork. What reads as a cake stand at `poi_haven` is not the apron at all — it is `_haven`'s **own two-course shelf drum** with a hard circular rim, which is a different object in a different function |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
+| **WS-7: seven fishing pins have no water and it is a `Water.ts` / `WorldMap.ts` + re-bake job** | **Four of the six had water 6 m away.** `Fishing._survey` tested `terrain.heightAt(x,z) < water.level` — the *global* −6.5 m — after `Water` stopped having one global level: `_findTarns` and `Field._tarnBasins` had already given every inland pin its own body at +36.9 to +80.5 m. One predicate, no re-bake. 4 live holes -> **8**. `2b344e7` |
+| **WS-8: the near-field foam's handles are the shore ribbon's `lace` threshold and the `brk` shore-break term** | **Neither can touch it.** Ablated at the third-gentlest beach on the map: hide `shoreRibbon` entirely, and separately set its `uFoam` to 0 — the white patch is unchanged both times. It is the **lake surface's** own depth-derived margin in `Water._makeMaterial`, where `uFoamBand` is 1.35 m of *depth* and therefore four-plus metres of *ground* on anything that shelves. `5531bd9` |
+| The river bank reads as hovering plates because it still uses the clipmap-envelope lift `Shore.ts` rejected | **Removing the lift moved the ablation frame by nothing visible.** It is gone anyway — the shore's argument applies verbatim and it costs a `drawnEnvelope` probe per station — but the plates were the bank being **8.08 m mean, 13.0 max per side** against a 1.75 m water half-width, because `firstCrossing` never finds `bankH` on a valley floor and returns the whole of `MAX_BANK` |
+| **WS-8: raising the half-width cap to `2.5 + 14 q` is what the rivers need** | Mean width 3.49 -> **5.17 m**, mean depth 0.39 -> 0.47, max width 20.0 -> **29.9**. The p50 reach (4.1 m) **still reads as a damp streak on a pasture** — that site is a pan with no incised channel — and at p99 the cap truncates the sheet over still-submerged ground into a hard polygonal cliff, which a wider cap makes worse. The levers that moved it were opacity (a 0.34 alpha floor) and the sky gain (1.15 -> 2.9). Landed, but **unverified as an improvement** |
+| **WS-7: `setPiece` must be added to `Shots.ts` and `Game.applyShot`** | **Already there** under a different name: `ScenarioName` carries `setpiece_astral` / `setpiece_field`, `Director._setPieceScenario` routes them through the same `startSetPiece` the hunt runtime calls, and `setpiece_deadeye` is a live boss fight in the corpus today |
+| Titan cannot be framed because the Disc of Cauthess fills the frame | **The camera never moved.** `boss_astral` is a `follow:` shot, so `applyShot` sets `CameraRig.followShot` and the rig re-derives pos/target every frame, silently overwriting `setShot`. Ten vantages at six azimuths came back **byte-identical** — a contact sheet of ten copies of one frame. Clear `rig.followShot` and the sweep works first try. He is legible at az 300°, r 95 m, +34 m, fov 46; the shot still does not go in because he renders as an **unlit black silhouette** and sits 3 m under `Terrain.heightAt`. `374f5c9` |
 
 ## Order
 
