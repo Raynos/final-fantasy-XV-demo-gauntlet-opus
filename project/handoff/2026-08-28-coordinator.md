@@ -133,6 +133,24 @@ files and finding the right one is otherwise a search:
 | `creatures` | `fightshape` `rankcurve` `dens` `titanfist` |
 | `combat` | `stagecam` `dmgnum` `setpiece` `huntloop` |
 
+**Where to start on the 1.4 GB, and the instrument that can actually see it.**
+`performance.memory` is **frozen in this headless build**, which is why
+`probes/perfgc.mts` could not answer the question it was written for.
+`_probe/gcwatch.mts` reads the heap from *outside* the page over CDP
+`Runtime.getHeapUsage` and is the only working oracle here. Note also that JS
+heap is not the whole 1.4 GB: chromium RSS includes GPU-side texture and buffer
+allocations, and `/health` already records chromium RSS per lease, so the
+daemon's ledger has a free time series nobody has read for this question.
+
+The retained-allocation distribution is heavily concentrated and does not look
+like `?debug`: `terrain/Field.ts` 42 typed-array sites, `props/Rocks.ts` 23,
+`veg/VegTextures.ts` 13 + **18 render targets**, `terrain/FieldCodec.ts` 12,
+`props/BuildKit.ts` 12, `map/Chart.ts` 12, `sky/CloudTextures.ts` 11. Render
+targets cluster the same way — `VegTextures` 18, `TerrainMaterial` 14,
+`Warmup` 10. `src/dev/` is 2 169 lines total and gated at `main.ts:37`, so the
+human's *"and maybe in prod mode too"* is very likely right and the lane should
+**measure prod first** rather than assuming the dev suite is the cause.
+
 ## Results
 
 *(appended as lanes report)*
