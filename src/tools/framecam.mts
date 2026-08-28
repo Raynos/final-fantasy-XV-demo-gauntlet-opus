@@ -36,8 +36,8 @@ async function main() {
   const ha = harnessArgs(process.argv.slice(2));
   announceBuild(ha);
   const argv = process.argv.slice(2);
-  const opts: { out: string, settle: number, file: string | null, probe: string | null, w: number, h: number } =
-    { out: 'tmp/shots/probe', settle: 60, file: null, probe: null, w: 1600, h: 900 };
+  const opts: { out: string, settle: number, file: string | null, probe: string | null, w: number, h: number, jpeg: boolean } =
+    { out: 'tmp/shots/probe', settle: 60, file: null, probe: null, w: 1600, h: 900, jpeg: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out') opts.out = argv[++i];
@@ -45,7 +45,12 @@ async function main() {
     else if (a === '--probe') opts.probe = argv[++i];
     else if (a === '--w') opts.w = Number(argv[++i]);
     else if (a === '--h') opts.h = Number(argv[++i]);
-    else opts.file = a;
+    else if (a === '--jpeg') opts.jpeg = true;
+    // Every harness flag (`--dirty`, `--build`, `--lane`, `--agent`, ...) is
+    // consumed by `harnessArgs` above and must never fall through into the
+    // candidate-file slot. Six handoffs in a row reported `--dirty` being
+    // swallowed here and then failing to open as JSON; this guard is the fix.
+    else if (!a.startsWith('-')) opts.file = a;
   }
 
   const specs = opts.file
@@ -102,8 +107,13 @@ async function main() {
         const gl = g.renderer.info;
         return { triangles: gl.render.triangles, calls: gl.render.calls, pos: s.pos, target: s.target };
       }, [spec, opts.settle]);
-      const file = path.join(outDir, `${spec.name}.png`);
-      await writeFile(file, await page.screenshot({ type: 'png' }));
+      // `--jpeg` for looking: a capture is downscaled to a 1568 px long edge
+      // before an agent sees it, so a 2.5 MB PNG shows nothing a 250 KB JPEG
+      // does not. Keep PNG for `imgdiff`, whose floor is 1.5/255.
+      const file = path.join(outDir, `${spec.name}.${opts.jpeg ? 'jpg' : 'png'}`);
+      await writeFile(file, await page.screenshot(
+        opts.jpeg ? { type: 'jpeg', quality: 88 } : { type: 'png' }
+      ));
       resolved.push({ name: spec.name, pos: meta.pos, target: meta.target, fov: spec.fov });
       console.log(`✓ ${spec.name.padEnd(30)} pos ${JSON.stringify(meta.pos)} target ${JSON.stringify(meta.target)} fov ${spec.fov}`);
     }
