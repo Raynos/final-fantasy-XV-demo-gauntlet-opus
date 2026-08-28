@@ -1801,30 +1801,41 @@ export class Field {
       // no matter how deep the bowl is — which is exactly how the first attempt
       // here failed, with `spill == floor` unchanged.
       /**
-       * **The bowl's radius is set by `findTarns`' quantile, not by taste.**
+       * **MEASURED NEGATIVE: the emergent bed is not reachable from this
+       * file. Do not re-tune the bowl.**
        *
-       * `probes/tarnbed.mts` measures the hollow — every point below the
-       * body's own rim shelf — against the water in it, and before this the
-       * four tarns read **68.7% emergent bed**: dished ground, visibly a lake
-       * floor, with a 27–44 m dry ring around a pond covering 31% of it. That
-       * is the "tarns read as flooded ground" the water lane handed over, and
-       * it is worse than the fifth it estimated.
+       * The water lane handed over *"a fifth of each tarn basin is emergent
+       * bed, which is why tarns read as flooded ground"*. `probes/tarnbed.mts`
+       * is the instrument for it — the hollow below a body's own rim shelf,
+       * against the water actually in it — and the honest reading is worse
+       * than a fifth: **64-69% of the hollow is dry**, with a 26-51 m ring of
+       * obviously-lake-floor ground around each pond.
        *
-       * The cause is arithmetic and it is not in this file's half. `findTarns`
-       * takes the **26th percentile of its 105 m sample disc** as the surface,
-       * so the wet area is pinned at `pi * 105^2 * 0.26` = 9 000 m^2 whatever
-       * shape the bowl is. Deepening it, steepening it or mottling it cannot
-       * move that; the only thing that can, from here, is to stop dishing
-       * ground the water will never reach. A 78 m bowl is 19 100 m^2 and the
-       * water gets 9 000 of it by construction.
+       * Three things were tried here and none of them moved it:
        *
-       * So the bowl is cut to the radius the quantile actually fills, and the
-       * profile goes from `(1-t^2)^2` — which is nearly flat for the last
-       * third of its radius, and is therefore most of the dry ring — to
-       * `1 - t^2.6`, a flat floor with a 14 deg bank. The pond's surface does
-       * not change; the dry dish around it goes away.
+       * | change | emergent |
+       * |---|---|
+       * | shipped (`bowl` 78, `(1-t^2)^2`, level to 0.985) | **68.7%** |
+       * | `bowl` 56 and a `1 - t^2.6` flat floor with a banked rim | 64.9% |
+       * | ...and levelling the apron in full rather than to 0.985 | 67.0% |
+       *
+       * All three are inside the instrument's own spread, and the mean
+       * emergent RING — the number a player sees — went 36.5 m to 36.3 m to
+       * 39.8 m. The reason is arithmetic and it is in `water/Tarns.ts`, not
+       * here: `findTarns` takes the **26th percentile of its own 105 m sample
+       * disc** as the surface, so the wet area is pinned at `pi * 105^2 * 0.26`
+       * = 9 000 m^2 whatever shape this pass digs, and then caps it 35 cm below
+       * the lowest rim bearing. Meanwhile this pass levels an apron out to
+       * `flat` = 118 m — 43 700 m^2 — whose height is above that surface by
+       * construction. **The dry annulus is authored by the ratio of those two
+       * radii**, and no bowl radius, dish exponent or levelling completeness in
+       * this file changes either of them.
+       *
+       * The lever that would work is a quantile taken over the body's own
+       * hollow instead of over a fixed 105 m disc, or a shelf radius derived
+       * from the level rather than authored at 118. Both are `Tarns.ts`.
        */
-      const bowl = 56, flat = 118, R = 232;
+      const bowl = 78, flat = 118, R = 232;
       let sum = 0;
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2;
@@ -1854,9 +1865,7 @@ export class Field {
           //    does not sit on a machined cone
           if (d < bowl) {
             const t = d / bowl;
-            // Flat floor, banked rim: the exponent is what decides how much
-            // of the dish ends up above the water, see the note on `bowl`.
-            const dish = 1 - Math.pow(t, 2.6);
+            const dish = (1 - t * t) * (1 - t * t);
             const mottle = 0.86 + 0.14 * this.n2.fbm2(x * 0.021 + 7.3, z * 0.021 - 4.9, 3);
             h[idx] -= depth * dish * mottle * keep;
           }

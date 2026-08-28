@@ -29,8 +29,18 @@ const tarns = findTarns(h, WORLD.seaLevel);
 
 /** Sample radius and pitch, metres — 105 is the disc `findTarns` itself uses. */
 const R = 105, STEP = 3;
-/** The annulus the rim shelf is read from. */
-const RIM0 = 112, RIM1 = 128;
+/**
+ * The annulus the rim shelf is read from — and it has to be INSIDE
+ * `_tarnBasins`' own levelling radius (`flat` = 118 m), not outside it.
+ *
+ * Read at 112-128 m this probe lied by 2.2 m on `crestholm_reservoir`: past
+ * 118 the pass releases its levelling back to the natural hillside, so the
+ * "rim" it measured was the slope above the site, every point of the flat
+ * apron counted as hollow, and the answer came out 68.7% emergent for a
+ * geometry whose dish is only 56 m across. A shelf statistic taken off the
+ * ground the shelf pass does not touch is a statistic about the hillside.
+ */
+const RIM0 = 80, RIM1 = 100;
 /** Metres below the shelf that count as "in the hollow" at all. */
 const LIP = 0.15;
 
