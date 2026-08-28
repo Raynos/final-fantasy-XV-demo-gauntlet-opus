@@ -69,12 +69,24 @@ export class CameraRig {
   handheld!: number;
   height!: number;
   /**
-   * Combat framing target — see `setLockOn`. **Nothing in the tree calls
-   * `setLockOn`**, so this has only ever been `null` and the framing block in
-   * `lateUpdate` has never run. `CombatSystem.setLockOn` drives the HUD
-   * reticle, not the camera.
+   * Combat framing target — see `setLockOn`, which `CombatSystem._frameCombat`
+   * feeds from the live encounter. (`CombatSystem.setLockOn` is a different
+   * thing entirely: it drives the HUD reticle, not the camera.)
    */
   lockOn!: THREE.Object3D | THREE.Vector3 | null;
+  /**
+   * How tall the lock-on target is, metres. `setLockOn`'s second argument.
+   *
+   * The arm length in combat is a function of the target's own silhouette and
+   * not of how far away it is — see the framing block in `lateUpdate`.
+   */
+  lockHeight!: number;
+  /** Damped lock-on point. Raw enemy roots jitter at the animation rate. */
+  _lockSmooth!: THREE.Vector3;
+  /** True until `_lockSmooth` has been seeded, i.e. on a target change. */
+  _lockFirst!: boolean;
+  /** Damped combat arm length, so a target change is a glide and not a cut. */
+  _framedDist!: number;
   lookAhead!: number;
   lookAheadMax!: number;
   lookDamp!: number;
@@ -135,6 +147,10 @@ export class CameraRig {
     this.lookAhead = 0.34;        // metres per m/s of player velocity
     this.lookAheadMax = 2.2;
     this.lockOn = null;
+    this.lockHeight = 1.6;
+    this._lockSmooth = new THREE.Vector3();
+    this._lockFirst = true;
+    this._framedDist = this.restDistance;
     this.combatFraming = 0.6;
 
     // lens
@@ -198,8 +214,21 @@ export class CameraRig {
     else this._traumaDir.set(0, 0, 0);
   }
 
-  /** Lock-on framing target (an Object3D, a world point, or null). */
-  setLockOn(target: THREE.Object3D | THREE.Vector3 | null) { this.lockOn = target || null; }
+  /**
+   * Lock-on framing target (an `Object3D`, a world point, or null).
+   *
+   * @param target what to frame. An enemy's `root` sits at its FEET, so the
+   *   framing block lifts the point by `0.55 * height` to put the body in
+   *   frame rather than the ground under it.
+   * @param [height] the target's height in metres. This is the arm-length
+   *   knob: the camera comes IN for a sabertusk and backs off for a boss.
+   */
+  setLockOn(target: THREE.Object3D | THREE.Vector3 | null, height = 1.6) {
+    const next = target || null;
+    if (next !== this.lockOn) this._lockFirst = true;
+    this.lockOn = next;
+    this.lockHeight = Math.max(0.4, height);
+  }
 
   /** Nudge the orbit directly (used by cutscenes / auto-follow). */
   setOrbit(yaw: number, pitch: number) {
@@ -365,19 +394,74 @@ export class CameraRig {
     this.restDistance = this.targetDistance;
 
     // ---- combat framing: bias the orbit so the lock-on target is in frame
+    //
+    // Everything here is rate-limited and dead-zoned, and that is the whole
+    // point of it. The first version steered `yawTarget` straight at the
+    // bearing from the PLAYER to the target, which is the one quantity in the
+    // fight that is unstable: a sabertusk two metres away swings its
+    // player-relative bearing through ninety degrees in a third of a second
+    // while barely moving on screen. `probes/armwhip.mts` measured what that
+    // cost — in a real den fight the lens ran at **14.9 m/s at p95 and 59 m/s
+    // peak**, against 3.9 m/s walking, and the decomposition put 14.5 of that
+    // 14.9 in the ORBIT term with the arm contributing 5.3 and the focus 6.4.
+    // The arm sweep was innocent: zero frames at the `minDistance` clamp.
+    // That is the full-frame smear every `stagger` and `kill` frame came back
+    // as, and it is this block, not `_armDistance`.
     const lock = this.lockOn;
     if (lock) {
-      const lp = isVector3(lock) ? lock : this._tmp.setFromMatrixPosition(lock.matrixWorld);
+      // Frame the body, not the ground under it: an enemy's `root` is at its
+      // feet, so a Titan locked on his root points the camera at his ankles.
+      const raw = isVector3(lock) ? this._tmp.copy(lock) : this._tmp.setFromMatrixPosition(lock.matrixWorld);
+      if (!isVector3(lock)) raw.y += this.lockHeight * 0.55;
+      // A raw enemy root jitters at the animation rate and a target change is
+      // a jump; damping the point damps both, and it is what the look-at
+      // lerp below reads too.
+      if (this._lockFirst) { this._lockSmooth.copy(raw); this._lockFirst = false; }
+      else {
+        this._lockSmooth.x = THREE.MathUtils.damp(this._lockSmooth.x, raw.x, LOCK_DAMP, dt);
+        this._lockSmooth.y = THREE.MathUtils.damp(this._lockSmooth.y, raw.y, LOCK_DAMP, dt);
+        this._lockSmooth.z = THREE.MathUtils.damp(this._lockSmooth.z, raw.z, LOCK_DAMP, dt);
+      }
+      const lp = this._lockSmooth;
       const toTarget = this._tmp2.copy(lp).sub(player.position);
       const flat = Math.hypot(toTarget.x, toTarget.z);
-      const wantYaw = Math.atan2(-toTarget.x, -toTarget.z);
-      const wantPitch = THREE.MathUtils.clamp(0.16 + toTarget.y * 0.03, -0.2, 0.7);
-      this.yawTarget = angleLerp(this.yawTarget, wantYaw, this.combatFraming * Math.min(1, dt * 4));
-      this.pitchTarget = THREE.MathUtils.lerp(
-        this.pitchTarget, wantPitch, this.combatFraming * Math.min(1, dt * 3));
-      // back off so both silhouettes fit
-      this.restDistance = THREE.MathUtils.clamp(
-        this.targetDistance + flat * 0.22, this.targetDistance, this.maxDistance);
+
+      // Yaw, steered on the bearing from the LENS rather than from the player,
+      // because where the target sits on screen is a lens-relative quantity.
+      // Inside `FRAME_DEADZONE` — a box about the middle third of the frame —
+      // the camera is not moved at all, which is what a lock-on camera does
+      // and what stops a circling animal dragging the whole world with it.
+      const wantYaw = Math.atan2(-(lp.x - this.cam.position.x), -(lp.z - this.cam.position.z));
+      const err = shortestAngle(wantYaw - this.yawTarget);
+      const over = Math.sign(err) * Math.max(0, Math.abs(err) - FRAME_DEADZONE);
+      this.yawTarget += THREE.MathUtils.clamp(
+        over * Math.min(1, dt * FRAME_YAW_GAIN) * this.combatFraming,
+        -FRAME_YAW_RATE * dt, FRAME_YAW_RATE * dt);
+
+      // Pitch: FFXV's combat camera comes in AND down. The 0.16 rad this
+      // replaces is nine degrees, which for a metre-tall beast on flat ground
+      // is barely a tilt at all; `FRAME_PITCH` is seventeen.
+      const wantPitch = THREE.MathUtils.clamp(
+        FRAME_PITCH + THREE.MathUtils.clamp(toTarget.y, -3, 14) * 0.02, -0.2, 0.7);
+      this.pitchTarget += THREE.MathUtils.clamp(
+        (wantPitch - this.pitchTarget) * Math.min(1, dt * 2.4) * this.combatFraming,
+        -FRAME_PITCH_RATE * dt, FRAME_PITCH_RATE * dt);
+
+      // Arm length is a function of the target's own silhouette, not of how
+      // far away it is. `targetDistance + flat * 0.22` backed the arm off as
+      // the target got FARTHER, which makes a far target *smaller* — the
+      // opposite of framing it — and at sixteen metres pushed 5.6 m to 10 m.
+      // It also multiplied the whip above: every degree of yaw is arm-length
+      // metres of lens travel, and it ran the arm out to 7.9 m in a melee.
+      const fit = THREE.MathUtils.clamp(0.62 + 0.20 * this.lockHeight, 0.62, 1.30);
+      const wantDist = THREE.MathUtils.clamp(
+        this.targetDistance * fit + Math.max(0, flat - 10) * 0.10,
+        this.minDistance + 1.0, this.maxDistance);
+      this._framedDist = THREE.MathUtils.damp(this._framedDist, wantDist, 2.4, dt);
+      this.restDistance = THREE.MathUtils.lerp(this.targetDistance, this._framedDist, this.combatFraming);
+    } else {
+      this._framedDist = this.targetDistance;
+      this._lockFirst = true;
     }
 
     this.yaw = angleLerp(this.yaw, this.yawTarget, 1 - Math.exp(-this.rotDamp * dt));
@@ -458,12 +542,10 @@ export class CameraRig {
     this.cam.position.copy(this._smooth).add(this._tmp);
 
     this._lookAt.copy(this._focusSmooth);
-    if (lock) {
-      const lp = isVector3(lock)
-        ? lock
-        : new THREE.Vector3().setFromMatrixPosition(lock.matrixWorld);
-      this._lookAt.lerp(lp, 0.32 * this.combatFraming);
-    }
+    // The damped lock point, not the raw one: this term rotates the camera,
+    // and reading the enemy's live root here put the animation's own jitter
+    // straight into the lens.
+    if (lock) this._lookAt.lerp(this._lockSmooth, 0.32 * this.combatFraming);
     this.cam.lookAt(this._lookAt);
     if (this._tmp2.lengthSq() > 0) {
       this.cam.rotateX(this._tmp2.x);
@@ -478,6 +560,32 @@ export class CameraRig {
     this.cam.updateMatrixWorld();
     this._drivePost(game, this._focusSmooth);
   }
+}
+
+/**
+ * Combat-framing constants. Every one of them is a rate or a deadband, and
+ * they exist because the framing block that had none of them ran the lens at
+ * 59 m/s — see `probes/armwhip.mts`.
+ */
+/** Half-width of the do-nothing box the target may sit in, radians. */
+const FRAME_DEADZONE = 0.26;
+/** Ceiling on the yaw the framing may add per second, radians. */
+const FRAME_YAW_RATE = 1.5;
+/** Proportional gain outside the deadzone, per second. */
+const FRAME_YAW_GAIN = 4.0;
+/** Ceiling on the pitch the framing may add per second, radians. */
+const FRAME_PITCH_RATE = 0.9;
+/** Resting combat pitch in radians — 17 degrees down, against 9 before. */
+const FRAME_PITCH = 0.30;
+/** Damping rate on the lock point itself. */
+const LOCK_DAMP = 6.0;
+
+/** Shortest-arc difference between two angles, in `(-pi, pi]`. */
+function shortestAngle(d: number) {
+  d %= Math.PI * 2;
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
 }
 
 /** Shortest-arc lerp between two angles. */

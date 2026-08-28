@@ -1370,14 +1370,11 @@ export class CombatSystem {
       if (this._framedTarget) { rig.setLockOn(null); this._framedTarget = null; }
       return;
     }
-    // **Only frame a fight you are in.** `CameraRig` backs the arm off by
-    // `0.22 x` the distance to the lock target so both silhouettes fit, which
-    // is right for a Titan and ruinous for a sabertusk: fed a target twenty
-    // metres out it pushed the arm from 5.6 m to 10 m, put a boulder between
-    // the lens and the fight, and yo-yoed every time the nearest threat
-    // changed. Measured as a frame of pure motion blur with Noctis not in it.
-    // Inside FRAME_NEAR the same term is worth under three metres, which is
-    // the shoulder room it was written for.
+    // **Only frame a fight you are in.** The distance gate predates the arm
+    // rewrite in `CameraRig` — the arm is a function of the target's height
+    // now and no longer runs out to 10 m for a threat twenty metres away —
+    // but it is still right on its own terms: an animal you are not fighting
+    // should not be turning the camera.
     const near = (e: Enemy | null, r: number) => {
       if (!e || e.dead || !this.player) return false;
       const dx = e.root.position.x - this.player.position.x;
@@ -1391,8 +1388,11 @@ export class CombatSystem {
     if (!t && near(this._framedTarget, FRAME_HOLD)) t = this._framedTarget;
     if (!t) t = this.autoTarget(FRAME_NEAR);
     if (!t) t = this._nearestThreat(FRAME_NEAR);
+    // The height goes with the target: it is the arm-length knob, and an
+    // enemy's `root` is at its feet, so `CameraRig` lifts the framed point by
+    // `0.55 * height` as well.
     if (t !== this._framedTarget) {
-      rig.setLockOn(t ? t.root : null);
+      rig.setLockOn(t ? t.root : null, t ? t.height * (t.scale || 1) : 1.6);
       this._framedTarget = t;
     }
   }
