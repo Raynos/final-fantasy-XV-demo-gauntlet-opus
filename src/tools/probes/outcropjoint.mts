@@ -108,6 +108,41 @@ const surface = (t, px, pz, wantTop) => {
   return best;
 };
 
+/**
+ * **The lattice the block is actually drawn against, and not the one the parked
+ * camera happens to be looking at.**
+ *
+ * `Terrain.drawnHeightAt(x, z)` with no `cell` returns the highest ring that
+ * covers the point *given where the clipmap is standing right now*. This probe
+ * poses no shot, so the clipmap sits wherever boot left it — and the further a
+ * subject is from that, the coarser the ring under it and the deeper the chord
+ * sags. `Terrain`'s own docstring prices it: ~0.37 m inside 144 m, **16 m at
+ * 1.2 km**.
+ *
+ * That is not a defect in the world, it is the instrument moving. It is also
+ * exactly what made this probe read **1 floating of 2548 at `__OJ_CELLS=10` and
+ * 34 of 5488 at 14** — the extra cells are all further from the parked camera,
+ * so their support surface is measured on a lattice nobody will ever see them
+ * over. Diagnosed on the worst row: (2366, -211), `it.y` **161.6**, the analytic
+ * field **163.4**, and an uncelled `drawnHeightAt` **135.4** — a 28 m sag on
+ * ground whose slope is 0.179.
+ *
+ * `seatY` seats every rock against `clipSpacingForDistance(CULL[kind])`, the
+ * spacing at the range that kind is still drawn at, precisely so "a prop culled
+ * at 400 m is only ever seen over ground drawn at 6 m or finer". The support
+ * has to be read on the same lattice or the two are not comparable.
+ */
+const CULL_M = { granite: 1150, bedded: 1150, slab: 1150, spire: 1150, worn: 1150 };
+const cellCache = new Map();
+const cellFor = (k) => {
+  let c = cellCache.get(k);
+  if (c === undefined) {
+    c = terrain.clipSpacingForDistance(CULL_M[k] || 1150);
+    cellCache.set(k, c);
+  }
+  return c;
+};
+
 // Only the laid course blocks: scree, cobbles and pebbles lie in soil and are
 // `floatcheck` gate 2's business, not a joint's.
 const BIG = new Set(['granite', 'bedded', 'slab', 'spire', 'worn']);
@@ -121,6 +156,7 @@ const trisOf = (it) => {
 };
 
 const gaps = [];
+const float = [];
 let floating = 0, worst = -Infinity, worstAt = null;
 for (const it of subjects) {
   const ex = rocks.ext.get(it.k);
@@ -135,7 +171,7 @@ for (const it of subjects) {
       pts.push([it.x + Math.cos(a) * f * ax, it.z + Math.sin(a) * f * az]);
     }
   }
-  const support = pts.map(([x, z]) => terrain.drawnHeightAt(x, z));
+  const support = pts.map(([x, z]) => terrain.drawnHeightAt(x, z, cellFor(it.k)));
   for (const o of inst) {
     if (o === it) continue;
     const dx = o.x - it.x, dz = o.z - it.z;
@@ -155,7 +191,32 @@ for (const it of subjects) {
   }
   if (!Number.isFinite(gap)) continue;
   gaps.push(gap);
-  if (gap > 0) floating++;
+  if (gap > 0) {
+    floating++;
+    /*
+     * **A total is a verdict and a list is a diagnosis.** This probe reported
+     * "1 floating of 2548" and gave no way to ask what the one was, so the
+     * next run at a wider radius reported 34 and gave no way to ask whether
+     * they were the same defect. They were not a defect at all — see the
+     * `cellFor` note above — and the row that proved it is this one: `y`
+     * against the analytic field against the drawn surface, per subject.
+     * `bury` is on it because it is what separates a course-0 block, which
+     * `_item` seats, from an upper course, which `_genOutcrop` seats on a
+     * named block below it and zeroes.
+     */
+    const ps = R.placedScale(rocks.ext.get(it.k), it.s, it.sx, it.sy, it.sz, it.bury);
+    float.push({
+      at: [Math.round(it.x), Math.round(it.z)], k: it.k,
+      s: +it.s.toFixed(2), sy: +it.sy.toFixed(2), bury: +it.bury.toFixed(3),
+      y: +it.y.toFixed(1), gap: +gap.toFixed(2),
+      // The three surfaces the seat could have used, so a float says WHICH.
+      drawn: +terrain.drawnHeightAt(it.x, it.z, cellFor(it.k)).toFixed(1),
+      parked: +terrain.drawnHeightAt(it.x, it.z).toFixed(1),
+      analytic: +rocks.eco.height(it.x, it.z).toFixed(1),
+      slope: +rocks.eco.slope01(it.x, it.z).toFixed(3),
+      sink: +ps.sink.toFixed(2),
+    });
+  }
   if (gap > worst) { worst = gap; worstAt = `${Math.round(it.x)},${Math.round(it.z)} ${it.k} s=${it.s.toFixed(1)}`; }
 }
 
@@ -174,4 +235,5 @@ return {
   p50: q(0.5), p90: q(0.9), p99: q(0.99),
   worstM: +worst.toFixed(2),
   worstAt,
+  float: float.sort((a, b) => b.gap - a.gap).slice(0, 20),
 };
