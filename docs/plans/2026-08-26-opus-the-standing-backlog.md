@@ -635,6 +635,9 @@ without opening the handoff it lived in.
 | `--hide` renders less streamed content than its control, so an `--hide` delta is not a cost | **wrong for two months.** It was one frame of shadow-cascade phase: `resetClock()` lands every pose on frame 8, where all three cascades and the cloud shadow are due, and the hide pass stepped one frame further. A 4-mesh waymark reads **5 draws**, not −301 |
 | "zero `any`" | rested on `anycheck` reporting `0 across 0 files` — a scanner that walked nothing. It walks 534 files now, and the answer happens to still be zero |
 | `.menu-scrim`'s `backdrop-filter: blur(26px)` | **had never rendered.** It computes correctly and produces nothing: it samples its own compositing layer's backdrop, and inside `#menus` that is empty. Only re-homing into `uiRoot` fixes it — `position:fixed`, `will-change`, `translateZ(0)` and promoting `#menus` all cost 6× the memory and still do not work |
+| Sharpening the mouth line (blur 1.8 → 0.5), and darkening it further | moved the rendered mouth **0.5 of 255** each. `head-r3` §7's own next action, and it is nothing |
+| Face material `sheen` 0.17 → 0, `specularIntensity` 0.35 → 0.10 | moved **nothing** |
+| The transverse section is why the profile is wrong | it is a real defect and it landed (18.6 → 7.2 mm), but `x` is untouched by construction: `noseLeadMm` moved **<0.1 mm**. Two separate bugs |
 | `driftcheck`'s 200 m probe rect covers the LOD morph band | it does not — level 0 reaches +/-144 m, so a **5 m** morph error moved not one number. Rect is 340 m now |
 | `tourSettle` 40 -> 20 in `driftcheck` | 4 s of 36, bought by halving the LOD rings' settle time. Not taken |
 

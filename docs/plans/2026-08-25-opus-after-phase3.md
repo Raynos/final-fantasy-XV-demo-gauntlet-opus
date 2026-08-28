@@ -41,6 +41,47 @@ third time on this head that a measurement agreed while the picture did not, so:
 - `handoff/head.md`, `head-r2.md`, `head-r3.md` are three previous passes.
   Read what each of them already ruled out before ruling it out again.
 
+### 2026-08-28 — the bench exists, two shapes landed, and the defect moved
+
+**`src/tools/facecheck.mts` is the bench, and it failed on HEAD at 13 of 24 rows
+before a line of `Face.ts` moved** — which is what the instruction above was for.
+It renders each hero at 0.55 m and scores feature windows against a blank patch
+of the *same* face in the *same* light, after removing a least-squares plane: a
+raw p97−p03 scored the **terminator** as a mouth, and a blank cheek came back at
+`range` 157. `noseLeadMm` is in it as the ratchet. Wired into `check`, 19/19.
+
+Two shapes landed, both invisible to every bench that existed:
+
+- **`shellPoint` swept a pure ellipse in theta** — `transverseDropMm` **18.6 →
+  7.2** against a real head's ~7. This is `head-r3` §4, which left it as "a lane,
+  not an afternoon". Note `x` is untouched by construction, so `muzzleMm` moved
+  6.46 → 6.26 and `noseLeadMm` by **<0.1 mm**: the transverse section was never
+  the projection defect, and fixing it does not fix the profile.
+- **The jawline undercut reached x = 4 mm, the midline**, taking 6.6 mm off the
+  chin's half-width. `jawWidthErr` 0.0665 → 0.018; the mandible profile is now
+  `0.804 0.677 0.507 0.328` against Farkas' `0.82 0.70 0.53 0.32`.
+
+**And then the finding that reframes three lanes of failure.** Fill the whole
+face canvas pure `#00ff00` and re-render: the shadow half comes back green, **the
+lit half comes back white.** *No texture survives on a blown face.* `SKIN_BASE`
+0.88 → 0.55, which walks it out of the clip, moves `mouthRange` **1.4 → 12.3**.
+Which half is blown is decided by the hero's **yaw and nothing else** — Ignis
+reads a mouth at window-mean 175, Noctis does not at 227, on identical geometry
+and identical paint.
+
+So *"no mouth texture on the mouth's location"* is very likely **a clip, not a
+sculpt**, and that is a coherent explanation for why three agents in a row
+measured a correct face and photographed a wrong one. `facecheck` now VOIDs a
+clipped window and names it rather than blaming the sculpt. **Open: whether the
+cure is `SKIN_BASE` or the scene exposure aimed at the landscape** — different
+bugs, different blast radii, and it needs a full-corpus diff.
+
+Honest read from the lane that did the work: **better, not fixed.** The hair is
+black instead of slate, both eyes read in `hero_portrait` where one was blank,
+the chin is no longer a point and the cheek has a plane — but the portrait is
+still a pale blown mask with no mouth, on a head pitched down under a camera
+looking up.
+
 **Done when** the portrait reads as a face at 1:1 — a mouth that exists, a nose
 that leads the profile — and a bench asserts both, so the next agent cannot
 regress it silently.
