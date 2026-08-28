@@ -40,14 +40,21 @@ import type { InteractableHandle } from '../interaction/Interactables.ts';
  *
  * ## Where the spots are, and why there are only three
  *
- * `Water` is a **single global plane at y = -6.5**: a basin below that gets a
- * surface and everything else is dry, so a fishing pin standing at 68 m of
- * elevation can never have water under it no matter what its `does:` line
- * says. Seven of the ten pins are in that position — the survey is in
- * `probes/fishwater.mts` and the numbers are in the handoff. `_spots` walks
- * out from each pin looking for a genuine waterline within `SEARCH_R`, places
- * the stand on the bank facing the water, and **silently skips a pin it cannot
- * find water for** rather than registering a rod over dry rock.
+ * `Water` is **not** a single global plane. It was when this file was written,
+ * and the sentence that used to be here — "a fishing pin standing at 68 m of
+ * elevation can never have water under it" — went stale the night
+ * `Water._findTarns` started measuring a level per body and `Field._tarnBasins`
+ * carved a basin under every inland pin. Four pins had real water 6 m away and
+ * were reported dry for a week, because the survey still compared the ground
+ * against `Water.level` (−6.5 m, the sea) instead of against the body's own
+ * surface. Every level in here is per spot now.
+ *
+ * `_survey` walks out from each pin to the nearest **waterline** — a wet/dry
+ * transition, in whichever direction the pin happens to be standing — places
+ * the stand on the dry side of it, and **silently skips a pin it cannot find
+ * water for** rather than registering a rod over dry rock. Two pins are in that
+ * position and the world map draws them as unavailable rather than promising
+ * them; `probes/fishwater.mts` is the live survey.
  *
  * ## Where this lives
  *
@@ -91,6 +98,15 @@ export interface FishingSpot {
   fish: string[];
   /** POI level — scales the EXP and gates nothing. */
   lv: number;
+  /**
+   * The surface height of *this* hole's water body.
+   *
+   * Not `Water.level`. `Water` stopped being one global plane when `_findTarns`
+   * gave every inland pin its own measured level, and this file did not notice:
+   * four pins with real water at +36.9 to +80.5 m were surveyed against the sea
+   * at −6.5 m, reported dry, and drew no rod. A float lands here.
+   */
+  level: number;
 }
 
 export class Fishing {
@@ -211,8 +227,15 @@ export class Fishing {
   _survey(game: Game): FishingSpot[] {
     const water = game.get('Water')!;
     const terrain = game.get('Terrain')!;
-    const wet = (x: number, z: number) =>
-      water.surfaceAt(x, z) != null && terrain.heightAt(x, z) < water.level;
+    // Submerged means "under **this** body's surface", not under the sea.
+    // `surfaceAt` already returns the body's own level; comparing the ground
+    // against the global `water.level` instead was the whole bug — every tarn
+    // stands tens of metres above −6.5 m, so the test could only ever pass at
+    // the coast, and six of ten pins reported dry over water 6 m away.
+    const wet = (x: number, z: number) => {
+      const lv = water.surfaceAt(x, z);
+      return lv != null && terrain.heightAt(x, z) < lv;
+    };
 
     const out: FishingSpot[] = [];
     this.dry.length = 0;
@@ -225,30 +248,50 @@ export class Fishing {
       if (!fish) throw new Error(`Fishing: no catch table for fishing POI ${p.id}`);
       for (const id of fish) if (!FISH[id]) throw new Error(`Fishing: ${p.id} lists unknown fish ${id}`);
 
-      let hit: { x: number, z: number, a: number, r: number } | null = null;
+      // **Two shapes of pin, and only one of them was ever handled.** A dock
+      // pin stands on dry land beside its water; a tarn pin stands at the
+      // *centre* of a basin `Water._findTarns` cut around it, so the pin is
+      // itself two to four metres under. Walking outward for the first wet
+      // sample from inside the lake finds the pin's own puddle at r = 6 and
+      // parks the rod in the middle of it. So look for the transition, in
+      // whichever direction the pin is standing.
+      const inWater = wet(p.x, p.z);
+      let hit: { a: number, r: number } | null = null;
       for (let r = 6; r <= SEARCH_R && !hit; r += 4) {
         for (let k = 0; k < 36; k++) {
           const a = (k / 36) * Math.PI * 2;
           const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
-          if (wet(x, z)) { hit = { x, z, a, r }; break; }
+          if (wet(x, z) !== inWater) { hit = { a, r }; break; }
         }
       }
-      if (!hit) { this.dry.push(p.id); continue; }
+      if (!hit) {
+        // Wholly dry within the search radius, or — for a pin already in the
+        // water — a basin wider than it, which is not a failure.
+        if (!inWater) { this.dry.push(p.id); continue; }
+        hit = { a: 0, r: SEARCH_R };
+      }
 
-      // Back up along the ray to the last dry metre: that is the waterline.
-      const dx = Math.cos(hit.a), dz = Math.sin(hit.a);
+      // `ax`/`az` points at the bank; `dx`/`dz` points out over the water.
+      const ax = Math.cos(hit.a), az = Math.sin(hit.a);
+      const dx = inWater ? -ax : ax, dz = inWater ? -az : az;
+      // Walk back to the last metre on the near side: that is the waterline.
       let edge = hit.r;
-      while (edge > 1 && wet(p.x + dx * (edge - 1), p.z + dz * (edge - 1))) edge -= 1;
-      const sx = p.x + dx * (edge - STAND_BACK), sz = p.z + dz * (edge - STAND_BACK);
+      while (edge > 1 && wet(p.x + ax * (edge - 1), p.z + az * (edge - 1)) !== inWater) edge -= 1;
+      // The stand is always `STAND_BACK` on the dry side of the waterline,
+      // which is `-out` by construction whichever shape of pin this is.
+      const sx = p.x + ax * (edge + (inWater ? STAND_BACK : -STAND_BACK));
+      const sz = p.z + az * (edge + (inWater ? STAND_BACK : -STAND_BACK));
 
       // How much open water is in front of it, so a cast cannot land on the
-      // far bank of a narrow inlet.
+      // far bank of a narrow inlet. Measured from the waterline, outward.
+      const ex = p.x + ax * edge, ez = p.z + az * edge;
       let fetch = 0;
-      while (fetch < 90 && wet(p.x + dx * (edge + fetch + 2), p.z + dz * (edge + fetch + 2))) fetch += 2;
+      while (fetch < 90 && wet(ex + dx * (fetch + 2), ez + dz * (fetch + 2))) fetch += 2;
 
       out.push({
         id: p.id,
         name: p.name,
+        level: water.surfaceAt(ex + dx * 2, ez + dz * 2) ?? water.surfaceAt(p.x, p.z) ?? water.level,
         stand: new THREE.Vector3(sx, terrain.heightAt(sx, sz), sz),
         out: new THREE.Vector2(dx, dz),
         fetch: Math.max(10, fetch),
@@ -483,7 +526,7 @@ export class Fishing {
     this._bobFrom.copy(this._tipWorld(game));
     this._bobTarget.set(
       spot.stand.x + spot.out.x * dist,
-      (game.get('Water')?.level ?? 0),
+      spot.level,
       spot.stand.z + spot.out.y * dist,
     );
     this.line0 = dist;
@@ -783,7 +826,7 @@ export class Fishing {
     const spot = this.active;
     if (!spot) return;
     const now = game.time.now;
-    const level = game.get('Water')?.level ?? 0;
+    const level = spot.level;
 
     if (this.phase === 'cast') {
       // Reeled in: the float hangs off the tip.
