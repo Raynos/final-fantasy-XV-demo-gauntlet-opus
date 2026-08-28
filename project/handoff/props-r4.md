@@ -122,9 +122,73 @@ reason that is measured rather than rhetorical:
   the only new information on the other side is a bench for a generator that has
   a bench.
 
-## Row 1 — the Meteor and `tintNorm` for the rock field — see below
+## Row 1 — the Meteor — **DECIDED (negative) on `tintNorm`; the glow is a measured negative with a named cost**
 
-*(Filled in when the two corpus arms land — `ec0c2bd~1` against `ec0c2bd`.)*
+### `tintNorm` for the instanced field: **NO**, and the corpus is the proof
+
+Built as a committed arm (`ec0c2bd`) and priced by **two cold 142-shot corpora,
+`ec0c2bd~1` against `ec0c2bd`** — one commit apart by construction, because three
+lanes were live and `Field.ts` was uncommitted in the shared tree, so a `--dirty`
+corpus would have been measuring somebody else's heightfield. Reverted at
+`b921642`, with the whole measurement in the comment on the call site.
+
+- **The ablation is not null.** `tmp/p4/hlw`, the `zone_longwythe` heat map:
+  every changed pixel is a rock. Terrain, sky, vegetation, clouds and the
+  Insomnia skyline untouched (**VERIFIED BY EYE**).
+- **No shot moves above its own noise floor.** Worst mean `party_formation`
+  **1.814/255** against a floor of 2.85; `zone_longwythe` 0.680 over 0.097% of
+  pixels (floor 1.23), `zone_three_valleys` 0.648/0.107% (0.74),
+  `zone_mencemoor` 0.359, `zone_ostium_gorge` 0.439 (**MEASURED**).
+- **The arithmetic is the finding.** Over the eight shipped kinds at their
+  shipped `opts` the bake's means run **0.8731 to 0.9270, mean of means
+  0.8966** — so `tintNorm` here is a **uniform ×1.1153 albedo lift** plus a
+  **6.01%** inter-kind equalisation. A re-tint wearing a normalisation's name,
+  on a material whose tint and per-instance range were both calibrated with the
+  0.8966 in them. If we wanted every rock 11% brighter, the honest change is the
+  hex (**MEASURED**, `tmp/p4/tint.mts`).
+- **Looked at anyway**, because a mean under the floor is not "no change":
+  `tmp/p4/lwA.png` -> `tmp/p4/lwB.png`, the Longwythe corestone at 3x. The lift
+  is if anything slightly *worse* — normalising to the mean raises the cavity as
+  much as the ledge, so the crevice shading flattens (**VERIFIED BY EYE**).
+
+The Meteor is the opposite case and keeps it: there the material had **no**
+large-scale albedo variation at all, so the attribute was new information rather
+than a scale on information the tint already carried.
+
+### The Disc at `zone_mencemoor`: it is the Meteor, and its glow has never rendered
+
+`probes/pixelowner.mts` settles the first half: the pale dome at (760,180) of
+`zone_mencemoor` is `meteor_mega_stone`, 723 960 verts, map+normalMap+
+roughnessMap, vertex colours on, nearest corner **917.7 m**. It is the Meteor,
+not a terrain feature, and it does carry every map it should.
+
+The second half is a hard negative with a mechanism (`3eef135`).
+`probes/meteorglow.mts` is a positive control: multiply `meteorGlow.emissive` by
+**40** and re-shoot. **Not one lit pixel**, in `zone_mencemoor` or in
+`landmark_meteor` (`tmp/p4/disc.png` -> `tmp/p4/discglow.png`, **VERIFIED BY
+EYE**). The glow is not faint; it is inside the rock. `_meteorParts` authors a
+cleft as the *midpoint between two neighbouring mass centres*, and the masses run
+r 165–300 m at centres 300–360 m apart — the midpoint of two overlapping bodies
+is the middle of both. All 22 slabs sit within ±204 m of the group origin while
+the stone spans −1154 to +1085. So the night ramp `glows()` drives,
+`1.6 + 1.4 * night`, has never rendered either.
+
+**I built the placement fix and reverted it, because it does not close the row.**
+Seating each slab on an actual vertex of a mass — rejected if inside another
+mass's ellipsoid at 0.98 (buried again) or not inside one at 1.22 (not a seam) —
+does move them onto the real cut surface: the glow group's box goes
+[-204,-77,-165]..[189,257,199] -> [-231,28,-350]..[416,291,168]. **Still
+invisible at 40x from both judged cameras**, for a reason of scale rather than
+placement: a slab sunk to sit in a crack stands ~0.6 m proud and **one pixel at
+`zone_mencemoor`'s range is 1.53 m**; and from that stand the frame is dominated
+by the front mass, whose face is not a seam at all.
+
+**What it actually needs, priced for the human:** glowing veins authored *across
+the visible faces* on the cleave-plane edges the mass already has, at tens of
+metres, sized for a 585 m landform. That is an art round with its own
+before/after, not a nudge — and it would buy the Meteor its one warm accent and
+give the night ramp something to drive. It is not queued anywhere; it is in this
+lane's final report.
 
 ---
 
