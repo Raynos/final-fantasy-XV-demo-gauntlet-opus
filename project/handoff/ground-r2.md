@@ -1,12 +1,13 @@
 # ground-r2 — the four ground leftovers WS-13 handed back
 
 Owner: the `ground-r2` lane, 2026-08-28. Directories: `src/world/terrain/`,
-`src/world/sky/SkyProbe.ts`. **`src/world/veg/` is `alpha-edges`'; nothing in
-this lane edits it.**
+`src/world/sky/SkyProbe.ts`, and — after `alpha-edges` handed off at `fbe8e1f`
+mid-session — the one `Ecology` predicate the beach needed.
 
 Four items, each measured by a lane that stopped at a directory boundary, plus
-the water lane's tarn leftover. Two landed, two closed as measured negatives,
-one is a `Shots.ts` recommendation. Read the item you are picking up and its
+the water lane's tarn leftover. **Two landed in full, one is closed for terrain
+and open for two other directories, one is half a measured negative and half a
+`Shots.ts` recommendation, and the tarn is a fourth measured negative.** Read the item you are picking up and its
 number before anything else.
 
 ---
@@ -51,17 +52,42 @@ twenty-metre bluff, water starting where the grass stops. After: a pale sand
 strand across the width of the frame with the foam lace on it, shallows over a
 sandy bed, Angelgard still sheer. It reads as a beach.
 
-### What this exposes, and it is `alpha-edges`', not mine
+### The `Ecology` half — LANDED too, `444f8ee`
 
-**The tree line now stands IN the swash.** `Ecology.treeDensity` rejects only
-`waterDepth > 0.3`, so a tree may grow to the waterline; with the bluff gone,
-that line is now on the wet foreshore and the frame has trees in the surf.
-`grassDensity`/`scrubDensity` carry the same `0.15` reject and the same problem
-one metre up. What all three want is a **strandline reject** — nothing woody
-below about `WORLD.seaLevel + 1.5`, grass thinned to dune tussock below +3 —
-which is one predicate in `src/world/veg/Ecology.ts`. The terrain half is
-landed and will not move again; this is the remaining half of WS-13's "Galdin
-Quay is not a beach".
+`alpha-edges` handed off (`fbe8e1f`) mid-session, so `src/world/veg/` came free
+and this could be finished rather than filed.
+
+The terrain half immediately exposed it: every population grew to the water's
+edge and stopped, because the only water test any of them had was
+`waterDepth > 0.15` (`0.3` for a tree) — a predicate about being *submerged*.
+On a coast that shelved twenty metres in twenty that was invisible; on a real
+foreshore it is not, because the ground a tree wants is a few centimetres above
+the sea for the whole width of the beach. The tree line came out standing in
+the swash.
+
+`Ecology.strand` is an elevation ramp and each population picks the band it
+clears — grass thinned to a fifth over 3 m, scrub to a tenth over 2.2, nothing
+woody below 4.5 — because a strand's real signature is a **zonation**: bare wet
+sand, dune tussock, scrub, then trees well back from the water.
+
+**Gated on `Field.beachMask`, and that gate is the load-bearing part.** Height
+above the sea plane cannot tell a foreshore from the margin of the Vesperpool,
+which is authored as a *drowned forest* with its floor 20 m below the water
+plane (`alstorBasin` is −16 and the same case) — a world-wide rule in these
+units would strip the trees out of it in order to fix Galdin. `Field.ts`
+publishes the same site mask `_beachShelf` grades with, rather than letting a
+second list drift out of step with it.
+
+**`Ecology.ts` and `Field.ts` are both in `GEO_SOURCES`**, so this needs
+`node src/tools/texbake.mts --geo` — one of the two caches nobody can rebuild
+for you.
+
+### What this exposed, before that half landed
+
+**The tree line stood IN the swash** — see above; fixed. Recorded because the
+shape of the mistake generalises: a placement predicate written in the units of
+a *submersion* test cannot see a change of *gradient*, and three populations
+carried the same one.
 
 ---
 
@@ -231,7 +257,9 @@ the hillside.
 
 ## Files this lane owns and has touched
 
-`src/world/terrain/Field.ts` · `src/world/terrain/TerrainMaterial.ts`
+`src/world/terrain/Field.ts` · `src/world/terrain/TerrainMaterial.ts` ·
+`src/world/veg/Ecology.ts` (the strandline predicate only, after `alpha-edges`
+handed off)
 
 ## Instruments this lane added
 
