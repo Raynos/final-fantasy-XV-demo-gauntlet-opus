@@ -60,6 +60,12 @@ export const TEX_SOURCES = [
   // baked against a previous terrain is the stale-cache failure with no
   // symptom, and the two artifacts are rebuilt together anyway.
   'src/world/map/Chart.ts',
+  // The chart's water mask is decided per body by `findTarns`, which is shared
+  // with `Water.ts` precisely so the sheet and the world cannot disagree about
+  // where the water is. That makes it a chart generator, so it belongs here:
+  // a change to the tarn arithmetic that did not invalidate the chart bake
+  // would put the two back out of step with every gate green.
+  'src/world/water/Tarns.ts',
   'src/world/map/WorldMap.ts',
   'src/world/terrain/Field.ts',
   'src/world/terrain/Road.ts',
@@ -124,6 +130,11 @@ const GEO_SOURCES = [
   'src/world/props/ZoneDress.ts',
   'src/world/props/PropMaterials.ts',
   'src/world/water/Shore.ts',
+  // The shore ribbon is a pure function of the terrain bake and `Water.bodies`,
+  // and half of `Water.bodies` is now decided in `Tarns.ts`. Move a tarn's
+  // level without invalidating this and the ribbon comes back from the cache
+  // tracing a waterline the water is no longer at.
+  'src/world/water/Tarns.ts',
   'src/world/water/contour.ts',
   'src/world/water/geo.ts',
   // where they are placed, and on what

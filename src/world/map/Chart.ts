@@ -2,6 +2,7 @@ import { worldMap, WORLD } from './WorldMap.ts';
 import type { Biome, ZoneWeights } from './WorldMap.ts';
 import type { Terrain } from '../Terrain.ts';
 import { bakedBytes } from '../../engine/TexBake.ts';
+import { findTarns } from '../water/Tarns.ts';
 
 /**
  * THE CHART OF LUCIS — a baked relief map of the whole continent.
@@ -26,8 +27,10 @@ import { bakedBytes } from '../../engine/TexBake.ts';
  *      green, cool grey rock, pale highland, volcanic ash. Regional colour
  *      comes from the same zone table the terrain shader reads, so the chart
  *      is ochre exactly where Leide is ochre.
- *   4. **Water** — anything under the water plane, ramped from turquoise
- *      shoal to deep navy, with a pale hairline coast.
+ *   4. **Water** — anything under a water *surface*, ramped from turquoise
+ *      shoal to deep navy, with a pale hairline coast. Surface, not plane:
+ *      the sea is one global level and every inland tarn has its own,
+ *      measured by `water/Tarns.ts`, which `Water.ts` reads too.
  *   5. **Drainage** — the terrain's own flow accumulation channel drawn as
  *      watercourses, which is what gives the sheet its fine branching detail.
  *   6. **Contours** — 40 m minor and 200 m index lines, anti-aliased by the
@@ -213,6 +216,50 @@ export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = 
 function rasterChart(H: Float32Array, ctrl: Uint8Array | null, size: number, mPerPx: number, ppm: number) {
   const SEA = WORLD.seaLevel;
 
+  // ---- inland water ------------------------------------------------------
+  //
+  // **`h < SEA` is not the question the chart is asking.** It was the only
+  // question for as long as the world had one water level, and it painted the
+  // sheet correctly right up until `Water._findTarns` gave four fishing pins a
+  // body of their own at +36.9, +40.1, +67.9 and +80.5 m. After that,
+  // Swainsmere was a live fishing hole — a boat, a jetty, a catchable trout —
+  // with no blue anywhere near it on the map the player navigates by.
+  //
+  // Same predicate, same one-global-level assumption, third file: `Fishing.ts`
+  // had it and called those four tarns dry with water six metres from the pin.
+  // So the arithmetic is not copied here. It is `water/Tarns.ts`, run against
+  // this bake's own elevation grid rather than against a live `Terrain`, which
+  // is the whole reason that module takes its ground as a function: this pass
+  // runs under Node inside `texbake.mts` with no `Terrain` and no DOM.
+  //
+  // The grid read is bilinear and deliberately *without* `microDetail` — the
+  // analytic ±0.9 m relief the terrain adds on top of the DEM. It is zero-mean,
+  // so it moves a 26th-percentile surface by centimetres, and the chart is
+  // 4 m per pixel: a metre of level is a fraction of a pixel of shoreline.
+  const sampleH = (x: number, z: number) => {
+    const fx = (x + WORLD.half) / mPerPx, fz = (z + WORLD.half) / mPerPx;
+    let i0 = Math.floor(fx), j0 = Math.floor(fz);
+    const tx = fx - i0, tz = fz - j0;
+    if (i0 < 0) i0 = 0; else if (i0 > size - 2) i0 = size - 2;
+    if (j0 < 0) j0 = 0; else if (j0 > size - 2) j0 = size - 2;
+    const b0 = j0 * size + i0;
+    const a0 = H[b0], a1 = H[b0 + 1], a2 = H[b0 + size], a3 = H[b0 + size + 1];
+    return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
+  };
+  // Pixel rects, so the per-texel test is four integer compares against a
+  // handful of boxes rather than a distance to every body in the world.
+  const tarns = findTarns(sampleH, SEA).map((t) => ({
+    level: t.level,
+    // Ramp the blue across the body's *own* depth. A tarn is 2-5 m deep and
+    // the sea ramp is 26 m, so sharing it would paint every tarn the single
+    // flat turquoise of a shoal and lose the shape of the basin.
+    dscale: Math.max(1.5, t.level - t.floor),
+    i0: Math.max(0, Math.floor((t.cx - t.w * 0.5 + WORLD.half) / mPerPx)),
+    i1: Math.min(size - 1, Math.ceil((t.cx + t.w * 0.5 + WORLD.half) / mPerPx)),
+    j0: Math.max(0, Math.floor((t.cz - t.d * 0.5 + WORLD.half) / mPerPx)),
+    j1: Math.min(size - 1, Math.ceil((t.cz + t.d * 0.5 + WORLD.half) / mPerPx)),
+  }));
+
   // ---- local relief: elevation against a 96 m blurred surface -------------
   // Built on a 16 m coarse grid, which is all the smoothness this needs and a
   // sixteenth of the work.
@@ -335,11 +382,33 @@ function rasterChart(H: Float32Array, ctrl: Uint8Array | null, size: number, mPe
       shade = clamp01(shade);
 
       // ---- colour ------------------------------------------------------
+      // The local water surface: the sea everywhere, except a pixel that is
+      // under a tarn's own measured level inside that tarn's own footprint.
+      //
+      // **Under it, not merely inside the box.** The first version of this let
+      // any pixel in the box take the tarn's surface so the sandy strand would
+      // ramp against the tarn's waterline too, and every pond arrived on the
+      // sheet inside a pale grey rectangle: the box is the water's bounding
+      // rect plus 8 m, a tarn basin is dished, so most of the dry margin sits
+      // 1-3 m above the level and the strand filled the box to its corners and
+      // stopped dead at them. A tarn is 30-40 px across at 2048 and its shore
+      // cue is the coastline hairline the pass below already draws around
+      // anything the mask calls water. It does not need a beach as well.
+      let surf = SEA, dscale = 26, dscale2 = 90;
+      if (h >= SEA) {
+        for (let t = 0; t < tarns.length; t++) {
+          const T = tarns[t];
+          if (h < T.level && i >= T.i0 && i <= T.i1 && j >= T.j0 && j <= T.j1) {
+            surf = T.level; dscale = T.dscale; dscale2 = Infinity; break;
+          }
+        }
+      }
+
       let r, g, b;
-      if (h < SEA) {
+      if (h < surf) {
         water[row + i] = 1;
-        const dep = clamp01((SEA - h) / 26);
-        const dep2 = clamp01((SEA - h) / 90);
+        const dep = clamp01((surf - h) / dscale);
+        const dep2 = clamp01((surf - h) / dscale2);
         r = mix(P.shoal[0], P.sea[0], dep); g = mix(P.shoal[1], P.sea[1], dep); b = mix(P.shoal[2], P.sea[2], dep);
         r = mix(r, P.deep[0], dep2); g = mix(g, P.deep[1], dep2); b = mix(b, P.deep[2], dep2);
         // a whisper of the drowned floor's relief keeps basins from going flat
