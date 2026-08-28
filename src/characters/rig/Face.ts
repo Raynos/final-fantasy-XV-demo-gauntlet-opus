@@ -193,19 +193,37 @@ export function brushes(look: Look): SculptBrush[] {
   // moved: the whole nose is compressed 0.70x toward the eye line, its two long
   // y radii with it, and the tip and subnasale amounts cut so the profile
   // projects like a nose instead of a beak.
-  add({ p: [0, -0.0117, 0.089], r: [0.0175, 0.023, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
-  add({ p: [0, -0.0313, 0.095], r: [0.0165, 0.0140, 0.028], amt: 0.0115 + 0.004 * nose, dir: [0, 0.14, 1] });
-  add({ p: [0, -0.0362, 0.098], r: [0.0115, 0.0080, 0.020], amt: 0.0045, dir: [0, -0.2, 1] });
+  //
+  // **And the second measured defect, which is the one the frame shows.** The
+  // two dorsum brushes carried r_x of 17.5 and 16.5 mm — a 34 mm-wide *bridge*,
+  // wider than a real nose is at its wings — so the nose left the midline as a
+  // 20-degree ramp and arrived at the cheek having never turned. There is no
+  // sidewall on a ramp, so there is no plane for a key to separate and no edge
+  // for a cast shadow to start at, which is why the profile has a nose and the
+  // front view has none. Narrowed to 10-12 mm, which is a dorsum, with the
+  // amounts raised to hold the midline projection the sagittal bench likes
+  // (pronasale - subnasale stays ~20 mm, Farkas' 21).
+  add({ p: [0, -0.0117, 0.089], r: [0.0125, 0.023, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
+  add({ p: [0, -0.0313, 0.095], r: [0.0110, 0.0140, 0.028], amt: 0.0130 + 0.004 * nose, dir: [0, 0.14, 1] });
+  add({ p: [0, -0.0362, 0.098], r: [0.0095, 0.0080, 0.020], amt: 0.0068, dir: [0, -0.2, 1] });
+  // The lateral nasal walls: the two planes that make a nose a wedge instead of
+  // a bump. They cut *between* the dorsum and the cheek along the nose's whole
+  // length, so the dorsum reads as a ridge with two sides rather than as the
+  // top of a dome.
+  add({ p: [0.0140, -0.0245, 0.0865], r: [0.0080, 0.0175, 0.0195], amt: -0.0058, dir: 'normal', mirror: true });
   // alar wings: a real ball of cartilage each side of the tip, and the crease
   // that curls around it. Without these the nose is a triangular smear. Their
   // radii are NOT scaled with the rest — at 5-11 mm they are already at the
   // grid's resolution floor (`brushsurvive.mts`), and shrinking them is how the
   // nostrils lost every vertex of support the last time round.
-  add({ p: [0.0155, -0.0365, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0115, dir: 'normal', mirror: true });
-  add({ p: [0.0225, -0.0372, 0.0790], r: [0.0055, 0.0090, 0.0140], amt: -0.0055, dir: 'normal', mirror: true });
+  add({ p: [0.0155, -0.0365, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0125, dir: 'normal', mirror: true });
+  // The alar crease is the darkest small value on a lit face and it was 5.5 mm
+  // of a brush 5.5 mm wide — half a millimetre of actual groove once the cosine
+  // falloff is paid. Doubled and widened enough to have vertices in it.
+  add({ p: [0.0228, -0.0370, 0.0800], r: [0.0080, 0.0120, 0.0170], amt: -0.0112, dir: 'normal', mirror: true });
   add({ p: [0, -0.0425, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0072, dir: [0, 0, 1] });
   // nostril openings, cut upward into the underside of the nose
-  add({ p: [0.0092, -0.0412, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0090, dir: [0, 0.55, 1], mirror: true });
+  add({ p: [0.0092, -0.0412, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0112, dir: [0, 0.55, 1], mirror: true });
 
   // mouth — the lips are volumes, not a painted line. Upper lip rolls forward
   // under a real philtrum; the lower lip carries a fuller, rounder mass with a
@@ -243,9 +261,13 @@ export function brushes(look: Look): SculptBrush[] {
   // this and neither can a landmark bench: it is off-midline mass, and it is
   // what makes a mouth read from an angle.
   add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0008, dir: 'normal' });
-  add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0038, dir: [0, 0, 1] });    // philtrum groove
+  add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0052, dir: [0, 0, 1] });    // philtrum groove
   add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0026, dir: [0, 0, 1], mirror: true }); // philtrum columns
-  add({ p: [0, -0.0605, 0.0855], r: [0.026, 0.0075, 0.026], amt: 0.0024, dir: [0, 0.18, 1] });   // upper vermilion
+  // The two vermilions were 2.4 and 5.0 mm on a face whose cheek 30 mm out is
+  // within 7 mm of the midline: a lip has to stand off the plane it sits on by
+  // more than the plane's own noise or it is a painted line, which is what four
+  // rounds of mouth work kept measuring.
+  add({ p: [0, -0.0605, 0.0855], r: [0.026, 0.0075, 0.026], amt: 0.0042, dir: [0, 0.18, 1] });   // upper vermilion
   add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0010, dir: [0, 0, 1] });      // cupid's bow
   // 6.8 mm, down from 13, and still twice an adult's stomion recess on purpose:
   // 3 mm of groove is 5.7 px at `hero_portrait` and it has to survive a raking
@@ -261,8 +283,8 @@ export function brushes(look: Look): SculptBrush[] {
   // floor of 137 / 133 / 134 across round 13's frame, this sculpt before the
   // undercut, and after it. The mouth there is carried by `paintFace`.
   add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0.42, 1] });     // mouth line
-  add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0050, dir: [0, 0.12, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0078, dir: 'normal', mirror: true });
+  add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0072, dir: [0, 0.12, 1] });  // lower vermilion
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0104, dir: 'normal', mirror: true });
   /**
    * **The maxilla and the malar, and why a hard terminator ran down the
    * midline of every front view in this repo's history.**
@@ -385,7 +407,13 @@ export function brushes(look: Look): SculptBrush[] {
  * height, and it is right. The *lateral* extent is this times `jawTaper`.
  */
 function profileW(yn: number) {
-  if (yn >= 0) return Math.sqrt(Math.max(0, 1 - yn * yn));
+  // **The vault was a hemisphere and a skull is not one.** `sqrt(1 - yn^2)` is
+  // 0.60 of full depth at 0.8 of the way to the vertex; a braincase holds about
+  // 0.75 there and only turns over in the last tenth. Captured bald at 0.55 m
+  // (`tmp/shots/p5-hours/`) the head came to a **point**, and "an egg with two
+  // eyes stuck in it" is that silhouette, not the face on it. Same family as
+  // the lower half so the two meet with matching slope at the equator.
+  if (yn >= 0) return Math.pow(Math.max(0, 1 - Math.pow(yn, 2.6)), 0.46);
   const a = Math.min(1, Math.abs(yn) / 1.055);
   return Math.pow(Math.max(0, 1 - Math.pow(a, 2.6)), 0.46);
 }
@@ -469,6 +497,31 @@ function jawTaper(yn: number) {
  */
 const FACE_FLAT = 1.30;
 
+/**
+ * **...and it must not be applied above the nose, which is what buried it.**
+ *
+ * The number above was derived at the *upper-lip line*, where a maxilla really
+ * is broad and nearly flat. It was then applied at every height, and at the
+ * nose line that is the difference between a cheek at z = 78.7 mm and a cheek
+ * at z = 89.3 (`shellPoint`, x = 40 mm, canonical). Measured on the shipped
+ * mesh by `src/tools/probes/facesect.mts`, which prints the surface as a
+ * *section* rather than as one extremum: at pronasale height the tip stood
+ * **16.7 mm** in front of the cheek 40 mm out, where a head does 35-45, and
+ * **4.5 mm** in front of the surface 8 mm out. `facecheck`'s `noseLeadMm` read
+ * 26.8 through all of it, because pronasale-minus-subnasale on the midline is
+ * *correct* (20.5 mm, Farkas' 21) — the nose is the right length and has
+ * nothing to be long against.
+ *
+ * That is the whole of "an egg with two eyes stuck in it. Not a weak nose; no
+ * nose": there was no cheek behind the nose to see it against, at any exposure
+ * and under any key. So the flattening is ramped off between the nose tip and
+ * the mouth line — full where it was measured and where it belongs, zero over
+ * the nose, the sockets and the brow.
+ */
+function faceFlat(yn: number) {
+  return FACE_FLAT * smooth(clamp01((yn + 0.28) / -0.22));
+}
+
 /** Un-sculpted skull surface point for a spherical coordinate. */
 function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3) {
   const yn = Math.cos(phi);
@@ -478,8 +531,9 @@ function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3
   // The back half is an ellipse and takes the cheap path: two `Math.pow` per
   // sample matters here because `skullPoint` calls this four times per grid
   // vertex, on a 145 x 121 grid, for every character and every NPC at boot.
-  if (ct <= 0) return out.set(x, yn * rr[1], w * ct * rr[2]);
-  const n = 2 + FACE_FLAT * ct;
+  const ff = faceFlat(yn);
+  if (ct <= 0 || ff <= 0) return out.set(x, yn * rr[1], w * ct * rr[2]);
+  const n = 2 + ff * ct;
   const zu = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(st), n)), 1 / n);
   return out.set(x, yn * rr[1], w * zu * rr[2]);
 }
