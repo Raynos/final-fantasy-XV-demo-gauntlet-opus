@@ -111,7 +111,16 @@ export const GRADES: Record<string, GradePreset> = {
     // higher shoulder, not from saturation.
     contrast: 1.13, saturation: 1.02,
     lift: [0.0, 0.0, 0.003], gain: [1.0, 1.0, 1.0],
-    vignette: 0.30, chroma: 0.7, grain: 0.020, key: 0.225,
+    // key is the auto-exposure target middle grey, and all four presets' were
+    // raised 20% on 2026-08-28 alongside the exposure meter's luminance
+    // weighting (a432996). The weighting stopped a black jacket outvoting a
+    // sunlit hillside four to one, which took the corpus median exposure from
+    // 1.361x the Sky's published scene exposure to 0.944x -- correct in
+    // consistency and 30% down in level. Measured on the eight-shot day slice
+    // against FFXV-field, the level had to come back: hi230% fell 8.84 -> 2.56
+    // against a reference of 6.20 and clip% 1.12 -> 0.04 against 0.50, which is
+    // the "nothing in this game reaches white" failure by another road.
+    vignette: 0.30, chroma: 0.7, grain: 0.020, key: 0.270,
     // Noon's key light is already near-neutral, so a light bleach is enough to
     // stop the sun disc and the brightest cloud tops taking a primary.
     bleach: [0.55, 3.4, 0.55],
@@ -149,7 +158,7 @@ export const GRADES: Record<string, GradePreset> = {
     balance: [0.04, 0.0],
     contrast: 1.14, saturation: 1.0,
     lift: [0.0, 0.004, 0.022], gain: [1.0, 1.0, 1.005],
-    vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.215,
+    vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.258,
     // The strongest bleach of the four, and the reason this lever exists: a
     // low amber sun drives every lit highlight toward red, and the reference's
     // golden hour keeps its hot pixels within +7.6 R-B of neutral.
@@ -173,7 +182,7 @@ export const GRADES: Record<string, GradePreset> = {
     balance: [-0.20, -0.04],
     contrast: 1.06, saturation: 0.94,
     lift: [0.0, 0.004, 0.016], gain: [0.93, 0.98, 1.10],
-    vignette: 0.44, chroma: 1.3, grain: 0.024, key: 0.115,
+    vignette: 0.44, chroma: 1.3, grain: 0.024, key: 0.138,
     // Night's highlights are moonlight and practicals, and the reference night
     // corpus is the *most* saturated slice we hold (76.4% against our 54.2%).
     // Bleaching it would push the wrong way, so this is deliberately off.
@@ -196,7 +205,7 @@ export const GRADES: Record<string, GradePreset> = {
     balance: [-0.05, 0.05],
     contrast: 1.12, saturation: 0.82,
     lift: [0.003, 0.005, 0.011], gain: [0.95, 0.99, 1.05],
-    vignette: 0.42, chroma: 0.9, grain: 0.032, key: 0.200,
+    vignette: 0.42, chroma: 0.9, grain: 0.032, key: 0.240,
     // A storm's bright break is a white hole in a black lid. Light bleach, but
     // the storm frame's real problem is that it has no bright pixels at all.
     bleach: [0.60, 3.0, 0.45],
