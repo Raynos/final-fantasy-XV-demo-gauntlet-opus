@@ -142,6 +142,7 @@ export class WorldMapScreen {
   camT!: { x: number, z: number };
   canvas!: HTMLCanvasElement;
   cardDoes!: HTMLElement;
+  cardWarn!: HTMLElement;
   cardFt!: HTMLElement;
   cardGlyph!: HTMLElement;
   cardName!: HTMLElement;
@@ -241,11 +242,12 @@ export class WorldMapScreen {
     this.cardName = el('div.wm-name', { text: '' });
     this.cardType = el('div.wm-type', { text: '' });
     this.cardDoes = el('div.wm-does', { text: '' });
+    this.cardWarn = el('div.wm-warn', { text: '' });
     this.cardRows = el('div.wm-rows');
     this.cardFt = el('div.wm-ft', { text: '' });
     this.card = el('div.wm-card.plate', {}, [
       el('div.wm-chead', {}, [this.cardGlyph, el('div', {}, [this.cardName, this.cardType])]),
-      el('div.rule'), this.cardDoes, this.cardRows, this.cardFt,
+      el('div.rule'), this.cardDoes, this.cardWarn, this.cardRows, this.cardFt,
     ]);
     root.appendChild(this.card);
 
@@ -500,8 +502,9 @@ export class WorldMapScreen {
     const region = zone ? this.map.regionById.get(zone.region) : null;
     const def = POI_TYPES[p.type as keyof typeof POI_TYPES];
 
-    if (this._cardKey !== `${p.id}|${known}`) {
-      this._cardKey = `${p.id}|${known}`;
+    const dead = known ? this._unavailable(p) : null;
+    if (this._cardKey !== `${p.id}|${known}|${dead ? 1 : 0}`) {
+      this._cardKey = `${p.id}|${known}|${dead ? 1 : 0}`;
       while (this.cardGlyph.firstChild) this.cardGlyph.removeChild(this.cardGlyph.firstChild);
       this.cardGlyph.appendChild(glyphSvg(known ? POI_GLYPH[p.type as keyof typeof POI_GLYPH] : 'unknown', { size: 26 }));
       this.cardGlyph.style.color = known ? def.colour : 'rgba(198,214,240,.42)';
@@ -510,6 +513,10 @@ export class WorldMapScreen {
         + `${region ? `, ${region.name}` : ''}`;
       this.cardDoes.textContent = known ? (p.does || '')
         : 'Charted from a distance. Walk within sight of it to learn what it is.';
+      this.cardDoes.classList.toggle('dead', !!dead);
+      this.cardWarn.textContent = dead || '';
+      this.cardWarn.style.display = dead ? '' : 'none';
+      this.cardGlyph.style.color = dead ? 'rgba(178,190,206,.55)' : this.cardGlyph.style.color;
     }
 
     const drive = this.map.travel(px, pz, p.x, p.z, 'drive');
@@ -535,8 +542,9 @@ export class WorldMapScreen {
       this._rowEls[i][1].textContent = rows[i][1];
     }
     this.cardFt.textContent = !known ? 'UNDISCOVERED'
-      : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER' : 'NO FAST TRAVEL';
-    this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
+      : dead ? 'UNAVAILABLE IN THIS WORLD'
+        : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER' : 'NO FAST TRAVEL';
+    this.cardFt.className = `wm-ft${dead ? ' dead' : known && p.travel ? ' on' : ''}`;
   }
 
   _draw(game: Game, t: number, rev: number) {
@@ -826,12 +834,34 @@ export class WorldMapScreen {
     }
   }
 
+  /**
+   * Why this pin cannot be used, or null when it can.
+   *
+   * A map that lists a place the world cannot deliver is a worse map than one
+   * that lists fewer places, and the `Fishing` filter was listing ten holes
+   * over eight that have water. `Fishing._survey` runs at install and keeps
+   * the ids it could not find a waterline for; those are drawn **dead** —
+   * struck through, greyed, and with the reason printed on the card — rather
+   * than merely inert, which is how `MainScreen` draws a row whose screen no
+   * build registered. The live survey is the authority, so this cannot go
+   * stale the way a hand-kept list of exceptions would.
+   */
+  _unavailable(p: Poi): string | null {
+    if (p.type !== 'fishing') return null;
+    const rpg = this.game?.get('Rpg') as unknown as { fishing?: { spots?: Map<string, unknown> } } | undefined;
+    const fishing = rpg?.fishing;
+    // Before the first tick there is no survey and nothing is claimed.
+    if (!fishing || !fishing.spots?.size) return null;
+    if (fishing.spots.has(p.id)) return null;
+    return 'No water. The survey finds no fishable shoreline here — the pin is a place name, not a spot.';
+  }
+
   _pois(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, rev: number, t: number, place: LabelPlacer, W: number, H: number) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
     // draw order: dimmed first, then normal, then the selection on top
-    const rows: { p: Poi, x: number, y: number, known: boolean, off: boolean, sel: boolean, hover: boolean, rad?: number }[] = [];
+    const rows: { p: Poi, x: number, y: number, known: boolean, off: boolean, dead: boolean, sel: boolean, hover: boolean, rad?: number }[] = [];
     for (const p of this.map.pois) {
       const known = this._known(p);
       if (!known && fog.at(p.x, p.z) < 0.5) continue;
@@ -839,7 +869,7 @@ export class WorldMapScreen {
       if (x < -60 || x > W + 60 || y < -60 || y > H + 60) continue;
       this._screenPos.set(p, [x / dpr, y / dpr]);
       const off = !!(f.types && !f.types.includes(p.type));
-      rows.push({ p, x, y, known, off, sel: p === selected, hover: p === this.hover });
+      rows.push({ p, x, y, known, off, dead: known && this._unavailable(p) != null, sel: p === selected, hover: p === this.hover });
     }
     rows.sort((a, b) => (a.off ? 0 : 1) - (b.off ? 0 : 1) || (a.sel ? 1 : 0) - (b.sel ? 1 : 0));
 
@@ -850,10 +880,27 @@ export class WorldMapScreen {
       const rad = (!r.known ? 4.6 : r.sel ? 10 : r.hover ? 9 : SETTLED.includes(r.p.type) ? 8.4 : 7.4)
         * zk * dpr;
       r.rad = rad;
-      const alpha = (r.off ? 0.14 : r.known ? (big ? 1 : 0.9) : 0.3) * rev;
-      const colour = r.known ? def.colour : 'rgba(206,222,246,0.9)';
+      // A dead pin keeps its own glyph — you must still be able to tell what
+      // it was meant to be — and loses its type colour and half its opacity.
+      const alpha = (r.off ? 0.14 : r.dead ? (big ? 0.62 : 0.42) : r.known ? (big ? 1 : 0.9) : 0.3) * rev;
+      const colour = r.dead ? 'rgba(178,190,206,0.95)' : r.known ? def.colour : 'rgba(206,222,246,0.9)';
       drawGlyph(c, r.known ? (POI_GLYPH[r.p.type as keyof typeof POI_GLYPH] || 'dot') : 'unknown', r.x, r.y, rad, colour,
         { alpha, weight: 1.3 * dpr });
+      // …and carries a strike, because colour alone is not a difference a
+      // player reads on a sheet with eleven pin colours already on it.
+      if (r.dead && !r.off) {
+        const d = rad * 0.92;
+        c.save();
+        c.globalAlpha = (big ? 0.85 : 0.6) * rev;
+        c.lineCap = 'round';
+        c.strokeStyle = 'rgba(6,10,17,0.8)';
+        c.lineWidth = 3.0 * dpr;
+        c.beginPath(); c.moveTo(r.x - d, r.y + d); c.lineTo(r.x + d, r.y - d); c.stroke();
+        c.strokeStyle = 'rgba(228,236,248,0.95)';
+        c.lineWidth = 1.25 * dpr;
+        c.beginPath(); c.moveTo(r.x - d, r.y + d); c.lineTo(r.x + d, r.y - d); c.stroke();
+        c.restore();
+      }
       place.reserve(r.x - rad, r.y - rad, r.x + rad, r.y + rad);
     }
 
@@ -884,7 +931,8 @@ export class WorldMapScreen {
       // the selected point always carries its name, collision or not
       if (!put && r.sel) { put = slots[0]; place.reserve(put[0], put[1] - 6.5 * dpr, put[0] + w, put[1] + 6.5 * dpr); }
       if (!put) continue;
-      const a = (r.sel ? 0.98 : r.hover ? 0.92 : named ? 0.80 : r.known ? 0.60 : 0.4) * rev;
+      const a = (r.dead ? (r.sel || r.hover ? 0.66 : 0.34)
+        : r.sel ? 0.98 : r.hover ? 0.92 : named ? 0.80 : r.known ? 0.60 : 0.4) * rev;
       c.fillStyle = `rgba(240,248,255,${a.toFixed(3)})`;
       c.shadowColor = 'rgba(3,7,14,0.95)';
       c.shadowBlur = 6 * dpr;
@@ -1083,6 +1131,12 @@ function styleTag() {
   font-size: 11.5px; font-weight: 300; letter-spacing: .035em; line-height: 1.62;
   color: var(--ink-2); text-shadow: var(--sh-text); min-height: 58px;
 }
+.wm .wm-does.dead { color: var(--ink-4); text-decoration: line-through; text-decoration-color: rgba(200,214,236,.28); }
+.wm .wm-warn {
+  margin-top: 9px; font-size: 10.5px; font-weight: 300; letter-spacing: .045em;
+  line-height: 1.5; color: rgba(226,184,150,.88); text-shadow: var(--sh-text);
+  border-left: 1px solid rgba(226,184,150,.34); padding-left: 10px;
+}
 .wm .wm-rows { margin-top: 13px; display: flex; flex-direction: column; gap: 7px; }
 .wm .wm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
 .wm .wm-k {
@@ -1098,6 +1152,7 @@ function styleTag() {
   text-shadow: var(--sh-text);
 }
 .wm .wm-ft.on { color: var(--gold); }
+.wm .wm-ft.dead { color: rgba(226,184,150,.72); }
 
 .wm .wm-scalebar { position: absolute; left: 66px; bottom: 118px; }
 .wm .wm-scaleline {
