@@ -266,6 +266,19 @@ vec2 tf_rot(vec2 p, float a) {
 }
 
 /**
+ * A packed (x, y) pair from surfArray.rg as a unit tangent-space normal.
+ *
+ * The layer textures carry no normal Z -- surfArray is
+ * "rg = tangent normal xy, b = roughness, a = AO" -- so every reader has to
+ * rebuild it, and a reader that takes .b for Z is reading the roughness. The
+ * floor keeps normalize away from the zero vector at full xy deflection.
+ */
+vec3 tf_tanN(vec2 rg) {
+  vec2 xy = rg * 2.0 - 1.0;
+  return vec3(xy, sqrt(max(1.0 - dot(xy, xy), 1e-4)));
+}
+
+/**
  * Screen-footprint weight for a world feature of wavelength L metres, given
  * the size of a pixel in world metres.
  *
@@ -1120,7 +1133,28 @@ void tf_shade() {
     vec3 planarN = normalize(T * tn.x + B * tn.y + N * tn.z);
 
     // triplanar (whiteout) normal for the rock layer
-    vec3 nX = sx.rgb * 2.0 - 1.0, nY = sy.rgb * 2.0 - 1.0, nZ = sz.rgb * 2.0 - 1.0;
+    //
+    // Z IS RECONSTRUCTED, NOT READ. surfArray is (normal.xy, roughness, ao)
+    // -- Layers.ts line 9 -- so there is no normal Z in it, and reading
+    // sx.rgb as a tangent normal took the ROUGHNESS for Z. That was the
+    // black blob on the Nebulawood canopy, and the mechanism is worth stating
+    // because nothing about the frame suggested it: where the rock layer is
+    // out of contention (w[3] < wCut, i.e. any ground with no rock in it,
+    // which is most of a forest) all three planes keep the neutral fill
+    // SURF_FLAT, and 0.5 decodes to the ZERO VECTOR rather than to a flat
+    // tangent normal (0, 0, 1). The whiteout blend of three zero vectors is
+    //
+    //     (N.x * (bw.y + bw.z), N.y * (bw.x + bw.z), N.z * (bw.x + bw.y))
+    //
+    // which on axis-aligned ground -- N = (0, 1, 0) and bw = (0, 1, 0), i.e. a
+    // flat forest floor -- is exactly zero, and normalize of that is NaN.
+    // A NaN normal is a NaN pixel in the scene target, which the grade shows as
+    // a hole of pure 0,0,0. It reached the frame even where the rock weight is
+    // zero, because mix(planarN, rockN, 0.0) is 0.0 * NaN = NaN.
+    //
+    // Reconstructed, the neutral fill contributes exactly N -- which is what
+    // the comment on SURF_FLAT above already claims it does.
+    vec3 nX = tf_tanN(sx.rg), nY = tf_tanN(sy.rg), nZ = tf_tanN(sz.rg);
     vec3 tX = vec3(nX.xy + N.zy, abs(nX.z) * N.x).zyx;
     vec3 tY = vec3(nY.xy + N.xz, abs(nY.z) * N.y).xzy;
     vec3 tZ = vec3(nZ.xy + N.xy, abs(nZ.z) * N.z).xyz;
