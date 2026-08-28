@@ -75,6 +75,8 @@ export interface CpuSample {
 
 interface FrameProfile {
   frames: number;
+  /** rAF callbacks the host offered over the window, drawn or skipped. */
+  ticks: number;
   wallMs: number;
   /** name -> total ms spent inside it over the window */
   rows: Record<string, number>;
@@ -129,7 +131,17 @@ const INSTALL = `(() => {
   // The whole frame, so "everything the table does not name" is derivable
   // rather than assumed to be zero.
   wrap(g, 'frame', '__frame');
-  w.__idlecpu = { acc, t0: now(), f0: g.time.frame };
+  w.__idlecpu = { acc, t0: now(), f0: g.time.frame, ticks: 0 };
+  // Count the host's rAF callbacks INDEPENDENTLY of the game's loop.
+  //
+  // Game.start() caps itself by SKIPPING rAF callbacks, so g.time.frame counts
+  // frames DRAWN and says nothing about how many the host offered. This second
+  // chain counts the offer, and the gap between the two is the cap doing its
+  // job. Without it a headless rate of 90 fps is indistinguishable from an
+  // uncapped loop on a 90 Hz display -- which is exactly the ambiguity the gate
+  // has to resolve. One increment per vsync; it costs nothing measurable.
+  const tick = () => { w.__idlecpu.ticks++; requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
   return 'installed';
 })()`;
 
@@ -142,6 +154,8 @@ const READ = `(() => {
   delete rows.__frame;
   return {
     frames: g.time.frame - w.f0,
+    // rAF callbacks the host offered over the window, drawn or skipped.
+    ticks: w.ticks,
     wallMs: performance.now() - w.t0,
     rows, frameMs,
     visibility: document.visibilityState,
@@ -163,7 +177,7 @@ const READ = `(() => {
 const ZERO = `(() => {
   const w = window.__idlecpu;
   for (const k of Object.keys(w.acc)) delete w.acc[k];
-  w.t0 = performance.now(); w.f0 = window.GAME.time.frame;
+  w.t0 = performance.now(); w.f0 = window.GAME.time.frame; w.ticks = 0;
   return true;
 })()`;
 
@@ -205,13 +219,22 @@ interface Arm {
 function report(arms: Arm[]) {
   console.log('\n=== CPU of an idle tab, by browser process (% of ONE core)');
   const types = [...new Set(arms.flatMap((a) => Object.keys(a.proc)))].sort();
-  console.log(`  ${'arm'.padEnd(12)}${types.map((t) => t.slice(0, 9).padStart(11)).join('')}${'TOTAL'.padStart(11)}${'fps'.padStart(9)}`);
+  console.log(`  ${'arm'.padEnd(12)}${types.map((t) => t.slice(0, 9).padStart(11)).join('')}${'TOTAL'.padStart(11)}`
+    + `${'rAF Hz'.padStart(9)}${'fps'.padStart(9)}`);
   for (const a of arms) {
     let total = 0;
     const cells = types.map((t) => { total += a.proc[t] ?? 0; return p1(pct(a.proc[t] ?? 0, a.wallMs)).padStart(11); });
-    const fps = a.prof && a.prof.wallMs > 0 ? (a.prof.frames / (a.prof.wallMs / 1000)) : 0;
+    const per = (n: number) => (a.prof && a.prof.wallMs > 0 ? n / (a.prof.wallMs / 1000) : 0);
+    /**
+     * `rAF Hz` is what the host OFFERED and `fps` is what the loop DREW; the
+     * gap between them is `Game.maxFps` doing its job. They were the same
+     * number before the cap existed, which is why this column is new — and
+     * headless chromium does not vsync, so its offer moves with the box and
+     * neither column can be inferred from the other.
+     */
     console.log(`  ${a.name.padEnd(12)}${cells.join('')}${p1(pct(total, a.wallMs)).padStart(11)}`
-      + `${(a.prof ? fps.toFixed(1) : '—').padStart(9)}`);
+      + `${(a.prof ? per(a.prof.ticks).toFixed(1) : '—').padStart(9)}`
+      + `${(a.prof ? per(a.prof.frames).toFixed(1) : '—').padStart(9)}`);
   }
   /**
    * Headless does not vsync, so the raw percentage above is NOT what a person
@@ -290,19 +313,55 @@ function report(arms: Arm[]) {
  * and this is the only assertion in the suite that would notice if it stopped:
  * every other gate poses a `?shoot=1` page that never calls `start()` at all.
  *
+ * **It is conditional on the host's rAF rate, and that is not a hedge.** The
+ * cap is a vsync divisor and it *floors* rather than rounds, so a host offering
+ * fewer than `2 x cap` callbacks a second has no legal division: the only
+ * alternative to drawing every one is dropping under the cap, and `BRIEF.md`
+ * rule 3's floor wins that. On such a host the loop is *supposed* to draw every
+ * callback, and asserting a rate there would be asserting a bug.
+ *
+ * That case is not hypothetical, and it is not only 75/90/100 Hz panels:
+ * **headless chromium's rAF is not vsync-locked**, and its rate moves with the
+ * box. Measured minutes apart on this machine, the same arm was offered
+ * ~120 Hz (loop drew 60.0, divisor 2) and ~90 Hz (loop drew 90.5, correctly
+ * uncapped). A flat `fps <= 75` would have failed the second one for doing the
+ * right thing — a gate that flakes by punishing correct behaviour, which is
+ * worse than no gate.
+ *
+ * So count the offer as well as the draw: `INSTALL` runs a second, independent
+ * rAF chain whose only job is to count callbacks. Above `2 x cap` the cap must
+ * bite and the drawn rate is asserted; below it, only that the cap is
+ * configured and that the loop is not drawing more often than it is called.
+ * Both branches print the rAF rate, so the row says which one ran.
+ *
  * The slack is not a tolerance for noise — the cap can only ever *skip* a
- * frame, so contention pushes this number down and never up. It is there
- * because the cap is a vsync divisor: a host refresh that is not a multiple of
- * the cap legitimately draws above it (144 Hz -> 72 fps, 1.2x, because 60 is
- * not reachable there and `BRIEF.md` rule 3's floor wins). The daemon's
- * headless chromium runs a ~120 Hz rAF, so the divisor is 2 and the observed
- * rate is 60.0-60.2. If this ever fails with a rate between the cap and 2x it,
- * the host's refresh moved into the 61-119 Hz band, where no legal division
- * exists and the honest answer is to widen the budget — not to blame the cap.
+ * frame, so contention pushes the drawn rate down and never up, and a busy box
+ * cannot fail this. It is there for the divisor: at 144 Hz the loop draws
+ * 72 fps, 1.2x the cap, because 60 is not reachable there.
  */
 const STOPPED_MAX = 15;
 const FRAME_CPU_MAX = 28;
 const CAP_SLACK = 1.25;
+
+/**
+ * "Is the render loop capped, and is it honouring the cap?" — see the block
+ * above for why the answer depends on how fast the host offers rAF callbacks.
+ */
+function capCheck(cap: number, fps: number, rafHz: number): [string, boolean, string] {
+  const where = `Game.maxFps ${cap}, host rAF ${rafHz.toFixed(1)} Hz, drew ${fps.toFixed(1)} fps`;
+  if (!(cap > 0)) {
+    return ['the render loop is capped, and honours its cap', false,
+      'Game.maxFps is 0 — the loop free-runs at whatever rate the host offers'];
+  }
+  if (rafHz >= cap * 2) {
+    return ['the render loop is capped, and honours its cap', fps <= cap * CAP_SLACK,
+      `${where}, budget ${(cap * CAP_SLACK).toFixed(1)}`];
+  }
+  return ['the render loop is capped (host too slow for the cap to bite)',
+    fps <= rafHz * 1.05,
+    `${where} — under ${cap * 2} Hz there is no division that stays at or above the cap, `
+    + 'so drawing every callback is correct'];
+}
 
 function gate(arms: Arm[]): boolean {
   const armOf = (n: string) => arms.find((a) => a.name === n);
@@ -321,18 +380,16 @@ function gate(arms: Arm[]): boolean {
       stoppedPct <= STOPPED_MAX, `${p1(stoppedPct)} of a core, budget ${p1(STOPPED_MAX)}`],
     ['one rendered frame stays inside its whole-browser CPU budget',
       frameCpu <= FRAME_CPU_MAX, `${frameCpu.toFixed(2)} CPU ms/frame = ${p1(frameCpu * 60 / 10)} of a core at 60 Hz, budget ${FRAME_CPU_MAX} ms`],
-    ['the render loop is capped, and honours its cap',
-      cap > 0 && fps <= cap * CAP_SLACK,
-      cap > 0
-        ? `Game.maxFps ${cap}, drew ${fps.toFixed(1)} fps, budget ${(cap * CAP_SLACK).toFixed(1)}`
-        : 'Game.maxFps is 0 — the loop free-runs at the display refresh rate'],
+    capCheck(cap, fps, running.prof.ticks / (running.prof.wallMs / 1000)),
   ];
   let ok = true;
   for (const [what, pass, detail] of checks) {
     console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${what} — ${detail}`);
     if (!pass) ok = false;
   }
-  console.log(`\nidlecpu: ${ok ? 'PASS' : 'FAIL'} — stopped ${p1(stoppedPct)}, ${frameCpu.toFixed(2)} CPU ms/frame, ${fps.toFixed(1)} fps against a cap of ${cap}`);
+  console.log(`\nidlecpu: ${ok ? 'PASS' : 'FAIL'} — stopped ${p1(stoppedPct)}, `
+    + `${frameCpu.toFixed(2)} CPU ms/frame, drew ${fps.toFixed(1)} fps of the `
+    + `${(running.prof.ticks / (running.prof.wallMs / 1000)).toFixed(1)} Hz offered, cap ${cap}`);
   return ok;
 }
 
