@@ -59,19 +59,6 @@ const SINK_FRAC = 0.12;
 /** Fallback extents for a kind that somehow has no measured hull. */
 const _EXT1: [number, number, number] = [1, 1, 1];
 
-/**
- * Camera-blocker collection — see {@link Rocks.blockers}.
- *
- * `BLOCKER_RANGE` only has to cover the camera arm, which is at most 12 m,
- * plus the eleven metres the camera may travel before the list is rebuilt.
- * `BLOCKER_MIN_R` drops the scree: a 0.45 m stone cannot hide a lens that
- * rides 0.74 m above the ground even when the arm is fully collapsed, and
- * counting them would spend the cap on gravel.
- */
-const BLOCKER_RANGE = 34;
-const BLOCKER_MIN_R = 0.45;
-const BLOCKER_MAX = 128;
-
 /** Clamp an axis-jitter multiplier away from zero and from absurdity. */
 const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
 
@@ -1712,29 +1699,6 @@ export class Rocks {
    */
   guard!: { aspect: number, sink: number, worstAspect: number, drawn: number };
   outcrops!: TileStream<RockInstance>;
-  /**
-   * Stones near the camera, as blocker spheres for `CameraRig._armDistance`:
-   * four floats per stone, `[x, y, z, r]`, `blockerCount` of them.
-   *
-   * **The camera has never collided with a prop.** `_armDistance` sweeps the
-   * heightfield and nothing else — there used to be a raycast against
-   * `Props.cameraColliders || .colliders || .collisionMeshes`, none of which
-   * has ever existed, so the list was always empty and the ray never ran. Its
-   * own comment asks for exactly this: an opt-in list, published because
-   * raycasting a whole instanced prop group every frame costs more than the
-   * camera is worth.
-   *
-   * Filled from {@link Rocks.update}'s existing instance walk, which already
-   * visits every drawn stone and already only runs when the camera has moved
-   * eleven metres or a cell has changed. The radius is a real measurement off
-   * the finished, placed hull — `placedScale` times this kind's own `ext`
-   * half-extents — and the *median* of the three axes, because the largest
-   * would push the camera in for a slab it can see straight past and the
-   * smallest would let it into a tor.
-   */
-  blockers!: Float32Array;
-  /** How many of {@link Rocks.blockers} are live. */
-  blockerCount!: number;
   quality!: number;
   radius!: number;
   scene!: THREE.Scene;
@@ -1749,8 +1713,6 @@ export class Rocks {
     this.hy = new Map();
     this.ext = new Map();
     this.guard = { aspect: 0, sink: 0, worstAspect: 0, drawn: 0 };
-    this.blockers = new Float32Array(BLOCKER_MAX * 4);
-    this.blockerCount = 0;
     this._last = new THREE.Vector3(1e9, 0, 1e9);
   }
 
@@ -2405,7 +2367,6 @@ export class Rocks {
 
     for (const g of this.groups) { g.w = 0; g.nw = 0; g.fw = 0; }
     this.guard.aspect = 0; this.guard.sink = 0; this.guard.worstAspect = 0; this.guard.drawn = 0;
-    this.blockerCount = 0;
     const cx = camPos.x, cz = camPos.z;
 
     const emit = (arr: RockInstance[]) => {
@@ -2452,23 +2413,6 @@ export class Rocks {
         if (it.bury < SINK_FRAC * Math.max(ex[0], ex[2]) * 2) this.guard.sink++;
         _p.set(it.x - it.nx * ps.sink, it.y - it.ny * ps.sink, it.z - it.nz * ps.sink);
         _s.set(it.s * ps.jx, it.s * ps.jy, it.s * ps.jz);
-        // Camera blockers — see `Rocks.blockers`. Free here: this loop already
-        // has the placed centre and the finished hull, and it already runs
-        // only when the camera has moved.
-        if (this.blockerCount < BLOCKER_MAX && d2 < BLOCKER_RANGE * BLOCKER_RANGE) {
-          const hx = _s.x * ex[0], hy = _s.y * ex[1], hz = _s.z * ex[2];
-          const r = hx + hy + hz - Math.max(hx, hy, hz) - Math.min(hx, hy, hz);
-          if (r >= BLOCKER_MIN_R) {
-            const o = this.blockerCount++ * 4;
-            this.blockers[o] = _p.x;
-            // The placed centre is the hull's centre, and the half-height is
-            // what stands above it: a stone whose sphere is centred on the
-            // record's own y sits half buried in the camera's world.
-            this.blockers[o + 1] = _p.y + hy * 0.35;
-            this.blockers[o + 2] = _p.z;
-            this.blockers[o + 3] = r;
-          }
-        }
         _m.compose(_p, _q, _s);
         _m.toArray(mesh.instanceMatrix.array, slot * 16);
         const c = mesh.instanceColor.array;

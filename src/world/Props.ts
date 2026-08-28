@@ -41,20 +41,6 @@ export class Props {
   roadKit!: RoadFurniture;
   rocks!: Rocks;
   wildlife!: Wildlife;
-  /**
-   * Blocker spheres for the camera arm: four floats per prop, `[x, y, z, r]`,
-   * `cameraBlockerCount` of them. Read by `CameraRig._armDistance`, which
-   * treats an absent or empty list as "no props", so a world booted without
-   * `Props` behaves exactly as it did before.
-   *
-   * Only `Rocks` fills it today. Any prop system that can publish a cheap
-   * sphere for the things big enough to hide a lens behind belongs here too;
-   * what does **not** belong is a raycast against a whole instanced group
-   * every frame, which is what the dead `cameraColliders` lookup this replaces
-   * would have cost had it ever had a list to look at.
-   */
-  cameraBlockers?: Float32Array;
-  cameraBlockerCount?: number;
   async init(game: Game) {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.5
@@ -263,14 +249,6 @@ export class Props {
 
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     this.rocks.update(this._camPos);
-    // What the camera arm is allowed to collide with — see `Rocks.blockers`
-    // and `CameraRig._armDistance`. Published here rather than reached for
-    // through `Props.rocks` so the rig depends on an interface any prop system
-    // can fill, which is what `_armDistance`'s own comment has always asked
-    // for. Aliased, never copied: it is rebuilt in place at most once every
-    // eleven metres of camera travel.
-    this.cameraBlockers = this.rocks.blockers;
-    this.cameraBlockerCount = this.rocks.blockerCount;
     this.debris.update(this._camPos);
     if (this.outposts) this.outposts.update(dt, t, night, this._camPos);
     if (this.roadKit) this.roadKit.update(this._camPos);
