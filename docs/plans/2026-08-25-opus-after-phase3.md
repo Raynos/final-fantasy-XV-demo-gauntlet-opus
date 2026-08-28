@@ -138,7 +138,7 @@ touches how everything in the game is shaded.
 
 ---
 
-## WS-3 — Bake the geometry
+## WS-3 — Bake the geometry — **DONE**
 
 Three items on the boot profile want the same thing that does not exist:
 
@@ -174,6 +174,61 @@ Read before starting:
   because `heightAt`, collision and `creaturecheck`'s skinned-AABB probe all
   walk them. A bake does not fix that, but it is the only lever that has not
   been tried.
+
+### DONE 2026-08-28 — cold boot 7.13 s → 5.78 s
+
+`Game.init()` **6.95 → 5.61 s**; warm 6.67 → 5.56 s. `bootprof --n 3` at HEAD on
+a quiet tree (`VERDICT: quiet`), exclusive lease, every other cache warm, with
+`geo.bin.gz` moved aside and put back between the two runs so nothing else
+differs. At **188 cold boots per suite cycle**, and it is `TODO.md` line 1.
+
+| phase | no artifact | artifact live |
+|---|---|---|
+| `Water.shore` | 384.4 ms | **0.9 ms** |
+| `Props.mega` | 454.8 ms | **9.0 ms** |
+| `Props.poiPrebuild` | 423.1 ms | **38.2 ms** |
+| the wait for the 35.5 MB artifact | — | **0 ms** |
+
+**The correctness argument is the interesting half, and it is not the image
+diff.** `probes/geoverify.mts` compares the cache against the generators in one
+page at one instant, every attribute and every index: **IDENTICAL — 145 parts,
+4 624 052 vertices, byte for byte.** That is the right oracle here, because **a
+stale geometry cache serves *well-formed* geometry** — correctly wound,
+contract-clean, standing on a heightfield that has since moved — and an image
+diff would have to be lucky to catch it. The full-corpus cold diff was run
+anyway, as this section asks: **142 of 142 at or under floor**, worst
+`party_formation` 2.033 against 2.85, and the cache-fed shots far lower
+(`road_viaduct` 0.703, `landmark_meteor` 0.438 against 1.24).
+
+**Design decisions worth not re-litigating:**
+
+- **Priced before written** (`probes/geocodec.mts`, in the page, real bytes):
+  164.9 MB raw / 45.6 MB gz, inflate 200 ms + rebuild 25 ms against ~1.5 s of
+  generation. So the codec is **deliberately stupid** — no quantisation, no
+  transposition, arrays bit-identical. That is what makes `geoverify` possible.
+- **Browser bake, not Node.** `PoiKits._base` seats compounds against
+  `drawnHeightAt` — the rasterised clipmap, the renderer's own arithmetic. A Node
+  bake would grade 124 aprons against ground the player does not stand on.
+- **Only what boot builds is baked** (14 keys), and `releaseGeoBake()` drops the
+  165 MB container at the end of `Props.init`. Caching the 116 streamed POIs
+  would hold it resident all session.
+- Keys are prefixed by quality tier and `loadGeoBake` skips the fetch entirely on
+  a tier the bake cannot serve, so `combatloop`/`integration` at `q=low` no longer
+  pay 165 MB for nothing.
+
+**Not done, and deliberately.** `trees.build` (~490 ms) is left exactly as this
+section instructed — GPU impostor atlases are rendered art and need baking as
+images with the baselines re-checked. `bushes.build` (~120 ms) and `Props.rocks`
+(~78 ms) were not attempted: `Rocks` is a tile streamer with no `PartBuilder`.
+`Props.landmarks` (~46 ms) is `PartBuilder`-shaped and would be five lines.
+
+**Two findings outside the brief.** `corpus.mts` threw `unknown flag --build`, so
+a 142-shot corpus **could only ever be captured at HEAD** — the one comparison it
+exists for (fixed, `caed02f`). And, for `TODO.md` line 2: the eight prebuilt POI
+compounds are **119.7 MB over 3.70 M vertices**, against the **82.3 MB for the
+whole page** that `boot-memory.md` records — with `lestallum` (1.34 M) and
+`galdin_quay` (1.28 M) making up 2.6 M of the 3.7 M. The bake does not fix that.
+**Nobody has ever looked at a 1.3 M-vertex town.**
 
 **Done when** the three items are cache reads, `pnpm run check` is green, and a
 full-corpus **cold** diff is at or under each shot's floor.
