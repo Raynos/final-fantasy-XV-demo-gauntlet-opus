@@ -166,8 +166,14 @@ unit free.** PCSS is still closed on its other clause (the depth read
     band structure to drop the globes earlier than 38 m.
 - **Wave 3's frame-cost split** (pixel-scaled vs fixed) — `post consolidation is
   gated on its answer`, per the archived sibling-ports plan. Two `perf.mts` runs
-  at 800x450 and 1600x900 over the same shots give both terms directly:
-  `P = (hi - lo) / 3`, `F = lo - P`.
+  at 800x450 and 1600x900 over the same shots give both terms directly, since
+  the pixel count is exactly 4x: `P = (hi - lo) / 3`, `F = lo - P`. Started and
+  **deliberately abandoned**: the box was at 4/4 workers busy with a sweep queue
+  25 deep and 38% of all wall-clock in queue, and `perf` takes the exclusive
+  lease — so the run would have starved six live lanes for twenty minutes to
+  produce a number `perf.mts` would then stamp `CONTENDED`, which is not a
+  number this repo lets anyone quote. Fifteen minutes on a quiet box. The recipe
+  above is the whole item.
 - **Character LOD**, handed over by the `materials` lane: `town_forecourt` is
   465 calls / 5 327 248 triangles, one `SkinnedMesh`/`ShaderMaterial` bucket at
   60 calls / 1 736 436 tris / **28 940 per draw, no LOD**. Headroom, not cost —
