@@ -200,14 +200,26 @@ more warps. Neither is in this lane's directories.
 
 ## 6. Exact next steps
 
-1. **Read `fightshape` after the poise change** — it was running when this was
-   written; the file is the scratchpad's `fightshape3.txt`. Expect the stagger
-   occupancy to fall and `attacks opened` to rise; the duration should follow.
-   If it does not, the stagger threshold rather than the poise pool is the
-   knob, and that is `hurt()` in `EnemyBase.ts`.
-2. **`pnpm run check`** — not yet run against the poise change. `combatloop`
-   spawns at listed levels so the factor is 1 there by construction, but that
-   is an argument, not a measurement.
+1. **`fightshape` after the poise change is UNMEASURED.** It was queued behind
+   three other lanes' gates for the last hour of this session and never got a
+   browser slot. Re-run it:
+
+       node src/tools/probe.mts src/tools/probes/fightshape.mts --lane sweep --ttl 25
+
+   Read the `enemy time:` and `enemy attacks opened` lines against the table in
+   §4. Expect stagger occupancy to fall from 28% and `attacks opened` to rise
+   from 0.27/s toward the imperial patrol's 0.99/s; duration should follow. If
+   it does not, the stagger *threshold* rather than the poise pool is the knob,
+   and that is `hurt()` in `EnemyBase.ts` — `poise <= 0` with no scaling of the
+   incoming `o.poise`.
+2. **`pnpm run check` reached 10 of 19 and stalled on browser slots**, all ten
+   PASS (`build` `silhouette` `geocheck` `horizoncheck` `anycheck` `orphans`
+   `roadcheck` `hydrocheck` `silrocks` and the second silhouette set). The nine
+   that did not run are the browser gates, `creaturecheck` among them — it was
+   run standalone against the anak and passed 9/9, but not against the poise
+   change, where `combatloop` is the one that matters. `combatloop` spawns at
+   listed levels so the level factor is 1 there by construction; that is an
+   argument, not a measurement. **Re-run `pnpm run check` on a quiet box.**
 3. The three Anak weaknesses in §2.
 
 ## 7. Reported, not fixed — outside these directories
