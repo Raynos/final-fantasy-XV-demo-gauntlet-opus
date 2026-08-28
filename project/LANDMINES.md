@@ -1446,3 +1446,44 @@ look at it, and correctly refused to ship a change it had not seen.
 
 `npx tsc --noEmit -p tsconfig.json` takes seconds. If a refactor cannot be
 finished quickly, park your own file and leave the tree green.
+
+## A consistently-but-inversely wound shell is invisible to every bench in this repo
+
+**2026-08-28, and it cost five lanes.** `buildHead`'s skull grid had `u`
+increasing with `+x` at the front and `v` with `−y`, so every quad's geometric
+normal was `−ẑ` — pointing *into* the head. With the face material at
+`FrontSide` the near surface was backface-culled in **every frame this repo has
+ever captured**, and what drew was the **inside of the far side of the skull**,
+with the lids, lashes, ears and hair — built by `blob`/`ribbon`/`buildLid`, all
+correctly wound — floating in front of it.
+
+**Read the judge's own sentences against that mechanism.** An inside-out occiput
+*is* "an egg". The eyes *are* "stuck in front of it", because they are separate
+meshes. The mouth is missing because it is on the culled surface. And *"the chin
+projects further forward than the nose"* is exact: the lowest forward point of
+the inside of a braincase **is** where a chin would be. Four rounds of judging
+described this correctly and every reader took it as a sculpting complaint.
+
+**Why five passes of measurement agreed while the picture did not — this is the
+transferable part.** Every bench here reads the **position** buffer, and the
+positions were always right. `headprop`, `facecheck`'s geometry rows, `geocheck`,
+`seatcheck`, `silhouette` and the whole `probes/` family measure where vertices
+*are*, never which way a face points. A silhouette is the same surface either way
+round, so even the profile looked plausible. **If a metric agrees and the frame
+disagrees, suspect a property no metric in the tree reads** — and winding is the
+one this repo demonstrably did not read.
+
+**`assertConsistentWinding` does not catch it, by construction.** Edge parity is
+orientation-*relative*: a shell that is uniformly wrong is uniformly consistent,
+and passes. The check has to be **orientation-absolute**.
+`src/tools/probes/facewind.mts` is that check — geometric normal of the
+front-most triangles, plus signed volume per mesh. It read **0.0% outward before,
+100.0% after**; the mesh's max-z vertex, the nose tip at `uv = (0.500, 0.372)`,
+carried `n = (0.01, 0.35, −0.94)`.
+
+**The `DoubleSide` → `FrontSide` fix recorded above did not cause this; it
+revealed it.** While the material was `DoubleSide` the inverted grid still drew,
+so the head looked whole and merely wrong. Moving to `FrontSide` was correct and
+is what made the defect visible as a missing surface. Expect the same order of
+events anywhere else `DoubleSide` is masking geometry: **fixing the material is
+step one, and step two is checking the winding it was hiding.**
