@@ -140,11 +140,26 @@ writers — and `WildTerritories.denLevel` lifts a wild den toward the party.
 
 `fightshape`, three dens, the scripted policy the original claim used:
 
-| | LIFT 0.7, no poise scaling | LIFT 1.0 | LIFT 1.0 + poise |
+| | LIFT 0.7, no poise | LIFT 1.0 | LIFT 1.0 + poise |
 |---|---|---|---|
-| sabertusk den | lv 21, 1 381 hp, **6.3 s**, 1.3% | lv 28, 2 444 hp, **7.5 s**, 2.1% | *see §6* |
-| voretooth den | lv 19, 1 229 hp, **6.8 s**, 0.0% | lv 26, 2 176 hp, **10.2 s**, 0.0% | |
-| imperial patrol | lv 18, 753 hp, **16.7 s**, 0.8% | unchanged, **14.1 s**, 1.8% | |
+| sabertusk den | lv 21, 1 381 hp, **6.3 s**, paid 1.3%, 0.31 atk/s | lv 28, 2 444 hp, **7.5 s**, 2.1%, 0.27/s | **8.3 s**, **5.1%**, **0.36/s** |
+| voretooth den | lv 19, 1 229 hp, **6.8 s**, 0.0%, 0.44/s | lv 26, 2 176 hp, **10.2 s**, 0.0%, 0.59/s | **11.3 s**, **1.6%**, **0.62/s** |
+| imperial patrol *(control — not lifted)* | lv 18, 753 hp, **16.7 s**, 0.8%, 0.99/s | **14.1 s**, 1.8% | **15.9 s**, 0.88/s |
+
+**The headline is the third column and it is the HP cost, not the clock.**
+Noctis pays **5.1% of max HP** for a sabertusk den against 1.3% on the tree
+this lane inherited — a fight that is now losable over a few encounters — and
+the pack opens 0.36 attacks/s against 0.31. Duration 6.3 s -> 8.3 s and
+6.8 s -> 11.3 s.
+
+**One prediction in this lane was wrong and is worth recording.** I expected
+poise scaling to *lower* stagger occupancy; on the sabertusk den it went
+**28% -> 40%**. It is not a regression and the mechanism is obvious in
+hindsight: the animal now survives long enough to be staggered several times
+instead of dying inside the first one. `attacks opened` rose anyway, which is
+the number that actually says whether there is a rhythm. If someone wants
+stagger occupancy itself down, the knob is the *threshold* in `hurt()` — the
+incoming `o.poise` is a flat per-attack constant and is not scaled by anything.
 
 **`LEVEL_LIFT` 0.7 -> 1.0** (`de11493`). 0.7 was a first guess with no
 measurement under it; the arithmetic is now written beside the constant. A den
@@ -200,27 +215,14 @@ more warps. Neither is in this lane's directories.
 
 ## 6. Exact next steps
 
-1. **`fightshape` after the poise change is UNMEASURED.** It was queued behind
-   three other lanes' gates for the last hour of this session and never got a
-   browser slot. Re-run it:
+1. The three Anak weaknesses in §2 — the horns are the one worth doing.
+2. **`drawcheck` was VOID on this tree** (`18/19 gates passed`, and the void is
+   "the machine was somebody else's", not a regression). Re-run `pnpm run
+   check` on a quiet box to close it. Everything else passed, including
+   **`creaturecheck`** and **`combatloop` 31/31** — so the argument that the
+   level curve cannot move `combatloop` because it spawns at listed levels is
+   now a measurement rather than an argument.
 
-       node src/tools/probe.mts src/tools/probes/fightshape.mts --lane sweep --ttl 25
-
-   Read the `enemy time:` and `enemy attacks opened` lines against the table in
-   §4. Expect stagger occupancy to fall from 28% and `attacks opened` to rise
-   from 0.27/s toward the imperial patrol's 0.99/s; duration should follow. If
-   it does not, the stagger *threshold* rather than the poise pool is the knob,
-   and that is `hurt()` in `EnemyBase.ts` — `poise <= 0` with no scaling of the
-   incoming `o.poise`.
-2. **`pnpm run check` reached 10 of 19 and stalled on browser slots**, all ten
-   PASS (`build` `silhouette` `geocheck` `horizoncheck` `anycheck` `orphans`
-   `roadcheck` `hydrocheck` `silrocks` and the second silhouette set). The nine
-   that did not run are the browser gates, `creaturecheck` among them — it was
-   run standalone against the anak and passed 9/9, but not against the poise
-   change, where `combatloop` is the one that matters. `combatloop` spawns at
-   listed levels so the level factor is 1 there by construction; that is an
-   argument, not a measurement. **Re-run `pnpm run check` on a quiet box.**
-3. The three Anak weaknesses in §2.
 
 ## 7. Reported, not fixed — outside these directories
 
