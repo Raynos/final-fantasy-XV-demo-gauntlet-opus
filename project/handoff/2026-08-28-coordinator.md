@@ -1,0 +1,101 @@
+# Coordinator — building out both live plans, 2026-08-28
+
+**Owner:** an autonomous coordinator session. **Mandate:** take
+`docs/plans/2026-08-25-opus-after-phase3.md` and
+`docs/plans/2026-08-26-opus-the-standing-backlog.md` to `DONE` — every workstream
+either landed or closed with a measured negative appended to the backlog's
+negatives table.
+
+## Decisions the human made before this started
+
+They are recorded here because every one of them overrides a default that a
+fresh agent would otherwise pick, and three of them override the plans themselves.
+
+| question | ruling |
+|---|---|
+| how much of the two plans | **all of it** — full coverage, not a subset |
+| how | **waves of 2–3 concurrent lanes** on provably disjoint directories, not a big-bang fan-out |
+| the risky shading sweeps (A-WS2 programs, B-WS12b materials) | **in, fully** — gated on `check` + a full-corpus cold diff, reverted wholesale if the diff does not clear |
+| the head's "do not rebuild" verdict | **rebuild sanctioned.** The head may be treated as broken by construction |
+| baselines | a lane **may re-baseline a shot** it intentionally changed, *after* capturing it, reading the image and judging the frame better. Before/after and the reason go in the commit message |
+| a measured negative | **counts as closing an item.** It goes in the backlog's negatives table |
+| "budget several days" | that is a pre-agent estimate. It is not a reason to defer a workstream |
+| `TODO.md` | folded in as its own wave. The repo-layout line was closed by the human at `ddea338`; boot and the 1.4 GB RSS remain |
+| when to stop | **when the plans are done**, respawning lanes from their handoffs as they hit their limits |
+
+## Baseline this run started from
+
+`ddea338` · tree `2072870e2ace` · **`pnpm run check` 18/18** (16 from cache,
+8.5 s). Perf gates not re-run — they need a quiet tree and the tree has not been
+quiet since. `project/STATUS.md` is otherwise accurate as of 08-28.
+
+## The lane map
+
+Sixteen workstreams across the two plans collapse to **fifteen lanes**, because
+five pairs are the same work seen from two plans. The merges are the important
+part of this table — staffing them separately is how two lanes ship two terms
+that cancel.
+
+| lane | owns | is | merged from |
+|---|---|---|---|
+| `head` | `src/characters/` | the judge's #1, 3.0 → 4.0 | A-WS1 + B-WS1 + B-WS11's character list |
+| `harness` | `src/tools/` | cheap, unblocks 3 lanes | B-WS9 |
+| `canopy` | postfx + the veg material | one black blob on a judged shot | A-WS4 |
+| `ground-light` | `src/world/terrain/`, `src/world/veg/` | 2.6 of a 15-point gap | B-WS2 a/b/c/d |
+| `landmarks` | `src/world/props/` | the most-named object in the rounds | B-WS5 |
+| `water-content` | `src/world/water/`, the map, fishing | breaks a playthrough | B-WS7 + B-WS8 |
+| `alpha-edges` | `src/world/veg/`, postfx | the judge's #1 of round 5 | B-WS3 |
+| `sky-clouds` | `src/world/sky/` | one free win inside | B-WS4 |
+| `creatures` | `src/characters/enemies/`, encounters | Anak, Titan, and `Enemy.level` | B-WS10 |
+| `geometry-bake` | `src/world/**` generators, `bake.mts` | ~1.5 s of a 6.5 s boot | A-WS3 + B-WS12a |
+| `perf` | `src/engine/postfx/`, npc shadows | the last 3 stalls + draw calls | B-WS6 + B-WS11's draw list |
+| `combat` | `src/combat/` | the arm whip, the framing, the banner | B-WS11's combat list |
+| `materials` | cross-cutting | 228 programs, 288 buckets, char LOD | A-WS2 + B-WS12b |
+| `memory` | cross-cutting | 1.4 GB RSS in `?debug` and prod | `TODO.md` |
+| `dress` | `src/characters/` costume | Ignis, the sleeve, the collar hole | B-WS11's character list, if `head` does not reach it |
+
+**Collisions and the order they force.** `head` and `dress` are the same
+directory — `dress` waits. `ground-light` (2b) and `alpha-edges` are both
+`src/world/veg/` — sequenced, not concurrent. `harness` and `geometry-bake` are
+both `src/tools/` but disjoint files. `materials` touches every lane's materials
+and therefore runs when the fewest lanes are live.
+
+**Order constraints inherited from the plans:** `harness`'s `--hide` fix before
+any cost ablation in `alpha-edges` / `landmarks` / `perf`; B-WS2c before B-WS2d;
+`head` first in priority because nothing in the environment buys a point while
+that frame exists.
+
+## Waves
+
+- **Wave 1 — RUNNING.** `head`, `harness`, `canopy`.
+- **Wave 2.** `ground-light`, `landmarks`, `water-content`.
+- **Wave 3.** `alpha-edges`, `sky-clouds`, `creatures`.
+- **Wave 4.** `geometry-bake`, `perf`, `combat`.
+- **Wave 5.** `materials` (alone or nearly — it moves pixels everywhere).
+- **Wave 6.** `memory`, `dress`, and whatever earlier waves handed back.
+
+## The brief every lane is given
+
+Because it is the same brief every time and it is the accumulated cost of not
+saying it: read `BRIEF.md` and `CLAUDE.md` first; **ablate before re-tinting**;
+capture and *actually look at the image*, `--jpeg` for looking and PNG only for
+`imgdiff`; `--hide` is broken until `harness` fixes it, so difference two
+ablations against each other; you commit to see your work, because captures
+default to `--build HEAD`; `noise-floors.json` covers 18 shots of 142 and its
+floors are *cold* floors, so calibrate and diff cold against cold; read
+`VERDICT:` before any number; never start a server or poll; commit early, often,
+one concern, **explicit pathspec via `gitlock.mts`**, never `git add -A`.
+
+## Open questions
+
+None blocking. The human is away and has cleared the session to run unattended.
+
+## Next step
+
+Wave 1 is in flight. On each completion: record the result below, fold anything
+the lane handed back into the right plan section, and launch the next lane so
+that 2–3 are always live.
+
+## Results
+
+*(appended as lanes report)*

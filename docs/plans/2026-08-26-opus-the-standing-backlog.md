@@ -1,6 +1,6 @@
 # The standing backlog — everything 52 handoffs were still holding
 
-Status: PROPOSED (2026-08-26, opus) — **ten workstreams, none staffed, nothing
+Status: IN-PROGRESS (2026-08-28, opus) — **ten workstreams, none staffed, nothing
 locked.** This is a *queue*, not a snapshot: every item below is work somebody
 measured, wrote down, and could not finish.
 

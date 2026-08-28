@@ -1,6 +1,6 @@
 # After phase 3 — four independent pieces of work
 
-Status: PROPOSED (2026-08-25, opus) — four workstreams, each independently
+Status: IN-PROGRESS (2026-08-28, opus) — four workstreams, each independently
 staffable. **Nothing here is locked.** WS-1 is the only one with an external
 argument for its priority; WS-2 and WS-3 are the boot work phase 3 deliberately
 did not take, sized against measurements rather than guesses; WS-4 is small and

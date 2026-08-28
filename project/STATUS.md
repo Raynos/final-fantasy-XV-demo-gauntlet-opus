@@ -7,11 +7,11 @@
 **`main`.** Zero `any`, both typechecks clean, **`pnpm run check` 18/18**, and
 **both perf gates certify** — `gameplay.mts` for the first time ever.
 
-**Live lanes: none.** The three that sat IN-PROGRESS with no owner — benchmaxx,
-the gate audit, the 100x map — were audited on 08-28, folded into
-`docs/plans/2026-08-28-opus-close-out.md`, and all four are now in
-`project/archive/plans/`. Eight of close-out's ten items closed the same night;
-its two builds are `docs/plans/2026-08-26-opus-the-standing-backlog.md` §WS-12.
+**Both live plans are IN-PROGRESS and staffed.**
+`handoff/2026-08-28-coordinator.md` carries the lane map, the five plan-pairs
+that are really one lane, and the human's rulings: full coverage, the head may
+be rebuilt, a lane may re-baseline a shot it has looked at, a measured negative
+closes an item. Fifteen lanes, waves of 2-3. Wave 1: **head · harness · canopy**.
 
 **Two of the numbers this repo was steering by were wrong, and both were the
 same defect** — an instrument folding a bad result into a failed measurement.
