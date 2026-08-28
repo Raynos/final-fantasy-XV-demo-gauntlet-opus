@@ -492,6 +492,15 @@ export interface HealthResponse {
    * gate noticing. That warning lived only in prose, in two documents.
    */
   paintedFaces: boolean;
+  /**
+   * True when `src/public/baked/geo.bin.gz` is present.
+   *
+   * Same failure, same shape: the geometry bake is recorded in a browser, so
+   * nothing can rebuild it automatically, and the vite plugin can only *delete*
+   * one whose sources have moved. Cold boot then regresses ~1.2 s with every
+   * gate green. `node src/tools/texbake.mts --geo` puts it back.
+   */
+  bakedGeometry: boolean;
 }
 
 /**
@@ -2739,6 +2748,7 @@ function health(): HealthResponse {
     ledger: ledgerPath(),
     rssMb: pool.lastRssMb,
     paintedFaces: existsSync(path.join(ROOT, 'src/public/baked/texc.bin.gz')),
+    bakedGeometry: existsSync(path.join(ROOT, 'src/public/baked/geo.bin.gz')),
   };
 }
 
@@ -2935,6 +2945,11 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
         console.log('\n[daemon] WARNING: src/public/baked/texc.bin.gz is missing — the painted-face');
         console.log('         cache is cold and every boot pays ~2.5 s to redraw it. `pnpm run build`');
         console.log('         deletes it without replacing it; run `pnpm run build:full`.');
+      }
+      if (!h.bakedGeometry) {
+        console.log('\n[daemon] WARNING: src/public/baked/geo.bin.gz is missing — the POI, mega and');
+        console.log('         shore geometry is being regenerated on every boot, ~1.2 s. Anything in');
+        console.log('         `GEO_SOURCES` moving deletes it; run `node src/tools/texbake.mts --geo`.');
       }
     } catch (e) { console.log('not running:', e instanceof Error ? e.message : String(e)); process.exit(1); }
   } else if (argv.includes('--wait')) {

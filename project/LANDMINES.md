@@ -380,9 +380,11 @@ in this file.
 ## Baked caches
 
 - **A stale texel bake is the one cache failure with no symptom.** `src/public/baked/`
-  holds **three** caches of our own generators — `terrain.bin.gz` (the heightfield),
-  `tex.bin.gz` (143 procedural `DataTexture`s, from `src/engine/TexBake.ts`) and
-  `texc.bin.gz` (the *drawn canvas* mip chains behind every painted face).
+  holds **four** caches of our own generators — `terrain.bin.gz` (the heightfield),
+  `tex.bin.gz` (143 procedural `DataTexture`s, from `src/engine/TexBake.ts`),
+  `texc.bin.gz` (the *drawn canvas* mip chains behind every painted face) and
+  `geo.bin.gz` (the POI, megastructure and shore **geometry**, from
+  `src/engine/GeoBake.ts`).
   A *missing* or *corrupt* artifact is harmless: every path falls back to the
   generator and costs only the time it used to cost. A **stale** one is not. The
   keys still resolve, the page still boots, every gate still passes, and the
@@ -409,7 +411,7 @@ in this file.
   `node src/tools/texbake.mts --canvas --force`. A boot number taken without the
   second one is not a boot number.
 - **`node src/tools/texbake.mts --force` is the reset**, and `?nobake=1` takes
-  all three caches out of the loop entirely for one page load — which is also how you
+  all four caches out of the loop entirely for one page load — which is also how you
   prove a suspected bake bug is or is not one, in thirty seconds.
 - **A shared cache means any agent can rewrite everyone's.** `src/public/baked/`
   is a symlink into the main checkout from every worktree, which is right — a
@@ -431,6 +433,26 @@ in this file.
   logged at the point it matters. Re-run `node src/tools/texbake.mts --canvas`
   after touching it. It bit twice in one session on 2026-08-25, the second time
   after the first had already been diagnosed.
+- **A stale GEOMETRY bake is the sharpest version of the same failure, because
+  what it serves is *well-formed*.** A stale texel is a colour that looks like a
+  material choice. A stale POI compound is a compound — correctly wound,
+  contract-clean, `assertAttributeContract` green — standing on a heightfield
+  that has moved, or graded against an apron that no longer exists. Nothing in
+  this repo can see that: `check` is green, `floatcheck` reads the group's
+  position rather than its vertices, and only a person looking at the frame
+  would notice a viaduct in the air. So `GEO_SOURCES` in `src/tools/texbake.mts`
+  is the widest of the three source lists on purpose (the kit code, what it
+  lofts, `Ecology`, `Terrain` and the clipmap, the map, `Noise`/`Rng`), and the
+  vite plugin **deletes** rather than serves. **`geo.bin.gz` will go missing
+  often** — any lane touching `Terrain.ts`, `Ecology.ts`, `Rocks.ts` or
+  `WorldMap.ts` invalidates it — and each time cold boot silently goes back up
+  by ~1.2 s. `daemon.mts --health` reports `bakedGeometry`;
+  `node src/tools/texbake.mts --geo` puts it back, and `pnpm run build:full`
+  now runs it.
+- **A commit prunes a stale geometry bake, because `pre-commit` runs `vite build`
+  and the plugin runs there.** That is correct, and it means the artifact cannot
+  survive a commit that moves one of its sources — including *another lane's*
+  commit. Bake AFTER the tree settles, and never in the middle of a measurement.
 - **A cache read before `Props.init()` misses on every boot.** `loadTexBake()`
   starts at module eval and is *awaited* by `Props`, the eighth system. `Sky` is
   the first. The cloud volumes were added to the bake, baked correctly, shipped

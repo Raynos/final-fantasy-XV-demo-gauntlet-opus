@@ -178,6 +178,51 @@ Read before starting:
 **Done when** the three items are cache reads, `pnpm run check` is green, and a
 full-corpus **cold** diff is at or under each shot's floor.
 
+### WS-3 result, 2026-08-28 (`geometry-bake` lane) — **DONE**, and it pays 5:1
+
+`src/engine/GeoBake.ts` + `node src/tools/texbake.mts --geo`. All three items
+are cache reads. Same tree, same page pool, artifact moved aside and put back
+between the two runs, so nothing but the cache differs:
+
+| phase | no artifact | artifact live |
+|---|---|---|
+| `Water.shore` | 465.5 ms | **0.7 ms** |
+| `Props.mega` | 492.6 ms | **6.4 ms** |
+| `Props.poiPrebuild` | 440.2 ms | **32.2 ms** |
+| the wait for the 35.5 MB artifact | — | **0 ms** |
+| `Game.init` | **9120 ms** | **7889 ms** |
+
+**The codec was priced before it was written** (`probes/geocodec.mts`, in the
+page, on the real bytes): those three subtrees are **164.9 MB raw / 45.6 MB
+gz**, and inflating and rebuilding all 145 `BufferGeometry` objects costs
+**200 + 25 ms**. That is the whole argument, and it is why the codec is
+deliberately stupid — no quantisation, no byte transposition — so the arrays
+come back bit-identical.
+
+Three things the section did not anticipate:
+
+- **It has to be a *browser* bake, not a Node one.** `PoiKits._base` seats every
+  compound against `Terrain.drawnHeightAt`, the **rasterised clipmap**, which
+  `seatcheck.mts` proves is the renderer's own arithmetic. A Node bake would
+  seat 124 compounds at subtly different heights and grade their aprons against
+  ground that is not the ground the player stands on.
+- **Only what boot builds is baked, and that is a memory decision.** 14 keys.
+  The container is 165 MB inflated and `releaseGeoBake()` drops it at the end of
+  `Props.init`; caching the 116 POI sites that stream in later would hold all of
+  it resident for the session.
+- **The prize being "bigger than 950 ms" is right, and worse than stated.**
+  `probes/geofootprint.mts`: the eight prebuilt POI compounds alone are
+  **119.7 MB over 3.70 M vertices**, against the **82.3 MB for the whole page**
+  `boot-memory.md` records — and **two** of them, `lestallum` (1.34 M) and
+  `galdin_quay` (1.28 M), are 2.6 M of the 3.7 M. The bake does not fix that; it
+  changes where the arrays come from, not how many there are. Somebody should
+  look at a 1.3 M-vertex town.
+
+Not taken, with reasons, in `project/handoff/geometry-bake.md`:
+`Vegetation.trees.build` (GPU impostor art, WS-12a says stage last or leave —
+left), `bushes.build`, `Props.rocks` (a tile streamer, not a `PartBuilder`), and
+`Props.landmarks` (46 ms, `PartBuilder`-shaped, would be five lines).
+
 ---
 
 ## WS-4 — The black patch on the Nebulawood canopy — **DONE** (4384cff, 154e8bf)

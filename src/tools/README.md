@@ -274,3 +274,24 @@ do not look the same to an agent reading an exit code.
 
 `grep -ln 'chromium.launch(' src/tools/*.mts` returns **`chromium.mts`** and
 nothing else. Keep it that way.
+
+## The four baked caches, and the two nobody can rebuild for you
+
+`src/public/baked/` is generated, git-ignored, shared by every materialised tree
+through a symlink, and free to delete — it costs only the boot time it was
+saving. Two of the four are rebuilt automatically by the vite plugin at server
+start; the other two are recorded **in a browser**, so the plugin can only
+*delete* a stale one and cold boot silently goes up.
+
+| artifact | what | rebuilt by |
+|---|---|---|
+| `terrain.bin.gz` | the 2048² heightfield | `bake.mts`, automatic |
+| `tex.bin.gz` | 143 procedural `DataTexture`s | `texbake.mts`, automatic |
+| `texc.bin.gz` | the painted-face canvas mip chains | `texbake.mts --canvas`, **by hand** |
+| `geo.bin.gz` | POI / megastructure / shore **geometry** | `texbake.mts --geo`, **by hand** |
+
+`daemon.mts --health` reports `paintedFaces` and `bakedGeometry`, and warns when
+either is missing — ~2.5 s and ~1.2 s of cold boot respectively. `pnpm run
+build:full` is `vite build` plus both. `?nobake=1` takes all four out of the
+loop for one page load, which is how you prove a suspected bake bug is or is not
+one in thirty seconds.

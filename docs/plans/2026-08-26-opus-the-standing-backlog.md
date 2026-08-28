@@ -779,6 +779,27 @@ images with the image baselines re-checked, so stage it last or leave it.
 and reverted: it is 610 ms, it looks certainly redundant under `?shoot`, and it
 moves `hero_full` by 13.359/255 against a floor of 2.25. See `LANDMINES.md`.
 
+#### WS-12a result, 2026-08-28 (`geometry-bake` lane) — **DONE for the three; trees left**
+
+`src/engine/GeoBake.ts`, `node src/tools/texbake.mts --geo`, and the full
+account in `docs/plans/2026-08-25-opus-after-phase3.md` §WS-3 and
+`project/handoff/geometry-bake.md`. `Water.shore` 465.5 -> **0.7 ms**,
+`Props.mega` 492.6 -> **6.4 ms**, `Props.poiPrebuild` 440.2 -> **32.2 ms**,
+`Game.init` 9120 -> **7889 ms**, for a 35.5 MB artifact whose fetch measures
+**0 ms** because it starts at module evaluation and Water is only the third
+system.
+
+`trees.build` was left, as this section said to: it draws impostor atlases on
+the GPU and would need baking as *images* with the image baselines re-checked.
+`bushes.build` (120 ms) and `Props.rocks` (78 ms) were not attempted —
+`Rocks` is a tile streamer with no `PartBuilder` and needs a different shape of
+entry.
+
+**And the memory line is understated.** The eight prebuilt POI compounds are
+**119.7 MB over 3.70 M vertices** (`probes/geofootprint.mts`) against the
+82.3 MB `boot-memory.md` records for the whole page, and two town POIs are 2.6 M
+of the 3.7 M. Directly relevant to `TODO.md` line 2, which still has no lane.
+
 ### WS-12b — material consolidation (was the 100x map's #12)
 
 `probes/drawwhere.mts` on `town_forecourt`: 496 draw calls but **5 231 106
