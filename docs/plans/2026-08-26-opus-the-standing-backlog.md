@@ -884,6 +884,18 @@ directory boundary it did not own.
   the change is landed but unverified and the lane says it would take an argument
   to revert. There is also a **p99 hard edge**.
 
+### Memory — `TODO.md` line 2, still unstaffed (from `geometry-bake`)
+
+- **The eight prebuilt POI compounds are 119.7 MB over 3.70 M vertices**, against
+  the **82.3 MB for the whole page** that `boot-memory.md` records. `lestallum`
+  (1.34 M) and `galdin_quay` (1.28 M) are 2.6 M of the 3.7 M on their own.
+  **Nobody has ever looked at a 1.3 M-vertex town.** The geometry bake does not
+  fix this — it caches the build, it does not shrink the result.
+- The instrument is `_probe/gcwatch.mts` (CDP `Runtime.getHeapUsage`);
+  **`performance.memory` is frozen in this headless build**, which is why
+  `probes/perfgc.mts` could not answer. Chromium RSS is also recorded per lease in
+  the daemon's ledger — a free time series nobody has read for this question.
+
 ### The face (from `head`, passes 3–5)
 
 - **The `Exposure` meter is routed to `sky-clouds`** and is not a character item:
