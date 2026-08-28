@@ -110,6 +110,18 @@ Four items with one theme: what the ground reflects, what occludes it, what
 shadows the light reaching it, and how things meet it. **Two have already been
 diagnosed wrong once by being treated separately.**
 
+> **Worked 2026-08-28 by the `ground-light` lane — read
+> `project/handoff/ground-light.md` before picking any of this up.** Result in
+> one line each: **2a is a measured negative** and is in the negatives table
+> below, though the half of it that was real (`LAYER_AVG`) landed at `14c49f3`;
+> **2b is half stale** (the `zone_fallgrove` colour disagreement was fixed
+> before this plan was written) and half open (coverage economics, and tier-D
+> whose *ceiling* is now priced and is in the negatives table); **2c is
+> landed** — its "written and never run" commit is an ancestor of `main` and the
+> ramp has been rendering for five days, now ablated; **2d is still open and its
+> gate has an answer.** Four new `?post=` ablations and three probes were added
+> so none of this has to be re-argued.
+
 ### 2a. Shadow warmth is a ground-albedo row, not an ambient one
 
 `sh(R−B)` **−9.2** against the FFXV-field reference's **+5.8** — the last
@@ -665,6 +677,10 @@ without opening the handoff it lived in.
 | Turning CAS's constant down | its benefit is in the same octave as its cost; the lever must be spatial |
 | PCSS blocker search on our shadow path | needs a depth read `sampler2DShadow` cannot do, and the page is already at 16/16 texture units |
 | The ambient probe is the shadow-warmth gap | the **whole** diffuse ambient is worth 2.6 of 15 points |
+| **Ground albedo is the shadow-warmth gap** (WS-2a, the re-filing above) | **it is not, and now it has a positive control.** `?post=gwhite` moves the median 48 levels, so the lever reaches; then `gwarm`+`vwarm` — every ground *and* plant pixel pushed 35% red / −38% blue at constant luma, far past shippable — buys **5.2 of the 13.2 levels needed** and takes `sat%` to **38.6** against a 29.5 reference. The reference's own per-plate spread on the column is 50 levels around a 15-level difference of medians, and the darkest quartile, painted and looked at, is half canopy. `handoff/ground-light.md` |
+| The six `RECIPES` in `Layers.ts` have mean lumas spanning only 0.35–0.47 | **that is `LAYER_AVG`, not the recipes.** The recipes' real mean *linear* lumas run **0.091–0.361, a 3.98× spread**. `LAYER_AVG` was their sRGB numbers used as linear light and was painting the far LOD 2.2–4.0× too bright; fixed at `14c49f3`. Nothing is wrong with the recipes' value contrast |
+| WS-2c's fraction-of-object contact ramp "has never rendered" | **`207a399` is an ancestor of `main`** and the ramp has been live since 2026-08-23. Ablated: `?post=nogcontact` moves `zone_vannath` **4.228 mean/255 over 11.9%** of pixels against a 2.00 floor, with `gcmax` at 5.634 — the shipped term is at 75% of its own ceiling, and an order of magnitude past the metre-scale version's 0.438/0.059% |
+| Tier-D dry cover can close the `reliefstat` gap if its reach is widened | **only a fifth of the way, and into the wrong bands.** `?post=drymax` prices full cover on `zone_longwythe` at tot 29.0 → **40.4** against a reference of 49.0 — but it lands as d1 **16.4** and d2 **23.3** where the reference is 11.3 and 15.5 (we would be 45–50% *over*), while d8/d16/d32 stay at 12.2/11.3/11.2 against 18.4/21.2/21.8. The hole is 4–30 m features and the term's octaves are 0.74 m and 1.9 m |
 | Skipping `Vegetation`'s origin prime under `?shoot`, since `converge()` re-streams at the shot camera | 610 ms and **wrong**: `hero_full` moves **13.359/255** against a 2.25 floor. Sixty budgeted `update()` calls are not the same resident set as "stream until finished" |
 | `combatloop` and `integration` can take warm leases once the viewport matches | `integration` needs `audio=force` in the query and no pooled page has it; `combatloop` matching the pool key costs **+28 s (42 -> 70)** to save a 7.5 s boot |
 | Chromium's disk cache can hold the 181 shader programs | `gl` and `metal` both compile +181 on a warm load; the cost is ANGLE's in-process translation, which no disk cache stores |
