@@ -13,12 +13,13 @@ and the frame is what said so.
 | pin | was | now | seat |
 |---|---|---|---|
 | `fort_vaullerey` | hang 24.8, toe mean +6.06 | hang −0.79, toe mean −5.09 | (−2560, −2720), 20 m south of `n_fort_vaullerey`, authored `x`/`z` |
-| `tomb_fierce` | hang 22.0, toe mean +3.72 | hang +0.20, toe mean −1.91, **deep 26.0 → 2.6** | (−2604, −1214) |
+| `tomb_fierce` | hang 22.0, toe mean +3.72 | hang −0.15, toe mean −0.45, deep 6.2, proud 0.9 | (−2604, −1254), after two rejected seats |
 | `tomb_mystic2` | hang 19.5, toe mean −8.62 | hang −1.35, toe mean −4.79 | (−1104, −2234) |
 
 World totals, `probes/padhang.mts`: `over6` **5 → 2**, `over3` 13 → 10, `over1`
-21 → 19, mean toe **−1.33 → −1.49 m**. The three named pins are off the worst-20
-list entirely.
+21 → 19, `over0` 52 → 49, mean toe **−1.33 → −1.47 m**. The three named pins are
+off the worst-20 list entirely; the world's worst apron is now `crestholm_inlet`
+at 11.36 m, which is not this lane's and is below.
 
 **The method that made this cheap, and it is reusable:** `tmp/probes/poiseat.mts`
 rebuilds the *actual kit* at every offset on a lattice (`pk._make` after resetting
@@ -26,12 +27,26 @@ rebuilds the *actual kit* at every offset on a lattice (`pk._make` after resetti
 ring off the geometry that comes back. A 20 m lattice out to 100 m for three pins
 is ~10 s of probe. Do not score a candidate seat off a heightmap.
 
-**The correction that cost a cycle, now a landmine.** The first `tomb_fierce`
-move was chosen on hang and relief and looked *worse*: `gradePad`'s `cliff`
-branch answers a brink with a **retaining wall**, a wall lands, and `hang` /
-`toeMean` / `floatcheck` are all blind to a 26 m pale curtain pasted down a rock
-face. `poiseat` now also reports `deep` — how far the apron falls below its own
-deck — and ranks on both. See `project/LANDMINES.md`.
+**`tomb_fierce` took three seats, and each rejection came from a frame that the
+previous number called good.** That is the whole method lesson of this lane.
+
+1. `hang` alone chose z = -1274. Looked at: a tall pale striated curtain pasted
+   flat on a dark rock cliff. `gradePad`'s `cliff` branch answers a brink with a
+   **retaining wall**, and a wall *lands* — so `hang`, `toeMean` and `floatcheck`
+   are all structurally blind to it. New number: **`deep`**, the apron's lowest
+   vertex below its own deck.
+2. `deep` alone chose z = -1214, at 2.6 m. Looked at: the mausoleum in a notch
+   with grass across its roofline. An apron is a **mesh laid over the terrain,
+   not an excavation** (`_base`'s docstring already records
+   `poi_costlemark_menace` growing a mound inside its own sealed court), so a
+   hummock inside the footprint comes up through the building. New number:
+   **`proud`**, the highest drawn ground above the deck within the *building's*
+   ten metres — not the pad's, whose uphill rim is above its deck by
+   construction.
+3. All three together chose **z = -1254**: hang -0.15, deep 6.2, proud 0.9. 6.2 m
+   is an ordinary batter; `FILL_MAX` for a 34 m pad is 17.
+
+Both traps are in `project/LANDMINES.md`.
 
 **Closed with a measured reason, not landed:** `tomb_mystic2` keeps `deep = 26`.
 Every seat within 100 m of the Disc's flank does; the first that does not is
@@ -40,8 +55,9 @@ for. Its toe is buried 1.35 m and its mean 4.79 m, so the earthwork lands. Left
 where it is deliberately.
 
 `fort_vaullerey` also reads `deep = 26` on some bearing and stays, because it has
-been looked at from two bearings and its apron meets the grass on a soft,
-scalloped, tufted line with no undercut.
+been looked at from four bearings and its apron meets the grass on a soft,
+scalloped, tufted line with no undercut on any of them. It is the best-looking
+POI frame this lane produced.
 
 ## Row 2 — four fishing camps stood proud of their bank
 
@@ -95,12 +111,34 @@ not a float.
 - **The Keycatrich peak's hard horizontal terracing** is still in `poi_tomb`, as
   §WS-13 already records. Not mine and not touched.
 - **`crestholm_inlet` is now the world's worst apron at 11.36 m**, and
-  `balouve_mines` at 7.09. Both are `at:`-a-road-node pins of the same shape as
-  the three this lane moved, and `poiseat.mts` would answer them in one run. Not
-  in this lane's rows; not started.
+  `balouve_mines` at 7.09. `poiseat.mts` was run on the first of them, and the
+  answer is a decision rather than a number: the nearest seat that lands is
+  **(+20, +40), hang -0.08, toe mean -0.38, deep 0.9** — and the flattest,
+  (+60, -20), has footprint relief **3.6 m against 74.1 today**. Both are 45-63 m
+  off `n_crestholm`, and Ostium Gorge is a **parking bay**, which is a thing that
+  is beside a road by definition. Moving it turns a lay-by into a clearing. That
+  trade is a content call, not a seating one, so it is written here rather than
+  taken. `balouve_mines` is a dungeon mouth and cannot move at all.
 - The tarn water surface reads as a dense white foam mottle across the whole
   body at `maidenwater` — visible in `tmp/shots/fishcam2/maidenwater.jpg`. That
   is `Water`/`Shore`, not `PoiKits`.
+- **`gradePad`'s steep faces are smeared by construction, and the cause is one
+  line.** The pad writes **world-planar XZ** UVs — `uv.push(ct * s, st * s)` in
+  `Wear.ts` — so a face's UV varies with its RADIUS and not with its height. On
+  the `cliff` branch the radius moves 1.6 m while `y` drops up to 26, which is a
+  16:1 vertical stretch; on any steep batter it is several to one. Both reviews
+  of these pads independently described "finely vertical-striated", "smeared",
+  "stretched UVs, not rock", "pasted on" — that is this, and it is why a
+  retaining wall reads as a curtain rather than as a wall. Visible in
+  `tmp/shots/fierce/fierce_e.jpg`. A triplanar or an arc-length-plus-height
+  parameterisation on the batter stations would fix it; `Wear.ts` is not this
+  lane's file and the change touches every apron in the world.
+- **The Tomb of the Mystic's mausoleum may be broken as well as steep.** Read
+  from bearing 165 the pediment appears to hover with two column shafts ending
+  in mid air. `_tomb`'s `shaft(..., broken)` deliberately snaps ~16% of columns
+  to a 1.7-4.0 m stump, so this is *probably* the authored ruin seen at 2% of
+  frame through the Disc — but it was seen twice and is written down rather than
+  waved off. A close capture would settle it in one frame.
 
 ## Files
 
