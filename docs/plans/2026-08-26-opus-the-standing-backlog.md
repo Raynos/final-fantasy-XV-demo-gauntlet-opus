@@ -706,6 +706,73 @@ mean 208 fps against a 60 fps target. This is bought for boot and for headroom.
 are real and latent, and splitting them from the bucket work would mean touching
 the same 127 sites twice.
 
+## WS-13 — What the 2026-08-28 wave handed back
+
+Five lanes closed on 08-28. **This section exists because their open work would
+otherwise have died in a handoff**, which is the failure this whole plan was
+written to stop. Each item names the lane that measured it and stopped at a
+directory boundary it did not own.
+
+### Ground and vegetation (from `ground-light`, `water-content`, `landmarks`)
+
+- **The "Leide is bare" hole is 4–30 m features, and nothing occupies that
+  band.** Tier-D's ceiling is priced: `?post=drymax` buys `zone_longwythe`
+  29.0 → 40.4 of 49.0, but lands d1 **16.4** / d2 **23.3** against a reference of
+  11.3 / 15.5 while d8–d32 stay flat. **Turning the dry cover up makes the ground
+  noisier and does not close the gap.** Something has to *be* there at 4–30 m.
+- **Galdin Quay is not a beach and the water lane cannot make it one.** 698 of
+  6 280 shore points have a run-out gentler than 4 m. It needs a **`Field.ts`
+  sand shelf plus `Ecology` grass suppression** — the land behind a now-correct
+  foam lace is grass to the waterline.
+- **`zone_mencemoor` renders as a bare corrugated massif that nobody owns.**
+- **WS-2d was never reached.** It was gated on 2c, and 2c turned out to be
+  already landed — so the gate is lifted and the item is simply untouched.
+  Occluding indirect diffuse in-material is still open, and `?post=gcmax` (5.634
+  mean/255 on `zone_vannath`) still bounds it.
+
+### The map and the two dry pins (from `water-content`)
+
+- **`Chart.ts` uses one global sea level, so the world map draws no blue under
+  the four tarns** that now have water. Same bug class as the survey predicate
+  that hid them, and it **costs a chart re-bake**.
+- **`PoiKits` still builds a jetty at the two genuinely dry pins.** They are
+  drawn dead on the map now, but the jetty is still in the world.
+
+### Landmarks and props (from `landmarks`)
+
+- **Seven kits still build from bare `BoxGeometry`** — `_imperial`, `_tomb`,
+  `_landmark`, `_dungeon`, `_chocobo`, `_menace`, `_haven`. **The tomb first:**
+  it is a 40-px grey box and its own docstring says it *"most has to read from a
+  kilometre away"*. `_block` and `_hut` are the templates.
+- **`_haven`'s own shelf** is what reads as a cake stand at `poi_haven`;
+  `gradePad` already replaced the drum, so that half of the plan's claim is
+  stale.
+- **`_genOutcrop` is ungraded** and needs the plan/seat split `_genTor` got.
+- **One unexplained levitating boulder in `poi_imperial`**, pixel-identical
+  across all three joint fixes, so it is a **fourth mechanism** and not the
+  un-sunk-plan bug.
+- **The Meteor is a good landmark and not yet a beautiful one** — one dark
+  monolith rather than a cluster of angular peaks, low in chroma against a bright
+  sky. The untried lever: normalise the rock generator's vertex-colour bake to
+  mean 1.0 and turn `vertexColors` on for `M.stone`. Touches a shared generator;
+  needs its own before/after.
+
+### Content and water (from `water-content`)
+
+- **Energy deposits are invisible** and **Fociaugh's cave mouth sits on a 1.26
+  bank** — both outside that lane's four directories, both still open from WS-7.
+- **The rivers are the weakest thing in the water lane's own estimate.** Width
+  went 3.49 → 5.17 m mean and the p50 reach **still reads as a damp streak**;
+  the change is landed but unverified and the lane says it would take an argument
+  to revert. There is also a **p99 hard edge**.
+
+### The face (from `head`, passes 3–5)
+
+- **The `Exposure` meter is routed to `sky-clouds`** and is not a character item:
+  a +33% eye-adaptation excursion driven by the subject's own black jacket, worth
+  most of the corpus's median-luma gap (100.2 against FFXV's 70.2).
+- Everything else is in `project/handoff/head.md`, which is still live.
+
 ## Negatives worth not re-opening
 
 Collected because each one cost a lane real time and none is discoverable

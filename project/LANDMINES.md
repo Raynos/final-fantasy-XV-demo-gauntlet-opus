@@ -1401,3 +1401,26 @@ about whether the scrim is composited.
    `mix-blend-mode` isolates it" — before anyone noticed the frames were
    identical. An A/B whose arms are byte-identical is not a null result, it is a
    broken harness.
+
+## A `follow:` shot ignores `setShot`, so a re-framing that changes nothing is not a bad frame
+
+Five attempts to re-frame Titan produced **ten byte-identical vantages** and were
+read as five bad choices. The camera never moved. `follow:` shots set
+`CameraRig.followShot`, which **overwrites `setShot` every frame**, so any
+`setShot` a probe or a `Shots.ts` entry applies to one of the 47 `follow` shots
+is silently discarded on the next tick. Check which kind of shot you are framing
+before concluding a vantage is wrong: byte-identical output from two different
+camera positions is the signature.
+
+## The shared working tree must stay parseable between edits, not only at commit
+
+The `dirty:` build serves the **shared** working tree, so a file left
+half-written across several tool calls stops **every** lane on the machine from
+capturing — the page does not boot, and the symptom at the other end is a capture
+timeout, not a syntax error. On 2026-08-28 this happened twice in one day (both
+times a backtick inside a `/* glsl */` template literal) and cost one lane the
+end of its session: it had a finished, measured fix, could not get a frame to
+look at it, and correctly refused to ship a change it had not seen.
+
+`npx tsc --noEmit -p tsconfig.json` takes seconds. If a refactor cannot be
+finished quickly, park your own file and leave the tree green.
