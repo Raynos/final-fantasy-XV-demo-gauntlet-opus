@@ -15,6 +15,7 @@ files outlive the agents that wrote them.
 | `LANDMINES.md` | **durable** — what will bite you, proven | Append when something is proven; delete when the cause leaves the code. |
 | `handoff/` | **agent-lifetime** — one file per live agent | Graduates to `archive/` when its branch merges. See `handoff/README.md`. |
 | `journal/` | **history** — one file per session, dated | Append-only. Never edited, never deleted. |
+| `TASKS.md` | **the backlog** — measured, named, not done | Agents append and delete. One line each; the argument lives in the named handoff. **Allowed to live forever — it is a tracker, not a plan.** |
 | `TODO.md` | **the human's queue** | Human-written. **Agents never tick or edit it.** |
 | `archive/` | **graduated** — done, superseded, abandoned | Never edited. See `archive/README.md`. |
 

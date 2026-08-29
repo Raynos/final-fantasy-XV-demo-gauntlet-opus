@@ -92,7 +92,7 @@ fi
 # one thing the root is explicitly allowed to hold.
 # ---------------------------------------------------------------------------
 
-ROOT_ROSTER='BRIEF.md CLAUDE.md README.md
+ROOT_ROSTER='BRIEF.md CLAUDE.md README.md HUMAN_REVIEW.md
 docs project src tmp
 dist node_modules
 package.json pnpm-lock.yaml tsconfig.json tsconfig.tools.json vite.config.js'

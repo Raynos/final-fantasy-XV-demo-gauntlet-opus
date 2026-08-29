@@ -35,8 +35,8 @@ strip-only, hence `erasableSyntaxOnly` in `tsconfig.tools.json`). Probes under
 `src/tools/_probe/` and `probes/` are excluded — they are evaluated as a
 *function body*, so a top-level `return` is correct.
 
-Root: `README.md` (the human's original brief), `CLAUDE.md`, `BRIEF.md`, build
-config — a new file that is none of those belongs in one of the four buckets.
+Root: `README.md`, `CLAUDE.md`, `BRIEF.md`, `HUMAN_REVIEW.md` (what needs the
+operator, not a lane), build config. Roster enforced in `.githooks/pre-commit`.
 
 ## Committing
 
