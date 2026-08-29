@@ -13,6 +13,8 @@ plan's negatives table is the list of things already decided against.
 
 ## Live defects nobody had recorded
 
+- **No gate drives the car.** The steering was mirrored (D turned left) and shipped, because `AutoDrive` is self-consistent in the same flipped frame so the AI drove fine, all five posed regalia shots are a parked car, and `regaliadrive` asserts the car steers *at all*, never which way. Fixed 2026-08-29 by a human playing it. **A gate that holds a key and asserts the sign is the gap.**
+
 - **`KeyT` is bound twice** — `CombatSystem.ts:1519` `drawEnergy()`, `RegaliaSystem.ts:60` Type-D — and `ControlsScreen.ts:57` lists `T` as Type-D only. Deposits are visible and prompted now (`c220833`), so a live mechanic has no correct in-game statement of its key. `water-fix`
 - **Nothing in `check` fails when a bake artifact is missing.** `geo.bin.gz` was absent for a day (~1.2 s of cold boot) while five handoffs said "whoever is next should re-bake". `daemon --health` warns; no gate does.
 
