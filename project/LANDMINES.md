@@ -1659,29 +1659,45 @@ commit in the history under someone else's name. **Commit with an explicit
 pathspec, always, and never let a pathspec widen to a directory another lane is
 editing.**
 
-## `daemon.mts --wait` exits 0 when it gives up, so "the box went quiet" and "I stopped waiting" look identical
+## Piping `daemon.mts --wait` throws its exit code away, and that is how a perf number gets taken on a busy box
 
-**2026-08-28.** A lane waited for a quiet tree, read exit code 0, and reported
-that the daemon had gone idle. It had not: the wait **gave up after 1800 s with
-four jobs still running**, and the box was 4/4 busy at load 9.24. The lane then
-took a perf number on a saturated machine and had to correct itself.
+**This entry replaced a wrong one, and the correction is the useful part.** It
+used to say *"`--wait` exits 0 when it gives up"*. **That is false and was false
+when it was written.** `daemon.mts` ends its wait with
+`else { console.log(\`[daemon] gave up after ${secs} s — ${r.why}\`); process.exit(1); }`,
+and has since `42c4dce` on 2026-08-27 — about nineteen hours *before* the entry
+claiming otherwise was committed. The tool was right; the entry blamed it.
 
-`--wait` prints *why* it is still waiting when it gives up — that part works, and
-it is the only signal. **The exit code does not distinguish the two outcomes**,
-so any script or agent branching on `&&` after a `--wait` proceeds as though the
-condition held. Read the printed reason, not the status.
+**What actually happens** is that the exit code is real and then discarded by the
+caller. Every invocation in this repo's transcripts looks like
 
-This matters most for exactly the tools that need it: `perf`, `gameplay`,
-`bootprof` and `bench` take the exclusive lease and are meaningless under
-contention. **A perf number taken after a `--wait` that timed out is void**, and
-nothing in the pipeline will say so — `perf.mts` stamps `RULER_VALID` and
-`VERDICT:`, but a tool that prints no verdict line at all (`perfmenurepro` is
-one) gives you a number with no way to tell. On a busy box that probe reported
-**938 ms and 14 hitches** which were pure contention; alone on a quiet tree it is
-0 and max 14 ms.
+    node src/tools/daemon.mts --wait quiet --for 900 2>&1 | tail -3 && node src/tools/perf.mts …
 
-**Until `--wait` gets a distinct exit code, treat the printed reason as the
-result** — and prefer a tool that stamps its own verdict over one that does not.
+and **a pipeline's exit status is the status of its *last* command**, which is
+`tail`, which succeeds. So `&&` runs, the perf number is taken on a 4/4-busy box
+at load 9.24, and nothing anywhere says so. The give-up line scrolls past in the
+`tail` output and reads like progress.
+
+**Do not pipe a wait you are branching on.** Either let it exit into the `&&`
+directly, or capture it and test:
+
+    node src/tools/daemon.mts --wait quiet --for 900 || { echo "still busy"; exit 1; }
+
+`set -o pipefail` also fixes it, and is not on by default in these shells.
+
+**Why it matters where it matters:** `perf`, `gameplay`, `bootprof` and `bench`
+take the exclusive lease and are meaningless under contention. **A perf number
+taken after a wait that timed out is void**, and only some tools will tell you —
+`perf.mts` stamps `RULER_VALID` and `VERDICT:`, but a probe that prints no
+verdict line at all gives you a number with no way to tell. `perfmenurepro` read
+**938 ms and 14 hitches** on a busy box and **0, max 14 ms** alone on a quiet
+tree.
+
+**The separate, real complaint about `--wait` itself**, from `perf-r4`: chained
+with `&&` it will sit for the *full* N while other lanes shoot, because the
+condition it waits for is one those lanes keep breaking. That is a latency
+problem, not a correctness one, and it is why a long `--for` on a shared box is
+often worse than queueing behind the scheduler.
 
 
 ## An explicit pathspec commits the FILE, not your hunks — which is why shared documents still get swept
