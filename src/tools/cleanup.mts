@@ -113,7 +113,18 @@ const isOurs = (r: ProcRow) => OURS.test(r.args) || OURS.test(childOf(r.pid)?.ar
  * behind, since `Harness.ensureServer` spawns it as a plain (non-detached)
  * child and nothing reaps it when the daemon dies.
  */
-const isViteServer = (a: string) => /npm exec vite/.test(a) || /node_modules\/\.bin\/vite/.test(a);
+const isViteServer = (a: string) =>
+  /npm exec vite/.test(a)
+  || /node_modules\/\.bin\/vite/.test(a)
+  // The third shape, and the one that leaked 21 servers holding 558 MB for
+  // three and a half days while this tool printed "clean". `.bin/vite` is a
+  // SYMLINK; node resolves it before writing argv, so the process this repo
+  // actually spawns reads
+  //   node .../node_modules/.bin/../vite/bin/vite.js --port NNNNN
+  // and `.bin/` is followed by `..`, not by `vite`. Neither older pattern can
+  // match it. Match the real entry point instead of the launcher path -- that
+  // is the one string node cannot rewrite.
+  || /vite\/bin\/vite\.js/.test(a);
 
 /** `ps` etime is `[[dd-]hh:]mm:ss`; anything over a day broke the naive split. */
 function etimeHours(etime: string): number {
