@@ -1,189 +1,136 @@
-# To nine — polish 9/10, playable 9/10
+# To nine — the build list
 
-Status: PROPOSED (2026-08-29, opus) — **nothing locked.** One plan, five phases,
-an exit criterion per phase and a rule that ends it. Read §0 before anything.
+Status: PROPOSED (2026-08-29, opus) — **62 named tasks in 14 lanes, all
+buildable in parallel, one day of wall-clock.** Every task names the file, the
+mechanism and what makes it done. Nothing here says "iterate until it looks
+better".
 
-Today's honest scores, from an audit that looked at frames rather than at
-`STATUS.md`: **polish 6.5, playable 7.** The blind critic identifies our frame
-as not-FFXV **19 times in 20**, 0 fooled. This plan is the argument for how that
-becomes 9 and 9, what it costs, and what it would mean.
+**Lanes collide nowhere.** Directory ownership is stated per lane; run all 14 at
+once if the machine allows, or in waves of 4–5. **No lane may add a task to this
+file** — leftovers go to `project/TASKS.md`, traps to `project/LANDMINES.md`,
+decisions to `HUMAN_REVIEW.md`. This plan archives when the lanes report.
 
----
-
-## §0 — The rules this plan is built under, because the last one nearly did not end
-
-The standing backlog was archived yesterday after it turned self-regenerating:
-every finishing lane handed its leftovers into a §WS-13 that kept the plan alive
-to staff another wave. So:
-
-1. **No section may grow.** A lane's leftovers go to `project/TASKS.md` (the
-   tracker), a reusable trap goes to `project/LANDMINES.md`, a decision goes to
-   `HUMAN_REVIEW.md`. **This plan ends when its five phases have exit criteria
-   met or explicitly waived by the human.**
-2. **A measured negative closes an item.** Six of the last plan's premises were
-   false and eight more were stale; expect the same rate here and treat killing
-   an item with a number as a win, not a failure.
-3. **Every phase's exit is an instrument, not an opinion.** Where the instrument
-   does not exist, building it is the first task of the phase.
-4. **Nothing in here is believed until it is looked at.** The most expensive
-   failures in this repo were plausible write-ups of things nobody photographed.
+Round 17 is in flight. **When it lands, its ranked tells re-order lanes A–F.**
+It does not add tasks; it says which of these to do first.
 
 ---
 
-## §1 — What 9/10 actually means, defined before it is chased
+## A · Head — `src/characters/rig/Face.ts`, `Head.ts`
 
-Vague targets are why "polish" has never moved as a number. So:
+1. **`facewind`'s negative signed volume on `Noctis_body`, `_hair`, `_outfit` and both eye meshes.** Unchecked across two passes, both of which estimated ten minutes. Same class as the inverted skull grid that beat five passes. **Do this before anything else in the lane.** Done: every mesh reads outward, or the negative is explained.
+2. **Re-author `paintFace`'s brushes and AO from zero.** Every brush was authored while the face was backface-culled — tuned against the inside of a skull. Pass 6 damped them 30–45% and the frame still shows a fifty-year-old's brow shelf and marionette arcs. **Damping is exhausted; re-derive against the visible surface.** Done: `facecheck` pixel rows no longer VOID; `noctis_front` at 0.55 m has no painted crease that geometry does not justify.
+3. **The dark diagonal across the shadow half of the mid-face** — the eye-socket brush's inferior wall at a third of its former size. Another 20–25% is available before the aperture closes. Done: gone at 0.55 m, `mouthEdge` unmoved.
+4. **The eyes are asymmetric in a bald front framing** — one reads narrower at the same `eyeOpen`. Never investigated. Done: cause named, symmetric.
+5. **`euEu` 162.5 mm against a real 152.** Lower face is heavy for a slim 20-year-old. Done: inside 155.
 
-**Polish 9/10 = the blind critic's hesitation rate reaches 30%** on a 20-pair
-round, with **at least two frames it calls wrong**. Today: 5% hesitation, 0
-fooled. `compare.mts` already runs this and its own header says the hesitation
-rate moves before the win rate does — it is the leading indicator and it is the
-score.
+## B · Hair and costume — `src/characters/` (not `rig/`)
 
-**Playable 9/10 = a first-time player, given no instruction, plays for 30
-minutes and reports fewer than three things that feel broken.** Today that
-number is unknown and the one sample we have is bad: a human drove for a minute
-and found the steering mirrored. **The instrument here does not exist and Phase 1
-builds it.**
+6. **Prompto's hair is near-white; he is blond.** **Ignis's is near-white; he is ash-brown.** Two constants. Done: `hero_full` reads four distinguishable people.
+7. **Hair is flat opaque ribbons at 0.55 m.** ~870 roots × 3 locks, 4–5-sided tubes 1.3–2 mm, no alpha. **A 1.5 mm lock at 4 m in a 1600 px 50° frame is 0.7 px — sub-pixel opaque geometry cannot be antialiased and can only shimmer.** Decide the representation (alpha cards vs fewer, wider locks) from that number, then build it. Done: no shimmer under `--cold` A/B at 4 m.
+8. **Hair textures are `mips: 0` on all four heads** — 128 px, anisotropy 16, no mip chain, 9.01 texels/px. Done: mip chain present, verified by `leaftexel`.
+9. **Ignis is one black column** — no hem line, no lapel thickness, no collar break. Done: three separations visible at 4 m.
+10. **The sleeve cut** — real work on `piece('sleeve')`. Three attempts *as a surface* are a recorded negative; it needs geometry.
+11. **Noctis's skull print** is vertex-coloured on a 42×76 shirt sweep and smears at 0.95 m. `printWindow`/`printSteps`/`printSeg` exist for exactly this.
+12. **A triangular hole at Noctis's collar**, skin through it.
+13. **`_probe/hands.mts`'s `_palm*` framings are inside the geometry** — nothing has ever looked at a palm.
 
-**Both are hard and one may not be reachable.** 30% hesitation against shipped
-console art, in a browser, with no binary assets, is a serious bar. Phase 5 is
-the honest re-scoring that says whether it was met, missed, or was the wrong
-target.
+## C · Aprons and props — `src/world/props/Wear.ts`, `PoiKits.ts`
 
----
+14. **`gradePad` writes world-planar XZ UVs** (`uv.push(ct * s, st * s)`) so a batter's texture varies with **radius, not height** — on the cliff branch the radius moves 1.6 m while `y` drops 26: a **16:1 vertical stretch**. This is the "smeared striations / pasted on" two independent reviews reported. Done: V follows height; a 26 m wall reads as masonry courses.
+15. **Fociaugh's cave mouth is buried under a ~40 m untextured apron deck**, filling every approach frame from four vantages. A talus-ramp design that is real collision floor is written in `e5557e5` and cannot land until the apron goes.
+16. **Balouve's sill is 15.1 m below the eye at 8 m, 36.7 m at 20 m** — worse than Fociaugh, never reported. Distinct from its 7.09 m apron hang.
+17. **The Tomb of the Mystic's pediment hovers on column stubs.** `_tomb` snaps ~16% of columns deliberately; determine whether this is that or a break. Seen twice.
 
-## §2 — Where the 3.5 points of polish actually are
+## D · Sky and clouds — `src/world/sky/`
 
-From the audit, scored per dimension. **The gap is not evenly spread and this is
-the single most important table in the plan:**
+18. **Cloud internal dynamic range.** Crown to self-shadowed base is under a stop where a cumulus wants body ~0.8 and crown 3–4. Levers: `cloudDensity`'s remap steepness and `uCloudSunGain` (`Sky.ts:1036`) against `uCloudMaxRad` 9.5. **Not `uCloudTap`, not `MARCH_SCALE`, not exposure — three recorded negatives.** Done: crown/base ≥ 2 stops, interior structure visible at 4×.
+19. **`zone_vannath`'s foreground sits at luma 13/255** under a cloud shadow. `shadowScale` 3.5 maps a 9.45 km field onto a 2.7 km tile → ~640 m patches under 2.25 km clouds. **Do not take `shadowScale` to 1.0 alone** (one patch in the visible world) and **do not deepen it** — 26% of sunlit against a physical 11%. The tile size moves with it. Done: foreground ≥ 30/255, patch size within 2× of its clouds.
+20. **`hi(R−B)` −20.7 against the reference's −13.5.** **Do not chase with a tint.** Build a sky-matched reference slice first — our vistas are 40–60% sky against the plates' 20–25%, so the current comparison is invalid. Done: the slice exists and the number is re-derived on it.
 
-| dimension | now | ceiling reachable | gap |
-|---|---|---|---|
-| Technical | 9 | 9 | — |
-| UI | 8 | 9 | 1 |
-| Environment | 7.5 | 9 | 1.5 |
-| **Characters** | **4** | 8 | **4** |
+## E · Vegetation and alpha — `src/world/veg/`
 
-**Characters are the whole problem.** Every judged round names them, the head
-alone was costed at 3.0 → 4.0 by the critic, and six passes on it ended short of
-the bar. An environment-only push cannot reach 9 because a party stands in the
-middle of the hero shots.
+21. **`coverageAA` is called only from `VegMaterial`** (`:100`, `:266`). Fences, foliage decals, town alpha-cut props, `hh_town_chainlink` (alphaTest 0.14, 1.21 texels/px at 10.6 m) and every character hair card are still binary against a multisampled target. **One line each.**
+22. **The impostor ring at 210–280 m is the 1:1 texel band** (0.74–1.13 texels/px) and holds the treeline's residual speckle. `leaftexel.mts` prints it per shot.
+23. **Nothing with a silhouette occupies 15–97 m in `hero_full`** — `bush_sage_1_leaf` reaches 15.1 m, the next alpha card is at 97.5 m. **The occupant already exists, instanced and in frame:** pull `scrub_*_card`'s seating range inward. No new asset. Price the draws with `vegcensus` first.
+24. **Bush stand-card vs its own geometry-ring albedo**, via `bakeCanopyCard`. Extend `vegalbedo.mts` to bake the card.
 
----
+## F · Occlusion — `src/world/terrain/`, `src/world/props/Rocks.ts`
 
-## Phase 1 — Find out what is actually broken (2 days)
+25. **`aoBoost` reaches grass and nothing else** (`GrassField.ts:465/485/492`) — trees and bushes carry **no base occlusion at all**.
+26. **`Rocks.ts` already writes a vertex colour from `up`/`cav`** that a height-above-own-base factor would ride for free.
+27. **Terrain's 1–64 m occlusion band is empty** — detail maps own under a metre, the horizon bake is swept at a 64 m texel, nothing occludes at the scale of a swale.
 
-**Nothing here is a fix.** Two instruments and a judged round, because every
-number this plan steers by is either missing or a day stale.
+## G · Memory — `src/engine/`
 
-- **A playtest protocol, and the first three sessions.** Written steps, a fixed
-  30 minutes, and *the human plays* — the steering bug proved that a person
-  finds in one minute what 1,348 commits of automation cannot. Output is a
-  ranked list of what felt broken, undiagnosed.
-- **Judge round 17** (in flight) — the ranked list of *what identifies us*, in
-  fix-payment order. **Phases 2 and 3 are re-ordered by its answer**, and if it
-  contradicts §2's table, the table is wrong and the judge is right.
-- **An input audit.** The steering was mirrored in a frame where `AutoDrive` was
-  self-consistent, so every instrument agreed. Walk every binding in
-  `ControlsScreen` against what the code does. `KeyT` is already known to be
-  bound twice with the wrong one documented.
+28. **181 MB of render targets across 33.** `PostFX`. The largest single lever left. Done: under 120 MB with the corpus unchanged at floor.
+29. **`AttrPack` does not reach the 116 POI sites that stream in during play.**
+30. **`skinWeight` is 20.4 MB of `4x Float32`; glTF ships `Uint8` everywhere.** ~15 MB.
+31. **`lestallum` (1.34 M verts) and `galdin_quay` (1.28 M) are 2.6 M of 3.70 M resident.** Nobody has ever looked at a 1.3 M-vertex town. Done: a census of what those vertices are, and whatever is unreachable removed.
 
-**Exit:** three playtest reports, round 17's ranked tells, and an input audit
-with every binding verified or fixed.
+**Exit for the lane: tab under 800 MB** (`bootprof --mem --play --prod`), from 1 246 MB.
 
-## Phase 2 — Characters, because they are four points of the gap (2 weeks)
+## H · First load — `src/engine/TexBake.ts`, `GeoBake.ts`, `src/tools/bake.mts`
 
-The largest, hardest, least optional phase. `src/characters/**`.
+32. **85.5 MB on the wire, 5 requests**: `terrain.bin.gz` 33.1, `tex.bin.gz` 31.0, `texc.bin.gz` 20.5. 0.27 s local, **~14 s on 50 Mbit before `Game.init()` starts.** Ship a low-resolution first tier and stream the rest, or defer `texc` past `ready`. Done: **under 25 MB to first frame**, measured by `coldload --prod`.
 
-- **The head, seventh pass, and this time from the right end.** Six passes fixed
-  geometry; the last one found the actual state: **every painted brush and
-  painted AO on that head was authored while the face was culled** — tuned
-  against the inside of a skull. Re-author rather than damp. The winding fix
-  means the sculpt underneath is finally visible and correct.
-- **Hair.** It reads as flat ribbons at 0.55 m and covers the far eye. The pixel
-  arithmetic was never acted on: a 1.5 mm lock at 4 m is **0.7 px** — sub-pixel
-  opaque geometry can only shimmer, and no amount of shading fixes it. Decide
-  the representation before modelling.
-- **Silhouette and costume variety.** In `hero_full` two of four have near-white
-  hair (Prompto is blond, Ignis ash-brown), and all four read as dark
-  bodysuits. Ignis is untouched — one black column, no hem, no lapel, no collar
-  break. This is cheap next to the head and buys a lot.
-- **`facewind`'s negative signed volume on the body, outfit and both eyes is
-  still unchecked.** Two passes estimated ten minutes and neither spent them.
-  **Do this first** — the same class of bug beat five passes.
+## I · Idle CPU — `src/engine/postfx/`
 
-**Exit:** a blind round in which the *character* shots hesitate at least once,
-and `facecheck` green with the pixel rows no longer VOID.
+33. **`post.render` is 74–77% of a 5.9 ms frame** and is the only lever left on a 60 Hz panel — the 60 fps cap helped 120 Hz only. Profile the chain per pass and cut or gate the most expensive. Done: **idle under 30% of a core at 60 Hz** (`idlecpu --q high --dpr 1.5`), from ~100%.
 
-## Phase 3 — Environment, the last 1.5 points (1 week)
+## J · Boot — `src/world/props/`, `src/world/veg/`
 
-Ordered by round 17's tells, not by this list. Provisionally:
+34. **`Props.landmarks` ~46 ms is `PartBuilder`-shaped and is a five-line `bakedParts` addition.** Cheapest open boot item in the repo.
+35. **`Vegetation.bushes.build` ~120 ms** — split geometry cost from instanced plumbing before caching.
+36. **`Props.rocks` ~78 ms** — `Rocks` is a tile streamer with no `root`; needs a different cache entry shape.
+37. **Caching `Vegetation.prime`'s *result* (610 ms).** **Not** deleting the prime — that is a recorded negative (`hero_full` moves 13.359/255). The streamer's tile bookkeeping must restore with the matrices or the world desyncs on the first `update()`.
 
-- **`gradePad`'s world-planar XZ UVs** — a 16:1 vertical stretch on every apron
-  batter, which two independent reviews reported as "smeared / pasted on".
-  Biggest single art defect with a known cause.
-- **Cloud internal dynamic range** — crown to self-shadowed base is under a
-  stop where a cumulus wants 3–4. Named the top of the next list by the lane
-  that owned it. Not exposure, not `uCloudTap`, not `MARCH_SCALE` — all
-  recorded negatives.
-- **`zone_vannath`'s foreground at luma 13/255** under a cloud shadow 3.5×
-  smaller than its own clouds.
-- **The impostor ring at 210–280 m** — the 1:1 texel band, where the treeline's
-  residual aliasing lives.
-- **`coverageAA` reaches only `VegMaterial`** — fences, decals, town alpha props
-  and every hair card are still binary. One line each.
+## K · Combat length — `src/game/encounters/`, `src/combat/`
 
-**Exit:** round 18's landscape pairs hesitate at ≥20%.
+38. **A field encounter lasts 6–7 s against FFXV's 30–90**, and **the level curve is spent** — 1.0 is its ceiling, and 30 s needs ~21 000 hp of den against a top species of 22 000. The two untouched, never-measured levers:
+39. **Pack size** — `WildTerritories.count`, `Pack.maxEngaged`, and `spawnRoamer` capping at 3.
+40. **Warp-strike throughput** — 26–47% of a den's damage from 3–12 casts.
+41. **`RpgSystem.enemyScaling` is documented as reading the party's level and does not** (`:721` is `nightScaling(hour, isDaemon)`), while `EncounterDirector.activate` feeds `levelBonus` into every authored territory.
+42. Done for the lane: **`fightshape` reports a median den at 18–30 s** with Noctis paying ≥15% of his HP, `combatloop` still 31/31, both perf gates certifying.
 
-## Phase 4 — Make it a demo a stranger can run (1 week)
+## L · Input and controls — `src/ui/screens/ControlsScreen.ts`, all input sites
 
-Polish and playability both die at the door if the page will not load.
+43. **Audit every binding in `ControlsScreen` against what the code does.** The car's steering was mirrored and shipped because `AutoDrive` was self-consistent in the same flipped frame — every instrument agreed and only a human disagreed.
+44. **`KeyT` is bound twice** — `CombatSystem.ts:1519` `drawEnergy()` and `RegaliaSystem.ts:60` Type-D — and `ControlsScreen.ts:57` documents only Type-D.
+45. **A gate that drives the car and asserts the sign of a turn.** `regaliadrive` asserts it steers *at all*, never which way; all five posed regalia shots are a parked car.
+46. Done: every documented binding does what it says, and a gate covers direction.
 
-- **85.5 MB on the wire, ~14 s on 50 Mbit** before `Game.init()` starts. Stream
-  the bake or ship a low-resolution first tier.
-- **1.5 GB in the tab.** The named lever is **181 MB of render targets across
-  33**; `AttrPack` not reaching the 116 streamed POI sites is next.
-- **~100% of a core while idle on a 60 Hz panel.** The 60 fps cap helped 120 Hz
-  only. `post.render` is 74–77% of the frame and is the only remaining lever.
-- **A 1.3 M-vertex town nobody has ever looked at** — `lestallum` and
-  `galdin_quay` are 2.6 M of 3.7 M resident vertices.
+## M · Water — `src/world/water/`, `src/world/terrain/Field.ts`
 
-**Exit:** first visit under 25 MB, tab under 800 MB, idle under 30% of a core on
-60 Hz — measured by `coldload`, `bootprof --mem` and `idlecpu`, all of which
-exist.
+47. **The tarn surface reads as dense white foam mottle across the whole body** at `maidenwater` — *after* the foam-band fix (45.7% → 14.9%), so not that item.
+48. **The shallow river reads as a transparent grey sheet over gravel.** Two lanes, two levers, both on the table: `RiverMaterial` and depth, versus **conditioning the channel in `Field.ts`** — *"a reach on a flat pan has no banks to have water between"*.
+49. **The discharge proxy is zero on 85.8% of stations**, so most of the network is the minimum channel. Lowering the 0.88 pivot retunes every river in the world — price it before taking it.
+50. **Malacchi Pond has no pond** — nearest water 133.5 m away, 28 m below.
+51. **Boulders under Crestholm outside `Ecology.rockScatter`** — ~23 instances deeper than 1.2 m.
 
-## Phase 5 — Fights that last, and the honest re-score (1 week)
+## N · Gates and instruments — `src/tools/`
 
-- **A field encounter lasts 6–7 s against FFXV's 30–90.** The level curve is
-  **spent** — 1.0 is its ceiling, and 30 s needs ~21 000 hp of den against a top
-  species of 22 000. The two untouched, never-measured levers are **pack size**
-  (`WildTerritories.count`, `Pack.maxEngaged`, `spawnRoamer` caps at 3) and
-  **warp-strike throughput** (26–47% of a den's damage from 3–12 casts).
-- **Three more playtest sessions** against Phase 1's protocol, same shape, so the
-  before/after is real.
-- **Judge round 19**, and the re-score against §1's definitions.
+52. **Nothing in `check` fails when a bake artifact is missing.** `geo.bin.gz` was absent for a day (~1.2 s of cold boot) while five handoffs said "whoever is next should re-bake". `daemon --health` warns; no gate does.
+53. **`assertAttributeContract` is not wired into a generator** — the last unwired row; the other three asserts are wired.
+54. **Grep for unguarded `normalize(` and `pow(` with a varying base** across the remaining shaders. Both NaN bugs this month were an operation undefined on its input reaching the frame through a path that looked safe.
+55. **`project/noise-floors.json` covers 18 shots of 142**; the rest diff against a placeholder 2.0, and the recorded floors are *cold* while the daemon reuses pages, so a warm diff runs 4–6× them. Calibrate the 30 judged shots.
+56. **`Wear.ts:873` keys its program cache on `tex.uuid`** for GLSL that is byte-identical every time. 1–2 programs, free.
+57. **22 dedupable programs** in `characters/rig/` (`char2-eye<N>`, eye `gloss` is a GLSL literal).
+58. **Water's reflection pass spends ~40 draws on shots with no visible water** — `Water._visible` is a bbox test.
+59. **The two menu nits the scrim blur revealed** — the Armiger gauge caption is dark-on-dark and wraps to *"on a / pad."*; the two-column screens leave the bottom ~35% empty.
+60. **Prune `project/archive/handoff/`** — 90 files, nothing prunes it.
 
-**Exit:** the plan's own scoring, published, whether or not it reached 9.
+## O · The playtest — the human, not a lane
+
+61. **Three 30-minute sessions, written steps, no instruction given.** The output is a ranked list of what felt broken, undiagnosed. **This is the only instrument that has ever found an input bug**, and it found one in about a minute.
+62. **Round 18 after lanes A–F land**, same 20 pairs, same method — the before/after that says whether any of this moved the grade.
 
 ---
-
-## What this costs, and the part worth arguing with
-
-**Five to six weeks of lane time**, of which Phase 2 is a third and is the one
-that could fail — six passes have already ended short. If Phase 2 stalls again,
-**polish caps at about 7.5** no matter what Phases 3 and 4 do, because the party
-is in the hero shots. That is the plan's single biggest risk and it should be
-said before anyone starts, not after.
-
-The cheapest real win in the whole document is **Phase 1**, and it is two days.
-It may also reorder everything after it.
 
 ## Definition of done
 
-- [ ] Every phase's exit criterion is met, or **explicitly waived by the human**
-      with the reason recorded here.
-- [ ] The re-score in Phase 5 is published with its evidence, including if it
-      says 7.
-- [ ] **This plan is archived when Phase 5 reports.** Leftovers go to
-      `project/TASKS.md`. **No section may be added to this file.**
+- [ ] All 62 tasks landed or closed with a measured negative.
+- [ ] `check` green, `nanscan` 0/142, both perf gates certifying.
+- [ ] Tab under 800 MB, first load under 25 MB, idle under 30% of a core.
+- [ ] A den lasts 18–30 s.
+- [ ] Round 18 run and published, whatever it says.
+- [ ] **This file is archived when the lanes report. No section may be added to it.**
