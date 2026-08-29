@@ -532,8 +532,21 @@ export class RegaliaSystem {
     let th = 0, br = 0, st = 0;
     if (inp.key('KeyW') || inp.key('ArrowUp')) th = 1;
     if (inp.key('KeyS') || inp.key('ArrowDown')) br = 1;
-    if (inp.key('KeyD') || inp.key('ArrowRight')) st += 1;
-    if (inp.key('KeyA') || inp.key('ArrowLeft')) st -= 1;
+    // Steering is NEGATIVE-is-right, and that is not a typo. `forward()` is
+    // `(sin h, 0, cos h)`, so at h = 0 the car faces +Z; facing +Z with +Y up in
+    // a right-handed frame the driver's right hand points at -X, and increasing
+    // `heading` swings forward toward +X — the driver's LEFT. The low-speed
+    // model settles it with no geometry at all: `wKin = vl * tan(delta) / L`, so
+    // a positive steer raises `heading`, which turns left.
+    //
+    // Everything else in the car already agrees with that frame and is correct:
+    // `AutoDrive` aims along `right()` (which is really the car's left) and
+    // steers with the same sign, which is why the AI drives the highway
+    // perfectly and only a human at the wheel ever noticed. The bug was here,
+    // in the two lines that turn a keypress into a sign, and it shipped because
+    // no gate drives the car — all five posed regalia shots are a parked car.
+    if (inp.key('KeyD') || inp.key('ArrowRight')) st -= 1;
+    if (inp.key('KeyA') || inp.key('ArrowLeft')) st += 1;
 
     const gp = inp.gamepad;
     if (gp) {
@@ -541,8 +554,9 @@ export class RegaliaSystem {
       // analogue triggers: RT throttle, LT brake
       if (bt[7]) th = Math.max(th, bt[7].value != null ? bt[7].value : (bt[7].pressed ? 1 : 0));
       if (bt[6]) br = Math.max(br, bt[6].value != null ? bt[6].value : (bt[6].pressed ? 1 : 0));
+      // same frame as the keys above: stick right is negative steer
       const ax = gp.axes[0] || 0;
-      if (Math.abs(ax) > 0.12) st = ax;
+      if (Math.abs(ax) > 0.12) st = -ax;
     }
 
     // S is brake while rolling forward and reverse once stopped — one pedal,
