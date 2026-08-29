@@ -8,4 +8,6 @@ Keep this short. Delete a line once it is decided.
 - **Idle CPU is unfixed on a 60 Hz panel** — the 60 cap only helps 120 Hz. Next lever is `post.render`, 74–77% of the frame.
 - **Is this ever served over a network?** First visit is 85.5 MB, ~14 s on 50 Mbit, invisible locally. Decides whether streaming the bake is worth building.
 - **The Meteor needs an art round to read as a meteorite.** Both engineering levers are measured negatives. Declined once.
-- **`gradePad`'s 16:1 UV stretch** is the "smeared / pasted on" two reviews reported. Touches every apron in the world.
+- **`gradePad`'s 16:1 UV stretch** is the "smeared / pasted on" two reviews reported. Touches every apron in the world — who pays for that blast radius?
+- **The corduroy: fund it or close it?** A world-wide heightfield change across five generators, and **no instrument in the repo measures directional statistics**. Priced as not worth it for one establishing shot.
+- **`crestholm_inlet` — may a lay-by become a clearing?** The seat that lands is found and 45 m away; Ostium Gorge is a parking bay. Content call, nothing left to measure.
