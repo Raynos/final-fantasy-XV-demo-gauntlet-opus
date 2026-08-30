@@ -1384,10 +1384,27 @@ Two further details generalise.
   nothing observable and the first version of the probe read that as "no
   collision". Five presses, five verbs, one call each.
 
-The fix is not a bigger exemption. It is `SHARED_ON_PURPOSE`, a per-key
-allowlist where each entry carries the reason it is allowed — **a category can
-absorb a new defect silently; a named key cannot.** Replayed against the tree
-before the rebind: old gate green, new gate flags KeyV, KeyB, KeyT.
+**How it ended, which is the part worth copying.** The first fix was
+`SHARED_ON_PURPOSE`, a per-key allowlist where each entry carried the reason it
+was allowed — right while the mode did not exist, because a category can absorb
+a new defect silently and a named key cannot. Then `CombatSystem.update` got
+the one line that actually implements the mode (`da4530c`, skip `_readInput`
+while `Regalia.isDriving`), and at that point the allowlist became the same act
+of faith with more names on it. So the modal exemption is back — **and it is
+now earned by a measurement that runs inside the same gate.** `uxcheck` section
+7.5 drives the car, presses the shared keys, asserts no combat verb answers,
+then gets out and asserts every one of them does; section 8's exemption is
+documented as licensed by that pair, so if 7.5 goes red the exemption is void.
+
+    PASS  combat does not read the keyboard while driving   -- 0 calls
+    PASS  and every one of those verbs still fires on foot  -- 5/5
+
+**The second assertion is the one that earns its keep, and it generalises to
+every mode guard anyone writes here.** A guard is one `&&` away from switching
+the system off altogether, and "no verb fired in the guarded state" is exactly
+what the first assertion wants to see: the widest possible guard scores a
+perfect green on it. Any check of the form "X is suppressed in state S" needs
+its partner, "and X still happens outside S", or it is not a check.
 
 ### And the same shape in `regaliadrive`: `Math.abs` is an exemption too
 
