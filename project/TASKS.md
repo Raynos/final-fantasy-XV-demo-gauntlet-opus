@@ -13,9 +13,6 @@ plan's negatives table is the list of things already decided against.
 
 ## Live defects nobody had recorded
 
-- **Five menu screens sit 29–54% empty below their last line of text** — `elemancy` 54%, `inventory` 49%, `system` 40%, `photo` 38%, `quests` 35%, `armiger` 29%, measured by `src/tools/_probe/menufill.mts` (lowest ink in the 150–812 px reading band, per screen; it counts text and glyphs only, because plates and dividers run the full band height and an earlier version reported 0–6% for all sixteen). **Lane 12 candidate** — layout is not lane 10's, and if a first-time player names one in R2 the number is already attached.
-- **`ui-shoot.mts` has no `--jpeg` flag.** It prints `unknown scene --jpeg`, treats it as a scene name, and writes PNGs regardless — while the plan's own command lines offer it. A trap for any lane following a brief literally; either add the flag or stop suggesting it.
-
 - **Nothing in `check` fails when a bake artifact is missing.** `geo.bin.gz` was absent for a day (~1.2 s of cold boot) while five handoffs said "whoever is next should re-bake". `daemon --health` warns; no gate does.
 
 ## Memory — 1.5 GB the tab, 2.5 GB the tree
