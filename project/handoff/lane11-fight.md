@@ -241,10 +241,60 @@ the field is `m.n` — fixed in `77fffdd`, but *after* this run. The medians abo
 are computed by hand from the five per-round lines, which were correct
 (`pack dead 5/5 ended: wiped`). The next run will print them itself.
 
+## `combatloop` is 34/35 and it is NOT this lane — but somebody must own it
+
+```
+FAIL   poise breaks into a stagger with a damage window   poise 5/71 never broke
+34/35 mechanics verified
+```
+
+**Reproduced twice, the second time on a tree `daemon.mts --wait idle` had just
+declared quiet, so it is not contention.** It was 35/35 at `4a588f4`, which is
+this lane's third commit, so it broke somewhere in the wave after that.
+
+It cannot be this lane's, and the mechanism is checkable rather than a guess:
+the row spawns its fixture with `spawnAhead('sabertusk')`, which is
+`enemies.spawn(key, { pos, heading })` — **no `pack`, no `level` override, no
+territory** — and then `pin()`s it. Every lever this lane moved needs one of
+those three: `LEVEL_LIFT`/`denLevel` only runs for a `WildTerritories` def,
+`PARTY_LIFT`/`enemyScaling` is only called from `EncounterDirector.activate`
+and `spawnRoamer`, `Pack._reslot` needs a pack, `INCOMING_SCALE` is damage *to*
+the player, and the roster counts are table data. The fixture is a level-14
+sabertusk being hit by Noctis with nothing in between.
+
+Poise reached **5 of 71** in the 400 frames the row allows — 93 % of the way —
+so whatever landed slowed the player's poise damage slightly, or slowed the
+swing cadence. **This lane did not have the turns to bisect it. It needs one.**
+
+## Second look, after the `_reslot` fix — **verified**, `tmp/shots/lane11b/`
+
+Honest answer: **the fix is real and visible, and it is one fix out of five.**
+
+- **Better.** `f-stagger` has two sabertusks cleanly separated with daylight
+  between them and their nameplates on separate rows; `f-kill` genuinely has
+  animals on three different bearings — the encirclement the change was for.
+- **Not fixed.** `f-midfight` still shows three sabertusks fused into one
+  animal's worth of ground, hindquarters passing through another's back, and
+  every animal inside a ~30° arc on one flank. Peak simultaneous visible
+  sabertusks is still 3–4 of 5.
+- The other four defects are **untouched**, and three of them are outside this
+  lane's files (see the residue below): the engage frame is still 90 % the
+  inside of a boulder; HUD nameplates still overprint each other
+  ("SABERTUSKSABERTUSK") and land on the party HP row and the minimap label,
+  with reward toasts drawn over the technique list; allies still stand inside
+  each other in three frames; the white radial ground bloom still washes out
+  midfight and kill.
+- New, seen this pass: the kill frame's motion blur is heavy enough that the
+  action is illegible; damage numbers persist over empty ground in the victory
+  frame; enemy corpses vanish instantly.
+
+The approach and after frames are genuinely beautiful — layered mesas, cloud
+shadow, a windmill silhouette, garulas at different depths. **The fight frames
+are not.** By `BRIEF.md`'s bar this is not done, and the remaining work is
+mostly not in `src/combat/` or `src/game/encounters/`.
+
 ## Not verified yet
 
-- the `b24d958` frames (`tmp/shots/lane11b/`) — second look-loop in flight
-- `combatloop` re-run on the now-quiet tree — see below
 - both perf gates — **not taken**; must be behind `daemon.mts --wait
   exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
