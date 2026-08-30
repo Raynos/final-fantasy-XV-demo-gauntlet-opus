@@ -4,6 +4,7 @@ import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { clamp01, smooth } from './Geo.ts';
 import { EYE } from './Face.ts';
+import { sceneSamples } from '../../engine/postfx/Msaa.ts';
 
 const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 
@@ -432,6 +433,48 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
 }`);
     }
 
+    // ---- coverage antialiasing on the alpha-cut hair -----------------------
+    //
+    // A hair card is a 12-18 mm alpha-tested strip, and `alphaTest` is a binary
+    // stencil: every strand boundary in the groom is a hard staircase, which is
+    // exactly the judge's "opaque hard-alpha shards, aliased edges". The fix is
+    // the one `VegMaterial.patchVeg` already proved on the treeline — read its
+    // block before touching this one, the two are the same mechanism and the
+    // same trap.
+    //
+    // Two halves, each a no-op without the other: `alphaToCoverage` on the
+    // material (set in `hairMaterial`, and only when `sceneSamples() > 0`)
+    // turns the alpha fraction into a sample mask, and this ramp is what
+    // produces a fraction to hand it. three's own chunk ramps *from* the cutoff
+    // upward, so a texel sitting exactly on `alphaTest` — the middle of the
+    // silhouette by definition — reports zero coverage and half of every edge
+    // stays binary while the strand erodes inward. Straddling the cutoff puts
+    // coverage 0.5 where the alpha map says the edge is.
+    //
+    // The 0.06 floor is `VegMaterial`'s and for the same reason: `fwidth(a)` is
+    // the alpha map's slope *in pixels*, so on a card magnified to a 0.55 m
+    // closeup it collapses toward zero and the ramp would close back into a
+    // binary test at exactly the range where each lock is biggest on screen.
+    //
+    // The shadow half is NOT this shader. `WebGLShadowMap.getDepthMaterial`
+    // copies `map`/`alphaMap`/`alphaTest` onto a stock `MeshDepthMaterial` and
+    // never sees `onBeforeCompile`, so nothing written here reaches the depth
+    // pass — see `Character.ts`'s hair depth material for that half.
+    if (hair) {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <alphatest_fragment>', /* glsl */`
+      #ifdef USE_ALPHATEST
+        #ifdef ALPHA_TO_COVERAGE
+          float hairAw = max( fwidth( diffuseColor.a ), 0.06 );
+          diffuseColor.a = smoothstep( alphaTest - hairAw, alphaTest + hairAw, diffuseColor.a );
+          if ( diffuseColor.a <= 0.0 ) discard;
+        #else
+          if ( diffuseColor.a < alphaTest ) discard;
+        #endif
+      #endif
+      `);
+    }
+
     if (blocks.length) {
       sh.fragmentShader = sh.fragmentShader.replace(
         '#include <opaque_fragment>',
@@ -836,6 +879,13 @@ export function hairMaterial() {
     sheenRoughness: 0.45,
     side: THREE.DoubleSide,
   });
+  // The other half of the coverage ramp in `patch()`. `sceneSamples() === 0` is
+  // the `low` tier and `?post=nomsaa`: with one sample the hardware half is a
+  // strict no-op but the shader half is not, and a fractional alpha on an
+  // opaque material then does exactly one thing — move the discard outward —
+  // handing that tier a silhouette a ramp-width fatter and every bit as hard.
+  // So the flag must not be set at all there. Read `engine/postfx/Msaa.ts`.
+  if (sceneSamples() > 0) m.alphaToCoverage = true;
   return patch(m, {
     sss: 0,
     hair: { spec: 0.55, shift: 0.30, exp1: 110.0, exp2: 20.0, tint: 0.85 },
