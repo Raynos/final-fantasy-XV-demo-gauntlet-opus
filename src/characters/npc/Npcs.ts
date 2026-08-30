@@ -172,15 +172,45 @@ export interface RemoteNpc {
   castKey: keyof typeof NPC_CAST;
   /** POI id from `WorldMap`. */
   at: string;
-  /** metres east of the pin. */
+  /**
+   * A named anchor the POI's kit published, e.g. `stall0` or `edge3`.
+   *
+   * Without one a placement is measured off the POI **pin**, which for a
+   * `town` is the centre of a merged 140 m volume — the reason every named
+   * person outside Hammerhead stands in a car park. With one, the person
+   * stands on the actual pavement the kit laid, and {@link off} moves them
+   * around it in a frame that follows the town's yaw.
+   *
+   * A row with an anchor stays pending until `PoiKits` has *built* the site.
+   */
+  anchor?: string;
+  /**
+   * Offset from `anchor`, metres, in the frame **anchor -> plaza**:
+   * `[along, side]`, `+along` toward the middle of the square and `+side` to
+   * the left of that. Rotation-invariant, so it survives a re-seeded town.
+   */
+  off?: [number, number];
+  /** metres east of the pin (or of the anchor, if there is one). */
   dx?: number;
   /** metres south of the pin. */
   dz?: number;
-  /** heading in radians they face at rest. */
+  /** heading in radians they face at rest. Anchored rows default to the plaza. */
   face?: number;
   posture?: PostureName;
   task?: NpcTask;
   talkRadius?: number;
+  /** unique id, when one archetype is reused for several bodies. */
+  key?: string;
+  /** extra seed offset, so two copies of one archetype are not twins. */
+  seed?: number;
+  /**
+   * A patrol, as `[along, side]` pairs in the same frame as {@link off}.
+   * The body is spawned at the first node.
+   */
+  route?: [number, number][];
+  pause?: number[];
+  speed?: number;
+  sit?: boolean;
 }
 
 /**
@@ -215,18 +245,116 @@ export const REMOTE: RemoteNpc[] = [
   //
   // On the Galdin apron where the causeway starts, facing whoever parks.
   { castKey: 'dino', at: 'galdin_carpark', dx: 7, dz: 5, face: -1.0, posture: 'lean', task: 'inspect' },
+  // ...and see CITY below: Dino also keeps a bench on the quay itself, which
+  // is where his shop is. The car-park Dino is the one `main_ch2_galdin` sends
+  // you to and is left exactly where it was.
   // Waiting at the Lestallum parking, which is exactly how the game meets her.
   { castKey: 'iris', at: 'lestallum_lookout', dx: -7, dz: 4, face: 1.2, posture: 'pockets' },
   // At the paddock rail, arms folded, watching the birds.
   { castKey: 'wiz', at: 'wiz_chocobo', dx: 26, dz: 14, face: -1.9, posture: 'folded' },
   // On the plant apron with a clipboard, beside the sheds.
   { castKey: 'holly', at: 'exineris', dx: -8, dz: 12, face: -2.2, posture: 'folded', task: 'inspect' },
-  // His stall is at the far end of the same apron, 18 m round from Iris.
-  { castKey: 'randolph', at: 'lestallum_lookout', dx: 8, dz: -6, face: 2.4, posture: 'folded' },
+  // **Randolph has moved into the city.** He was at the lestallum PARKING POI
+  // because that was the only ground the placement pass could prove was open;
+  // `PoiKits` publishes the market square's anchors now, so the weaponsmith
+  // stands at his own forge on the square, which is where `side_gemstone_run`
+  // has always said he is (`talk('smith', 'randolph', ..., at('lestallum'))`).
+  // The row lives in CITY below.
 ];
 
 /** Metres at which a {@link REMOTE} placement is built. @see Npcs._place */
 const REMOTE_RANGE = 420;
+
+/**
+ * The people of Lestallum and Galdin Quay.
+ *
+ * Twenty-nine bodies, and only five of them are new archetypes. That ratio is
+ * the whole perf strategy: `archetype()` in `NpcRig.ts` caches geometry, the
+ * painted 1024² face **and** the eye material per cast key, so the eighteen
+ * ambient bodies below cost one skeleton and five draws each and nothing else.
+ * It is also why the ambient crowd deliberately re-uses `trucker`, `traveller`,
+ * `mechanic` and `kid` rather than getting a look apiece: twenty distinct
+ * looks would be twenty painted faces and twenty iris programs
+ * (`Materials.ts` bakes the iris hex as a GLSL literal), for people you see
+ * from fifteen metres.
+ *
+ * Everything is placed against a **kit anchor**, so nobody is standing in a
+ * field or inside a wall. Which anchors are usable was measured with
+ * `src/tools/probes/cityanchors.mts`: a block of Lestallum's street grid leans
+ * into its square and takes out `edge0`, `edge1`, `edge5` and `stall5`, and one
+ * block at Galdin takes out `edge4`. None of those five is used here.
+ *
+ * `off` is `[toward the plaza, to the left of that]`, so a vendor sits at the
+ * front of their own stall whatever yaw the town was seeded with.
+ */
+export const CITY: RemoteNpc[] = [
+  /* ---------------------------------------------------------- Lestallum -- */
+  // The three counters, each with the person whose name is on the shop row.
+  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [1.7, 1.6], posture: 'counter', talkRadius: 3.0 },
+  { castKey: 'surgate', at: 'lestallum', anchor: 'stall2', off: [1.6, -1.7], posture: 'folded', talkRadius: 3.0 },
+  { castKey: 'randolph', at: 'lestallum', anchor: 'stall4', off: [1.8, 1.5], posture: 'folded', talkRadius: 3.2 },
+  // Sania at last, on the square with a specimen jar and no interest in
+  // anybody's schedule.
+  { castKey: 'sania', at: 'lestallum', anchor: 'edge2', off: [2.4, -1.2], posture: 'counter', task: 'inspect', talkRadius: 3.0 },
+  // Two of the standing cast who already have scripts, so the square has
+  // people to talk to that are not shopkeepers.
+  { castKey: 'mechanic', at: 'lestallum', key: 'lest_mech', seed: 11, anchor: 'edge3', off: [1.8, 2.2], posture: 'wrench', task: 'wrench', talkRadius: 2.8 },
+  { castKey: 'kid', at: 'lestallum', key: 'lest_kid', seed: 12, anchor: 'edge4', off: [2.6, 1.4], talkRadius: 2.6 },
+  { castKey: 'traveller', at: 'lestallum', key: 'lest_trav', seed: 13, anchor: 'plaza', off: [0, 4.4], posture: 'pockets', talkRadius: 2.8 },
+
+  // Eleven ambient. Spread deliberately: half on the square, half out on the
+  // apron behind the stalls, so no single framing carries all of them.
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_a', seed: 21, anchor: 'stall1', off: [1.2, -2.0], posture: 'folded' },
+  { castKey: 'traveller', at: 'lestallum', key: 'lest_b', seed: 22, anchor: 'stall3', off: [1.4, 1.9], posture: 'pockets' },
+  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [-0.4, -2.6], posture: 'lean' },
+  { castKey: 'kid', at: 'lestallum', key: 'lest_d', seed: 24, anchor: 'plaza', off: [-3.2, -2.6] },
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_e', seed: 25, anchor: 'edge2', off: [-2.0, 3.0], posture: 'folded' },
+  // Four walkers. A square with nobody crossing it is a diorama.
+  {
+    castKey: 'traveller', at: 'lestallum', key: 'lest_w1', seed: 26, anchor: 'edge3',
+    route: [[1.0, 0], [7.5, 2.0], [12.0, -3.0], [5.0, -4.0]], pause: [1.6, 0.9, 2.2, 1.1], speed: 1.15,
+  },
+  {
+    castKey: 'trucker', at: 'lestallum', key: 'lest_w2', seed: 27, anchor: 'edge4',
+    route: [[1.5, 1.0], [8.0, -2.5], [13.0, 1.5]], pause: [1.0, 2.4, 1.4], speed: 1.05,
+  },
+  {
+    castKey: 'mechanic', at: 'lestallum', key: 'lest_w3', seed: 28, anchor: 'stall2',
+    route: [[2.0, 0], [4.5, 5.5], [1.0, 9.0]], pause: [2.0, 1.2, 2.6], speed: 1.25,
+  },
+  {
+    castKey: 'kid', at: 'lestallum', key: 'lest_w4', seed: 29, anchor: 'stall4',
+    route: [[2.2, 1.0], [6.0, -3.5], [2.5, -7.0]], pause: [0.8, 0.6, 1.2], speed: 1.8,
+  },
+  // Two out on the apron, well back, so the town has depth from the road in.
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_f', seed: 30, anchor: 'edge2', off: [-14.0, -6.0], posture: 'lean' },
+  { castKey: 'traveller', at: 'lestallum', key: 'lest_g', seed: 31, anchor: 'edge3', off: [-13.0, 5.0], posture: 'folded' },
+
+  /* -------------------------------------------------------- Galdin Quay -- */
+  { castKey: 'coctura', at: 'galdin_quay', anchor: 'stall0', off: [1.7, 1.6], posture: 'counter', talkRadius: 3.0 },
+  {
+    castKey: 'dino', at: 'galdin_quay', key: 'dino_bench', seed: 3, anchor: 'stall3',
+    off: [1.8, -1.5], posture: 'lean', task: 'inspect', talkRadius: 3.0,
+  },
+  // Navyth on the rail, folded over it, watching water he has been watching
+  // for eleven years. `side_legendary_fish` names him and he did not exist.
+  { castKey: 'navyth', at: 'galdin_quay', anchor: 'edge0', off: [-1.6, 0], posture: 'folded', talkRadius: 3.2 },
+  { castKey: 'traveller', at: 'galdin_quay', key: 'gald_trav', seed: 41, anchor: 'edge1', off: [2.2, -1.4], posture: 'pockets', talkRadius: 2.8 },
+
+  { castKey: 'trucker', at: 'galdin_quay', key: 'gald_a', seed: 42, anchor: 'stall1', off: [1.3, 1.8], posture: 'folded' },
+  { castKey: 'kid', at: 'galdin_quay', key: 'gald_b', seed: 43, anchor: 'stall2', off: [1.5, -1.6] },
+  { castKey: 'mechanic', at: 'galdin_quay', key: 'gald_c', seed: 44, anchor: 'edge3', off: [2.0, 2.2], posture: 'lean' },
+  { castKey: 'traveller', at: 'galdin_quay', key: 'gald_d', seed: 45, anchor: 'edge5', off: [2.4, -2.0], posture: 'folded' },
+  {
+    castKey: 'trucker', at: 'galdin_quay', key: 'gald_w1', seed: 46, anchor: 'edge2',
+    route: [[1.5, 0], [7.0, 3.0], [11.5, -2.0]], pause: [1.4, 2.0, 1.6], speed: 1.1,
+  },
+  {
+    castKey: 'traveller', at: 'galdin_quay', key: 'gald_w2', seed: 47, anchor: 'stall5',
+    route: [[2.0, 1.5], [6.5, -2.0], [2.0, -6.0]], pause: [1.8, 1.0, 2.2], speed: 1.2,
+  },
+  { castKey: 'kid', at: 'galdin_quay', key: 'gald_e', seed: 48, anchor: 'edge5', off: [-12.0, 4.0] },
+];
 
 /** Where and how one townsperson is placed. */
 export interface NpcPlacement {
@@ -249,8 +377,18 @@ export class Npcs {
   _camPos!: THREE.Vector3;
   /** `InteractionSystem.register` handles, kept so they could be revoked. */
   _handles!: ReturnType<InteractionSystem['register']>[];
-  /** {@link REMOTE} placements not yet built. @see _streamRemote */
+  /** {@link REMOTE} and {@link CITY} placements not yet built. @see _streamRemote */
   _pending!: RemoteNpc[];
+  /**
+   * Raised, walkable decks the ground sampler has to know about.
+   *
+   * A `_town` plaza is a 0.35 m slab whose top sits 0.675 m over the graded
+   * apron, and the rig's foot IK plants on `Ecology.height`. Without this every
+   * person on a city square stands shin-deep in their own pavement. Filled by
+   * `_place` the first time it resolves a city anchor, so it costs nothing at
+   * all in a game that never goes to a city.
+   */
+  _pads!: { x: number, z: number, r: number, y: number }[];
   eco!: Ecology | undefined;
   game!: Game;
   /** The pad-aware ground the rig's foot IK plants on. See `_groundAt`. */
@@ -265,7 +403,8 @@ export class Npcs {
     this.root.name = 'npcs';
     this._camPos = new THREE.Vector3();
     this._handles = [];
-    this._pending = REMOTE.slice();
+    this._pending = REMOTE.concat(CITY);
+    this._pads = [];
   }
 
   async init(game: Game) {
@@ -379,12 +518,65 @@ export class Npcs {
   _place(game: Game, r: RemoteNpc) {
     const p = worldMap.poiById(r.at);
     if (!p) { console.warn(`[Npcs] ${r.castKey} anchored to unknown POI "${r.at}"`); return null; }
-    const pos = new THREE.Vector3(p.x + (r.dx || 0), 0, p.z + (r.dz || 0));
-    const face = new THREE.Vector3(pos.x + Math.sin(r.face || 0) * 6, 0, pos.z + Math.cos(r.face || 0) * 6);
-    const npc = this._spawn(r.castKey, { pos, face, posture: r.posture, task: r.task, talkRadius: r.talkRadius ?? 3.0 });
+    const frame = r.anchor ? this._anchorFrame(game, r) : null;
+    if (r.anchor && !frame) return null;      // kit has not built the site yet
+    const origin = frame ? frame.o : new THREE.Vector3(p.x, 0, p.z);
+    // `[along, side]` -> world, through the anchor->plaza frame, so the whole
+    // arrangement rotates with the town instead of being re-measured per seed.
+    const at = (a: number, sd: number) => new THREE.Vector3(
+      origin.x + (frame ? frame.fx * a + frame.sx * sd : a),
+      origin.y,
+      origin.z + (frame ? frame.fz * a + frame.sz * sd : sd),
+    );
+    const off = r.off || [0, 0];
+    const route = r.route ? r.route.map(([a, sd]) => at(a, sd)) : undefined;
+    const pos = route ? route[0].clone() : at(off[0], off[1]);
+    pos.x += r.dx || 0;
+    pos.z += r.dz || 0;
+    // An anchored body faces the middle of the square unless it says otherwise
+    // — a market vendor with their back to the market is the single thing that
+    // most makes a crowd read as scenery.
+    const face = r.face !== undefined || !frame
+      ? new THREE.Vector3(pos.x + Math.sin(r.face || 0) * 6, 0, pos.z + Math.cos(r.face || 0) * 6)
+      : frame.plaza.clone();
+    const npc = this._spawn(r.castKey, {
+      key: r.key, seed: r.seed, pos, face, route, pause: r.pause, speed: r.speed, sit: r.sit,
+      posture: r.posture, task: r.task, talkRadius: r.talkRadius ?? (r.key ? 0 : 3.0),
+    });
     if (!npc) return null;
     this._registerTalkFor(game, npc);
     return npc;
+  }
+
+  /**
+   * The local frame of a kit anchor: where it is, and which way the square is.
+   *
+   * `+f` points at the plaza, `+s` is to the left of that. Returns `null`
+   * until `PoiKits` has built the site, which is the signal `_streamRemote`
+   * uses to keep the row pending.
+   *
+   * It also registers the plaza as a raised pad the moment it first resolves —
+   * see {@link _pads}. Doing it here rather than in a table is what keeps the
+   * height honest: it is read off the anchor the geometry was built with.
+   *
+   * @param game the game
+   * @param r the placement
+   */
+  _anchorFrame(game: Game, r: RemoteNpc) {
+    const kits = game.get('Props')?.poiKits;
+    if (!kits) return null;
+    const o = kits.anchorAt(r.at, r.anchor as string);
+    const plaza = kits.anchorAt(r.at, 'plaza');
+    if (!o || !plaza) return null;
+    if (!this._pads.some((q) => q.x === plaza.x && q.z === plaza.z)) {
+      // The paved disc is 11 m; 11.4 covers the kerb the apron meets it at.
+      this._pads.push({ x: plaza.x, z: plaza.z, r: 11.4, y: plaza.y });
+    }
+    let fx = plaza.x - o.x, fz = plaza.z - o.z;
+    const d = Math.hypot(fx, fz) || 1;
+    fx /= d; fz /= d;
+    // left of `f` in this handedness
+    return { o, plaza, fx, fz, sx: -fz, sz: fx };
   }
 
   /**
@@ -444,6 +636,9 @@ export class Npcs {
     if (t && t.origin) {
       const d = Math.hypot(x - t.origin.x, z - t.origin.z);
       if (d < 42) y = Math.max(y, t.base + 0.02);
+    }
+    for (const pad of this._pads) {
+      if (Math.hypot(x - pad.x, z - pad.z) < pad.r) y = Math.max(y, pad.y);
     }
     return y;
   }
@@ -505,7 +700,12 @@ export class Npcs {
       const d = this._camPos.distanceTo(npc.pos);
       // LOD before anything else: an NPC nobody can see does not need a
       // skeleton solve, and the skeleton solve is the whole per-NPC cost.
-      const lod = d > 85 ? 2 : d > 38 ? 1 : 0;
+      // 25 m, not 38: LOD 1 drops the eye meshes, and a pair of eyes is two
+      // colour draws on a body that is four. With twenty-nine people in two
+      // cities that is the difference between a square inside the 60-draw
+      // budget and one at ninety. 60 m, not 85, for the same arithmetic: a
+      // person further away than that in a city is behind a building.
+      const lod = d > 60 ? 2 : d > 25 ? 1 : 0;
       npc.body.setLod(lod);
       // The prompt anchor is not part of the LOD. It costs a vector copy, it
       // is what the interaction verb reads, and skipping it past 85 m is how a
@@ -590,8 +790,14 @@ export class Npcs {
       const p = worldMap.poiById(r.at);
       if (!p) { pend.splice(i, 1); return; }
       if (Math.hypot(p.x + (r.dx || 0) - this._camPos.x, p.z + (r.dz || 0) - this._camPos.z) > REMOTE_RANGE) continue;
+      // An anchored row cannot be placed until the kit has built the site, and
+      // `PoiKits` builds one POI per frame. `_place` returns null for exactly
+      // that case, and the row stays pending rather than being lost — which is
+      // what a `splice` before the call would have done, silently, for every
+      // city body, because 420 m is well outside `BUILD_R`.
+      const npc = this._place(game, r);
+      if (!npc && r.anchor) continue;
       pend.splice(i, 1);
-      this._place(game, r);
       this.stats = { count: this.list.length, draws: this.list.length * 5 };
       return;
     }

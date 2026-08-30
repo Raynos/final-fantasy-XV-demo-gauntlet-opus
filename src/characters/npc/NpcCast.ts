@@ -550,6 +550,212 @@ export const NPC_CAST = {
     },
   },
 
+  /* ------------------------------------------------------ the two cities -- */
+  /*
+   * Five people who make Lestallum and Galdin Quay places rather than sets.
+   *
+   * **Sania and Navyth are the two the quest table has been naming for
+   * months.** `side_scraps` is given by Sania and `side_legendary_fish` by
+   * Navyth, and neither of them existed, so both quests were handed out by
+   * nobody and turned in to nobody. Same failure the five in `REMOTE` above
+   * were built to fix, one region further on.
+   *
+   * All five are streamed, not booted: a cast member is one archetype and one
+   * painted 1024^2 face, and `archetype()` caches per key, so the cost is paid
+   * once, the first time the camera comes within 420 m of the city, and the
+   * eleven ambient bodies standing beside them cost geometry and nothing else
+   * because they reuse the keys above.
+   */
+  sania: {
+    name: 'Sania Yeagre',
+    role: 'Biologist',
+    hue: 128,
+    profile: { height: 1.66, shoulder: 0.82, muscle: 0.24, hip: 1.04, neck: 0.96, headScale: 1.05 },
+    look: {
+      seed: 311,
+      // Leaning slightly in, the way somebody stands when the thing they are
+      // looking at is more interesting than the person they are talking to.
+      idle: {
+        hips: [0, 0.03, -0.06], spine01: [0.03, 0, 0.03], spine03: [0.04, 0.06, 0.02],
+        neck: [-0.05, 0.05, 0], head: [-0.06, 0.07, -0.02],
+        upperArmL: [0.05, 0.02, 0.09], lowerArmL: [-0.52, 0.10, 0],
+        upperArmR: [0.04, -0.02, -0.08], lowerArmR: [-0.30, -0.04, 0],
+        thighL: [-0.03, 0, 0.05],
+      },
+      stance: 0.4,
+      skin: srgb(0x6f5136), iris: 0x35251a,
+      headWidth: 0.94, jaw: -0.35, cheek: 0.60, nose: -0.05, brow: 0.05, eyeOpen: 1.08,
+      blush: 'rgba(146,68,52,0.28)', lip: 'rgba(150,80,76,0.60)',
+      browShadow: 'rgba(22,14,10,0.58)', lashColor: 0x090605,
+      fringeShadow: 0.42,
+      brows: { color: 0x181110, len: 0.0138, width: 0.0058 },
+      // cropped natural hair, close to the skull
+      hair: hairSet({ color: 0x151010, tip: 0x2e2420, len: 0.010, back: 0.012, n: 140, spring: 0.05, rough: 0.5 }),
+      outfit: [
+        { type: 'shirt', color: 0x2f6a63, rough: 0.84, u0: 0.30, u1: 0.96, pad: 0.010, neckCut: 0.40, wrinkle: 0.016 },
+        { type: 'pants', color: 0x3a3a42, rough: 0.82, padHip: 0.016, padAnkle: 0.012, u1: 0.94, wrinkle: 0.016 },
+        // the field lab coat, worn open, which is the whole silhouette
+        { type: 'jacket', color: 0xe6e4dc, rough: 0.78, u0: 0.20, u1: 0.94, pad: 0.020, gap: 0.62, flare: 0.10, thickness: 0.009, collarH: 0.046, collarR: 0.060, collarFlare: 1.02 },
+        { type: 'sleeve', color: 0xe6e4dc, rough: 0.78, u0: 0.03, u1: 0.62, pad: 0.013, cuff: 0.03 },
+        { type: 'glasses', color: 0x2a2622, rough: 0.35 },
+        { type: 'pouch', color: 0x6b5a3e, rough: 0.7, sides: ['R'], u: 0.28, size: [0.055, 0.085, 0.038] },
+        { type: 'belt', color: 0x6b5a3e, rough: 0.6, u: 0.36, pad: 0.016, buckleBox: true, buckleColor: 0x9a9088 },
+        { type: 'boots', color: 0x3a332c, rough: 0.62, shaft: 0.72, height: 0.038 },
+      ],
+    },
+  },
+
+  navyth: {
+    name: 'Navyth Arlund',
+    role: 'Fisherman',
+    hue: 200,
+    profile: { height: 1.79, shoulder: 0.98, muscle: 0.62, hip: 1.06, neck: 1.06, headScale: 0.99 },
+    look: {
+      seed: 337,
+      // Folded over a rail, weight on the forearms. The `folded` posture goes
+      // on top of this, so the arms stay near-neutral here.
+      idle: {
+        hips: [0, -0.03, 0.05], spine01: [0.06, 0, 0], spine02: [0.05, 0, 0], spine03: [0.04, -0.04, 0],
+        neck: [0.06, -0.03, 0], head: [-0.04, -0.04, 0.02],
+        upperArmL: [0.05, 0.02, 0.11], lowerArmL: [-0.34, 0.05, 0],
+        upperArmR: [0.05, -0.02, -0.11], lowerArmR: [-0.34, -0.05, 0],
+      },
+      stance: -0.3,
+      skin: srgb(0xc09166), iris: 0x4a6a74,
+      headWidth: 1.04, jaw: 0.75, cheek: -0.25, nose: 0.45, brow: 0.85, eyeOpen: 0.84,
+      blush: 'rgba(176,88,58,0.40)', lip: 'rgba(140,84,72,0.48)',
+      browShadow: 'rgba(38,26,16,0.60)', lashColor: 0x140d08,
+      stubble: 0.34, stubbleColor: '#4a4038',
+      fringeShadow: 0.48,
+      brows: { color: 0x4a3c2c, len: 0.0166, width: 0.0076 },
+      hair: (() => {
+        const h = hairSet({ color: 0x5a4c3c, tip: 0x8c7c66, len: 0.018, back: 0.030, n: 110, spring: 0.18, rough: 0.56 });
+        h.tufts.push(...beard(0x5a4c3c, 0x8c7c66, 0.020, 130));
+        return h;
+      })(),
+      outfit: [
+        { type: 'shirt', color: 0x8f9aa2, rough: 0.90, u0: 0.30, u1: 0.90, pad: 0.012, neckCut: 0.34, wrinkle: 0.026 },
+        { type: 'pants', color: 0x39424a, rough: 0.88, padHip: 0.020, padAnkle: 0.016, u1: 0.96, wrinkle: 0.024 },
+        // an oilskin gilet, salt-bleached from something that was navy
+        { type: 'jacket', color: 0x3d4e56, rough: 0.60, u0: 0.34, u1: 0.90, pad: 0.021, gap: 0.44, flare: 0.03, thickness: 0.012, collarH: 0.050, collarR: 0.062, collarFlare: 1.10 },
+        { type: 'belt', color: 0x40362a, rough: 0.6, u: 0.36, pad: 0.020, buckleBox: true, buckleColor: 0x8a8074 },
+        { type: 'pouch', color: 0x40362a, rough: 0.7, sides: ['L'], u: 0.26, size: [0.06, 0.09, 0.04] },
+        { type: 'boots', color: 0x24282a, rough: 0.44, shaft: 0.92, height: 0.040 },
+      ],
+    },
+  },
+
+  coctura: {
+    name: 'Coctura Arlund',
+    role: 'Chef · Mother of Pearl',
+    hue: 186,
+    profile: { height: 1.70, shoulder: 0.86, muscle: 0.32, hip: 1.05, neck: 0.98, headScale: 1.02 },
+    look: {
+      seed: 353,
+      // Standing square, hands habitually low: a cook waiting for an order.
+      idle: {
+        hips: [0, 0.02, -0.05], spine03: [-0.03, -0.04, 0.02],
+        neck: [0.02, -0.03, 0], head: [-0.03, -0.04, -0.02],
+        upperArmL: [0.04, 0.02, 0.08], lowerArmL: [-0.46, 0.08, 0],
+        upperArmR: [0.04, -0.02, -0.08], lowerArmR: [-0.46, -0.08, 0],
+      },
+      stance: -0.2,
+      skin: srgb(0x8a6446), iris: 0x2f4a52,
+      headWidth: 0.96, jaw: -0.20, cheek: 0.50, nose: -0.15, brow: 0.10, eyeOpen: 1.02,
+      blush: 'rgba(160,78,60,0.32)', lip: 'rgba(158,84,80,0.62)',
+      browShadow: 'rgba(24,16,12,0.56)', lashColor: 0x0c0806,
+      fringeShadow: 0.40,
+      brows: { color: 0x1a1310, len: 0.0140, width: 0.0058 },
+      hair: (() => {
+        const h = hairSet({ color: 0x1a1310, tip: 0x3a2e26, len: 0.012, back: 0.014, n: 130, spring: 0.06, rough: 0.42 });
+        h.tufts.push(ponytail(0x1a1310, 0x3a2e26, 0.13));
+        return h;
+      })(),
+      outfit: [
+        // whites, an apron, and nothing else, because that is a chef
+        { type: 'shirt', color: 0xf0ece2, rough: 0.86, u0: 0.28, u1: 0.96, pad: 0.011, neckCut: 0.36, wrinkle: 0.020 },
+        { type: 'sleeve', color: 0xf0ece2, rough: 0.86, u0: 0.03, u1: 0.46, pad: 0.012, cuff: 0.02 },
+        { type: 'pants', color: 0x30363a, rough: 0.84, padHip: 0.016, padAnkle: 0.012, u1: 0.94, wrinkle: 0.018 },
+        { type: 'plate', color: 0x1f5a68, rough: 0.82, u0: 0.22, u1: 0.72, pad: 0.013, theta: [2.05, 4.25] },
+        { type: 'belt', color: 0x1f5a68, rough: 0.8, u: 0.36, pad: 0.014 },
+        { type: 'boots', color: 0x2a2622, rough: 0.5, shaft: 0.42, height: 0.030 },
+      ],
+    },
+  },
+
+  verdough: {
+    name: 'Verdough',
+    role: 'Grocer · Partellum Market',
+    hue: 92,
+    profile: { height: 1.72, shoulder: 0.92, muscle: 0.44, hip: 1.10, neck: 1.04, headScale: 1.01 },
+    look: {
+      seed: 379,
+      // Behind a counter all day: weight back, one hand resting on it.
+      idle: {
+        hips: [0, -0.02, 0.06], spine02: [-0.03, 0, 0], spine03: [-0.05, 0.04, 0.02],
+        neck: [0.06, 0.03, 0], head: [-0.02, 0.04, -0.02],
+        upperArmL: [0.06, 0.03, 0.12], lowerArmL: [-0.62, 0.12, 0],
+        upperArmR: [0.04, -0.02, -0.09], lowerArmR: [-0.28, -0.04, 0],
+      },
+      stance: 0.3,
+      skin: srgb(0xb98f66), iris: 0x4a3a26,
+      headWidth: 1.05, jaw: 0.45, cheek: 0.20, nose: 0.35, brow: 0.55, eyeOpen: 0.92,
+      blush: 'rgba(180,92,64,0.38)', lip: 'rgba(146,84,74,0.50)',
+      browShadow: 'rgba(34,24,16,0.56)', lashColor: 0x120c08,
+      stubble: 0.22, stubbleColor: '#3a3028',
+      fringeShadow: 0.44,
+      brows: { color: 0x2e2418, len: 0.0158, width: 0.0072 },
+      hair: hairSet({ color: 0x2e2418, tip: 0x574530, len: 0.016, back: 0.020, n: 100, spring: 0.10, rough: 0.52 }),
+      outfit: [
+        { type: 'shirt', color: 0xdcd0b2, rough: 0.88, u0: 0.28, u1: 0.94, pad: 0.011, neckCut: 0.36, wrinkle: 0.024 },
+        { type: 'sleeve', color: 0xdcd0b2, rough: 0.88, u0: 0.03, u1: 0.40, pad: 0.012, cuff: 0.02 },
+        { type: 'pants', color: 0x4a4238, rough: 0.86, padHip: 0.020, padAnkle: 0.016, u1: 0.94, wrinkle: 0.022 },
+        { type: 'plate', color: 0x6e7a3e, rough: 0.86, u0: 0.20, u1: 0.74, pad: 0.014, theta: [2.05, 4.25] },
+        { type: 'belt', color: 0x3c3228, rough: 0.6, u: 0.36, pad: 0.018, buckleBox: true, buckleColor: 0x8e8474 },
+        { type: 'boots', color: 0x2e2820, rough: 0.6, shaft: 0.48, height: 0.034 },
+      ],
+    },
+  },
+
+  surgate: {
+    name: 'Surgate',
+    role: "Proprietor · Surgate's Beanmine",
+    hue: 28,
+    profile: { height: 1.63, shoulder: 0.84, muscle: 0.30, hip: 1.08, neck: 0.98, headScale: 1.03 },
+    look: {
+      seed: 397,
+      // Arms crossed, chin down, entirely unimpressed. The `folded` posture
+      // layers on top; the idle only sets the attitude.
+      idle: {
+        hips: [0, 0.04, -0.08], spine01: [0.02, 0, 0.03], spine03: [0.02, 0.05, 0.03],
+        neck: [0.05, 0.04, -0.02], head: [0.02, 0.06, -0.03],
+        upperArmL: [0.05, 0.02, 0.10], lowerArmL: [-0.44, 0.08, 0],
+        upperArmR: [0.05, -0.02, -0.10], lowerArmR: [-0.44, -0.08, 0],
+        thighR: [-0.04, 0, -0.05], shinR: [0.08, 0, 0],
+      },
+      stance: -0.55,
+      skin: srgb(0x8f6a4a), iris: 0x3a2a1e,
+      headWidth: 1.00, jaw: 0.10, cheek: 0.35, nose: 0.10, brow: 0.35, eyeOpen: 0.88,
+      blush: 'rgba(162,80,58,0.34)', lip: 'rgba(148,80,74,0.56)',
+      browShadow: 'rgba(28,18,12,0.58)', lashColor: 0x0d0806,
+      fringeShadow: 0.44,
+      brows: { color: 0x241a12, len: 0.0146, width: 0.0064 },
+      hair: (() => {
+        const h = hairSet({ color: 0x241a12, tip: 0x584330, len: 0.013, back: 0.018, n: 120, spring: 0.10, rough: 0.46 });
+        h.tufts.push(ponytail(0x241a12, 0x584330, 0.10));
+        return h;
+      })(),
+      outfit: [
+        { type: 'shirt', color: 0x8c2f2a, rough: 0.86, u0: 0.30, u1: 0.94, pad: 0.011, neckCut: 0.42, wrinkle: 0.020 },
+        { type: 'pants', color: 0x33302c, rough: 0.84, padHip: 0.016, padAnkle: 0.012, u1: 0.94, wrinkle: 0.018 },
+        { type: 'plate', color: 0x2b2723, rough: 0.84, u0: 0.20, u1: 0.70, pad: 0.013, theta: [2.05, 4.25] },
+        { type: 'band', color: 0xd8c8a8, rough: 0.8, sides: ['L', 'R'], u: 0.60, pad: 0.010, ridge: 0.02 },
+        { type: 'belt', color: 0x2b2723, rough: 0.6, u: 0.36, pad: 0.014 },
+        { type: 'boots', color: 0x2a2420, rough: 0.55, shaft: 0.46, height: 0.032 },
+      ],
+    },
+  },
+
   kid: {
     name: 'Kid',
     role: 'Local',

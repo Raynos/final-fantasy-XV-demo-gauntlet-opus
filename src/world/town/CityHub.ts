@@ -213,7 +213,7 @@ export class CityHub {
     const p = new THREE.Vector3(), q = new THREE.Vector3();
     // One shared bulb, instanced by merging: a pear 6x5 sphere is 40 triangles
     // and there are about seventy of them.
-    const bulbGeo = new THREE.SphereGeometry(0.075, 6, 5);
+    const bulbGeo = new THREE.SphereGeometry(0.105, 6, 5);
     const SEG = 9;
     for (const [i, j] of city.festoon) {
       const pa = kits.anchorAt(city.poi, `light${i}`, a);
@@ -230,16 +230,17 @@ export class CityHub {
         q.set(THREE.MathUtils.lerp(pa.x, pb.x, t1), y(t1), THREE.MathUtils.lerp(pa.z, pb.z, t1));
         const mid = p.clone().lerp(q, 0.5);
         const len = p.distanceTo(q);
-        const g = new THREE.CylinderGeometry(0.012, 0.012, len, 4, 1);
+        const g = new THREE.CylinderGeometry(0.017, 0.017, len, 4, 1);
         const m = new THREE.Matrix4().lookAt(p, q, new THREE.Vector3(0, 1, 0));
         // `lookAt` builds a -Z basis; a cylinder is +Y, so tip it first.
         m.multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
         m.setPosition(mid);
         cable.push(g.applyMatrix4(m));
-        // a bulb hanging off every second segment joint
-        if (s % 2 === 1) {
+        // a bulb hanging off every segment joint but the last, which is the
+        // pole. Eight to a run, six runs: forty-eight bulbs in one draw.
+        if (s < SEG - 1) {
           const bg = bulbGeo.clone();
-          bg.translate(q.x, q.y - 0.16, q.z);
+          bg.translate(q.x, q.y - 0.19, q.z);
           bulbs.push(bg);
         }
       }
@@ -267,11 +268,11 @@ export class CityHub {
     // pavement and the people standing on it, rather than merely glowing.
     const plaza = kits.anchorAt(city.poi, 'plaza');
     if (plaza) {
-      const l = new THREE.PointLight(city.bulb, 0, 34, 2);
+      const l = new THREE.PointLight(city.bulb, 0, 44, 2);
       l.position.set(plaza.x, plaza.y + 5.2, plaza.z);
       l.name = `city_plaza_light_${city.poi}`;
       this.root.add(l);
-      this.lights.push({ light: l, night: 16, day: 0 });
+      this.lights.push({ light: l, night: 70, day: 0 });
     }
   }
 
@@ -441,7 +442,7 @@ export class CityHub {
     // Same ramp shape as `PoiKits.update` gives `M.lamp`, one stop brighter,
     // because a festoon is the light source in the frame and a POI lamp is a
     // detail on a wall.
-    this.festoonMat.emissiveIntensity = 0.25 + night * 2.6;
+    this.festoonMat.emissiveIntensity = 0.25 + night * 4.2;
   }
 }
 

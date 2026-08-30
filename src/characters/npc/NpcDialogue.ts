@@ -381,11 +381,34 @@ export const NPC_DIALOGUE = {
           next: 'menu',
         },
         menu: hub([
+          { label: 'The bench', note: 'Shop', action: () => { openShop(game, 'dinos_bench'); return null; }, end: true },
+          { label: 'Take our picture', next: 'postcards', when: () => questStatus(game, 'city_gald_postcards') === 'available' },
+          { label: 'About the postcards', next: 'postnag', when: () => questStatus(game, 'city_gald_postcards') === 'active' },
           { label: 'The ferry to Altissia', next: 'ferry' },
           { label: 'Somewhere to sleep', next: 'lodging' },
           { label: 'What do you do here?', next: 'stones' },
           { label: 'We should go', next: 'bye' },
         ]),
+        postcards: {
+          lines: [
+            'Other way round, kid. I need pictures, you have the blond with the camera.',
+            'Three frames. The causeway, the rock off the point, and something on the water at the right hour. My column runs Thursday and I have four column inches of nothing.',
+          ],
+          next: 'postmenu',
+        },
+        postmenu: hub([
+          {
+            label: 'Prompto will love this', note: 'Accept',
+            action: () => takeQuest(game, 'city_gald_postcards', 'dino', 'postyes', 'postno'),
+          },
+          { label: 'Write it yourself', next: 'menu' },
+        ]),
+        postyes: { lines: ['Dusk, if you can. Everything here photographs like a postcard at dusk and like a car park at noon.'], next: null },
+        postno: { lines: ['Fine. I will describe it. Badly.'], next: null },
+        postnag: {
+          lines: ['Still four inches of nothing. Dusk, from the boards — press C and point it at the water.'],
+          next: 'menu',
+        },
         ferry: {
           lines: [
             'Sailing is suspended. Has been since this morning, and nobody at the desk will tell you why.',
@@ -430,11 +453,33 @@ export const NPC_DIALOGUE = {
         next: 'menu',
       },
       menu: hub([
+        { label: 'Show us the city', next: 'tour', when: () => questStatus(game, 'city_lest_arrival') === 'available' },
+        { label: 'About the tour', next: 'tournag', when: () => questStatus(game, 'city_lest_arrival') === 'active' },
         { label: 'Lestallum', next: 'town' },
         { label: 'The Meteor', next: 'meteor' },
         { label: 'Your brother', next: 'gladio' },
         { label: 'Later, Iris', next: 'bye' },
       ]),
+      tour: {
+        lines: [
+          'Okay — okay, this is the good bit. Market first, because Verdough will be insufferable if we go anywhere else first.',
+          'Then the lookout, and you have to let Prompto take the picture or he will sulk for a day. Then coffee at the Beanmine, and then I will stop.',
+        ],
+        next: 'tourmenu',
+      },
+      tourmenu: hub([
+        {
+          label: 'Lead the way', note: 'Accept',
+          action: () => takeQuest(game, 'city_lest_arrival', 'iris', 'touryes', 'tourno'),
+        },
+        { label: 'Maybe in a minute', next: 'menu' },
+      ]),
+      touryes: { lines: ['Market, lookout, Beanmine. Try to look like tourists. You are all extremely bad at it.'], next: null },
+      tourno: { lines: ['Sure. No. It is fine. It has only been a year.'], next: null },
+      tournag: {
+        lines: ['Market, then the lookout with the camera, then the Beanmine. In that order, it is a whole thing.'],
+        next: 'menu',
+      },
       town: {
         lines: [
           'The whole city runs off the Meteor. That is not a metaphor — EXINERIS taps the heat straight out of it.',
@@ -549,9 +594,31 @@ export const NPC_DIALOGUE = {
         menu: hub([
           { label: 'What is wrong with it?', next: 'offer', when: () => status === 'available' },
           { label: 'About the substation', next: 'nag', when: () => status === 'active' },
+          { label: 'The city lights are going out', next: 'lights', when: () => questStatus(game, 'city_lest_lights') === 'available' },
+          { label: 'About the outage', next: 'lightsnag', when: () => questStatus(game, 'city_lest_lights') === 'active' },
           { label: 'How the plant works', next: 'plant' },
           { label: 'We will leave you to it', next: 'bye' },
         ]),
+        lights: {
+          lines: [
+            'The market strings dropped out twice last night. In this city that is not an inconvenience, it is a body count.',
+            'There is a relay station three hundred metres out on the shelf that has stopped answering, and the last two people I sent up there did not come back down.',
+          ],
+          next: 'lightsmenu',
+        },
+        lightsmenu: hub([
+          {
+            label: 'We will go up there', note: 'Accept',
+            action: () => takeQuest(game, 'city_lest_lights', 'holly', 'lightsyes', 'lightsno'),
+          },
+          { label: 'That is a plant problem', next: 'menu' },
+        ]),
+        lightsyes: { lines: ['Substation is on the shelf edge, north-west. Whatever is in it, I want the relay back and I want it working.'], next: null },
+        lightsno: { lines: ['Then I send a third person. Sleep well.'], next: null },
+        lightsnag: {
+          lines: ['Still dark. North-west on the shelf — you will see the pylons before you see the building.'],
+          next: 'menu',
+        },
         offer: {
           lines: [
             'Pressure on the number-four line has dropped eleven per cent in two days. Nothing is broken. I have checked twice.',
@@ -609,6 +676,10 @@ export const NPC_DIALOGUE = {
           next: 'menu',
         },
         menu: hub([
+          // The rack is new: Randolph has moved off the Lestallum car park and
+          // onto his own forge on the market square, and `TOWN_SHOPS.forge` is
+          // the top half of the weapon catalogue Culless no longer carries.
+          { label: 'Show me the rack', note: 'Shop', action: () => { openShop(game, 'forge'); return null; }, end: true },
           { label: 'You are working on something', next: 'offer', when: () => status === 'available' },
           { label: 'About those gemstones', next: 'nag', when: () => status === 'active' },
           { label: 'About the work', next: 'craft' },
@@ -677,6 +748,361 @@ export const NPC_DIALOGUE = {
   },
 
   /* ------------------------------------------------------ ambient folk -- */
+  /* ------------------------------------------------- the two cities -- */
+  /*
+   * Sania and Navyth are the two names the quest table has been carrying with
+   * nobody attached to them: `side_scraps` is *given by Sania* and
+   * `side_legendary_fish` *by Navyth*, and both were handed out by nobody and
+   * turned in to nobody. These scripts are where those two quests finally have
+   * a mouth, and where the three counters on each square get a person behind
+   * them instead of a floating prompt.
+   */
+  sania: (game: Game) => {
+    const SCRAPS = 'side_scraps';
+    const MARKET = 'city_lest_market';
+    const scraps = questStatus(game, SCRAPS);
+    const market = questStatus(game, MARKET);
+    const rpg = rpgOf(game);
+    const books = () => rpg?.inventory?.count?.('old_book') ?? 0;
+    return {
+      speaker: 'Sania', role: 'Biologist · Lestallum', hue: 128, tone: 0.52,
+      start: 'hello',
+      nodes: {
+        hello: {
+          lines: [
+            'She is holding a jar up to the light with something small and unhappy in it, and does not lower it to talk.',
+            '"Sania Yeagre. Do not apologise, everybody interrupts. What do you know about frogs?"',
+          ],
+          next: 'menu',
+        },
+        menu: hub([
+          { label: 'Frogs?', next: 'frogs' },
+          { label: 'You are collecting something', next: 'offer', when: () => scraps === 'available' },
+          { label: 'About the map scraps', next: 'scrapnag', when: () => scraps === 'active' && books() < 5 },
+          { label: 'We have all five scraps', next: 'scrapdone', when: () => scraps === 'active' && books() >= 5 },
+          { label: 'The market wants something', next: 'marketoffer', when: () => market === 'available' },
+          { label: 'About the Meteor', next: 'meteor' },
+          { label: 'We should go', next: 'bye' },
+        ]),
+        frogs: {
+          lines: [
+            '"Myrlwood frogs. Six of them, one in each region, and every single one is somewhere with a daemon problem."',
+            '"I am a field biologist with a laboratory the size of a wardrobe and a grant that ran out in the spring. I ask people."',
+          ],
+          next: 'menu',
+        },
+        offer: {
+          lines: [
+            '"Not frogs. Paper. Somebody in the last century tore a survey map into five and posted it to five different people, which was either very clever or the worst filing in Lucis."',
+            '"Old books turn up with the scraps still in them. Collectors here pay for the books and throw the paper away, which is criminal."',
+          ],
+          next: 'offermenu',
+        },
+        offermenu: hub([
+          {
+            label: 'We will keep an eye out', note: 'Accept',
+            action: () => takeQuest(game, SCRAPS, 'sania', 'scrapyes', 'scrapno'),
+          },
+          { label: 'Not our sort of errand', next: 'menu' },
+        ]),
+        scrapyes: {
+          lines: ['"Five. Any old book you find, check the endpapers before you sell it. Especially to Verdough."'], next: null,
+        },
+        scrapno: { lines: ['"Mm. Everyone says that until they find one."'], next: null },
+        scrapnag: {
+          lines: () => [`"${books()} of five. Keep looking — they turn up in the places nobody has cleared out yet."`],
+          next: 'menu',
+        },
+        scrapdone: {
+          lines: [
+            '"All five. Give me the table." She lays them out and they do not match, and then they do.',
+            '"That is a survey marker nobody has walked to since the Fall. I am not going. You, however, look like people who go places."',
+          ],
+          next: null,
+        },
+        marketoffer: {
+          lines: [
+            '"While you are here. I need three things off this market and every one of them is behind a person who wants to talk to me for an hour."',
+            '"Ulwaat berries, a sky gemstone and something from Surgate that is not coffee. Buy them, bring them, and I will tell you where the Cleigne frog is."',
+          ],
+          next: 'marketmenu',
+        },
+        marketmenu: hub([
+          {
+            label: 'We will do the shopping', note: 'Accept',
+            action: () => takeQuest(game, MARKET, 'sania', 'marketyes', 'marketno'),
+          },
+          { label: 'Ask somebody else', next: 'menu' },
+        ]),
+        marketyes: { lines: ['"Partellum for the berries and the stone. The Beanmine for the third. Do not let Verdough see you are in a hurry."'], next: null },
+        marketno: { lines: ['"Fine. I will send the intern. I do not have an intern."'], next: null },
+        meteor: {
+          lines: [
+            '"It has been sitting on the Disc for a very long time and the whole of this city is plugged into the heat coming off it."',
+            '"Nobody has ever explained to me what happens when it cools. I have stopped asking, because of the faces people make."',
+          ],
+          next: 'menu',
+        },
+        bye: { lines: ['"Take a jar. Everyone should carry a jar."'], next: null },
+      },
+    };
+  },
+
+  /* ----------------------------------------------------------- Verdough -- */
+  verdough: (game: Game) => ({
+    speaker: 'Verdough', role: 'Grocer · Partellum Market', hue: 92, tone: 0.5,
+    start: 'hello',
+    nodes: {
+      hello: {
+        lines: [
+          'A trestle four metres long under a red awning, stacked in a way that suggests a man who has thought about it.',
+          '"Morning. Everything on this table came up the shelf road before dawn and none of it will be here tomorrow."',
+        ],
+        next: 'menu',
+      },
+      menu: hub([
+        { label: 'Show me the table', note: 'Shop', action: () => { openShop(game, 'partellum'); return null; }, end: true },
+        { label: 'About the stones', next: 'stones' },
+        { label: 'About the city', next: 'city' },
+        { label: 'Later', next: 'bye' },
+      ]),
+      stones: {
+        lines: [
+          '"Sky and earth, both. Come out of the Disc and the quarries under it, and every elemancer between here and Altissia wants one."',
+          '"Randolph over there will tell you they belong in a hilt. Randolph is wrong about most things that are not steel."',
+        ],
+        next: 'menu',
+      },
+      city: {
+        lines: [
+          '"Nobody in Lestallum owns a generator. Whole city runs off the Meteor and has done since before my mother."',
+          '"The women run the plant, the men run the market, and everybody complains about the heat. That is the whole place."',
+        ],
+        next: 'menu',
+      },
+      bye: { lines: ['"Before Thursday, mind. It does not keep."'], next: null },
+    },
+  }),
+
+  /* ------------------------------------------------------------ Surgate -- */
+  surgate: (game: Game) => ({
+    speaker: 'Surgate', role: "Proprietor · Surgate's Beanmine", hue: 28, tone: 0.42,
+    start: 'hello',
+    nodes: {
+      hello: {
+        lines: [
+          '"Sit or do not, but do not stand in the doorway. Board is on the wall and Tony is the one who talks about it."',
+          'Behind her the machine makes a noise like a small industrial accident and produces, eventually, coffee.',
+        ],
+        next: 'menu',
+      },
+      menu: hub([
+        { label: 'The counter', note: 'Shop', action: () => { openShop(game, 'beanmine'); return null; }, end: true },
+        { label: 'The board', next: 'board' },
+        { label: 'About Tony', next: 'tony' },
+        { label: 'Thanks', next: 'bye' },
+      ]),
+      board: {
+        lines: [
+          '"Duscae ledger. Everything from the Disc down to the slough, and half of it has been up there since spring."',
+          '"You want it, take it. I only serve the coffee the hunters do not pay for."',
+        ],
+        next: 'menu',
+      },
+      tony: {
+        lines: [
+          '"Tipster. Sits in that corner, knows what is where, has never once bought anything."',
+          '"Every hunt in the region goes through my wall and not one gil of it goes through my till. I have made my peace."',
+        ],
+        next: 'menu',
+      },
+      bye: { lines: ['"Mind, it is hot. Everything here is hot."'], next: null },
+    },
+  }),
+
+  /* ------------------------------------------------------------ Coctura -- */
+  coctura: (game: Game) => {
+    const QID = 'city_gald_catch';
+    const status = questStatus(game, QID);
+    const rpg = rpgOf(game);
+    /** Everything in the bag the sea gave you. */
+    const catchList = () => {
+      const items = rpg?.tables?.items;
+      const bag = rpg?.inventory?.bag || {};
+      const out: { id: string, n: number, gil: number }[] = [];
+      for (const id of Object.keys(bag)) {
+        const d = items?.[id];
+        if (!d || !d.tags?.includes('fish') || !bag[id]) continue;
+        out.push({ id, n: bag[id], gil: Math.round((rpg?.inventory?.sellPrice?.(id) ?? 0) * 1.4) });
+      }
+      return out;
+    };
+    const catchWorth = () => catchList().reduce((a, c) => a + c.gil * c.n, 0);
+    /**
+     * Sell the whole catch at 1.4x.
+     *
+     * The premium is HERE and not on the shop row on purpose:
+     * `Inventory.sellPrice` is global and `ShopScreen` has no per-shop hook, so
+     * a `sellMult` on `TOWN_SHOPS.pearl` would be a field nothing reads. This
+     * sells at the normal rate through the normal path and pays the 40% on top
+     * as a separate credit, so the ledger and the events stay correct.
+     */
+    const sellCatch = () => {
+      const inv = rpg?.inventory;
+      if (!inv) return 'nocatch';
+      let extra = 0, sold = 0;
+      for (const c of catchList()) {
+        const base = inv.sellPrice(c.id) * c.n;
+        const r = inv.sell(c.id, c.n);
+        if (!r?.ok) continue;
+        extra += Math.round(base * 0.4);
+        sold += c.n;
+      }
+      if (!sold) return 'nocatch';
+      inv.addGil(extra, 'coctura-premium');
+      rpg?.quests?.notify?.('fetch', { target: 'sea_bass', count: 0 });
+      return 'sold';
+    };
+    return {
+      speaker: 'Coctura', role: 'Chef · Mother of Pearl', hue: 186, tone: 0.5,
+      start: 'hello',
+      nodes: {
+        hello: {
+          lines: [
+            '"Sit anywhere. If it came out of that water this morning I will cook it, and if it did not I will not pretend."',
+            'Behind her the whole restaurant is built out over the sea on piles, and the floor moves a centimetre with the swell.',
+          ],
+          next: 'menu',
+        },
+        menu: hub([
+          { label: 'The kitchen', note: 'Shop', action: () => { openShop(game, 'pearl'); return null; }, end: true },
+          {
+            label: 'Sell you our catch', note: `${catchWorth().toLocaleString()} gil · +40%`,
+            when: () => catchWorth() > 0,
+            action: () => sellCatch(),
+          },
+          { label: 'You are short of something', next: 'offer', when: () => status === 'available' },
+          { label: 'About the order', next: 'nag', when: () => status === 'active' },
+          { label: 'About Navyth', next: 'navyth' },
+          { label: 'The hunts', note: 'Hunts', action: () => { openHunts(game); return null; }, end: true },
+          { label: 'Enjoy your evening', next: 'bye' },
+        ]),
+        sold: {
+          lines: [
+            '"Good fish. Better than what the boats bring me, which tells you something about the boats."',
+            'She pays over the odds without being asked, which is the only kind of generosity anyone in Leide accepts.',
+          ],
+          next: 'menu',
+        },
+        nocatch: { lines: ['"Come back with a fish and we will talk about money."'], next: 'menu' },
+        offer: {
+          lines: [
+            '"I have a table of eleven tomorrow and no sea bass, because the boat that brings it has decided it is a ferry now."',
+            '"The shoals are a hundred and fifty metres that way. You have a rod. I have a kitchen. This solves itself."',
+          ],
+          next: 'offermenu',
+        },
+        offermenu: hub([
+          {
+            label: 'We will fish it', note: 'Accept',
+            action: () => takeQuest(game, QID, 'coctura', 'yes', 'no'),
+          },
+          { label: 'Buy them off somebody', next: 'menu' },
+        ]),
+        yes: { lines: ['"East along the shingle, off the rocks. Do not fall in; I am not insured for princes."'], next: null },
+        no: { lines: ['"Then it is a table of eleven eating vegetables. On my conscience, not yours."'], next: null },
+        nag: {
+          lines: ['"Still nothing. The rocks east of here, and go at dusk — they come in with the light going."'],
+          next: 'menu',
+        },
+        navyth: {
+          lines: [
+            '"My brother. He has been standing on that rail for eleven years waiting for one fish that I am fairly sure is a rumour."',
+            '"Talk to him. He will tell you the whole thing and you will not get your evening back."',
+          ],
+          next: 'menu',
+        },
+        bye: { lines: ['"Watch the boards on the way out. They are wet, always, forever."'], next: null },
+      },
+    };
+  },
+
+  /* ------------------------------------------------------------- Navyth -- */
+  navyth: (game: Game) => {
+    const QID = 'side_legendary_fish';
+    const status = questStatus(game, QID);
+    const rpg = rpgOf(game);
+    const hasRod = () => !!rpg?.inventory?.has?.('fishing_rod');
+    return {
+      speaker: 'Navyth', role: 'Fisherman · Galdin Quay', hue: 200, tone: 0.4,
+      start: status === 'complete' ? 'done' : 'hello',
+      nodes: {
+        hello: {
+          lines: [
+            'A big man folded over the quay rail with his forearms on it, watching water that is doing nothing at all.',
+            '"Navyth. You are the fourth people today. The other three had cameras."',
+          ],
+          next: 'menu',
+        },
+        menu: hub([
+          { label: 'What are you watching for?', next: 'watching', when: () => status !== 'available' },
+          { label: 'Something is wrong with the water', next: 'offer', when: () => status === 'available' },
+          { label: 'About the fish', next: 'nag', when: () => status === 'active' },
+          { label: 'About fishing', next: 'craft' },
+          { label: 'Good luck', next: 'bye' },
+        ]),
+        watching: {
+          lines: [
+            '"Nothing. Which is the point. Eleven years I have been coming down here and the nothing is very consistent."',
+            '"My sister runs the restaurant behind you and thinks I am wasting a life. She is probably right and it is still my life."',
+          ],
+          next: 'menu',
+        },
+        offer: {
+          lines: [
+            '"Alstor Slough. Something has been through it and every fish in it is either gone or hiding under the bank."',
+            '"Voretooth. A pack of them working the shallows, which they do not do, which is how you know something is wrong further up."',
+            '"Clear them and then put a line in, and if a bass takes it, the slough is alive. If nothing takes it, I will stop coming down here."',
+          ],
+          next: 'offermenu',
+        },
+        offermenu: hub([
+          {
+            label: 'We will find out', note: 'Accept',
+            action: () => takeQuest(game, QID, 'navyth', 'yes', 'no'),
+          },
+          { label: 'Not today', next: 'menu' },
+        ]),
+        yes: {
+          lines: () => (hasRod()
+            ? ['"You have a rod. Good. The bass will fight you the whole way in and that is how you know it is a bass."']
+            : ['"You will want a rod. Ask at the Pearl; Coctura keeps my spare and pretends she does not."']),
+          next: null,
+        },
+        no: { lines: ['"Aye. It has waited eleven years."'], next: null },
+        nag: {
+          lines: ['"Voretooth first, then the line. In that order — you cannot fish a bank with something eating off it."'],
+          next: 'menu',
+        },
+        craft: {
+          lines: [
+            '"A rod is patience with a handle on it. You hold, you wait, and when it goes you do not pull, you lean."',
+            '"Everything else about it is people telling you what they caught."',
+          ],
+          next: 'menu',
+        },
+        done: {
+          lines: [
+            '"It took. I watched it take." He has not moved off the rail but he is standing differently.',
+            '"The slough is alive. Tell my sister. Do not tell her I asked you to."',
+          ],
+          next: 'menu',
+        },
+        bye: { lines: ['"Mind the boards."'], next: null },
+      },
+    };
+  },
+
   trucker: () => ({
     speaker: 'Haulier', role: 'Passing through', hue: 20, tone: 0.4,
     start: 'a',
