@@ -65,3 +65,38 @@ handoff requirement, the ~3 h/150-turn stop, and the report format.
 ## Status
 
 Wave 1 dispatched. See the per-lane files beside this one.
+
+## Watch list for the R1 judged round (round 17)
+
+Things a lane measured but could not settle alone, which the judged round is the
+right instrument for. **Rank these deliberately; do not let them ride.**
+
+- **`party_walk` may have got worse.** Lane 3 fixed a sign error in
+  `GrassField._update`'s near test (`dist < near - T*0.75` on tile centres was
+  21-18 = 3 m on a 24 m tile), which means the whole world had been tuned with
+  grass cards drawing from zero. Isolated against an ablation tree with only
+  `GrassField.ts` reverted: `hero_full` is plainly better, but **`party_walk`
+  moves 9.517/255 over 22.2% of pixels against a 1.51 floor** and loses the
+  tussocks around the party's boots. Blades cannot cover the gap
+  (`--hide grass_blade` is 1.075 at HEAD) and raising the caster gate is a
+  recorded negative. **If `party_walk` loses in the round, the answer is a
+  near-LOD geometry change, not a density tweak.**
+- **Task 13 (foreground occluders) is one third done** — `vista_dawn` has one,
+  the rest need `Shots.ts`, which lane 3 released to lane 21. The one frame that
+  ever made the judge stall is the one that has an occluder; this is the
+  cheapest lever in the judged set and it is unfinished.
+- **The city plaza/apron is a flat untextured plane** in every Lestallum and
+  Galdin frame (`PoiKits` `M.concrete`/`M.gravel`, handed to lane 18). Fourteen
+  of lane 21's shots are city frames and five join PAIRING.
+- **The eyes read googly on all four heroes**, a defect the winding fix exposed
+  rather than caused. The head is the judge's #1 ranked tell.
+
+## Cache hygiene before any judged or certified number
+
+`pnpm run build` **deletes** the painted-face cache without replacing it, and
+every lane's `pre-commit` runs it — so `geo.bin.gz` and `texc.bin.gz` were
+absent for hours tonight. **`pnpm run build:full` is what makes them.** Run it,
+then verify, immediately before R1 and before any final perf, memory or
+cold-load number. A capture taken with two of six artifacts missing is not the
+game.
+
