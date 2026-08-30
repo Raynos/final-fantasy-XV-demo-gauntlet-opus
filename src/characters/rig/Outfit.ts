@@ -23,16 +23,31 @@ import { Noise } from '../../util/Noise.ts';
  * height as the body sweep's `u` that `under()` evaluates the muscle shape at,
  * and the damping in `under()` used to pull the cloth inside a bulge. That is
  * millimetres of parameterisation error spread over every piece, not one bad
- * constant, and closing it properly means re-deriving the drape against arc
- * length. Until someone does, this is the margin that absorbs it: 12 mm on
- * the radius, about 6% on a torso's width, and the cheapest thing in the file
- * to take back once the drape is honest.
+ * constant. **The arc-length half of that story is wrong** and is recorded as a
+ * measured negative in `project/handoff/lane2-costume.md`: three.js maps a
+ * Catmull-Rom's `t` linearly to point index whatever the curve type, so a
+ * garment's `t` and the body's `u` already agree. What does diverge is the skin
+ * weights, which `DRAPE_DU` below addresses, and even that is not the whole of
+ * it — the residue is pose-time and nobody has named it yet.
+ *
+ * **This is 20 mm, not 30, and the 10 mm came off a measurement.**
+ * `src/tools/_probe/l2clear.mts` and `l2legclear.mts` evaluate garment-minus-
+ * body radius over the whole (theta, t) domain in the BIND pose: at
+ * `SKIN_CLEARANCE = 0` the worst case is +8.8 mm on a jacket, +9.9 on a shirt
+ * and +10.0 on a pair of trousers, across all four heroes. Nothing is inside
+ * the skin before the character is posed, so every millimetre here is pose
+ * margin and none of it is covering an authoring error. 12 mm was tried and
+ * visibly fails — bare hips and a bare crotch on Ignis, a bare thigh on Noctis
+ * at 1.9 m. 20 mm is clean on all four at that range and takes a third of the
+ * bulk off a silhouette that `HUMAN_REVIEW.md` had flagged as too heavy.
+ * Verified on the idle/walk pose only; a combat lunge bends further than
+ * anything photographed here.
  *
  * It is added to *every* pad, including the deliberately negative ones (the
  * sleeve root that tucks its seam inside the deltoid stays negative, just less
  * so), which is why it is applied here rather than at fifteen call sites.
  */
-const SKIN_CLEARANCE = 0.030;
+const SKIN_CLEARANCE = 0.020;
 
 type Pad = number | ((t: number, u: number) => number) | undefined;
 const clearPad = (p: Pad): Pad => (p == null ? p
@@ -848,11 +863,17 @@ piece('pants', (B, ctx, o) => {
     B.color(o.color ?? 0x22242a).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
   }
   if (o.waist !== false) {
-    // reaches down over the hip crest: the leg tubes only begin at the greater
-    // trochanter, so a short waistband leaves a ring of bare skin at the pelvis
-    const w = drape(ctx.torso, 0.16, 0.42, 5, (o.padHip ?? 0.014) + 0.004);
+    // Reaches down over the hip crest *and past the crotch*. The two leg tubes
+    // begin at the greater trochanter and never meet each other, so the pelvis
+    // is a hole in the geometry between them — visible as a bare triangle at
+    // the inside of the thigh on Noctis, Ignis and Prompto at 1.9 m, at every
+    // clearance including 30 mm. A waistband that stops at u 0.16 leaves it
+    // open; run the same sweep down to the bottom of the torso and it is a pair
+    // of shorts, which is what closes it. The torso's own taper does the
+    // shaping, so this costs a seam and no silhouette.
+    const w = drape(ctx.torso, 0.0, 0.42, 5, (o.padHip ?? 0.014) + 0.004);
     B.color(o.waistColor ?? o.color ?? 0x22242a);
-    sweepTube(B, { nodes: w, steps: 6, seg: 20, uvScale: [1, 0.5] });
+    sweepTube(B, { nodes: w, steps: 10, seg: 20, uvScale: [1, 0.8] });
   }
 });
 
