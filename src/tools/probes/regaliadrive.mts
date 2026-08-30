@@ -192,7 +192,17 @@ out.push('');
 out.push('--- 2b. which way does it steer ---');
 const left = lockTest('KeyA');
 const right = lockTest('KeyD');
+// Put it back on the carriageway before handing over to section 3. Both lock
+// tests end two and a half seconds into a full-lock turn, so without this the
+// auto-drive section starts from a different patch of scrub on every run and
+// 'he finds the road' / 'and then stays on it' become a coin toss -- one run
+// reported 0% off the carriageway and the next failed the same assertion, on
+// the same commit. A gate that is flaky about where it starts is not measuring
+// Ignis, it is measuring where the previous test happened to stop.
 inp.keys.clear();
+const back = reg.path.nearest(reg.body.pos.x, reg.body.pos.z, reg.path.makeHit());
+reg.body.reset(back.x - back.tz * 2.1, back.z + back.tx * 2.1, Math.atan2(back.tx, back.tz));
+reg.body.converge && reg.body.converge();
 step(30);
 
 const deg = (r) => `${(r * 57.3).toFixed(0)} deg`;
