@@ -84,9 +84,9 @@ export const EYE = {
    * worst point of either lid, and a 1.7 mm standoff at the margin, which is
    * about what an eyelid is thick.
    */
-  dome: 0.050,
+  dome: 0.035,
   /** Radius of the lid shell at its margin, as a fraction of globe radius. */
-  lidR: 1.16,
+  lidR: 1.30,
   /** Azimuthal span of the palpebral fissure: inner canthus .. outer canthus. */
   arc: [-1.02, 1.30],
   /** Extra x-spread at the canthi — a real fissure is wider than the globe. */
