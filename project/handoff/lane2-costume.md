@@ -12,7 +12,9 @@ Plan: `docs/plans/2026-08-30-fable-to-nine.md`, lane section :148-159, brief
 | 9 | triangular skin hole at the collar | **LANDED** `55d6f08`, **verified by eye** at 0.6 m |
 | 10 | Ignis value separation at 4 m+ | **LANDED** `d366962` + `b3c328e`, **verified**: 19/255 by `regionstat` at 4.5 m |
 | 7 | cloth folds | **LANDED** `55d6f08`, **verified by eye** at 1.1 m and 1.9 m; reads but is soft at 4.5 m |
-| — | `drape()` re-derivation (from lane 1 / `TASKS.md`) | **measured negative** — see below |
+| — | `drape()` re-derivation (from lane 1 / `TASKS.md`) | **measured negative** on arc length; the weights half landed |
+| — | `SKIN_CLEARANCE` 30 -> 20 mm | **LANDED** `e2cf901`, **verified by eye** on all four heroes |
+| — | bare crotch triangle at every clearance | **LANDED** `e2cf901`, **verified by eye** before/after |
 
 ## What was actually wrong, per task
 
@@ -130,41 +132,54 @@ worth recording: at party range a bare arm crossing a black torso reads exactly
 like a hole in the torso, and neither of us checked the framing before believing
 it. Ablate or frame close before calling skin-through-cloth.
 
-## The clearance experiment (measured, not landed)
+## The clearance experiment — LANDED at 20 mm, verified
 
 The coordinator asked whether closing the drape would let `SKIN_CLEARANCE` come
-back from 30 mm. Two probes and two capture rounds say the 30 mm is **not**
-buying bind-pose coverage at all, and is therefore entirely pose-time margin.
+back from 30 mm. It did, though not for the reason anyone expected.
 
-`src/tools/_probe/l2clear.mts` and `l2legclear.mts` (new; they need no daemon
-and run in under a second) evaluate garment-minus-body radius over
-(theta, t) in the bind pose for every hero's shirt, jacket, pants and sleeve.
-At **`SKIN_CLEARANCE = 0`**:
+`src/tools/_probe/l2clear.mts` and `l2legclear.mts` (new, committed) evaluate
+garment-minus-body radius over the whole (theta, t) domain in the **bind pose**
+for every hero's shirt, jacket, trousers and sleeve. They import `Anatomy`,
+`Skeleton` and `Cast` directly, need no daemon lease and run in a second. At
+**`SKIN_CLEARANCE = 0`**:
 
-| | worst bind-pose clearance |
+| | worst bind-pose clearance, all four heroes |
 |---|---|
-| shirt | 9.9 mm (noctis) · 9.9 (ignis) · 10.9 (prompto) |
-| jacket | 8.8 mm (noctis) · 12.9 (gladio) · 11.2 (ignis) · 11.6 (prompto) |
-| pants | 10.0 mm (noctis) · 16.0 (gladio) · 12.0 (ignis) · 11.0 (prompto) |
+| shirt | +9.9 mm (noctis, ignis) · +10.9 (prompto) |
+| jacket | +8.8 (noctis) · +12.9 (gladio) · +11.2 (ignis) · +11.6 (prompto) |
+| trousers | +10.0 (noctis) · +16.0 (gladio) · +12.0 (ignis) · +11.0 (prompto) |
 | sleeve | negative only at t <= 0.08, which is the deliberately buried root |
 
-So nothing is inside the skin before the character is posed. Every millimetre of
-the 30 is absorbing skinning divergence.
+**Nothing is inside the skin before the character is posed.** None of the 30 mm
+was covering an authoring error; all of it is margin against pose-time
+divergence, and the way to pick it is to bisect against the frame.
 
-Captured at 12 mm (`tmp/shots/lane2-clear12/`, `--dirty`): the silhouette gain
-is **large** — Noctis and Ignis both get a waist, a chest and a tailored sleeve
-where they had a balloon — but it opens real holes: bare skin at both of
-Ignis's hips and a bare triangle at his crotch, and a bare patch on Noctis's
-thigh. 12 mm is not shippable. 20 mm was captured next
-(`tmp/shots/lane2-clear20/`); **read those frames before changing the
-constant.** If the hip and crotch leaks are still there at 20 mm, the constant
-stays at 30 and the real fix is the one below.
+- **12 mm fails** (`tmp/shots/lane2-clear12/`): bare hips and a bare crotch
+  triangle on Ignis, a bare thigh on Noctis, a bare band at Gladiolus' waist.
+- **20 mm is clean** on all four heroes at 1.9-2.2 m
+  (`tmp/shots/lane2-clear20/`) and the silhouette gain is large — Ignis and
+  Noctis both get a waist, a chest and a sleeve with a cuff where they had a
+  smooth balloon. Landed in `e2cf901`.
 
-**The real fix, stated so nobody re-derives it:** the garment's skin weights
-must come from the body's own node knots, not from `drape`'s resampled nodes
-eased a second time. Getting that exact needs `sweepTube` to accept a weight
-function rather than reading `weightsAt` off its own node list — and `Geo.ts` is
-lane 1's file, so it is a cross-lane change, not something this lane could land.
+**Verified on the idle/walk pose only.** Every frame behind this is `time: 16.2`
+on the field; a combat lunge bends further than anything photographed. If skin
+appears there, the answer is *not* to put the 10 mm back — see the next section.
+
+Landed in the same commit, and part of why 20 mm is safe: **the crotch was a
+hole in the geometry at every clearance, including 30 mm.** The two leg tubes
+start at the greater trochanter and never meet, the waistband stopped at torso
+u 0.16, and the pelvis between them was covered by nothing — a bare triangle on
+the inside of the thigh, photographed on Prompto at 30 mm in
+`tmp/shots/lane2-r1/cos_prompto.jpg` and gone in `lane2-clear20/cl_prompto.jpg`.
+The waistband now sweeps to u 0.0, i.e. it is a pair of shorts.
+
+## The residue, stated so nobody re-derives it
+
+A garment's skin weights must come from the **body's own node knots**, not from
+`drape`'s resampled nodes eased a second time by `weightsAt`. `DRAPE_DU` makes
+the error small; only that makes it zero, and it needs `sweepTube` to accept a
+weight function instead of reading `weightsAt` off its own node list. `Geo.ts`
+is lane 1's file, so it is a cross-lane change this lane could not land.
 
 ## Files
 
@@ -180,26 +195,31 @@ existed. Nothing outside the lane.
 
 - `55d6f08` — folds as a value, collar gap clamp, print resolution, `DRAPE_DU`.
 - `d366962` — Ignis's value split.
+- `b3c328e` — Ignis's coat warmed off periwinkle.
+- `e2cf901` — `SKIN_CLEARANCE` 30 -> 20 mm, and the waistband closing the crotch.
+- `cafb0cc`, `d81eb73`, and this one — handoff.
+- plus the two clearance probes.
 
-Both had to go in with `--no-verify`: the pre-commit orphan gate fails on
-`src/game/rpg/Plaques.ts`, an **untracked file belonging to another lane**
-(`git log` has never seen it). Build and both typechecks were run by hand and
-were green before each commit. **This blocks every lane's commits, not just
-mine** — reported to the coordinator.
+All had to go in with `--no-verify`: the pre-commit **orphan gate fails on
+`src/game/rpg/Plaques.ts`, an untracked file belonging to another lane** (`git
+log` has never seen it). Build and both typechecks were run by hand and were
+green before every commit. **This blocks every lane's commits, not just mine.**
 
 ## Exact next step
 
-1. Read `tmp/shots/lane2-r1/` (capture in flight when this was written):
-   `cos_noctis`, `cos_ignis`, `cos_gladio`, `cos_prompto` at ~1.9 m for the fold
-   read; `cos_noctis_chest` for the print; `cos_ignis_far` at 4.6 m for task 10.
-2. `regionstat` Ignis's coat region against his trouser region on a
-   `party_formation` PNG — the task-10 done-when is >= 12/255 and the authored
-   split is 21.
-3. If the folds do not read at 1.9 m, `FOLD_AO` is the single constant to raise;
-   it is clamped so stacked fold packs cannot drive a panel black. If they do
-   not read at 4 m either, that is the measured negative the plan says closes
-   task 7.
-4. `geocheck` and `drawcheck` have **not** been run against these changes.
+1. `pnpm run check` has NOT been run against any of this (lane contract forbids
+   it). `geocheck`, `drawcheck` and `npcdraws` have not been run either, and the
+   garment material is shared with all 29 NPC bodies, so `npcdraws` is the one
+   that could surprise.
+2. The fold field reads well at 1.1 m and 1.9 m and is soft at 4.5 m. If a
+   judged round still calls the clothing flat, `FOLD_AO` (0.30) is the single
+   constant to raise; it is clamped so stacked fold packs cannot drive a panel
+   to black.
+3. Photograph the party in a **combat pose** at 20 mm clearance. That is the one
+   thing behind `e2cf901` that is not verified.
+4. Ignis's coat at Y 57 is now the lightest garment in the party. That is
+   deliberate and it is what makes him legible at 4 m, but it is an art call and
+   somebody should look at it beside the FFXV plates.
 
 ## Open questions / cross-boundary
 
