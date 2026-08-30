@@ -18,6 +18,8 @@ import type { VFX } from '../../combat/VFX.ts';
 import type { Terrain } from '../../world/Terrain.ts';
 import type { Ecology } from '../../world/veg/Ecology.ts';
 import type { Sky } from '../../world/Sky.ts';
+import type { Encounter as DungeonEncounter } from '../../world/dungeons/kit/Layout.ts';
+import type { SetPiece } from './SpawnTables.ts';
 import type { RpgSystem } from '../rpg/RpgSystem.ts';
 
 /**
@@ -124,6 +126,15 @@ export class EncounterDirector {
   state!: 'field' | 'combat';
   stats!: EncounterStats;
   suppressRoamers!: boolean;
+  /**
+   * The party is inside a dungeon.
+   *
+   * An interior's world origin is kilometres from the entrance, so the open
+   * world's territories and wild dens must not stream against it -- and the
+   * hand-placed dungeon fights must not be streamed out from under the player.
+   * @see spawnAt
+   */
+  interior!: boolean;
   terrain!: Terrain | undefined;
   threats!: EncounterThreat[];
   /** Terrain sampler for the wild dens' site test. See {@link WildTerritories}. */
@@ -153,6 +164,7 @@ export class EncounterDirector {
     this.enabled = true;
     /** Set true to stop rolling new roaming encounters. */
     this.suppressRoamers = false;
+    this.interior = false;
     /** Hard cap on simultaneously simulated creatures — one draw call each. */
     this.budget = 28;
 
@@ -382,6 +394,91 @@ export class EncounterDirector {
     }
     this._warn(def.faction === 'daemon' ? 'Daemons.' : def.faction === 'imperial' ? 'Imperials incoming.' : 'Something has our scent.');
     return { def, pack, enemies: list };
+  }
+
+  /* -------------------------------------------------------------- interiors */
+
+  /**
+   * Arm one dungeon encounter marker, in world space, inside a dungeon.
+   *
+   * `Layout.encounter()` markers had been declarative for the life of the
+   * feature -- six authored fights across the three dungeons, three of them
+   * bosses -- read only by `DungeonMap` to draw an enemy pip. This is the thin
+   * wrapper that makes them real, and it is deliberately NOT `activate()`:
+   *
+   * - the record never goes into `this.active`, so `_streamOne` cannot see it
+   *   and cannot distance-deactivate it. That matters because an interior sits
+   *   at its own world origin, which is kilometres from the entrance the party
+   *   walked in through, so the ordinary 230 m retire would fire instantly.
+   * - it is leashed to its own room rather than to a territory radius.
+   * - a boss routes through the existing `BossFight` on a `SetPiece` LITERAL.
+   *   There is no `SET_PIECES` row for a dungeon boss: those are a hand-placed
+   *   world table, and a dungeon's fight is placed by the dungeon.
+   *
+   * Call it only after `Dungeons._patchTerrain()` -- `ground()` reads
+   * `Terrain.heightAt`, which is what that patch redirects to the interior
+   * floor.
+   *
+   * @param spec the marker, from `Layout.encounters`
+   * @param pos  world position of the marker, already on the interior floor
+   * @returns what was spawned, keyed by `owner` for {@link clearOwned}
+   */
+  spawnAt(spec: DungeonEncounter, pos: THREE.Vector3, opts: { interior?: boolean, level?: number } = {}) {
+    const row = DUNGEON_KINDS[spec.kind];
+    if (!row) return null;
+    const owner = `dungeon:${spec.id}`;
+    const level = opts.level ?? row.level;
+
+    if (spec.boss) {
+      // A literal, not a table row. `arena` is the room, not the 60 m default,
+      // and `dropship` is false because there is no sky to drop from.
+      const def: SetPiece = {
+        id: owner, name: spec.name || row.name, kind: row.kind,
+        at: [pos.x, pos.z], radius: spec.r, level, boss: row.key,
+        dropship: false, arena: spec.r,
+        music: row.kind === 'imperial' ? 'boss-imperial' : 'boss-field',
+      };
+      // One boss at a time: `startSetPiece` has the same guard, and two armed
+      // fights clobber `this.boss`.
+      if (this.boss) this.endBoss(false);
+      const fight = new BossFight(def, this);
+      this.boss = fight;
+      // 16 m of stand-off is right on a hillside and wrong in a 12 m room.
+      fight.begin(pos.clone(), Math.min(16, spec.r * 0.75));
+      return { owner, pack: fight.pack, enemies: [fight.boss, ...fight.adds].filter(Boolean) as Enemy[], fight };
+    }
+
+    const n = Math.max(1, spec.count ?? 3);
+    const pack = new Pack({ id: owner, maxEngaged: Math.min(3, n), encounter: this });
+    const list: Enemy[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + this.rng.next() * 0.7;
+      const r = Math.sqrt(this.rng.next()) * spec.r * 0.6;
+      const p = this.ground(pos.x + Math.cos(a) * r, pos.z + Math.sin(a) * r, this._tmp2);
+      const e = this.enemies.spawn(row.key, {
+        pos: p, heading: this.rng.next() * Math.PI * 2, level,
+        pack, leash: spec.r + 10, owner, name: spec.name,
+      });
+      e.home.copy(this.ground(pos.x, pos.z, this._tmp2));
+      list.push(e);
+    }
+    this.packs.push(pack);
+    return { owner, pack, enemies: list, fight: null as BossFight | null };
+  }
+
+  /**
+   * Despawn everything {@link spawnAt} put in the world under `owner`.
+   *
+   * Mirrors `deactivate()`'s ownership test -- a pooled instance may already
+   * have been recycled into somebody else's pack, and despawning it twice
+   * would steal it.
+   */
+  clearOwned(owner: string, pack: Pack | null = null) {
+    for (const e of this.enemies.list.slice()) {
+      if (e.spawnedBy === owner) this.enemies.despawn(e);
+    }
+    if (this.boss && this.boss.def.id === owner) this.endBoss(false);
+    if (pack) { const i = this.packs.indexOf(pack); if (i >= 0) this.packs.splice(i, 1); }
   }
 
   /* ------------------------------------------------------------ set pieces */
@@ -944,6 +1041,11 @@ export class EncounterDirector {
     for (const e of this.enemies.list) if (e.analysed > 0) e.analysed -= 0.5;
     if (this.party) for (const m of this.party.members) if (m.taunting > 0) m.taunting -= 0.5;
 
+    // Inside a dungeon the only encounters are the authored ones. The wild
+    // generator would otherwise roll dens against the interior's own world
+    // origin -- a kilometre of empty heightfield nobody can reach.
+    if (this.interior) { this._wild = []; return; }
+
     this._wild = wildTerritoriesNear(pp.x, pp.z, 400, pressure, this._eco,
       this.game.seed ?? 1337, (this.rpg && this.rpg.noctis && this.rpg.noctis.level) || 0);
 
@@ -999,3 +1101,23 @@ export class EncounterDirector {
 
 const NEUTRAL = { levelBonus: 0, attack: 1, defense: 1, hp: 1, depth: 0, isNight: false };
 const MEMBER_BY_KEY: Record<CompanionKey, string> = { gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };
+
+/**
+ * What a dungeon `EncounterKind` marker actually spawns.
+ *
+ * The authored kinds are the dungeon author's vocabulary, not bestiary keys,
+ * and two of them name creatures this game does not have: there is no
+ * `mindflayer` and no `magitek_commander` in `TYPES`. Rather than invent two
+ * species to satisfy two markers, they map onto the nearest thing that exists
+ * and is the right shape of fight -- a Magitek Armour is exactly the imperial
+ * heavy a "commander" marker wants, and a Necromancer is the caster the
+ * Fociaugh marker was reaching for.
+ */
+const DUNGEON_KINDS: Record<string, { key: string, level: number, kind: SetPiece['kind'], name: string }> = {
+  'mt-squad':       { key: 'mt',             level: 13, kind: 'imperial', name: 'MT Squad' },
+  'mt-commander':   { key: 'magitek_armour', level: 20, kind: 'imperial', name: 'Magitek Commander' },
+  'goblin-pack':    { key: 'goblin',         level: 17, kind: 'field',    name: 'Goblin Pack' },
+  'iron-giant':     { key: 'irongiant',      level: 34, kind: 'imperial', name: 'Iron Giant' },
+  'sabertusk-pack': { key: 'sabertusk',      level: 11, kind: 'field',    name: 'Sabertusk Pack' },
+  'mindflayer':     { key: 'necromancer',    level: 27, kind: 'field',    name: 'Mindflayer' },
+};

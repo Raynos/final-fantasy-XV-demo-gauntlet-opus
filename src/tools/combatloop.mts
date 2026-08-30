@@ -659,6 +659,83 @@ const results = await page.evaluate(async () => {
       : F(`state=${after} hp=${Math.round(rpg.noctis.hp)}`);
   });
 
+  /* ============================================== 11. dungeon fights ==== */
+  // `Layout.encounter()` markers were declarative for the life of the feature:
+  // six authored fights across three interiors, read only by the map renderer,
+  // so every dungeon was a walk through empty rooms. These four checks are the
+  // whole contract of `EncounterDirector.spawnAt` -- armed on entry, boss on
+  // approach, killable, gone on the way out, back on the next visit.
+  const dungeons = g.get('Dungeons')!;
+  const owned = (prefix: string) => enemies.list.filter((e) => String(e.spawnedBy || '').startsWith(prefix) && !e.dead);
+
+  check('dungeon: entering Keycatrich arms its MT patrol', () => {
+    clearField();
+    if (dungeons.isInside) { dungeons.leave({ instant: true }); step(10); }
+    dungeons.enter('keycatrich', { instant: true });
+    step(20);
+    const live = owned('dungeon:');
+    return dungeons.isInside && live.length > 0
+      ? P(`${live.length} live: ${[...new Set(live.map((e) => e.speciesId))].join(', ')}`)
+      : F(`inside=${dungeons.isInside} spawned=${live.length}`);
+  });
+
+  check('dungeon: the Magitek Commander arms on approach, not at the door', () => {
+    const atDoor = enc.boss;
+    const f = dungeons._fights.find((x) => x.spec.boss);
+    if (!f) return F('no boss marker in the layout');
+    if (atDoor) return F('a boss was already armed at the entrance');
+    player.root.position.copy(f.pos);
+    step(60);                                   // _pollFights runs every 0.4 s
+    const b = enc.boss;
+    return b && b.boss && !b.boss.dead
+      ? P(`${b.def.name} armed at ${Math.round(b.boss.hp)} hp, ${b.boss.root.position.distanceTo(player.position).toFixed(1)} m off`)
+      : F(`boss=${b ? 'armed but no enemy' : 'still null'} after standing in the room`);
+  });
+
+  check('dungeon: the Magitek Commander dies to the real damage path', () => {
+    const b = enc.boss;
+    const boss = b && b.boss;
+    if (!boss) return F('no boss armed');
+    const hp0 = boss.maxHp;
+    // Fast-forward the fight, not the kill: a level-20 Magitek Armour is a
+    // several-minute bout at 60 frames a check, so the bar is taken down to a
+    // sliver and the *killing blow* is a real swing through `CombatSystem`.
+    // What is under test is that the death path runs on a dungeon-owned boss.
+    boss.hp = Math.min(boss.hp, 400);
+    const kills: Array<WindowEventMap['encounter:kill']['detail']> = [];
+    const onKill = (ev: WindowEventMap['encounter:kill']) => kills.push(ev.detail);
+    window.addEventListener('encounter:kill', onKill);
+    combat.drawSlot(1); step(2);
+    const f = boss.root.position.clone().sub(player.position); f.y = 0; f.normalize();
+    player.root.position.copy(boss.root.position).addScaledVector(f, -1.8);
+    player.heading = Math.atan2(f.x, f.z);
+    player.root.rotation.y = player.heading;
+    for (let i = 0; i < 900 && !boss.dead; i++) {
+      if (i % 16 === 0) mouseDown(0);
+      step(1);
+      if (i % 16 === 8) mouseUp(0);
+    }
+    mouseUp(0); step(20);
+    window.removeEventListener('encounter:kill', onKill);
+    return boss.dead && kills.length > 0
+      ? P(`${boss.name} (${hp0} hp) down, encounter:kill fired for ${kills[0].name}`)
+      : F(`dead=${boss.dead} hp=${Math.round(boss.hp)} kills=${kills.length}`);
+  });
+
+  check('dungeon: fights clear on leave and come back on re-entry', () => {
+    dungeons.leave({ instant: true });
+    step(20);
+    const afterLeave = owned('dungeon:').length;
+    dungeons.enter('keycatrich', { instant: true });
+    step(20);
+    const afterReturn = owned('dungeon:').length;
+    dungeons.leave({ instant: true });
+    step(20);
+    return afterLeave === 0 && afterReturn > 0
+      ? P(`0 live outside, ${afterReturn} live on re-entry`)
+      : F(`after leave ${afterLeave}, after re-entry ${afterReturn}`);
+  });
+
   return out;
 });
 

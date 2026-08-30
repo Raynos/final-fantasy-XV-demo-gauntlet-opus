@@ -507,9 +507,19 @@ export class Layout {
   /**
    * A scripted encounter marker.
    *
-   * Declarative only: nothing outside the map reads these. `EncounterDirector`
-   * runs on its own tables and has never been handed a dungeon's markers, so
-   * these draw an enemy pip on the map and spawn nothing.
+   * These are live. `Dungeons._armEncounters` walks `layout.encounters` on
+   * entry and hands each one to `EncounterDirector.spawnAt`, which spawns the
+   * pack leashed to `r`; a marker with `boss: true` arms a `BossFight` the
+   * first time the party walks inside `r`, and everything is cleared on the
+   * way out, so nothing respawns within a visit and the dungeon is fresh on
+   * the next one.
+   *
+   * `kind` is the dungeon author's vocabulary, not a bestiary key --
+   * `DUNGEON_KINDS` in `EncounterDirector` is where it resolves to a species.
+   *
+   * (For most of this feature's life the doc here read "these draw an enemy
+   * pip on the map and spawn nothing", and it was true: `DungeonMap` was the
+   * only consumer and every interior was a walk through empty rooms.)
    */
   encounter(s: EncounterSpec): Encounter {
     const e: Encounter = { id: `enc${this.encounters.length}`, ...s };

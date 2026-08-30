@@ -72,8 +72,14 @@ export class BossFight {
 
   /**
    * Put the boss in the world.
+   *
+   * @param at world anchor
+   * @param [standoff=16] metres between the anchor and where the boss stands,
+   *   measured away from the party so the arrival reads. 16 m is right on a
+   *   hillside and wrong in a 12 m dungeon room, which is the only reason this
+   *   is a parameter. `astral` ignores it -- Titan's arena sets its own.
    */
-  begin(at: THREE.Vector3) {
+  begin(at: THREE.Vector3, standoff = 16) {
     const def = this.def;
     this.centre.copy(at);
     this.pack = new Pack({ id: `boss-${def.id}`, encounter: this.dir, maxEngaged: 3 });
@@ -87,7 +93,7 @@ export class BossFight {
       : 0;
     const stand = def.kind === 'astral'
       ? dir.ground(at.x + Math.sin(bearing) * (def.arena || 60) * 0.9, at.z + Math.cos(bearing) * (def.arena || 60) * 0.9).clone()
-      : dir.ground(at.x + Math.sin(bearing) * 16, at.z + Math.cos(bearing) * 16).clone();
+      : dir.ground(at.x + Math.sin(bearing) * standoff, at.z + Math.cos(bearing) * standoff).clone();
 
     const boss = this.enemies.spawn(def.boss, {
       pos: stand, level: def.level, pack: this.pack, leash: 400,

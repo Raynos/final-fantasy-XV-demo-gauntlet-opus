@@ -16,6 +16,8 @@ import type { Player } from '../../characters/Player.ts';
 import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
 import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
 import type { InteractableHandle } from '../../game/interaction/Interactables.ts';
+import type { EncounterDirector } from '../../game/encounters/EncounterDirector.ts';
+import type { Encounter } from './kit/Layout.ts';
 import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake, compactTexBake } from '../../engine/TexBake.ts';
 import { packSubtree } from '../../engine/AttrPack.ts';
@@ -132,6 +134,14 @@ function shotDungeon(name: unknown): string | null {
  * registration off them so `E` reaches all four kinds — entrance, door, chest,
  * exit — without either side duplicating the other's rules.
  */
+/** One authored dungeon fight and what it has put in the world. */
+interface ArmedFight {
+  spec: Encounter;
+  pos: THREE.Vector3;
+  armed: boolean;
+  rec: ReturnType<EncounterDirector['spawnAt']>;
+}
+
 export class Dungeons {
   /** A bare position carrier in dungeon-local space -- not a camera. */
   _camLocal!: { position: THREE.Vector3 };
@@ -156,6 +166,15 @@ export class Dungeons {
   game!: Game;
   /** Dungeon-local key items the party has picked up, across every dungeon. */
   keys!: Set<string>;
+  /**
+   * The authored fights of the dungeon currently entered, and what each one
+   * has spawned. Cleared on leave, rebuilt on the next enter -- which is what
+   * "no respawn within a visit, a fresh dungeon next time" means, for free.
+   * @see _armEncounters
+   */
+  _fights!: ArmedFight[];
+  /** Seconds until the next room-trigger poll; bosses arm on approach. */
+  _fightTimer!: number;
   prompt!: DungeonPrompt | null;
   sky!: Sky | null;
   state!: DungeonState;
@@ -169,6 +188,8 @@ export class Dungeons {
     this.entrances = [];
     this.keys = new Set();
     this._hidden = [];
+    this._fights = [];
+    this._fightTimer = 0;
     this._saved = null;
     this._tmp = new THREE.Vector3();
     this._camLocal = { position: new THREE.Vector3() };
@@ -428,6 +449,8 @@ export class Dungeons {
     // than cutting. `CameraRig._cut()` is the method that would do it, and
     // wiring it up is a change to how the transition looks, not a port fix.
 
+    this._armEncounters(d);
+
     this.ambience.start(def.ambience || {});
     const audio = game.get('Audio');
     if (audio && audio.setState) audio.setState('tension');
@@ -462,6 +485,8 @@ export class Dungeons {
     // -- the guard was always false, so the arm eases into the new room rather
     // than cutting. `CameraRig._cut()` is the method that would do it, and
     // wiring it up is a change to how the transition looks, not a port fix.
+
+    this._clearEncounters();
 
     this.ambience.stop();
     const audio = game.get('Audio');
@@ -624,6 +649,81 @@ export class Dungeons {
     return { ok: true, rewards };
   }
 
+  // ------------------------------------------------------------- encounters
+
+  /** `EncounterDirector`, if the game has one. Captures run without it. */
+  get _dir(): EncounterDirector | null { return (this.game?.get('Encounters') as EncounterDirector) || null; }
+
+  /**
+   * Put the dungeon's authored fights in the world.
+   *
+   * `Layout.encounter()` markers -- six of them across the three dungeons,
+   * three of them bosses -- had been declarative since they were written: the
+   * only consumer was `DungeonMap`, drawing an enemy pip on a map screen that
+   * is itself unwired. Every interior was a walk through empty rooms with a
+   * treasure chest at the end.
+   *
+   * Roaming packs arm on entry, so the place is inhabited the moment you are
+   * in it. **Bosses arm on approach** (`_pollFights`), because
+   * `BossFight.begin` fires `encounter:boss` and starts the chase immediately
+   * -- arming the Magitek Commander at the door would announce it while the
+   * party is still in the airlock, and `EncounterDirector.boss` is a single
+   * slot, so two armed at once clobber each other.
+   *
+   * Called after `_patchTerrain()`: `EncounterDirector.ground()` reads
+   * `Terrain.heightAt`, which that patch redirects to the interior floor.
+   */
+  _armEncounters(d: Dungeon) {
+    const dir = this._dir;
+    if (!dir) return;
+    dir.interior = true;
+    dir.suppressRoamers = true;
+    for (const spec of d.layout.encounters) {
+      const wx = spec.at[0] + d.origin.x, wz = spec.at[1] + d.origin.z;
+      // `floorAt` is null outside the carved volume -- an author can put a
+      // marker in a corridor that later moved, and a spawn dropped onto a
+      // null floor lands at y=0, which is under the world.
+      const y = d.floorAt(wx, wz);
+      if (y == null) continue;
+      const pos = new THREE.Vector3(wx, y, wz);
+      if (spec.boss) { this._fights.push({ spec, pos, armed: false, rec: null }); continue; }
+      const rec = dir.spawnAt(spec, pos, { interior: true });
+      this._fights.push({ spec, pos, armed: true, rec });
+    }
+  }
+
+  /** Arm a boss the first time the party walks into its room. */
+  _pollFights(at: THREE.Vector3 | null) {
+    const dir = this._dir;
+    if (!dir || !at) return;
+    for (const f of this._fights) {
+      if (f.armed) continue;
+      if (Math.hypot(at.x - f.pos.x, at.z - f.pos.z) > f.spec.r) continue;
+      f.armed = true;
+      f.rec = dir.spawnAt(f.spec, f.pos, { interior: true });
+      break;                        // one boss per tick; the slot is single
+    }
+  }
+
+  /**
+   * Take the dungeon's fights back out of the world on the way out.
+   *
+   * Without this the interior's enemies stay in `Enemies.list` at the
+   * interior's own world origin, which is kilometres from anywhere the party
+   * can stand -- invisible, un-fightable, and still costing a draw call and an
+   * AI tick each. Clearing here is also what gives "no respawn within a visit,
+   * a fresh dungeon on re-entry" with no extra bookkeeping.
+   */
+  _clearEncounters() {
+    const dir = this._dir;
+    if (dir) {
+      for (const f of this._fights) if (f.rec) dir.clearOwned(f.rec.owner, f.rec.pack);
+      dir.interior = false;
+      dir.suppressRoamers = false;
+    }
+    this._fights.length = 0;
+  }
+
   // ---------------------------------------------------------------- ticking
 
   update(dt: number, game: Game) {
@@ -663,6 +763,9 @@ export class Dungeons {
     if (player) this._confine(player.root.position, 0.55);
     const party = game.get('Party');
     if (party && party.members) for (const m of party.members) this._confine(m.root.position, 0.7);
+
+    this._fightTimer -= dt;
+    if (this._fightTimer <= 0) { this._fightTimer = 0.4; this._pollFights(player ? player.position : null); }
 
     if (player) {
       this._hazards(dt, player);
