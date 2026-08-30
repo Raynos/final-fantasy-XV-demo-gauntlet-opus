@@ -1960,3 +1960,32 @@ finds its waterline and lays itself out from there, up to 80 m from the pin.
 
 The same shape will bite anything else that derives world content from a POI
 position and is then asked to reposition that POI.
+
+## An attribute is packable when it is spent on how a surface LOOKS, never on where it IS
+
+`aClip` looked like the safest row in `AttrPack`'s `RULES` table: two
+components, every value already inside 0..1, no range check refuses it, 1.6 MB
+for free. It is the terrain clipmap's **LOD morph alpha**, and
+`TerrainMaterial.ts:220-232` spends it as
+
+    tfH = mix(tfH, mix(mix(h00,h10,gt.x), mix(h01,h11,gt.x), gt.y), aClip.x);
+    ...
+    vec3 transformed = vec3(position.x, tfH, position.z);
+
+One byte of alpha is one byte of **height** on every clipmap ring in the world.
+Quantising it put `driftcheck` at 0.45 m against a 0.05 m tolerance and can
+never satisfy `heightcheck`, which asserts *0.000 m* GPU vs CPU.
+
+The rule that survives: **read the shader that consumes an attribute, not the
+attribute's measured range.** An `a`-prefixed name tells you nothing. `aMat`
+(roughness, metalness, thickness), `aTan`/`aGroom` (hair directions), `color`
+(a tint) and `skinWeight` (a partition of 1) are all shading and all pack
+safely; `aClip` is geometry wearing a shading name.
+
+**And the reason this is a landmine rather than a bug report:** a 1/255 error in
+a morph alpha is far under every per-shot `imgdiff` floor in this repo. Thirteen
+frames compared and four read by eye could not have caught it, and did not. One
+numeric gate did. That is the argument for `heightcheck` asserting exactly
+0.000 — and the same shape as "a consistently-but-inversely wound shell is
+invisible to every bench in this repo". Found 2026-08-30, reverted in `50b66b1`.
+
