@@ -124,6 +124,17 @@ export interface CardOpts {
   tipColor: THREE.Color;
   /** strength of the mean-preserving edge/root value spread. */
   spread?: number;
+  /**
+   * Self-occlusion at card fraction `t`: **0 = fully exposed, 1 = buried**.
+   *
+   * Written into `aMat.y`, which on hair is unused (every emitter in this file
+   * leaves metalness 0) and which the hair branch of `patch()` reads as
+   * occlusion instead of metalness. The zero default is deliberate: an emitter
+   * that does not pass this renders exactly as it did before the channel
+   * existed, which is the only safe failure mode for a channel five call sites
+   * write and one shader reads.
+   */
+  occAt?: (t: number) => number;
 }
 
 /**
@@ -198,6 +209,10 @@ export function emitCard(B: MeshBuilder, o: CardOpts) {
     // other emitter in this file clamped to the solid row. Nothing else in the
     // hair mesh had to change.
     const vAlong = -1 - t;
+    // Per-ROW, not per-vertex: the whole cross-section of a card sits at one
+    // depth in the pile, and this is the granularity the offset was measured at
+    // in `buildHair` (one `sample()` per strand point, ~10 per card).
+    if (o.occAt) B.metal(o.occAt(t));
     const rootDark = 1 + 0.30 * (smooth(t / 0.35) - hMean);
     const row: number[] = [];
     for (let j = 0; j < RING; j++) {
@@ -425,6 +440,18 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   // `hug: 0` opts a tuft out entirely — that is what a spike is.
   const rrH = [HEAD_R[0] * (look.headWidth ?? 1), HEAD_R[1], HEAD_R[2]];
   const _q = new THREE.Vector3();
+  /**
+   * How far `v` stands off the sculpted scalp, in canonical metres, measured
+   * along the scalp normal directly under it. This is the quantity both clamps
+   * below already compute; it is named here because it is also the only thing
+   * we know about **depth in the pile**, which is what hair self-occlusion is.
+   */
+  const skullOffset = (v: THREE.Vector3) => {
+    const th = Math.atan2(v.x / rrH[0], v.z / rrH[2]);
+    const ph = Math.acos(clamp01((v.y / rrH[1] + 1) / 2) * 2 - 1);
+    const { p: q, n } = sample(th, ph);
+    return _q.copy(v).sub(q).dot(n);
+  };
   const hugSkull = (v: THREE.Vector3, maxOff: number, k: number) => {
     // fade the clamp out below the jaw and above the crown, where the skull's
     // spherical parameterisation stops meaning anything and a mane hanging past
@@ -635,6 +662,31 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
         pts.push(cur.clone());
       }
 
+      // ---- self-occlusion: where in the pile does each row of this card sit?
+      //
+      // §12.3's plates are a *lifted, compressed* value cluster — no true
+      // blacks anywhere in hair, on a black head or a blond one — and the sky
+      // fill that supplies that lift is flat across the groom, so it widens the
+      // distribution instead of translating it (measured: at coefficient 0.30
+      // the median lands on the plate and Noctis' hair reads grey). What is
+      // missing is a fill that is strong at the outside of the pile and weak
+      // deep in it.
+      //
+      // The only cheap thing we know about depth is the standoff above the
+      // sculpted scalp — the quantity `liftOutOfSkull` already computes. Raw,
+      // it is a bad proxy: a lock lying flat where the groom is one layer thick
+      // would read as buried. Normalising it by that tuft's OWN corridor
+      // ceiling fixes exactly that, because the ceiling is the authored local
+      // thickness of the groom at that point. So `1` is the outside of the
+      // pile and `0` is against the skull, per strand point, whatever the style.
+      const occ: number[] = [];
+      for (let k = 0; k <= segs; k++) {
+        const t = k / segs;
+        const ceil = baseOff + (guided ? 0.018 : 0) + puff * len * t;
+        const span = Math.max(0.004, ceil - baseOff);
+        occ.push(1 - clamp01((skullOffset(pts[k]) - baseOff) / span));
+      }
+
       const tBase = tuft.color != null ? new THREE.Color().setHex(tuft.color, THREE.SRGBColorSpace) : base;
       const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
       const tRoot = tBase.clone().multiplyScalar(0.72);
@@ -671,6 +723,16 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
           // stop the card being a rectangle.
           taper: (t: number) => (0.72 + 0.28 * smooth(t / 0.20))
             * (1 - 0.90 * Math.pow(clamp01((t - 0.62) / 0.38), 1.05)),
+          // `emitCard` re-samples the strand on a centripetal spline, so its
+          // `t` is arc length and the array index is not — but the two agree to
+          // well inside one row on a curve this smooth, and occlusion is a
+          // low-frequency field. Lerped rather than nearest so a 7-segment
+          // strand does not step a 9-row card.
+          occAt: (t: number) => {
+            const f = clamp01(t) * segs;
+            const k = Math.min(segs - 1, Math.floor(f));
+            return occ[k] + (occ[k + 1] - occ[k]) * (f - k);
+          },
           // the same wide per-lock value spread the tubes carried: at card
           // scale it is finally resolvable, which is the point
           color: tRoot.clone().lerp(tTip, 0.10 + 0.32 * Math.pow(rng.next(), 1.3)),

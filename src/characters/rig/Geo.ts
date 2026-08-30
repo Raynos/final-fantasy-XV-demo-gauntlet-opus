@@ -157,6 +157,19 @@ export class MeshBuilder {
   thick(t: number) { this._m = [this._m[0], this._m[1], t]; return this; }
 
   /**
+   * The `aMat.y` channel alone, leaving roughness/thickness as they are.
+   *
+   * On every material but hair this channel is metalness and is what
+   * `<metalnessmap_fragment>` reads. **Hair never uses it** — every emitter in
+   * `Hair.ts` writes 0 — so on the hair material `patch()` pins
+   * `metalnessFactor` to 0 and reads the channel as *self-occlusion* instead:
+   * how deep in the pile a strand sits. `emitCard`'s `occAt` is the only
+   * caller, and it varies the value per card ROW, which is why this exists at
+   * all: `mat()` would reset roughness and thickness with it.
+   */
+  metal(m: number) { this._m = [this._m[0], m, this._m[2]]; return this; }
+
+  /**
    * Flow direction for anisotropic shading — the strand tangent on hair, the
    * weave direction on cloth. Object space; the shader skins and view-transforms
    * it. Defaults to +Y, which is what an unset surface gets.

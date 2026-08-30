@@ -182,8 +182,15 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
       .replace('#include <common>', `#include <common>\n${HEAD}${hair ? GROOM_HEAD : ''}`)
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n\troughnessFactor = clamp( vMat.x, 0.035, 1.0 );')
+      // `aMat.y` is metalness on every material here EXCEPT hair, where no
+      // emitter has ever written anything but 0 into it. The hair branch below
+      // spends that free channel on **self-occlusion** — depth in the pile —
+      // so on hair the metalness workflow is pinned off rather than fed a
+      // number that means something else entirely.
       .replace('#include <metalnessmap_fragment>',
-        '#include <metalnessmap_fragment>\n\tmetalnessFactor = clamp( vMat.y, 0.0, 1.0 );');
+        hair
+          ? '#include <metalnessmap_fragment>\n\tmetalnessFactor = 0.0;'
+          : '#include <metalnessmap_fragment>\n\tmetalnessFactor = clamp( vMat.y, 0.0, 1.0 );');
 
     const blocks = [];
 
@@ -398,7 +405,34 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // intuition" and that erring bright is the failure mode. So this sits at
   // 0.18, between the two measured points and deliberately a little under the
   // plate rather than a little over.
-  kk += uSunColor * pow( dome, 1.2 ) * 0.18 * strand * fillC * ( 0.30 + 0.30 * luminance );
+  //
+  // ---- self-occlusion, and it modulates THIS term and nothing else --------
+  //
+  // The standing diagnosis had hair self-occlusion as a darkening of the direct
+  // light. Against 12.3's plate table that is backwards: of our six hair
+  // numbers only ONE (blond's top end) asks for less light, and a darkening
+  // term moves the other five the wrong way. What is actually wrong is the
+  // shape of the distribution, not its level — our p5 is 0-9 against a plate
+  // 20-22 while the top ends are at or over it.
+  //
+  // pow(dome, 1.2) is what puts a zero there: it reaches 0 wherever the macro
+  // normal points away from the sky, i.e. under the fringe and beneath the
+  // mass. That is wrong for an *exposed* strand, which still sees a great deal
+  // of sky sideways plus its neighbours' scatter, and right only for one buried
+  // in the pile. So the fill gets a pedestal, and the pedestal is what
+  // occlusion gates: full at the outside of the groom, nearly gone against the
+  // skull. vMat.y carries that depth (Hair.ts's occAt; 0 = outside the pile,
+  // 1 = against the skull) and is 0 on every emitter that does not compute it,
+  // which is exactly the old behaviour.
+  //
+  // The point of doing it this way is that it TRANSLATES the cluster instead of
+  // stretching it. Raising the flat coefficient to fit the median was measured
+  // and rejected on sight — it lifts the top end as hard as the bottom and
+  // Noctis' hair reads grey. This leaves dome = 1 untouched at 1.0 and lifts
+  // only the dark tail.
+  float expose = 1.0 - 0.60 * clamp( vMat.y, 0.0, 1.0 );
+  float skyVis = mix( 0.45, 1.0, pow( dome, 1.2 ) ) * expose;
+  kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.30 + 0.30 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
