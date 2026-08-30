@@ -2654,6 +2654,33 @@ function waitFor(what: string, forMs: number): Promise<WaitResponse> {
 /** The sha this daemon is currently prewarming, so two commits do not race. */
 let prewarming: BuildId | null = null;
 
+/**
+ * The newest sha anyone has asked to prewarm. Everything else queued is stale.
+ *
+ * **`prewarming` alone did not supersede anything, and the docstring below said
+ * it did.** It is set at *submit* and cleared in the job's `finally`, so it only
+ * ever rejected a duplicate request for the same sha; a request for a NEW sha
+ * passed the guard, queued a second boot, and left the first one queued behind
+ * it. On a shared trunk with eight lanes committing every few minutes and a
+ * `post-commit` hook firing one of these per commit, that is a queue that grows
+ * faster than four workers can drain it.
+ *
+ * Measured on 2026-08-31, mid-wave: **sweep queue depth 53, of which 51 were
+ * `prewarm`**, all four workers busy, and `harnessstats` reporting 50% of all
+ * harness time spent queueing rather than working. Each of those 51 would
+ * materialise a tree, start a vite server and boot a page for a sha fifty
+ * commits stale that nobody would ever capture. Two `driftcheck` arms and three
+ * lanes' `check` runs died on a 300 s `preparePage` timeout behind it.
+ *
+ * The fix is to supersede where the claim always said it did: at the front of
+ * the queue. A prewarm job whose build is no longer the newest request steps
+ * aside in microseconds instead of spending a slot, so the queue drains rather
+ * than being blocked from filling.
+ */
+let prewarmWanted: BuildId | null = null;
+/** Prewarms that reached the front of the queue already obsolete. */
+let prewarmSuperseded = 0;
+
 export interface PrewarmResponse { started: boolean; build: string; reason: string }
 
 /**
@@ -2667,8 +2694,10 @@ export interface PrewarmResponse { started: boolean; build: string; reason: stri
  *
  * Fire-and-forget by construction: the caller (a post-commit hook) gets the
  * decision, never the boot. Newest sha wins — a second commit supersedes the
- * first rather than queueing two boots — and a `fix` lease evicts the page the
- * instant it wants the slot, because it goes through the same pool as everyone.
+ * first rather than queueing two boots, which is enforced at the front of the
+ * queue by {@link prewarmWanted} and NOT by the submit-time guard that used to
+ * claim it — and a `fix` lease evicts the page the instant it wants the slot,
+ * because it goes through the same pool as everyone.
  */
 function prewarm(build: BuildId): PrewarmResponse {
   const label = shortBuild(build);
@@ -2680,8 +2709,19 @@ function prewarm(build: BuildId): PrewarmResponse {
     return { started: false, build: label, reason: 'already warm' };
   }
   prewarming = build;
+  prewarmWanted = build;
   stats.prewarms++;
   void sched.submit('sweep', 'prewarm', 'prewarm', 0, async () => {
+    // The supersede, at the ONE moment it can be made honestly: the front of
+    // the queue. A sha that stopped being the newest request while this job
+    // waited is a sha nobody will capture, and booting it costs a slot every
+    // real job is queued behind.
+    if (prewarmWanted !== build) {
+      prewarmSuperseded++;
+      console.log(`[daemon] prewarm ${label} superseded by ${shortBuild(prewarmWanted!)} `
+        + `(${prewarmSuperseded} so far); stepping aside`);
+      return;
+    }
     try {
       await withPage({ build, w: 1600, h: 900 }, async () => { /* the boot IS the work */ });
     } finally {
