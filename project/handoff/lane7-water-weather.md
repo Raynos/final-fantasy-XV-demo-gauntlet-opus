@@ -214,3 +214,114 @@ nothing about the road, the apron or the Hammerhead forecourt slab, so a splash
 under a prop sits at terrain height and is correctly depth-rejected by the prop
 above it — and the judged storm frame is mostly tarmac. The fix is a
 depth-buffer read, not a bigger number. Residue, filed.
+
+## Gates run (individual, not the suite — the coordinator owns `pnpm run check`)
+
+- `node src/tools/hydrocheck.mts` — **PASS.** "4 channels are percentiles and
+  every lift clears the null by 2x"; `wet median 0.502 ok`; wet p99 lift 74.81
+  against a 1.07 null, 70.06x. Taken while the box was **busy** (sweep queue
+  depth 50, all prewarm) — it is a CPU gate on the field, not a timing, so
+  contention does not bear on it.
+- `node src/tools/orphans.mts` — 318/318 reachable. (It failed once inside a
+  `pre-commit`, transiently, on a co-lane's in-flight untracked module; the
+  hook builds the *working tree*, so an orphan gate on a shared trunk reports
+  other lanes.)
+- `npx tsc --noEmit -p tsconfig.json` after every edit — clean. This caught two
+  separate backtick-inside-`/* glsl */` breakages of my own before either
+  reached a co-agent's capture.
+- `pre-commit` (build + both typechecks + 4 cheap gates) green on all eight
+  commits.
+- **No perf number taken.** The box was never quiet: `harnessstats` shows the
+  sweep queue at 40–50 prewarms for the whole session and `shoot` alone at
+  121.7 minutes over 103 runs. Any figure taken tonight would be one of the
+  numbers LANDMINES is about.
+
+## Commits
+
+| sha | what |
+|---|---|
+| `9adfded` | cross-lane unblock: `GradePass` shader had not compiled since `ff8f459` |
+| `c6f05b1` | task 26 — `gradePad` arc-length UV |
+| `498127e` | task 23 first pass — group envelope, calm ramp, shoaling, refraction, per-body fetch |
+| `24f58ed` | task 24 — rain gust field and per-drop variation |
+| `f7b87a1` | withdraw the duplicate `uNear`/`uFar` after lane 15 landed the same fix |
+| `8c900dc` | task 23 second pass, from its own frames |
+| `e082127` | task 25 findings 1 and 2 — chop unscaled by fetch; reflection distortion |
+| `0189065` | task 24 — splash extent, fade, bias, opacity |
+| `9f5dd37` | task 25 finding 3 — the slab's sheen over its own beach |
+
+## Next step, exactly
+
+1. Read `tmp/shots/l7/w3/{zone_galdin,zone_vesperpool,storm}.jpg` (cold, at
+   `0189065`) and `tmp/shots/l7/f3/*` (the `l7frames.mts` derivation: every
+   body from its bank, three confluences). **Nothing after `9f5dd37` has been
+   looked at**, including the alpha gate, which is the change most likely to
+   have a side effect — check no shoreline lost its swash.
+2. If the near field of a lake still fizzes under overcast, that is Fresnel
+   picking the bright sky off scattered facets at 10–60 m. Ablate before
+   re-tinting: `--hide` the shore ribbon, then zero `uRoughness`, and see which
+   moves it.
+3. The river half of task 25 is open — see above.
+
+## Harness note for whoever picks this up
+
+Late in the session `shoot.mts` started returning
+
+    Error: page.waitForFunction: Timeout 300000ms exceeded.
+        at preparePage (daemon.mts:1714)
+
+on a four-shot cold capture. Nothing in the tree changed to cause it: the same
+sha had captured cleanly twenty minutes earlier, `cleanup.mts` reports "clean —
+no orphaned servers or browsers", and `daemon.mts --health` shows **4 of 4
+workers busy with a sweep queue of 50, every entry a `prewarm`**. That is a
+prewarm per commit, and eight lanes committing small and often is exactly what
+the CLAUDE.md advice produces. `harnessstats` for the window: `shoot` alone
+103 runs / **121.7 minutes**, chromium RSS p90 9798 MB, peak 13527 MB.
+
+Then, twenty minutes later, every in-flight tool died with `ECONNRESET`/`socket
+hang up` at once and `--health` came back with **`uptimeSec: 9`**: the daemon had
+restarted under them. Same lesson from the other side -- a tool that dies mid-run
+on this trunk tonight is far more likely to be the shared daemon than the code.
+
+It reads as a crash and it is a queue. Re-run the capture rather than bisecting.
+
+**Two bake caches are missing and `--health` says so:**
+
+    src/public/baked/texc.bin.gz  (painted faces, ~2.5 s/boot)  -> pnpm run build:full
+    src/public/baked/geo.bin.gz   (POI/mega/shore, ~1.2 s/boot) -> node src/tools/texbake.mts --geo
+
+The geo one is **lane 7's own doing and is expected**: `src/world/Water.ts` and
+`src/world/props/Wear.ts` are both in `GEO_SOURCES`, so every commit tonight
+invalidated it correctly. It needs regenerating before anyone measures a boot.
+`texc` is a `pnpm run build` somewhere, per its own warning text.
+
+## The judged frames after everything — `tmp/shots/l7/w3/`, cold, at `9f5dd37`
+
+Read with the Read tool. No page errors, so every program linked.
+
+- **`zone_galdin` — the tell is substantially addressed. Verified by eye.** The
+  horizon is a smooth graded deep blue instead of corduroy; the mid-field
+  carries visible patches of ruffle and calm (the set envelope); the near band
+  has visibly coarser wavelets than the far band, which is the wave-scale
+  variation the task asked for; the shallow margin is a clean pale sand-under-
+  water shelf again, with the mottle gone; and the waterline is a natural bed-
+  derived edge with no hard slab line. **One regression to watch:** the white
+  foam band along the right-hand beach is fainter than in `base`. The alpha gate
+  (`9f5dd37`) zeroes the first 6 cm of depth, which is exactly where foam is
+  strongest. If a judge calls the surf weak, that is the term to look at first —
+  gate `foam` out of the multiply rather than widening the ramp.
+- **`zone_vesperpool` — better, not resolved. Verified by eye.** There is now a
+  real near-to-far gradient: the water past the headland is smooth and takes the
+  pale cliff-and-sky tone, and the near water is coarse chop with visible light
+  and dark patches instead of uniform white sandpaper. The cliff still does not
+  appear as a recognisable *image* in the lake — under overcast at that
+  depression angle the reflection is a dark tone rather than a picture, which
+  may be right, but it has not been proven either way. Next instrument: ablate
+  the reflection (force `refl` to magenta) and see how much of the lake it owns.
+- **`storm` — streaks verified, splashes still not visible.** The curtains and
+  the per-drop variation read clearly. The near ground in this frame is almost
+  entirely the Hammerhead tarmac, which is a prop, so this frame cannot show a
+  splash however large the field is — see the residue item. `storm_ground` is
+  the framing that would answer it and its ground is tarmac too. **A framing
+  over bare terrain under a storm still does not exist**; that is the one thing
+  left to prove for task 24.
