@@ -204,6 +204,42 @@ What that does **not** imply: it is not "revert, it was only the cache". At 0.39
 the old flat predicate passes by 12%, i.e. the gate was one gully lip from red
 either way. It is the argument *for* the repair, not against it.
 
+## Standing procedure: the bake caches during a multi-lane wave
+
+Written here because it is a harness fact, not a coordinator preference, and it
+was learned the hard way twice in one night.
+
+**MISSING is safe. STALE is the dangerous state. Do not read a `bakecheck` FAIL
+without reading which.**
+
+- **MISSING** — every path falls back to the generator, so the output is correct
+  and only the boot is slower (`texc` ~2.5 s, `geo` ~1.2 s per load). This is the
+  *designed* response to a source moving.
+- **STALE** — the keys resolve, the page boots, every gate passes, and the world
+  is served a previous generator's output. Faces one version behind their sculpt;
+  a viaduct correctly wound and standing in the air. Red under every flag,
+  `--allow-cold` included, on purpose.
+
+**`texc.bin.gz` and `geo.bin.gz` cannot be kept fresh while lanes are
+committing.** They need a browser to record and the vite plugin only has a
+server, so all the plugin can do with a stale one is delete it — and it does, on
+any co-agent's `pre-commit`. Measured tonight: both were deleted again **within
+minutes** of a full `pnpm run build:full`. This is an operational constraint, not
+a bug to fix.
+
+So the sequence, immediately before a judged round or any boot / first-load
+number:
+
+    1. hold commits across the wave
+    2. pnpm run build:full            (or texbake.mts --canvas --force, --geo)
+    3. node src/tools/bakecheck.mts   -> must read 4/4 fresh, 5 ms
+    4. capture / judge / measure
+    5. release commits
+
+Step 3 is not optional and costs nothing. `bakecheck` is registered
+`uncacheable`, so it cannot replay a green recorded before a prune — that is the
+one thing that makes step 3 trustworthy at the end of a long night.
+
 ## Files owned and touched
 
 `src/tools/bakesources.mts` (new), `src/tools/bakecheck.mts` (new),
