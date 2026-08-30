@@ -168,6 +168,7 @@ export class ChocoboHub {
   /* ------------------------------------------------------------ the stable */
 
   _gil() { return this.game.get('Rpg')?.inventory?.gil ?? 0; }
+  _questDone() { return this.game.get('Rpg')?.quests?.status?.('side_chocobo') === 'complete'; }
   _greens() { return this.game.get('Rpg')?.inventory?.count?.('sylkis_greens') ?? 0; }
 
   /** Colours, feed and a word about the bird. */
@@ -179,12 +180,22 @@ export class ChocoboHub {
     menu.push({ label: 'How is she doing?', next: 'status' });
     menu.push({ label: 'Nothing today', end: true });
 
+    /**
+     * Wiz pays for the stray with a dye on the house.
+     *
+     * `side_chocobo` used to hand over the whistle, and the whistle is now in
+     * the starting bag, so its reward had to become something the stable
+     * actually sells. This is the whole of that: one colour free, once, after
+     * the quest is done — read from live quest state on the frame the row is
+     * drawn, so nothing has to be granted, saved or invalidated.
+     */
+    const freeDye = this._questDone() && sys.ownedColours.size === 1;
     const dyeRows: DialogueChoice[] = CHOCOBO_COLOURS.map((c) => {
-      const price = DYE_PRICE[c.key] ?? 0;
+      const price = freeDye ? 0 : (DYE_PRICE[c.key] ?? 0);
       const owned = sys.ownedColours.has(c.key);
       return {
         label: c.name,
-        note: owned ? (sys.colour === c.key ? 'Worn' : 'Owned') : `${price.toLocaleString()} g`,
+        note: owned ? (sys.colour === c.key ? 'Worn' : 'Owned') : (price === 0 ? 'On the house' : `${price.toLocaleString()} g`),
         when: () => sys.colour !== c.key,
         action: () => {
           if (!owned) {
@@ -206,10 +217,11 @@ export class ChocoboHub {
       nodes: {
         menu: { choices: menu },
         dyes: {
-          lines: () => [
-            'Dye, not breeding — she is the same bird underneath and she knows it.',
-            `You are carrying ${this._gil().toLocaleString()} gil.`,
-          ],
+          lines: () => (this._questDone() && sys.ownedColours.size === 1
+            ? ['Dye, not breeding — she is the same bird underneath and she knows it.',
+              'And you brought my stray home, so the first one is on me. Pick a colour.']
+            : ['Dye, not breeding — she is the same bird underneath and she knows it.',
+              `You are carrying ${this._gil().toLocaleString()} gil.`]),
           next: 'dyelist',
         },
         dyelist: { choices: dyeRows },

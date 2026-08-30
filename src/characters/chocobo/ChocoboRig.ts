@@ -254,6 +254,11 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
    */
   /** Radians either side of vertical left bare for the tack to sit on. */
   const SADDLE_PATCH = 0.85;
+  /**
+   * Radians between shingle rows. It is the same at every station, which is
+   * what made the gaps: see the width formula below.
+   */
+  const ROW_STEP = 0.34;
   const stations = [
     { z: 0.32, i: 3, len: 0.24, w: 0.042, rows: [0.28, 0.62, 0.96, 1.30, 1.64, 1.98, 2.32] },
     { z: 0.16, i: 3, len: 0.27, w: 0.045, rows: [0.45, 0.79, 1.13, 1.47, 1.81, 2.15] },
@@ -263,6 +268,23 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   ];
   for (const st of stations) {
     const [rx, ry] = bodyR[st.i];
+    /**
+     * **Vane width follows the arc it has to cover.**
+     *
+     * The first pass authored one half-width per station and stepped the rows
+     * at a fixed `ROW_STEP` *in radians*, which means the gap between two
+     * feathers is `ROW_STEP * r` and grows with the barrel. At the rump
+     * (`r` 0.31 m) that arc is 0.105 m against a 0.092 m vane, so every pair
+     * of feathers on the flank was 13 mm apart and the dark barrel showed
+     * through as a stripe — visible on the ridden rear-three-quarter frame as
+     * a set of black slots down the rump.
+     *
+     * Solving for the width instead of guessing it puts a constant 16%
+     * overlap on every station, which is what a shingle is. The authored
+     * `st.w` survives as a floor so no feather can end up narrower than it was.
+     */
+    const rMean = (rx + ry) * 0.5 * 0.90;
+    const vane = Math.max(st.w, ROW_STEP * rMean * 0.58);
     for (const s of [-1, 1]) {
       for (const phi0 of st.rows) {
         const phi = phi0 * s;
@@ -278,10 +300,19 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
         if (phi0 < SADDLE_PATCH) continue;
         const px = -Math.sin(phi) * rx * 0.90;
         const py = 1.345 + Math.cos(phi) * ry * 0.90;
-        const g = feather(st.len, st.w, 0.30, 0);
+        /**
+         * Pitch falls off down the flank. A tip lifted 0.30 rad off the
+         * surface casts a slot under itself, and near the topline the eye is
+         * looking straight into that slot; low on the flank it is looking
+         * along the feather and the lift is what makes the plumage read as
+         * layered rather than painted on. So keep the lift where it does work
+         * and take it away where it only opens a gap.
+         */
+        const pitch = Math.max(0.10, 0.30 * (1 - phi0 * 0.28));
+        const g = feather(st.len, vane, 0.30, 0);
         tint(g, mixc(col.plume, col.plumeDark, Math.min(0.55, phi0 * 0.22)).getHex(), 0.05);
         mat(g, FEATHER, 0);
-        shingle(g, phi, 0.30, px, py, st.z);
+        shingle(g, phi, pitch, px, py, st.z);
         rig.attachChain(g, ['hips', 'spine', 'chest'], 1.0);
       }
     }

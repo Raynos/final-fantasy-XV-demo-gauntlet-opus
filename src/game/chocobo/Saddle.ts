@@ -43,8 +43,17 @@ const POSE_RIDE: Record<string, number[]> = {
   footL: [0.22, 0, 0.08], footR: [0.22, 0, -0.08],
   toeL: [0, 0, 0], toeR: [0, 0, 0],
   clavicleL: [-0.12, 0, -0.06], clavicleR: [-0.12, 0, 0.06],
-  upperArmL: [-0.86, 0.22, 0.40], lowerArmL: [-0.62, 0.24, 0.10], handL: [0.14, 0, 0.48],
-  upperArmR: [-0.86, -0.22, -0.40], lowerArmR: [-0.62, -0.24, -0.10], handR: [0.14, 0, -0.48],
+  // **Elbows in.** These started life as `POSE_DRIVER`'s numbers (`z` +/-0.60,
+  // `y` +/-0.30) with the abduction trimmed a little, and that was the wrong
+  // parent: a wheel is held at arm's width and a rein is held at hip's width.
+  // At +/-0.40 of roll the arms photographed flung out from the body on the
+  // ridden rear-three-quarter — read as the *left* arm, because that was the
+  // one the framing showed, but it was both. Halving the roll and the yaw
+  // closes them onto the ribs where a rider's arms actually are; the forearm
+  // and the wrist keep their reach forward so the hands still meet over the
+  // bird's neck.
+  upperArmL: [-0.80, 0.12, 0.19], lowerArmL: [-0.72, 0.16, 0.08], handL: [0.14, 0, 0.42],
+  upperArmR: [-0.80, -0.12, -0.19], lowerArmR: [-0.72, -0.16, -0.08], handR: [0.14, 0, -0.42],
   fingersL: [-1.00, 0, 0], fingersR: [-1.00, 0, 0],
   thumbL: [-0.45, 0, 0], thumbR: [-0.45, 0, 0],
 };
