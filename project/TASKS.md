@@ -528,3 +528,37 @@ verified: high-frequency energy in a box of clear blue at `vista_noon` falls
   (`cf41e2f`) left the frame visibly unchanged against `9f5dd37`. **Ablate in
   this order:** `water/Shore.ts`'s 21-row swash ribbon (`shoot.mts --hide`),
   then the terrain clipmap's LOD stitching. Lane 7 owns the first one.
+
+### Lane 23 addendum (2026-08-31): swimming and diving residue
+
+- **A swimmer plays a walk cycle.** `Player.update` calls `character.update({
+  speed: this._gait, ... })` inside its own `update`, before any `lateUpdate`
+  the swim lane runs, so there is no zero-edit way to give a swimmer a stroke.
+  The real fix is a swim action in the rig — `src/characters/`, so **lanes
+  1/2/22**. Two partial zero-edit levers are written up in
+  `project/handoff/lane23-swimming.md` ("The biggest remaining visual gap"):
+  pitching `player.root` forward from `lateUpdate` the way `Occupants` does for
+  seated poses, and holding the gait near idle through
+  `CharacterController._score`. Neither is landed; neither has been looked at.
+  `lane1` `lane22`
+- **Two underwater framings want to be in the corpus.** `under_alstor` and
+  `under_vesper` — the first views of the water shader from underneath that
+  anyone has taken, and the only framings that exercise the new
+  `uCameraPos.y < uLevel` branch in `Water.ts`. Derived live by
+  `src/tools/probes/nanunder.mts`; resolved values in the lane 23 handoff.
+  `lane21`
+- **`Water.riverJoins` comes back empty — diagnosed, not a confirmed bug.**
+  `River.ts:778` skips any reach with `trunkOf[a] < 0`, and a reach only gets a
+  trunk if its first half passes within `hw[i] + th[bj]` of an already-accepted
+  reach (`:571-583`) *and* does not land in the last `minJoinRun ?? 90` m of it
+  (`:594` — "two reaches meeting end to end at the sea is not a confluence").
+  With nine reaches all running to the same sea, all nine landing in that
+  end-of-trunk window is entirely plausible. **`stats.confluences` settles it in
+  one probe line**: 0 means the routing genuinely found none and there is
+  nothing to fix; > 0 with an empty `joins` is a real bug. `lane7`
+- **Does any corpus shot now stand in >1.2 m of water?** The swim state takes
+  over foot IK, both locomotion speeds, the drawn blade, combat input and the
+  retinue's positions, so a shot posed in a lake silently changes in somebody
+  else's baseline. `src/tools/probes/shotswim.mts` answers it over the whole
+  corpus in one boot; its run was still queued when lane 23's first lifetime
+  ended. **Run it before the judged round.** `coordinator`
