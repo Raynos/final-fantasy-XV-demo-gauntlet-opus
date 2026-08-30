@@ -1,6 +1,6 @@
 {
-  "measured": "2026-08-28",
-  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts.",
+  "measured": "2026-08-30",
+  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts. CLEAR THE OUTPUT DIRECTORIES FIRST: shoot.mts does not empty --out, so a stale capture left in tmp/nf/a from another build is silently diffed against a fresh one in tmp/nf/b and its floor is rewritten from two different builds. vista_dawn, zone_lestallum, zone_three_valleys and zone_vannath were re-measured 2026-08-30 at e5db679 because that commit re-framed them; every other row is older and is the date on the row above it.",
   "floors": {
     "hero_full": 2.254,
     "hero_portrait": 0.185,
@@ -14,13 +14,16 @@
     "vista_noon": 0.385,
     "zone_fallgrove": 0.69,
     "zone_longwythe": 1.231,
-    "zone_three_valleys": 0.742,
+    "zone_three_valleys": 1.837,
     "combat_armiger": 2.065,
     "combat_hud": 1.854,
     "combat_magic_fire": 2.478,
     "combat_stagger": 2.27,
     "combat_wide": 2.284,
     "zone_malmalam": 0.276,
-    "zone_nebulawood": 0.744
+    "zone_nebulawood": 0.744,
+    "vista_dawn": 1.23,
+    "zone_lestallum": 1.494,
+    "zone_vannath": 1.615
   }
 }
