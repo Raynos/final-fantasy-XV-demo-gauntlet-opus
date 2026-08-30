@@ -384,6 +384,42 @@ export class WorldMapScreen {
   }
 
   /**
+   * Can Ignis drive to the selected pin?
+   *
+   * Not the same question as fast travel. Fast travel teleports and needs
+   * `travel: true`; this puts the party in the Regalia and drives, so what it
+   * needs is a POI a car can reach -- `POI_TYPES[type].drive` -- and a road
+   * network to reach it on. `AutoDrive.setTargetPos` snaps to the nearest
+   * point on the highway, so anything within reach of the road works, and the
+   * 23 parking POIs become destinations rather than decoration.
+   */
+  canDrive(p: Poi | undefined): p is Poi {
+    if (!p || !this.map.discovered.has(p.id)) return false;
+    return !!(p.travel || POI_TYPES[p.type]?.drive);
+  }
+
+  /**
+   * "Ignis, drive there."
+   *
+   * `AutoDrive.setTargetPos` had no caller in the tree: the only way to pick a
+   * destination was `nextDestination()`, which cycles the next name up the
+   * road, so a chart with 124 places on it could not send you to any of them.
+   * `RegaliaSystem.driveTo` is the right entry point rather than
+   * `setTargetPos` directly -- it flips `setAutoDrive(true)` and calls
+   * `enter(true)` if the party is on foot, which is the difference between a
+   * destination being set and the car actually going there.
+   */
+  driveThere() {
+    const p = this.list[this.sel];
+    if (!this.canDrive(p)) return false;
+    const regalia = this.game?.get('Regalia');
+    if (!regalia || !regalia.driveTo) return false;
+    regalia.driveTo(p.x, p.z, p.name);
+    this.menus.setScreen(null);
+    return true;
+  }
+
+  /**
    * Step the scale. Passing a world position keeps that point pinned under the
    * cursor while the chart grows or shrinks around it.
    * @param dir -1 out, +1 in
@@ -402,6 +438,9 @@ export class WorldMapScreen {
   _onKey(e: KeyboardEvent) {
     if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'KeyE') this.zoomBy(1);
     else if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'KeyQ') this.zoomBy(-1);
+    // `I` for Ignis. Enter is fast travel and stays fast travel; this is the
+    // other half of the pair, and the card footer names both.
+    else if (e.code === 'KeyI') this.driveThere();
     else return;
     e.preventDefault();
   }
@@ -541,9 +580,12 @@ export class WorldMapScreen {
       this._rowEls[i][0].textContent = rows[i][0].toUpperCase();
       this._rowEls[i][1].textContent = rows[i][1];
     }
+    const canDrive = !dead && this.canDrive(p);
     this.cardFt.textContent = !known ? 'UNDISCOVERED'
       : dead ? 'UNAVAILABLE IN THIS WORLD'
-        : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER' : 'NO FAST TRAVEL';
+        : p.travel && canDrive ? 'ENTER  FAST TRAVEL   ·   I  IGNIS, DRIVE THERE'
+          : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER'
+            : canDrive ? 'I  IGNIS, DRIVE THERE' : 'NO FAST TRAVEL';
     this.cardFt.className = `wm-ft${dead ? ' dead' : known && p.travel ? ' on' : ''}`;
   }
 

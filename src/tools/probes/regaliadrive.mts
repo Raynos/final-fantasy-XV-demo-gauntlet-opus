@@ -275,7 +275,51 @@ ok('on the ground, not inside it or above it', Math.abs(player.position.y - grou
   `player y ${player.position.y.toFixed(2)}, ground ${groundY.toFixed(2)}`);
 if (window.__shot) await window.__shot('out');
 
+/* ---- 5. a destination picked off the world map ------------------------ */
+// `AutoDrive.setTargetPos` had no caller in the tree. The only way to choose
+// where Ignis went was `nextDestination()`, which cycles the next name up the
+// road -- so the chart could draw 124 places and send you to none of them.
+// This drives the whole path: open the map, put the cursor on a pin, press the
+// key a player presses, and see whether the car goes there.
+out.push('');
+out.push('--- 5. "Ignis, drive there" from the world map ---');
+const menus = g.get('Menus');
+const M = await import('/world/map/WorldMap.ts');
+const map = M.worldMap;
+// A far, road-served pin the boot save has already charted. Not fast-travel
+// versus drive: the point is that a chart pin becomes a destination.
+const target = map.poiById('longwythe_rest') || map.poiById('hammerhead');
+map.discover(target.id);
+reg.exit();
+step(10);
+menus.setScreen('world');
+step(10);
+const screen = menus.screens.world;
+const idx = screen.list.indexOf(target);
+ok('the pin is on the chart and selectable', idx >= 0, `${target.name} at index ${idx}/${screen.list.length}`);
+screen.sel = idx;
+step(2);
+ok('the card offers the drive', /IGNIS, DRIVE THERE/.test(screen.cardFt.textContent || ''),
+  `footer reads "${screen.cardFt.textContent}"`);
+const before = reg.body.pos.clone();
+window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyI', bubbles: true }));
+step(20);
+ok('the map closes on the pick', menus.name !== 'world', `screen is ${menus.name}`);
+ok('Ignis takes the wheel', !!reg.auto && !!reg.isDriving, `auto=${reg.auto} driving=${reg.isDriving}`);
+ok('and the destination is the pin, not the next name up the road',
+  reg.autoDrive.destination === target.name, `destination "${reg.autoDrive.destination}"`);
+const d0 = Math.hypot(before.x - target.x, before.z - target.z);
+const gap0 = reg.autoDrive.remaining(reg.body.roadS);
+inp.keys.clear();
+for (let f = 0; f < 60 * 90; f++) g.frame(1 / 60);
+const d1 = Math.hypot(reg.body.pos.x - target.x, reg.body.pos.z - target.z);
+const gap1 = reg.autoDrive.remaining(reg.body.roadS);
+ok('the car actually closes on it', d1 < d0 - 100,
+  `${(d0 / 1000).toFixed(2)} km -> ${(d1 / 1000).toFixed(2)} km straight-line in 90 s; ` +
+  `${gap0.toFixed(0)} m -> ${gap1.toFixed(0)} m along the road`);
+if (window.__shot) await window.__shot('mapdrive');
+
 out.push('');
 out.push(fails.length ? `*** ${fails.length} FAILED: ${fails.join(', ')} ***`
-  : 'PASS — the Regalia is a car: it starts, drives, steers, drives itself and lets you out.');
+  : 'PASS — the Regalia is a car: it starts, drives, steers, drives itself, goes where the map says, and lets you out.');
 return out.join('\n');

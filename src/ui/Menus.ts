@@ -114,7 +114,7 @@ const FOOT = {
   armiger: [['↑↓', 'Select'], ['Enter', 'Unlock'], ['Bksp', 'Back'], ['Tab', 'Close']],
   shop: [['↑↓', 'Select'], ['←→', 'Shelf'], ['Enter', 'Deal'], ['Bksp', 'Leave']],
   hunts: [['↑↓', 'Select'], ['←→', 'Ledger'], ['Enter', 'Accept'], ['Bksp', 'Leave']],
-  world: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['M', 'Close'], ['Tab', 'Close']],
+  world: [['↑↓←→', 'Navigate'], ['Enter', 'Travel'], ['I', 'Drive'], ['M', 'Close'], ['Tab', 'Close']],
   map_wide: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['Bksp', 'Back'], ['Tab', 'Close']],
   map: [['↑↓', 'Marker'], ['Bksp', 'Back'], ['Tab', 'Close']],
 };
