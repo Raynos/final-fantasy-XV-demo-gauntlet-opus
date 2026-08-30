@@ -2346,3 +2346,33 @@ timeouts, an ablation timing out twice, and three lanes reporting a `check` that
 never returned. **A docstring describing behaviour the code does not have is
 worse than no docstring**, because it stops anyone reading the code beneath it.
 
+## A scanner that cannot tell a fix's rationale from the defect keeps every fix it inspires permanently red
+
+`nansweep` flagged `normalize(cross(dy, dx))` in `SsrPass.ts` as a HIGH-risk NaN
+site. The fix landed — and the sweep **re-reported the same words one line below
+the fix**, because they appear in the block comment *explaining* the defect that
+the code beneath it closes.
+
+The second-order cost is the one worth recording: a tool with this property
+**trains people to write the fix without the reason**, because leaving the
+explanation in keeps the file red forever. That is a scanner actively degrading
+the codebase it is meant to protect. `nansweep` strips comments now.
+
+Generalise it: **any pattern-matching gate over source must exclude comments and
+strings before it reports**, or its own success creates its next false positive.
+
+## A guard's failure mode should be the pass's existing no-op, not a wrong answer
+
+From the same fix, and it is the reusable half. Guarding
+`normalize(cross(dy, dx))` on depth-derived deltas cannot use an absolute floor
+on `|cross|`: **the deltas scale with distance** — one texel is a millimetre of
+world at arm's length and metres of it at the far plane — so any absolute
+threshold either misses the degenerate case up close or deletes the pass in the
+distance. The scale-free quantity is `dot(n,n) / (|dx|^2 |dy|^2)`, which is
+exactly `sin^2` of the angle between the deltas.
+
+And the guard bails by writing `src` unchanged — which is what the pass already
+does for every non-qualifying pixel. So its failure mode is **"no reflection
+here"**, never **"wrong reflection here"**. When you add a guard, check what it
+does when it is wrong, and prefer the branch the code already takes.
+
