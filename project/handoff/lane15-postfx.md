@@ -205,20 +205,51 @@ So the remaining levers are **MSAA sample count** and **GTAO resolution**, both
 of which change pixels and one of which is coupled to `VegMaterial` in another
 lane's file. Neither was taken. **Measured negative, with the number.**
 
-## Next steps
+## Residue — for `project/TASKS.md`
 
-1. Look at `tmp/shots/l15-a` vs `l15-b` (`vista_noon`, `vista_dawn`) and
-   confirm the sky reads as film rather than as video, and that no silhouette
-   picked up a seam.
-2. Re-run `rtwalk` for resident numbers; then the free cut: `gtaoRenderTarget`
-   and `pdRenderTarget` are built by three with the default `depthBuffer: true`
-   and are fullscreen quad targets that never test depth — **-10.98 MB, no
-   pixels change**.
-3. Per-pass profile (`probes/perfpasses.mts`) to place the 4.42 ms.
-4. Decide, with numbers, whether MSAA 8 at ultra and 4 at high can come down.
+- **MSAA sample count is the only remaining RT lever, and it is a quality
+  decision.** `rtScene`'s multisample renderbuffers are 65.92 MB at q=high
+  (samples 4) and **131.86 MB at q=ultra (samples 8)**, before the dpr 1.5
+  multiplier of 2.25x. 4 -> 2 would put the chain at ~156 MB resident; GTAO at
+  half resolution on top of that reaches ~139. Neither alone reaches 120.
+  `_wantSamples` (PostFX.ts) and `sceneSamples()` (postfx/Msaa.ts) must move
+  together and the second is read by `VegMaterial.patchVeg`, which is **not
+  this lane's file** -- so this needs an owner across both.
+- **Delete `gtao.normalRenderTarget`.** 21.97 MB declared, never uploaded, so
+  it frees nothing; worth doing so the declared budget stops lying. three's
+  `setSize` and `dispose` both touch it, so it needs a 1x1 stub rather than a
+  null.
+- **`bootprof.mts`'s `sizeOfRt` is still the wrong formula** (bootprof.mts:76-89)
+  and it is what `docs/BOOT_PERF.md`'s render-target row is built from. Either
+  point it at `rtwalk.mts`'s pricing or footnote every number derived from it.
+- **`?post=<tokens>` does not reach the page via `shoot.mts --post`** -- the
+  manifest comes back `"variant": ""` and the frame is unablated. Every A/B in
+  this repo taken that way compared a build against itself. `--extra post=...`
+  works. Worth a harness fix and worth checking who else has used `--post`.
+- **`GL_INVALID_OPERATION: glDrawArrays: Feedback loop formed between
+  Framebuffer and active Texture`** floods the console during
+  `probes/perfpasses.mts`, thousands of times, until chromium stops reporting.
+  Some pass is sampling the texture it is drawing into. Not diagnosed; not
+  obviously mine (`GradePass`'s new `tDepth` is `rtScene`'s and the grade never
+  renders into `rtScene`). Needs an owner.
 
-## Open questions / cross-lane
+## For `HUMAN_REVIEW.md`
 
-- `sceneSamples()` lives in `postfx/Msaa.ts` (mine) but its other half is
-  `VegMaterial.patchVeg` (**not mine**). Any sample-count change is a
-  cross-lane one-liner and must be reported, not made quietly.
+- **Task 44's exit (`idle < 30% of a core at 60 Hz`) cannot be met and the
+  plan should say so.** Idle is 119.6%; the whole post chain after the scene
+  and velocity passes costs ~0.3 ms of a 6.7 ms frame, and ablating eight
+  effects buys 14%. 30% needs 5 CPU ms a frame across every browser process
+  when the scene draw alone is 4.4 ms of main thread. The lever is draw-call
+  submission or drawing fewer frames; neither is in `postfx/`.
+- **Task 45's `<120 MB` was set against a formula that reported 130 where the
+  honest number is 188.76 MB resident.** Reaching 120 requires cutting MSAA
+  from 4 to 2 at q=high (and 8 to 4 at ultra) *and* halving GTAO's resolution.
+  Both are visible-quality decisions on `BRIEF.md`'s "beautiful over fast"
+  axis, so they are the operator's call and not a lane's.
+
+## Files owned and touched
+
+Owned: `src/engine/postfx/`, `src/engine/PostFX.ts`. Touched exactly those,
+plus new `src/tools/probes/rtwalk.mts` and this handoff. No other lane's file
+was edited. Lane 7 landed a one-line cross-lane unblock *into* `GradePass.ts`
+(`9adfded`) while my fix was in flight; `f7b87a1` reconciled them.
