@@ -29,8 +29,8 @@ one of them. **`pnpm run check` was not run — the coordinator owns the suite.*
 
 | task | state |
 |---|---|
-| 72 surface swimming | code landed `f580459`; `swimcross` trajectory instrument landed `9b39b41`; **numbers pending** |
-| 73 diving | murk + breath + forced ascent `f580459`; **the from-below shader branch landed `9b39b41`**; `nanunder` baseline taken and **looked at**; re-shoot pending |
+| 72 surface swimming | **landed and measured.** 167 m swum at Alstor, floor-walk 2/3287 samples, head 0.48 m clear throughout, exit under control. `longplay` NOT run. |
+| 73 diving | **landed and measured.** 9.76 m eye depth, breath to zero, forced ascent against a held dive key, 0 NaN on both underwater framings. Murk **looked at twice** and fixed twice. |
 
 ## What landed, and why it is shaped this way
 
@@ -149,35 +149,52 @@ Nothing has been looked at yet. Written but unseen:
 - the murk's colour and density;
 - the breath gauge's placement.
 
-## Blocked, not stuck — the harness queue
+## The numbers — both done-whens measured, VERIFIED
 
-At the end of this lifetime **four probe runs and one capture are queued and
-have not returned**: `swimcross` (`--dirty`), `nanunder` re-shoot, `divebreath`,
-`shotswim`. `daemon --health` says `"exclusive": "perf"` with a co-agent holding
-the lease and 0 of 4 workers busy against a queue depth of 16 in the `fix` lane
-alone. Nothing is wrong with the probes; they are waiting. The lease changed hands from
-`perf` to `gameplay` while this lane waited, queue depth 21, so the runs were
-killed rather than left holding slots other lanes need. Re-run them first
-thing:
+`swimcross` and `divebreath` at `396eb42` (HEAD at the time, quiet-ish tree —
+the exclusive lease was free, 4 workers busy, so these are gameplay-loop
+trajectories rather than perf numbers and contention does not affect them).
+
+### Task 72 — `swimcross`, Alstor bank at (−961, 745), level −6.5
 
 ```
-node src/tools/probe.mts src/tools/probes/swimcross.mts     # task 72's number
-node src/tools/probe.mts src/tools/probes/divebreath.mts    # task 73's number
-node src/tools/probe.mts src/tools/probes/shotswim.mts      # the cross-lane risk
-node src/tools/framecam.mts --probe src/tools/probes/nanunder.mts \
-  --out tmp/shots/l23/w2 --jpeg                             # number AND picture
+entered   true at depth 1.21 m        (threshold 1.2)
+swum      167 m,  max depth 6.45 m
+floorWalk 2 of 3287 samples  (0.06%)
+headUnder 0 frames           minHeadClear 0.48 m
+exited    true at depth 0.85 m,  stillSwimming false
+nan       0
 ```
 
-One earlier `swimcross` run at `f580459` DID come back, but only its tail
-survived the log tail: it showed the player at `y = -7.8` with the level at
-`-6.5` — feet exactly `FLOAT` = 1.30 m under the surface, so **buoyancy holds
-the swimmer at the water line** — swimming through 2.53 m, 1.99 m and 1.09 m of
-water on the way home and then `stillSwimming: false` at a final depth of
-0.85 m, which is the exit threshold. **He entered, he swam ~100 m out and back,
-and he exited at a bank.** The `floorWalk` counter was in the part of the log
-that was lost. Treat this as *strongly indicative, not verified*.
+Read that as: **the floor-walk is gone.** The defect's signature is feet within
+15 cm of the bed under more than 1.4 m of water, and it fires on 2 frames out
+of 3287 — both at a state-machine boundary, where the depth crosses 1.4 m in
+the same frame the feet are still on the bottom. `minHeadClear` is **exactly**
+`height 1.78 − FLOAT 1.30 = 0.48` and never moves, and the track holds
+`y = −7.80` for the whole 167 m: buoyancy pins the swimmer to the water line
+through 2 m to 6.45 m of water without a single bob. `headUnder = 0` — a
+surface swim never accidentally submerges.
 
-## Exact next step
+### Task 73 — `divebreath`, deep Alstor, dive key held for 45 s
+
+```
+maxEyeDepth   9.76 m       maxDive 10.13 m
+camUnder      2492 of 3180 frames      framesSubmerged 2562
+minBreath     0            breathHitZero true
+forcedAscent  550 frames   surfacedAgain true, 235 frames (3.9 s) after zero
+nan           0            on release: back to y = -7.80, breath 1.000
+```
+
+**The forced ascent is not negotiable, and this is the measurement that proves
+it**: `ControlLeft` is held down for the entire 45 s, and at the breath limit
+the swimmer rises from 8 m to 1.8 m of eye depth *against* the key and breaks
+the surface 3.9 s later. Breath then refills, the held key takes him back down,
+it drains again, and the cycle repeats stably — the phase table shows two full
+descend/drain/force/surface cycles. The camera goes under with him (2492
+frames), which is the other half of it: a dive that only lowers the feet leaves
+the lens in the air and nothing underwater is ever drawn.
+
+## Exact next step## Exact next step
 
 1. Read `tmp/l23/*.jpg` from the first `framecam --probe` run of
    `src/tools/probes/nanunder.mts`'s framings (the probe derives them; it does
