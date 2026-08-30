@@ -741,6 +741,44 @@ export class Sky {
       // captured from one build rather than argued about from a constant.
       if (this._ablate.has('noambbury')) m.uAmbBury.value = 0;
     }
+    this._ablateSet();
+  }
+
+  /**
+   * An arbitrary scalar override on any atmosphere or cloud-march uniform,
+   * from the query string:
+   *
+   *     ?post=set:ucloudsungain:0.16:ucloudmaxrad:24
+   *
+   * **Why a generic setter and not another named token.** Tuning a cloud is a
+   * *sweep* — the crown-to-body ratio is set by `uCloudSunGain` against
+   * `uCloudMaxRad` against `uAmbientBoost`, and no one of them can be read off
+   * the shader because the soft knee makes each one's effect depend on the
+   * other two. Six named tokens would be six commits and six rebuilds to
+   * answer one question; this answers it in six captures off one build, which
+   * is also the only way the arms share a shader cache and a TAA history.
+   *
+   * Numbers only, and only uniforms that already exist: an unknown name is
+   * ignored rather than created, so a typo reports the unablated frame instead
+   * of a `NaN` that would print black and read as a rendering bug. Tokens are
+   * lowercased by the parser in `init()`, hence the case-insensitive match.
+   */
+  _ablateSet() {
+    const march = this.clouds ? this.clouds.marchUniforms as Record<string, { value: unknown }> : null;
+    const atmo = this.u as unknown as Record<string, { value: unknown }>;
+    for (const t of this._ablate) {
+      if (!t.startsWith('set:')) continue;
+      const parts = t.split(':').slice(1);
+      for (let i = 0; i + 1 < parts.length; i += 2) {
+        const want = parts[i]!, v = Number(parts[i + 1]);
+        if (!Number.isFinite(v)) continue;
+        for (const bag of [march, atmo]) {
+          if (!bag) continue;
+          const key = Object.keys(bag).find((k) => k.toLowerCase() === want);
+          if (key && typeof bag[key]!.value === 'number') { bag[key]!.value = v; break; }
+        }
+      }
+    }
   }
 
   _makeUniforms(): AtmosphereUniforms {
@@ -1167,6 +1205,18 @@ export class Sky {
     u.uMilkyWay.value = 1.35;
 
     if (force || Math.abs(this.hours - this._envHours) > 0.08) this._updateEnv();
+
+    // Re-assert the ablations LAST.
+    //
+    // `_ablateWeather` used to run only from `_pushWeatherUniforms`, and the
+    // two writers are not ordered: `update()` pushes the weather first and
+    // *then* calls `_applyTimeOfDay(true)` on a change, so every cloud token
+    // whose uniform this method also writes -- `nocloudsun` and `nocloudamb`
+    // are both in that set, lines above -- was silently undone before the
+    // frame was drawn. An ablation that reports the unablated frame is worse
+    // than no ablation, because it reads as a measured negative. It is a
+    // no-op when `_ablate` is empty, which is every non-debug run.
+    this._ablateWeather();
   }
 
   /**
