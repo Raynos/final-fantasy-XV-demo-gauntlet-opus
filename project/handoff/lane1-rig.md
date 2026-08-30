@@ -648,3 +648,97 @@ Three arithmetic causes, none of them sculpt:
 **The grey-blue crescent below the lower lid margin is unchanged** — that is
 still the socket/skull residue the previous respawn measured and filed, and it
 is still a sculpt job.
+
+### The fill coefficient — three measured points, and the number and the frame disagree
+
+```
+              prompto p5/p50/p99.5     noctis p5/p50/p99.5
+      0.11          5 /  69 / 204            0 /  15 / 129
+      0.30         15 /  89 / 209            1 /  46 / 149
+      plate        22 /  81 / 176           20 /  37 / 140
+```
+
+**By the numbers 0.30 wins outright** — both medians within 9 Y of §12.3 where
+0.11 was 12 and 22 short. **By eye 0.30 is wrong: Noctis' hair reads GREY**
+(`tmp/shots/l1-fc9/noc_full.png`), a mid-grey mass with a pale fringe. A
+different character.
+
+They disagree because the plate's black hair is a *narrow dark cluster* (p10
+Y 25 -> p50 37) and a flat fill **widens** the distribution rather than
+translating it: ours ran p10 5 / p50 46 / p90 92 at 0.30, i.e. the median landed
+on the plate by averaging a crushed floor against greyed mid-tones. Fitting a
+median with a term that also stretches the spread buys the statistic and loses
+the read. **This is the general trap for any plate-table fit in this repo and it
+is worth remembering: §12.3 gives five percentiles per plate, and matching one
+of them is not matching the distribution.**
+
+`16378e7` sits at **0.18**, between the two measured points and deliberately a
+little *under* the plate — §12.3 says outright that hair is "rendered far darker
+than intuition" and that erring bright is the failure mode. Result in
+`tmp/shots/l1-fc10`.
+
+**The way to actually reach the plate's shape is self-occlusion after all** —
+but as a *modulation of this fill*, not as a darkening of the direct light,
+which is where the standing diagnosis had it and which the numbers refuse (see
+above: five of six numbers want more light, not less). A fill that is strong
+near the outside of the groom and weak deep in the pile translates the cluster
+instead of stretching it. The mechanism is written up in the residue below.
+
+## Respawn-3 residue, ready to paste into `project/TASKS.md`
+
+- **Lane 1 — hair self-occlusion, as a modulation of the sky fill and NOT as a
+  darkening of the direct light.** The standing diagnosis had it backwards:
+  against §12.3's plate table only ONE of our six hair numbers (blond's top end)
+  asks for less light, and adding a darkening term moves the other five the
+  wrong way. What the plates describe is a narrow, *lifted* cluster — no true
+  blacks anywhere in hair, on a black head or a blond one. The sky fill in
+  `Materials.ts` now supplies the lift but is flat across the pile, so it widens
+  the distribution instead of translating it (measured: at coefficient 0.30 the
+  median hits the plate and the hair reads grey). The fix is to weight the fill
+  by depth-in-groom. **The data does not exist yet and here is exactly where to
+  put it:** hair writes `B.mat(rough, 0, 1)` (`Hair.ts:645`), so **`aMat.y` —
+  metalness — is always 0 on hair and is free**; `patch()` can replace
+  `<metalnessmap_fragment>` with a constant 0 in the hair branch only and read
+  `vMat.y` as exposure. Compute it in `buildHair` the way `liftOutOfSkull`
+  already does — `(v - sample(th, ph).p) . n` is the offset above the sculpted
+  scalp, i.e. depth in the pile — once per card *row* (10 per card, ~2 500 per
+  head), not per vertex. **Encode 1 = exposed**, because the shell, the wisps
+  and the brows (`Hair.ts:332, 791, 869, 913`) write y = 0 today and would
+  otherwise render fully occluded.
+- **Lane 1 — the crown highlight reads as drybrush paint, not sheen.** Broad
+  flat grey patches with hard edges that follow whole card silhouettes
+  (`tmp/shots/l1-fc8/noc_crown.png` at 3x). `a1` is a function of the macro
+  normal and `jit` swings the primary band +/-60% per lock, so adjacent cards
+  take very different values and the band never becomes continuous across the
+  head. §12.3 wants "high-intensity, low-saturation and thin".
+- **Lane 1 — hair is warm and the plates are cool.** R-B +25 at p50 on Prompto,
+  +2 on Noctis; §12.3's plates are `B > G > R` at p10 AND p50 on every one of
+  them and call two shadow hues on one head (warm skin, cool hair) the thing to
+  reproduce. The fill is mixed 45% toward cool and is a small addition on a
+  large warm diffuse, so it cannot carry this alone. The lever with authority is
+  the authored `Cast.ts` hair colour — **lane 2's file**, needs a named
+  cross-lane one-liner.
+- **Lane 1 — `jit` is documented as per-lock and is not.** The comment at the
+  top of the hair block in `Materials.ts` is explicit that jittering the shift
+  per *fragment* replaces the band with noise, and derives `jit` from `vColor`
+  luminance to avoid it. But `emitCard` multiplies vColor by `crest` (across the
+  ribbon) and `rootDark` (along it), so luminance varies ~15% per fragment and
+  `fract(luminance * 137.31)` is many cycles of that. The jitter it documents is
+  not the jitter it computes, and this is a candidate cause of the item above.
+- **`facecheck` framings are not repeatable, so a fixed `regionstat` rect is not
+  an A/B instrument.** It stabilises the face, not the character's heading, so
+  the background behind the head moves between runs. Noctis' hair rect read
+  black hair in one run and blown-out white sky in the next (p50 185, p90
+  #ffffff) with no code between them that could do that. Crop the rect and look
+  at it before quoting a number off it. Prompto's happened to be stable, which
+  is the only reason any of tonight's hair A/Bs are sound.
+- **Lane 1 — the eye's remaining defect is the socket, and it is unchanged.**
+  A grey-blue sclera crescent still hangs below and temporal to each aperture,
+  ending in the globe's own silhouette arc. Proved not to be lid standoff by
+  overshooting `lidR` to 1.30 and measuring no change. `Face.ts buildHead` /
+  `brushes()` — the sculpted orbital rim below the outer canthus sits behind the
+  globe.
+- **Lane 1 task 6 — the mid-face diagonal is untouched and it is loud.** Dark
+  slashes running from each nose wing out and down across the cheek, plainly
+  visible at 0.55 m on `tmp/shots/l1-fc9/noc_full.png`. `Face.ts brushes()`
+  `:127`, constants `:203-268`, judged with `probes/facefront_flat.mts`.
