@@ -189,6 +189,89 @@ first job.** If a Galdin frame is still wrong, the deck height moved again.
 - The night sky's stars render as fat white blobs the size of boulders over
   torn black-and-white cloud noise, in every night frame.
 
+## The second read, and the honest state of the 21 shots
+
+Every frame was re-captured through `shoot.mts` after the fix pass and read
+again. **Nothing in the set is shippable as it stands**, and the reviewer's
+words for the three closest are "within one fix of it": `regalia_night_road`,
+`galdin_night_lanterns`, `lest_overlook_disc`.
+
+**Fixed by the fix pass, verified:** the four Galdin cameras are on the deck
+now, not under it — three of them frame the square with its people, its stalls
+and its bulbs. `lest_overlook_disc` contains **both** the Meteor and Lestallum's
+roofs, which is what its name promises and what the first stand did not have.
+
+**Broken by the fix pass, fixed again in `6d39721`, NOT re-verified:**
+`galdin_restaurant` (13.5 m from the plaza centre = inside the block, flat grey)
+and `lest_market_vendor` (11.6 m, flat maroon) — both moved back inside the
+12 m radius this file's own comment warns about, and `tomb_claim`'s tighter fov
+put the camera on the coffin lid, so it is back to the wider framing.
+
+**The two dungeon shots are renamed** to the rooms they can hold. `follow` plus
+a combat scenario was authored, captured and read: the scenario does not restore
+the interior lighting and both came back 99% black with a combat HUD over
+nothing. See `project/TASKS.md`.
+
+### The defect list a successor should work down, worst first
+
+Everything here was seen in a frame. Most of it is not framing.
+
+1. `galdin_restaurant`, `lest_market_vendor`, `tomb_claim` — re-verify `6d39721`.
+2. **The party/NPC idle animation is broken**: NPCs stand with both arms raised,
+   palms out, legs straight, in `galdin_pier_fishing` and `lest_plaza_walk`.
+3. **Every Lestallum body is cut off at mid-shin** with no shoe and no contact
+   shadow. Lane 19.
+4. **An NPC intersects a building wall** in `galdin_pier_fishing`.
+5. **The night sky's clouds render as ragged black blobs with vertical smear
+   artefacts over the starfield**, and the stars as fat white sprites. Visible
+   in `lest_overlook_disc` and `regalia_night_road`; it is the single thing
+   dragging both night frames down.
+6. **The Regalia's headlight pool is a hard-edged blown-white blob** with no
+   cone or falloff, larger in frame than the car.
+7. **The festoon bulbs are octagonal low-segment discs** and the nearest blows
+   out with no bloom. `galdin_night_lanterns`.
+8. **The EXINERIS stack has no material at all** — a pure-black column. So do
+   the `_town` roof planes, which is why `lest_night_high` reads as a level
+   editor viewport.
+9. **`tomb_claim`'s kit is a clay blockout** with an orange placeholder sphere
+   and a floating cyan quad in frame. Lane 18.
+10. **`landmark_meteor` clears 0.09 of its own subject** — the crown over a
+    ridge, no crater. Not re-framed here; the stands are in `discview`'s output
+    and re-framing re-baselines a judged shot, so it wants its own commit with
+    an `imgdiff`.
+
+## The 12 arc shots: what was measured, and why none landed
+
+`tmp/l21/arc.mts` (kept) streams each site in, takes the world-space extent of
+the built props within 130 m of the pin and derives two framings from it. Nine
+sites, eighteen frames, all read. **Six of the eighteen contain no authored
+landmark at all**: both `peak_overlook`, both `southwatch_haven`, both
+`saltgrass_flats`, both `pilgrims_rest` — woodland and terrain with nothing man-
+made in them. That is a missing-prop or wrong-pin problem, not a framing one,
+and it is lane 18's to answer. `saxham_ghost` **has no POI in `WorldMap` at all**.
+
+Corrected second-pass framings were shot for the four sites that do have
+geometry (`tmp/shots/l21-i`, all read):
+
+- `northwatch_ruin` — `I_northwatch_b`, `pos [110, 52, -3146] target [150, 57,
+  -3098] fov 50`, storm, t 13.2. Outpost legible at ~35% of frame height. **The
+  best of the eight**, and still an unlit black silhouette with no albedo.
+- `washes_lookout` — `I_washes_b`, `pos [690, 18.2, 659] target [702, 19.8, 645]
+  fov 38`, t 17.4. Marker at ~45%, campfire and cairn balanced. The shrine is
+  untextured beige and reads as a greybox.
+- `threshold_stones` — `I_threshold_b`, `pos [78, 31, 864] target [121, 33.5,
+  910] fov 38`, t 8.6. Eight stones plus a fallen one at ~30%. Every stone is a
+  flat black silhouette, and they cluster rather than march over a ridge.
+- `mencemoor_obelisks` — **neither candidate is enterable.** The obelisks are
+  under 5% of frame height at 22% of the derived standoff, and both frames
+  contain a **bright blue untextured LOD box** at the left edge.
+
+**None was committed, on purpose.** A corpus shot that is structurally valid and
+ugly is in every contact sheet and every judged round from now on; three
+greybox landmarks and one invisible one are worse than four absent rows. The
+framings above are measured and ready — land them the moment lane 18's material
+pass makes them worth looking at.
+
 ## Not done / left to do
 
 1. **The 12 lane-18 arc shots.** Wait for its kit fixes, then frame from
