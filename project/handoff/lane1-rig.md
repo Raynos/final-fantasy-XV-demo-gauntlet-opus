@@ -11,10 +11,11 @@ Plan: `docs/plans/2026-08-30-fable-to-nine.md`, lane section at :121-147, brief 
 | — | garment clearance (fallout of 1) | **LANDED** `bcc3228`, verified by eye; residue below |
 | 2 | subsurface / backlit ear | **LANDED** `35bee5a` — rim term + thickness; NOT yet looked at on `hero_profile` |
 | 3 | skin detail scale | **LANDED** `35bee5a` after one measured negative, verification pending |
-| 4 | hair aniso + coverageAA | **not done** — no time; see next step |
-| 5 | near-white blond | **not done** — no time; see next step |
+| 4 | hair aniso + coverageAA | **LANDED** `b402eba` + `b31cb87` + `eb0d40c`, verified by eye and by regionstat |
+| 5 | near-white blond | **CLOSED, re-diagnosed twice** — not albedo, and not self-occlusion either; it was a crushed floor. `9672122` + `16378e7` |
 | 6 | painted creases | **re-diagnosed, half landed** — see below |
-| 47 | facecheck VOID = failure | **NOT LANDED** — heads still VOID, see below |
+| 47 | facecheck VOID = failure | **CLOSED as unlandable**, filed to `HUMAN_REVIEW.md` at `27e1050` |
+| — | the eye has no pupil and no catchlight (new) | **LANDED** `b9375a2`, verified by eye at 7x |
 | 38 | `skinWeight` -> Uint8 in the generators (from lane 13) | **LANDED**, verification pending |
 
 ## 1 — winding (verified)
@@ -769,3 +770,27 @@ rather than stretch it.
 The two loudest things left on that frame are **not** hair: the eyes still read
 wide (socket residue, sculpt) and the mid-face diagonal is loud (task 6,
 untouched).
+
+### Gates run this respawn
+
+- `nanscan` after every shader edit: **0 of 142** and then **0 of 162 shots carry
+  NaN**.
+- **Cold link proof** (`shoot.mts hero_portrait --cold`, `tmp/shots/l1-cold`):
+  clean, 7 336 729 tris / **460 calls**, no page errors and no fallback
+  material — so the retuned Kajiya-Kay block, the rewritten sky fill, the iris
+  ramp and the `<alphatest_fragment>` replacement all compile and link.
+- `facecheck --only prompto,noctis`: **PASS** on the geometry rows every run;
+  both heads stay VOID on the pixel rows, which is task 47 and is filed as a
+  human decision.
+- Did NOT run `pnpm run check` — the coordinator owns the full suite.
+
+**Looked at, this respawn:** `l1-fc5/noc_crown.png`, `l1-fc5/noc_rect.png`,
+`l1-fc5/pr_hair.png`, `l1-fc6/noc_full.png`, `l1-fc6/noc_eye.png`,
+`l1-fc8/noc_full.png`, `l1-fc8/noc_eye.png`, `l1-fc8/noc_crown.png`,
+`l1-fc9/noc_full.png`, `l1-fc10/noc_full.png`, `l1-cold/hero_portrait.jpg`.
+
+**The loudest defect left on a hero at portrait range is not hair and not the
+eye: it is the mid-face diagonal.** On `l1-cold/hero_portrait.jpg` Noctis has a
+dark slash running from each nose wing down and out across the cheek, plus a
+dark mark under the mouth. At 1568 px it reads as war paint or bruising. That is
+task 6, `Face.ts brushes()`, and it is untouched.
