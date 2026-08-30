@@ -139,6 +139,15 @@ function seatsBare(p: Poi): boolean {
 /** Types the rest of the codebase already builds; we must not double up. */
 const SKIP_IDS = new Set(['hammerhead']);
 
+/**
+ * Walkable height of a `_town` plaza in kit-local metres.
+ *
+ * The paved disc is a 0.35 m slab whose centre is at y 0.5, so its top — the
+ * surface anything on the square stands on — is 0.675. Named because three
+ * files now place against it and a literal in each is how they drift apart.
+ */
+export const PLAZA_Y = 0.675;
+
 const _v = new THREE.Vector3();
 
 function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
@@ -211,6 +220,24 @@ export interface KitResult {
    * true; do not add a consumer without checking those two still want it.
    */
   noApron?: boolean;
+  /**
+   * Named points on what the kit just built, **kit-local**: post-yaw and
+   * pre-position, so adding the group's own `position` gives world space.
+   *
+   * A kit computes transforms for everything it lofts and then throws them
+   * away, which is why nothing could ever stand on a POI's pavement: the only
+   * numbers a caller had were the pin and the footprint radius, and the pin of
+   * a `town` is the middle of a merged 140 m volume. Publishing a handful of
+   * them costs nothing and is the difference between an NPC on a plaza and an
+   * NPC in a field.
+   *
+   * **Plain number triples, never `Vector3`.** This rides back through
+   * `bakedParts`' `meta` channel, which is `JSON.stringify`d into the geometry
+   * container (`GeoBake.ts`) — a `Vector3` survives the first (warm-from-build)
+   * run and comes back a method-less `{x,y,z}` object on every run that reads
+   * the cache. See {@link PoiKits.anchorAt}.
+   */
+  anchors?: Record<string, [number, number, number]>;
 }
 
 /** A kit builder. Invoked with `this` bound to the {@link PoiKits} instance. */
@@ -259,6 +286,11 @@ export interface BuiltSite extends PoiSite {
   casters: THREE.Object3D[];
   /** The proxy inside `casters`, hidden whenever it is not casting. */
   proxy: THREE.Mesh | null;
+  /**
+   * {@link KitResult.anchors} as the kit reported them — still kit-local.
+   * Read through {@link PoiKits.anchorAt}, which adds `group.position`.
+   */
+  anchors: Record<string, [number, number, number]>;
 }
 
 /**
@@ -1405,6 +1437,13 @@ export class PoiKits {
     }
     // the square: a paved plaza, market stalls and strung lights
     put(M.concrete, new THREE.CylinderGeometry(11, 11, 0.35, 22), [0, 0.5, 0]);
+    // Named points on the square, published through `KitResult.anchors` so a
+    // city hub can put a counter, a board and a person on real pavement. The
+    // disc is 0.35 thick and sits at y 0.5, so its walkable top is PLAZA_Y.
+    const A: Record<string, [number, number, number]> = {};
+    const _a = new THREE.Vector3();
+    const at = (v: THREE.Vector3, y: number): [number, number, number] => [v.x, y, v.z];
+    A.plaza = at(_a.set(0, 0, 0).applyMatrix4(world), PLAZA_Y);
     // Market stalls. These were a single 3.0 x 0.12 x 2.4 box of dark canvas on
     // two poles, which at eye level in the square reads as a flat black slab
     // hanging in the air -- and the square is the one place in a settlement the
@@ -1442,6 +1481,17 @@ export class PoiKits {
         B.add(role === 'cloth' ? cloth : M.plank, g, place);
       }
       put(M.lamp, new THREE.SphereGeometry(0.16, 6, 5), [Math.cos(a) * 10.5, 4.4, Math.sin(a) * 10.5]);
+      // Where a customer stands: 1.1 m clear of the counter side of the stall,
+      // taken through the stall's own `place` so it follows the ring and the
+      // town's yaw rather than being re-derived (and re-derived wrong).
+      A[`stall${i}`] = at(_a.set(0, 0, -cd / 2 - 1.1).applyMatrix4(place), PLAZA_Y);
+      // The bulb itself, for a festoon run or a light the hub wants to own.
+      const lb = _a.set(Math.cos(a) * 10.5, 4.4, Math.sin(a) * 10.5).applyMatrix4(world);
+      A[`light${i}`] = [lb.x, lb.y, lb.z];
+      // Free pavement between this stall and the next, still inside the disc:
+      // where a board, a bench or a person goes without blocking a counter.
+      const e = a + Math.PI / 6;
+      A[`edge${i}`] = at(_a.set(Math.cos(e) * 9.6, 0, Math.sin(e) * 9.6).applyMatrix4(world), PLAZA_Y);
     }
     // the vertical: a chimney stack and a water tower
     put(M.wall2, new THREE.CylinderGeometry(2.2, 3.0, 34, 14), [22, 17.5, -18]);
@@ -1455,7 +1505,7 @@ export class PoiKits {
         [-20 + Math.cos(a) * 2.5, 7.4, 14 + Math.sin(a) * 2.5],
         [Math.sin(a) * 0.11, 0, -Math.cos(a) * 0.11]);
     }
-    return { cast: false, r: 58 };
+    return { cast: false, r: 58, anchors: A };
   }
 
   /**
@@ -2856,7 +2906,38 @@ export class PoiKits {
       draw: DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R,
       casters,
       proxy,
+      anchors: res.anchors || {},
     });
+  }
+
+  /**
+   * A named point on a built POI, in world space.
+   *
+   * Kits publish {@link KitResult.anchors} kit-local — post-yaw, pre-position —
+   * so this is the group's own position plus the triple. It returns `null`
+   * until the streamer has actually built the site, which is the whole reason
+   * it is a lookup and not a table: `_make` runs when the camera comes within
+   * `BUILD_R`, so **a caller has to late-bind, not read once at `init`.**
+   *
+   * @param poiId POI id from `WorldMap`
+   * @param name anchor name the kit published
+   * @param out optional target
+   * @returns the world point, or `null` if the site or the name is not there
+   */
+  anchorAt(poiId: string, name: string, out = new THREE.Vector3()): THREE.Vector3 | null {
+    for (const s of this.built) {
+      if (s.poi.id !== poiId) continue;
+      const a = s.anchors[name];
+      if (!a) return null;
+      return out.set(s.group.position.x + a[0], s.group.position.y + a[1], s.group.position.z + a[2]);
+    }
+    return null;
+  }
+
+  /** Every anchor name a built POI published. @param poiId POI id */
+  anchorNames(poiId: string): string[] {
+    for (const s of this.built) if (s.poi.id === poiId) return Object.keys(s.anchors);
+    return [];
   }
 
   /**
