@@ -2666,11 +2666,22 @@ export class PoiKits {
           ), { ry, x, y, z }));
         }
       };
-      // Four arches, each smaller than the last, so the run has perspective
-      // built into it and reads as a cage seen end-on rather than as a fence.
+      /**
+       * Four arches, each smaller than the last, so the run has perspective
+       * built into it and reads as a cage seen end-on rather than as a fence.
+       *
+       * **The height-to-span ratio is the whole thing, and the first pass had
+       * it wrong.** At 19 m over an 8.4 m half-span the ellipse is so vertical
+       * that the arc barely turns until the last two segments: read in
+       * `tmp/shots/l18a/gy_n.jpg`, a rib pair renders as *two tapering spikes*
+       * with a hole between them, and the crossing at the apex — the one thing
+       * that makes a pair read as one pointed arch — never arrives. 1.42:1 is
+       * near enough to a real rib's curve that the arc is turning across its
+       * whole length, and the pair meets over your head instead of beside it.
+       */
       const SPINE: [number, number, number, number][] = [
         // [half-span, height, base radius, z along the spine]
-        [8.4, 19.0, 0.98, -13], [7.0, 15.8, 0.84, -1.5], [5.6, 12.6, 0.70, 9], [4.2, 9.2, 0.56, 18],
+        [13.0, 18.4, 1.35, -22], [11.0, 15.6, 1.15, -4], [9.0, 12.8, 0.95, 13], [7.0, 10.0, 0.75, 28],
       ];
       SPINE.forEach(([A, B, r0, dz], i) => {
         // The arch is one rigid piece, so it is seated at the LOWEST of its
@@ -2684,7 +2695,7 @@ export class PoiKits {
           // broken-off length lies on the ground beside its own stump.
           const snapped = i === 3 && side === 1;
           boneArc({
-            A, B, th0: -0.13, th1: snapped ? 0.72 : 1.73, r0, r1: snapped ? r0 * 0.62 : r0 * 0.24,
+            A, B, th0: -0.13, th1: snapped ? 0.72 : 1.86, r0, r1: snapped ? r0 * 0.62 : r0 * 0.22,
             segs: snapped ? 4 : 9, side, ry: spin, y: y0, z: dz,
           });
         }
@@ -2698,8 +2709,8 @@ export class PoiKits {
       });
       // The spine itself, half-sunk: a drum, a neural fin and two stubby
       // transverse processes per vertebra, tapering away from the shoulders.
-      for (let i = 0; i < 10; i++) {
-        const vz = -18 + i * 4.4, sc = 1.55 - Math.abs(i - 3) * 0.085;
+      for (let i = 0; i < 11; i++) {
+        const vz = -28 + i * 6.2, sc = 2.15 - Math.abs(i - 3) * 0.12;
         const vx = rng.gauss(0, 0.45), vy = gy(vx, vz, 2.2) + 0.30 * sc;
         const vr = rng.gauss(0, 0.12);
         bn.shell.push(xform(new THREE.CylinderGeometry(1.02 * sc, 0.94 * sc, 2.5 * sc, 9),
@@ -2722,7 +2733,7 @@ export class PoiKits {
        * which is what a break in a shell looks like.
        */
       {
-        const SR = 11.5, TH = 0.75, N = 11, FLAT = 0.5;
+        const SR = 15.5, TH = 0.95, N = 12, FLAT = 0.5;
         const prof: THREE.Vector2[] = [];
         for (let i = 0; i <= N; i++) {
           const th = (1 - i / N) * 0.60 * Math.PI;
@@ -2746,14 +2757,14 @@ export class PoiKits {
         const sg = mergeBag(shell).shell;
         // Tipped 0.42 rad off flat and rotated so the fracture faces the
         // approach; sunk so the low rim is a metre into the earth.
-        const sx = -7.5, sz = 31;
+        const sx = -11, sz = 50;
         bn.shell.push(xform(xform(sg, { rz: 0.42 }), { ry: -0.9, x: sx, y: gy(sx, sz, 9) + SR * FLAT * 0.42 - 1.0, z: sz }));
       }
       // Shards: the small change of a skeleton, half of it lying flat.
-      for (let i = 0; i < 16; i++) {
-        const a = rng.next() * 6.28, d = rng.range(9, 34);
-        const px = Math.cos(a) * d, pz = Math.sin(a) * d * 0.9 + 4;
-        const ln = rng.range(1.1, 3.6), rr = rng.range(0.13, 0.34);
+      for (let i = 0; i < 20; i++) {
+        const a = rng.next() * 6.28, d = rng.range(12, 48);
+        const px = Math.cos(a) * d, pz = Math.sin(a) * d * 0.9 + 6;
+        const ln = rng.range(1.4, 4.6), rr = rng.range(0.16, 0.44);
         bn.shell.push(xform(new THREE.CylinderGeometry(rr * 0.7, rr, ln, 6), {
           rz: Math.PI / 2 - rng.gauss(0, 0.24), ry: rng.next() * 6.28,
           x: px, y: gy(px, pz, 1.2) + rr * 0.55, z: pz,
@@ -2764,21 +2775,21 @@ export class PoiKits {
         // Bleached white at the top of an arch, stained brown where the earth
         // has been washing over it for a thousand years. `y0` is the earth
         // line, not the geometry's minimum, so the buried stubs stay dark.
-        bakeTone(g, { y0: -1, y1: 17, grime: 0.58, bleach: 1.16, jitter: tvG.jitter, tint: tvG.tint, streak: 0.26 });
+        bakeTone(g, { y0: -1, y1: 16, grime: 0.56, bleach: 1.18, jitter: tvG.jitter, tint: tvG.tint, streak: 0.28 });
         put(M.bone, g, [0, 0, 0]);
         void role;
       }
       // Field boulders, so the bones have something that is not bone to be
       // pale against, and the ground is not empty between the arches.
-      for (let i = 0; i < 9; i++) {
-        const a = rng.next() * 6.28, d = rng.range(6, 30);
-        const sr = rng.range(0.5, 1.6), bx2 = Math.cos(a) * d, bz2 = Math.sin(a) * d;
+      for (let i = 0; i < 11; i++) {
+        const a = rng.next() * 6.28, d = rng.range(8, 42);
+        const sr = rng.range(0.6, 2.0), bx2 = Math.cos(a) * d, bz2 = Math.sin(a) * d;
         const brk = kitRock(rng, sr);
         put(M.rock, brk.geo, [bx2, gy(bx2, bz2, sr * 2) + sr * 0.5, bz2],
           [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)],
           [brk.s * rng.range(0.9, 1.3), brk.s * rng.range(0.7, 1.0), brk.s]);
       }
-      return { cast: true, r: 40, noApron: true };
+      return { cast: true, r: 58, noApron: true };
     }
 
     /**
@@ -2798,19 +2809,52 @@ export class PoiKits {
      */
     if (/threshold/.test(s.poi.id)) {
       const st = bag();
-      const tvT = toneVariant(rng, { valueAmp: 0.12, warmAmp: 0.05 });
-      /** One milestone: tapered shaft, pyramidal cap, proud base band. */
+      /**
+       * One milestone: tapered shaft, pyramidal cap, proud base band, a collar
+       * at two thirds and three incised bands above it.
+       *
+       * **The carving is not decoration, it is the whole read.** The first pass
+       * was shaft + cap + base and nothing else, and at forty metres — which is
+       * where a player first sees this site — that silhouette is a *bollard*
+       * (`tmp/shots/l18a/th_w.jpg`). A stone this size has one lit face, one
+       * shaded face and a horizon; the only thing that can tell you it was cut
+       * by someone is a horizontal that catches the sun across both. Four of
+       * them cost four four-sided cylinders and they are the difference between
+       * Solheim and a car park.
+       *
+       * **Toned per stone, not per kit.** A single `bakeTone` over the merged
+       * bag is what made twelve stones one colour in the first pass. Baking
+       * each one before it is placed gives every stone its own value and warmth
+       * — and a felled one is baked darker and less bleached, because a stone
+       * that has been lying in the grass for eight centuries is not the colour
+       * of one that has been standing in the sun.
+       */
       const stone = (o: { x: number; z: number; h: number; w: number; lean: number; leanY: number; fallen?: boolean }) => {
         const { x, z, h, w, lean, leanY, fallen = false } = o;
         const g0 = gy(x, z, w * 2);
         const loc = bag();
+        /** Shaft radius at height fraction `t`, so the bands can stand proud of it. */
+        const shaftR = (t: number) => w * (1 - 0.28 * t);
         // Bedded a third of a metre; a milestone that has stood eight hundred
         // years is founded, and the bed is what stops the sag on a slope
         // reading as a stone hanging in the air.
         loc.shell.push(xform(new THREE.CylinderGeometry(w * 0.72, w, h, 4), { y: h * 0.5 - 0.34 }));
-        loc.shell.push(xform(new THREE.CylinderGeometry(0.02, w * 0.755, w * 0.9, 4), { y: h - 0.34 + w * 0.44 }));
+        loc.shell.push(xform(new THREE.CylinderGeometry(0.02, w * 0.755, w * 1.05, 4), { y: h - 0.34 + w * 0.52 }));
         loc.shell.push(xform(new THREE.CylinderGeometry(w * 1.1, w * 1.14, 0.34, 4), { y: -0.2 }));
+        loc.shell.push(xform(new THREE.CylinderGeometry(shaftR(0.64) + 0.075, shaftR(0.56) + 0.075, 0.30, 4),
+          { y: h * 0.60 - 0.34 }));
+        for (let k = 0; k < 3; k++) {
+          const t = 0.73 + k * 0.072;
+          loc.shell.push(xform(new THREE.CylinderGeometry(shaftR(t) + 0.042, shaftR(t) + 0.042, 0.065, 4),
+            { y: h * t - 0.34 }));
+        }
         const merged = mergeBag(loc).shell;
+        const tv = toneVariant(rng, { valueAmp: 0.17, warmAmp: 0.08 });
+        bakeTone(merged, {
+          y0: -0.4, y1: h, jitter: tv.jitter, tint: tv.tint, streak: 0.32,
+          grime: fallen ? 0.44 : 0.58 + rng.range(0, 0.10),
+          bleach: fallen ? 0.86 : 1.06 + rng.range(0, 0.14),
+        });
         if (fallen) {
           // A felled stone lies on its side with its foot still in its socket.
           st.shell.push(xform(xform(merged, { rz: Math.PI / 2 - 0.09 }), { ry: leanY, x, y: g0 + w * 0.8, z }));
@@ -2822,16 +2866,16 @@ export class PoiKits {
       // other, so the gap between them is the smallest thing in the frame and
       // the eye is pulled down the avenue.
       const gate: { x: number; z: number; h: number; lean: number; leanY: number }[] = [
-        { x: -4.6, z: -9, h: 6.4, lean: 0.10, leanY: 0.06 },
-        { x: 4.6, z: -9, h: 6.9, lean: -0.14, leanY: -0.10 },
+        { x: -4.4, z: -9, h: 8.0, lean: 0.10, leanY: 0.06 },
+        { x: 4.4, z: -9, h: 8.7, lean: -0.14, leanY: -0.10 },
       ];
-      for (const gt of gate) stone({ ...gt, w: 0.72 });
+      for (const gt of gate) stone({ ...gt, w: 1.05 });
       // The rune face on the inner cheek of each gate stone: the only thing in
       // the kit that is not stone-coloured, and it is 0.6 m² of it.
       for (const sgn of [-1, 1]) {
         const gt = gate[sgn > 0 ? 1 : 0];
-        put(M.runeface, new THREE.PlaneGeometry(0.72, 2.1),
-          [gt.x - sgn * 0.66, gy(gt.x, gt.z, 1.4) + 3.0, gt.z], [0, sgn * Math.PI / 2, gt.lean]);
+        put(M.runeface, new THREE.PlaneGeometry(1.05, 3.0),
+          [gt.x - sgn * 0.92, gy(gt.x, gt.z, 1.4) + 3.6, gt.z], [0, sgn * Math.PI / 2, gt.lean]);
       }
       // Five receding pairs. `k` runs the whole sequence: the far stones are
       // shorter, lean harder and are likelier to be down, which is the whole
@@ -2844,17 +2888,16 @@ export class PoiKits {
           const down = rng.next() < 0.16 + k * 0.5;
           stone({
             x: sx * half + rng.gauss(0, 0.5), z: z + rng.gauss(0, 0.9),
-            h: 4.3 - k * 1.5, w: 0.5 - k * 0.1,
+            // Size varies within the pair as well as down the avenue: a real
+            // alignment was cut over generations and no two are the same.
+            h: (5.2 - k * 2.0) * rng.range(0.86, 1.16), w: (0.62 - k * 0.16) * rng.range(0.88, 1.14),
             lean: rng.gauss(0, 0.05 + k * 0.18), leanY: rng.gauss(0, 0.5), fallen: down,
           });
         }
       }
-      const sg2 = mergeBag(st);
-      for (const [role, g] of Object.entries(sg2)) {
-        bakeTone(g, { y0: 0, y1: 7, grime: 0.62, bleach: 1.12, jitter: tvT.jitter, tint: tvT.tint, streak: 0.24 });
-        put(M.stone, g, [0, 0, 0]);
-        void role;
-      }
+      // No bake here: every stone was toned individually above, which is the
+      // point. One `put`, so the whole alignment is still one draw call.
+      for (const g of Object.values(mergeBag(st))) put(M.stone, g, [0, 0, 0]);
       // The kerb of the vanished road: set stones half-swallowed by the grass,
       // in two broken lines. This is the piece that says "road", and it is
       // twenty dodecahedra.
