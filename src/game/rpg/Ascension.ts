@@ -151,6 +151,10 @@ export const AP_RULES: Record<string, ApRule> = {
   'hunt-complete':      { ap: 15, name: 'Hunt complete',            cooldown: 0,  desc: 'Turn in a hunt at the tipster.' },
   'chapter-complete':   { ap: 50, name: 'Chapter complete',         cooldown: 0,  desc: 'Clear a main-story chapter.' },
   'discovery':          { ap: 5,  name: 'Discovery',                cooldown: 0,  desc: 'Find a new haven, outpost or dungeon.' },
+  // Paid by `rpg/Tombs.ts`. Its own rule rather than a multiple of
+  // `discovery` because the ascension screen lists the reason it paid for, and
+  // "Discovery x5" for the Sword of the Father is not what happened.
+  'royal-arm':          { ap: 25, name: 'A royal arm claimed',       cooldown: 0,  desc: 'Take a Lucian king\'s weapon from his tomb.' },
   'regalia-distance':   { ap: 1,  name: 'Road trip',                cooldown: 0,  desc: 'Per 500m driven in the Regalia.', perUnit: 500 },
   'chocobo-distance':   { ap: 1,  name: 'Chocobo ride',             cooldown: 0,  desc: 'Per 400m ridden on a chocobo.', perUnit: 400 },
   'fishing':            { ap: 2,  name: 'Catch of the day',         cooldown: 0,  desc: 'Land a fish.' },

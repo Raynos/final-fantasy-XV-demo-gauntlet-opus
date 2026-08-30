@@ -1730,7 +1730,15 @@ export class PoiKits {
       put(M.stone, new THREE.CylinderGeometry(colR * 0.95, colR, rng.range(0.8, 1.5), 12),
         [Math.cos(a) * d, 0.6, Math.sin(a) * d], [Math.PI / 2, rng.next() * 3, rng.gauss(0, 0.3)]);
     }
-    return { cast: true, r: 21 };
+    // The sarcophagus, published so `game/rpg/Tombs.ts` can hang the Claim
+    // prompt on the thing the player can see rather than on the POI pin. The
+    // pin is the centre of the temple; the coffin is 7 m in front of it under a
+    // random yaw, so without this the prompt appears where there is nothing.
+    // Kit-local, post-yaw, pre-position -- the contract `anchorAt` states.
+    const A: Record<string, [number, number, number]> = {};
+    const sarc = new THREE.Vector3(0, deck + 1.16, cD / 2 + 2.6).applyMatrix4(world);
+    A.sarcophagus = [sarc.x, sarc.y, sarc.z];
+    return { cast: true, r: 21, anchors: A };
   }
 
   /**
