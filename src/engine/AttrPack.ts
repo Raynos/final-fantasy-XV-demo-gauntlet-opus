@@ -60,7 +60,7 @@ export interface PackStats {
  *     position:3     78.6 MB  needs a bbox decode — NOT here, see below
  *     color:3        34.8 MB  29.3 MB of it is over-bright (>1); refused
  *     uv:2           30.2 MB  22.8 MB of it tiles past 1; refused
- *     skinWeight:4   20.4 MB  16.5 MB inside 0..1  <- packed, plan task 38
+ *     skinWeight:4   20.4 MB  16.5 MB inside 0..1  <- REVERTED, see below
  *     aMat:3          9.5 MB   6.5 MB inside 0..1  <- packed
  *     aTan:3          9.5 MB   6.2 MB inside -1..1 <- packed
  *     aGroom:3        4.7 MB   4.0 MB inside -1..1 <- packed
@@ -82,8 +82,37 @@ export interface PackStats {
  * The rule the table now follows: **an attribute is packable when it is spent
  * on how a surface LOOKS, never on where it IS.** `aMat` is
  * (roughness, metalness, thickness), `aTan` and `aGroom` are hair directions,
- * `color` is a tint, `skinWeight` is a partition of 1 — all shading. A name
- * beginning with `a` proves nothing; read the shader that consumes it.
+ * `color` is a tint — all shading. A name beginning with `a` proves nothing;
+ * read the shader that consumes it.
+ *
+ * **`skinWeight` is gone too, and for the OTHER reason this file has always
+ * warned about.** Plan task 38 asked for it and it worked — 16.5 MB, weights
+ * renormalised, `hero_full` under its floor. Then `driftcheck`'s travel tour
+ * printed this, twice:
+ *
+ *     THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array
+ *       must be of consistent array types across matching attributes.
+ *     THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge
+ *       the skinWeight attribute.
+ *
+ * That is the null merge {@link MIN_VERTS} exists to prevent, happening
+ * anyway, because `MIN_VERTS` guards the wrong axis for a character.
+ * `characters/npc/NpcShadow.ts`'s `skinnedShadowProxy` merges one NPC's meshes
+ * into a single caster — and an NPC's hair is 17-25 k vertices while its hands
+ * and eyes are under 8 000. This pass packed the hair and skipped the rest, so
+ * the merge saw `Uint8` beside `Float32`, returned **null**, and **deleted
+ * that person's shadow**. It happens when an NPC is built, which is during
+ * play, long after this pass has run — which is why thirteen posed-shot
+ * imgdiffs could not see it and a travel tour could.
+ *
+ * So {@link packSubtree} now skips any geometry carrying `skinWeight` at all,
+ * not just the weights themselves: colour and `aTan` would fail the identical
+ * merge. **A post-hoc re-pack is the wrong shape for character geometry**,
+ * because characters are the one family that is re-merged after boot. The safe
+ * form of task 38 is in the *generators* — `rig/Geo.ts:250`, `Sculpt.ts:512`,
+ * `enemies/RigBuilder.ts` — where every mesh gets one format and no merge can
+ * ever see two. The patch is written out in
+ * `project/handoff/lane13-memory-boot.md`.
  *
  * **`position` is deliberately absent**, for the milder version of the same
  * reason. 71.1 MB of it fits `Int16`, but a
@@ -98,7 +127,7 @@ export interface PackStats {
  * three's `BufferAttribute` supports but no generator in this repo emits, so it
  * wants its own verification pass.
  */
-type Packable = 'color' | 'normal' | 'skinWeight' | 'aMat' | 'aTan' | 'aGroom';
+type Packable = 'color' | 'normal' | 'aMat' | 'aTan' | 'aGroom';
 
 /** How one attribute name is re-packed, once its values are proved in range. */
 interface Rule {
@@ -137,10 +166,7 @@ const RULES: Record<Packable, Rule> = {
   // A unit vector. `Int8` normalised is `max(v / 127, -1)`, so a normal that is
   // not unit length is clipped rather than quantised — check before, not after.
   normal: { fmt: 'i8' },
-  // glTF's own format for weights, and the reason it is safe at one byte: the
-  // four weights are a partition of 1, so the absolute error a byte can carry
-  // is 1/255 of a bone's influence on one vertex.
-  skinWeight: { fmt: 'u8', renorm: true },
+  // NO `skinWeight`, and no skinned geometry at all -- see `packSubtree`.
   // Per-vertex material parameters, authored in 0..1.
   aMat: { fmt: 'u8' },
   // Strand / flow direction — the same unit-vector argument as `normal`.
@@ -289,6 +315,9 @@ export function packSubtree(root: THREE.Object3D, st: PackStats = { seen: 0, pac
   for (const [g, n] of uses) {
     const pos = g.getAttribute('position');
     if (n > 1 || !pos || pos.count < MIN_VERTS) continue;
+    // A geometry carrying `skinWeight` is a character's, and a character's
+    // meshes ARE re-merged after this pass runs -- see the note below.
+    if (g.getAttribute('skinWeight')) continue;
     packGeometry(g, st);
   }
   return st;

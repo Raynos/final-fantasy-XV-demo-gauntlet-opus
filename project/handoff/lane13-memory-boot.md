@@ -546,3 +546,59 @@ not its measurements; `driftcheck.mts:38-42` explains why the second is loose
 `node src/tools/driftcheck.mts` for the measured numbers — it was still queued
 behind other lanes when I stopped — and look at tonight's terrain and seating
 commits, not at `AttrPack`.
+
+## SECOND CORRECTION — task 38 is a measured NEGATIVE, and it was deleting NPC shadows
+
+`driftcheck`'s full output (the tour, 56 646 m over 28 stops) carried two page
+errors nothing else in the suite prints:
+
+    THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array
+      must be of consistent array types across matching attributes.
+    THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge
+      the skinWeight attribute.
+
+**That is the null merge this file's own `MIN_VERTS` docstring exists to
+prevent, happening anyway, because `MIN_VERTS` guards the wrong axis for a
+character.** `characters/npc/NpcShadow.ts`'s `skinnedShadowProxy` merges one
+NPC's meshes into a single caster, cloning `position`/`skinIndex`/`skinWeight`
+from each. An NPC's hair is 17-25 k vertices; its hands, eyes and teeth are
+under 8 000. So `packSubtree` packed the hair to `Uint8` and skipped the rest,
+`mergeGeometries` saw `Uint8` beside `Float32`, returned **null**, and **that
+person's shadow was deleted.**
+
+It happens when an NPC is *built* — during play, long after the boot pass ran.
+Which is why thirteen posed-shot imgdiffs could not see it and a travel tour
+could. Second time tonight a numeric instrument caught what read frames could
+not.
+
+**Fixed:** `packSubtree` now skips any geometry carrying `skinWeight` at all —
+not just the weights, because `color` and `aTan` are in the same merge spec
+(`Geo.ts:316`, `Sculpt.ts:512`) and would fail identically. `skinWeight` is out
+of `RULES`.
+
+**Task 38 is therefore a measured negative in the form the plan asked for.** A
+post-hoc re-pack is the wrong shape for character geometry, because characters
+are the one family that is re-merged *after* boot. The safe form is in the
+generators — `rig/Geo.ts:250`, `rig/Sculpt.ts:512`, `enemies/RigBuilder.ts:85,
+118,170` — where every mesh gets one format and no merge can ever see two. That
+patch is written out in the `FOR LANE 1` section above, and it is now a
+recommendation rather than an optional extra: **it is the only safe way to get
+task 38's 16.5 MB.**
+
+Cost of the fix: character geometry loses `color`, `normal`, `aMat`, `aTan`,
+`aGroom` and `skinWeight` packing. The props, POI and megastructure mass — 85.3
+MB of `poi_kits` and 27.6 of `megastructures`, where the bytes actually are —
+is untouched.
+
+### And `driftcheck` is confirmed NOT mine
+
+    SURFACE DRIFT     mean 0.000 m   worst 0.000 m over 36864 texels
+    gpu vs heightAt   boot: mean -0.001 worst -0.520
+                      after travel: mean -0.001 worst -0.520 at (-39.8, -68.2)
+
+Nothing drifted — both probes are identical to three decimals. The failing arm
+is a *static* 0.520 m disagreement between the rendered ground and
+`Terrain.heightAt()`, 0.07 m over the 0.45 m tolerance, present at boot and
+unchanged by 56 km of travel. That is terrain content or a grade, not this
+lane: `AttrPack` never touches `position`, and `heightcheck` now reads exactly
+0.000 GPU vs CPU at every sample.
