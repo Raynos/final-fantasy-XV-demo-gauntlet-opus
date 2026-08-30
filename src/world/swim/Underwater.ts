@@ -74,6 +74,10 @@ const _ONE = new THREE.Vector3(1, 1, 1);
 
 interface SavedAtm {
   autoGrade: boolean;
+  /** The dry-air exposure band. Saved as absolutes, never scaled in place. */
+  expBase: number; expLo: number; expHi: number; expCeil: number;
+  /** Sun cascade and image-based-light intensities, likewise absolute. */
+  csm: number[]; probe: number; env: number;
   skyDim: number; night: number; nightTint: THREE.Vector3;
   fogBase: number; fogHeight: number; fogDensity: number; hazeBase: number;
   aerialStrength: number; aerialTint: THREE.Vector3;
@@ -158,8 +162,14 @@ export class Underwater implements System {
     if (!sky || !sky.u) return;
     const u = sky.u;
     if (!this._saved) {
+      const ex = post && post.exposure;
       this._saved = {
         autoGrade: post ? post.autoGrade : true,
+        expBase: ex ? ex.base : 1, expLo: ex ? ex.rangeLo : 0.5,
+        expHi: ex ? ex.rangeHi : 2, expCeil: ex ? ex.ceiling : Infinity,
+        csm: sky.csm ? sky.csm.lights.map((l) => l.intensity) : [],
+        probe: sky.probe ? sky.probe.light.intensity : 0,
+        env: game.scene.environmentIntensity,
         skyDim: u.uSkyDim.value, night: u.uNight.value,
         nightTint: u.uNightTint.value.clone(),
         fogBase: u.uFogBase.value, fogHeight: u.uFogHeight.value,
@@ -190,6 +200,49 @@ export class Underwater implements System {
     u.uFogDensity.value = THREE.MathUtils.lerp(
       u.uFogDensity.value, MURK_DENSITY * (1.0 + 0.45 * k), w);
     u.uHazeBase.value *= 1 - w;
+
+    /*
+     * ---- and then the light that gets down here ----------------------------
+     *
+     * **Eye adaptation was the whole reason the first fix still looked wrong.**
+     * `under_alstor` and `under_vesper` at `9b39b41` came back with a correct
+     * rippling ceiling over a lake bed the colour of a swimming pool: a flat,
+     * near-white pale cyan slab that read as daylight with a tint on it. The
+     * murk *was* being applied — it was being applied and then undone.
+     * `Exposure` lets the integrator roam inside a band around `base`, and its
+     * own docstring says what happens without one: "a dark frame drives
+     * key / avgLuma toward the rail, and without the band the integrator would
+     * happily expose midnight as noon". Turning `autoGrade` off does not touch
+     * that band. `Dungeons` clamps it for exactly this reason and this lane
+     * copied everything else from that method except the clamp.
+     *
+     * So: hold the band at the DRY base, scaled down the water column, and let
+     * adaptation move only a stop either side of it. Underwater has to be
+     * darker than the world above or none of the rest of this means anything.
+     *
+     * The sun goes with it. `uSigma` in the lake shader is 0.46/0.10/0.045 per
+     * metre and the daylight reaching a diver has already crossed `depth`
+     * metres of that, so the cascades, the probe and the IBL are attenuated by
+     * the green channel's own extinction — one number, because these are
+     * scalar intensities and the colour of the loss is the fog's job.
+     *
+     * Every one of these is written as `saved * factor`, never scaled in
+     * place: `Sky` does NOT rewrite the light intensities per frame (that is
+     * why `Dungeons` has to call `setTimeOfDay` to put them back), so a
+     * multiply-in-place here would compound to black over a few seconds.
+     */
+    const s = this._saved;
+    const lit = THREE.MathUtils.lerp(1, Math.exp(-0.085 * depth), w);
+    if (sky.csm) sky.csm.lights.forEach((l, i) => {
+      if (s.csm[i] != null) l.intensity = s.csm[i] * lit;
+    });
+    if (sky.probe) sky.probe.light.intensity = s.probe * lit;
+    game.scene.environmentIntensity = s.env * lit;
+    const ex = post && post.exposure;
+    if (ex) {
+      const base = s.expBase * THREE.MathUtils.lerp(1, 0.62 + 0.20 * (1 - k), w);
+      ex.setSceneExposure(base, { lo: 0.90, hi: 1.12, ceiling: base * 1.20 });
+    }
   }
 
   _restore() {
@@ -209,8 +262,19 @@ export class Underwater implements System {
       u.uHazeBase.value = s.hazeBase;
       u.uAerialStrength.value = s.aerialStrength;
       u.uAerialTint.value.copy(s.aerialTint);
+      if (sky.csm) sky.csm.lights.forEach((l, i) => {
+        if (s.csm[i] != null) l.intensity = s.csm[i];
+      });
+      if (sky.probe) sky.probe.light.intensity = s.probe;
     }
-    if (game && game.post) game.post.autoGrade = s.autoGrade;
+    if (game) game.scene.environmentIntensity = s.env;
+    if (game && game.post) {
+      game.post.autoGrade = s.autoGrade;
+      if (game.post.exposure) {
+        game.post.exposure.setSceneExposure(s.expBase,
+          { lo: s.expLo, hi: s.expHi, ceiling: s.expCeil });
+      }
+    }
   }
 
   /**
