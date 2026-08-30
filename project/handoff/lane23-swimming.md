@@ -163,9 +163,16 @@ two were wrong in different ways.**
 
 ## Not verified
 
-- **`longplay` and `gameplay` were never run** — both need the exclusive lease,
-  which was held by co-agents for most of this lifetime. Task 72's done-when
-  says "`longplay` clean" and that half is **open**.
+- **`longplay` and `gameplay` were never run** — both need the quiet/exclusive
+  lane, and it was held *continuously* by co-agents for the whole lifetime:
+  `perf`, then `gameplay`, then `coldload`, with three `daemon --wait` calls
+  giving up at 400 s, 500 s and 600 s and `harnessstats` reporting 60% of all
+  harness wall-clock spent queueing. Task 72's done-when says "`longplay`
+  clean" and that half is **open**. `longplay` also dies if a co-agent takes
+  the exclusive lease mid-run (its own header documents this: `withExclusive`
+  closes every context including the one it holds a lease on), so check
+  `daemon --health` reads `"exclusive": null` before starting it, and run it
+  with `run_in_background`.
 - ~~`shotswim.mts` never returned~~ — **it did, and the answer is clean:**
   `[shotswim] 0 of 162 shots stand in water; 0 engage the swim state`, at
   `4af4d26`. **No corpus frame changes because of this lane.** The cross-lane
