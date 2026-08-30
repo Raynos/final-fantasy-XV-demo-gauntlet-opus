@@ -130,12 +130,20 @@ Amplitudes are a matched **8.2° tilt** — 3.20 m over 139 m, 0.85 m over 37 m,
 2.10 m over 87 m — which is tier-C's own measured seat one octave down.
 `?post=nomacroh` / `macrohmax` is the pair.
 
-**Not verified.** `reliefstat` was queued behind 33 sweep jobs and never ran;
-the numbers to beat are the ones quoted in the tier-C comment (ours d8 11.8,
-d16 12.1, d32 13.3 against 18.4 / 21.2 / 21.8). **Next step is exactly one
-command:** `node src/tools/reliefstat.mts <capture> --roi 0.1,0.6,0.8,0.35
---against FFXV-field-ground`, on a `nomacroh` / shipped pair, plus a look at
-`zone_longwythe` for the same 2.5× control tier-C used.
+**Not verified.** The numbers to beat are the ones quoted in the tier-C comment
+(ours d8 11.8, d16 12.1, d32 13.3 against 18.4 / 21.2 / 21.8).
+
+**The command, and DO NOT add `--against`:**
+`node src/tools/reliefstat.mts <off.png> <on.png> --roi 0.1,0.6,0.8,0.35`
+on a `?post=nomacroh` / shipped pair, plus a look at `zone_longwythe` for the
+same 2.5x control tier-C used. Until `1f799ae` this tool's own header documented
+`--against FFXV-field-ground` and that invocation **crashed**: the file filter
+skipped the value after `--roi` and after nothing else, so the flag's value was
+opened as an input path -- and `--against` was never read anyway, because the
+reference median is computed unconditionally from `GROUND_PLATES`. Two runs died
+on it tonight, each twenty-two minutes deep in the daemon queue. Fixed, but any
+older handoff quoting a `reliefstat --against` comparison did not get it from
+this tool.
 
 ## Looked at, at the end of the session
 
