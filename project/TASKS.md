@@ -602,4 +602,14 @@ feeding `warpMotion(dist)`. No throughput measurement ever existed.*
 - **`drawcheck`/`npcdraws` were not re-run after lane 2's garment work.** The
   draw count is structurally unchanged (same meshes, same materials) but the
   garment material is shared with 29 NPC bodies, so it wants confirming. `lane2`
+- **Composition call: the NE sector looks out on the Insomnia megastructure
+  skyline.** Present at both the old and the new `adamantoise_graveyard` pin, so
+  the site move did not introduce it. Whether the bone country should have a dead
+  city on its horizon is an art-direction decision, not a lane's — lane 21 can
+  frame around it either way, and `Megastructures.ts` is where it lives. `lane18`
+- **Redirect a probe's stdout to a file.** The agent task buffer keeps ~30 lines
+  and `perfpoi` prints ~200, so a long probe silently truncates — which is
+  exactly the shape that gets misread as a pass. Cost lane 5 a whole conclusion
+  tonight (it lost a baseline `driftcheck`'s numbers to `tail -14` and drew the
+  wrong inference from what survived). `lane18`
 
