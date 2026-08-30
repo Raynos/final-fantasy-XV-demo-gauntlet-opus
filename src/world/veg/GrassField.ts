@@ -43,9 +43,31 @@ import type { Ecology } from './Ecology.ts';
 // stamping geometry the alpha test cannot resolve.
 const LODS = [
   { name: 'blade', tile: 12, far: 26, spacing: 0.27, max: 240000, hMul: 1.0 },
-  { name: 'clump', tile: 24, near: 21, far: 84, spacing: 0.40, max: 105000, hMul: 1.05 },
-  { name: 'far', tile: 48, near: 78, far: 155, spacing: 1.35, max: 44000, hMul: 1.45 },
+  { name: 'clump', tile: 24, near: 6, far: 84, spacing: 0.40, max: 105000, hMul: 1.05 },
+  { name: 'far', tile: 48, near: 20, far: 155, spacing: 1.35, max: 44000, hMul: 1.45 },
 ];
+// `near` used to read 21 and 78 and it never meant that. The tile test it feeds
+// was `dist < near - T * 0.75` against the tile CENTRE, so the distance a ring's
+// instances actually started at was `near - 1.25 * T`: -9 m for the clump ring
+// and 18 m for the far one. Both rings have drawn from zero for their whole
+// existence, and every tuning decision in this file, every biome density and
+// every shot in the corpus was made against that world and not against the one
+// the numbers describe.
+//
+// So correcting the test (below, in `_update`) without correcting these is a
+// regression, and it was: with the sign fixed and 21/78 left alone, the clump
+// cards started at 22 m, `party_walk` lost every plant around the party's boots
+// and its near ground went to bare cracked dirt. A card is one whole tuft
+// painted on three crossed quads and a blade instance is one blade, so per
+// instance a card covers something like fifteen times the area; the blade ring
+// cannot replace it at any density this budget allows.
+//
+// What IS wrong is the last few metres. Looked down on from a camera two metres
+// up, three crossed quads each carrying a tuft silhouette read as a six-armed
+// asterisk -- the star tufts at the party's feet. That artifact lives inside
+// about six metres and nowhere else. So the rings now start where they have
+// always effectively started, minus that band: cards from ~7 m and far cards
+// from ~22 m.
 
 /** Blades in the fattest tuft. Sizes the tile scratch buffer. */
 const MAX_PER_CLUMP = 22;
