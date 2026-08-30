@@ -916,6 +916,21 @@ const SHOT_TABLE = {
     time: 21.4, weather: 'clear',
     pos: [-3060, 142, -680], target: [-1020, 340, -2160], fov: 34,
   },
+  disc_crater_night: {
+    // The 33rd corpus entry, authorised beyond the plan's 32 because it is the
+    // only framing in which this landmark reads as an impact rather than a rock.
+    // `probes/discview.mts` scores this stand at frac 0.82 -- crown, waist AND
+    // rim -- against 0.42-0.50 everywhere else in a 24-bearing x 5-range sweep;
+    // every other stand sees the crown over a ridge and no crater at all. It is
+    // 825 m out, which is ON the 790-1060 m rim ring, so the eye has to be 38 m
+    // above the road: lower and the frame is the inside of a rim block, and two
+    // candidates either side of this one came back as the meteorite's own flank
+    // filling the lens. Night, with the rest of the Disc set, because the
+    // fissures are the subject.
+    doc: 'The Disc of Cauthess from the highway at night: the mass in its own crater, fissures lit',
+    time: 21.2, weather: 'clear',
+    pos: [-1220, 390, -1360], target: [-1020, 120, -2160], fov: 60,
+  },
   lest_plaza_walk: {
     doc: 'Walkers crossing the square on a long lens — the city is lived in, not dressed',
     time: 12.2, weather: 'clear',
