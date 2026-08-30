@@ -1,11 +1,50 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp, smooth, clamp01, crScalar, weightsAt } from './Geo.ts';
 import type { SweepNode, SkinWeights } from './Geo.ts';
-import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape } from './Anatomy.ts';
+import { torsoNodes, armNodes, legNodes, drape as drapeRaw, torsoShape, armShape, legShape } from './Anatomy.ts';
 import { SIDES } from './Skeleton.ts';
 import type { Rig, Side } from './Skeleton.ts';
 import type { Look, OutfitPiece } from './Look.ts';
 import { Noise } from '../../util/Noise.ts';
+
+/**
+ * **Skin clearance every garment pad gets on top of whatever it asks for.**
+ *
+ * Until 2026-08-30 every sweep in `Geo.ts` was wound inward, and the skin
+ * material is `FrontSide` — so what drew for the body was the *far* side of
+ * each limb, tens of centimetres behind the cloth. The garment therefore won
+ * every depth test no matter how far inside the skin it actually sat, and none
+ * of these pads was ever under any pressure to be right. The moment the
+ * winding was fixed the whole party came out in patches of bare shoulder,
+ * back and thigh.
+ *
+ * The residual deficits are small and diffuse — a garment sweep re-splines its
+ * draped nodes centripetally, so its `t` does not land at quite the same
+ * height as the body sweep's `u` that `under()` evaluates the muscle shape at,
+ * and the damping in `under()` used to pull the cloth inside a bulge. That is
+ * millimetres of parameterisation error spread over every piece, not one bad
+ * constant, and closing it properly means re-deriving the drape against arc
+ * length. Until someone does, this is the margin that absorbs it: 12 mm on
+ * the radius, about 6% on a torso's width, and the cheapest thing in the file
+ * to take back once the drape is honest.
+ *
+ * It is added to *every* pad, including the deliberately negative ones (the
+ * sleeve root that tucks its seam inside the deltoid stays negative, just less
+ * so), which is why it is applied here rather than at fifteen call sites.
+ */
+const SKIN_CLEARANCE = 0.030;
+
+type Pad = number | ((t: number, u: number) => number) | undefined;
+const clearPad = (p: Pad): Pad => (p == null ? p
+  : typeof p === 'function' ? (t: number, u: number) => p(t, u) + SKIN_CLEARANCE
+    : p + SKIN_CLEARANCE);
+
+/** `Anatomy.drape` with `SKIN_CLEARANCE` folded into the pad. */
+function drape(
+  nodes: SweepNode[], u0: number, u1: number, count: number, pad: Pad, padZ?: Pad,
+) {
+  return drapeRaw(nodes, u0, u1, count, clearPad(pad) as never, clearPad(padZ) as never);
+}
 
 const _cloth = new Noise(9137);
 /** scratch for the boot shaft's band blend */
@@ -77,7 +116,21 @@ function clothShade(o: OutfitPiece): ClothShade {
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
 function under(fn: (theta: number, t: number) => number, u0: number, u1: number, damp = 0.88) {
-  return (th: number, t: number) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
+  return (th: number, t: number) => {
+    const v = fn(th, u0 + (u1 - u0) * t);
+    // Damping toward 1 is what makes cloth read smoother than the body inside
+    // it — but it is only safe on a HOLLOW. Where the body bulges (`v > 1`)
+    // damping pulls the garment *inside* the skin by `rx * (1 - damp) *
+    // (v - 1)`, which on Gladiolus' lats is about 8 mm against a 10 mm pad,
+    // and on a deltoid or a quadriceps more than the pad. That never showed
+    // while `Geo.ts`'s sweeps were wound inward: the skin material is
+    // `FrontSide`, so what drew for the body was the *far* side of each limb,
+    // tens of centimetres behind the cloth, and the garment won every depth
+    // test however far inside the skin it sat. The moment the winding was
+    // right (2026-08-30) the whole party came out in patches of bare
+    // shoulder, back and thigh. Smooth the hollows, follow the bulges.
+    return v > 1 ? v : 1 + (v - 1) * damp;
+  };
 }
 
 /**
