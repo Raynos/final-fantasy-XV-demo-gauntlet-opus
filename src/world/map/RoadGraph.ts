@@ -105,6 +105,33 @@ export const NODES: NodeTable = {
   n_keycatrich: [236, -1150],
   n_longwythe_peak: [905, -800],
 
+  // --- The Old South Road (route20) and the Longwythe ascent (route21).
+  //     Due south of Hammerhead was a 59-degree arc of the compass with no
+  //     road, no POI and no reason to steer into it; north-east past the peak
+  //     was the same. `j_southroad` sits on the Route 1 line between
+  //     `n_hammerhead` (60,18) and the [-300,-2] shaping point -- 12 rather
+  //     than the 30 the design sketch asked for, because Route 1's Z must
+  //     decrease monotonically from Insomnia to Lestallum and 30 would have
+  //     put a kink in the spine that every bracket-on-Z lookup would read as
+  //     the wrong carriageway.
+  j_southroad: [-40, 12],
+  n_pilgrims_rest: [-80, 2600],
+  n_kingsroad_end: [-60, 2860],
+  // The Longwythe ascent. `trail` is speed 0 / reach 0 -- a walking route, so
+  // nothing drivable may hang off either end, and its terminal is a haven
+  // rather than a parking spot. `roadcheck`'s turning-circle rule used to
+  // demand one anyway (it read `deadEnds()` class-agnostically), which would
+  // have forced a `parking` POI at the end of a footpath: a lie the map screen
+  // would then repeat. The rule now asks what it means -- a car that can drive
+  // here must be able to turn around -- and a zero-speed class has no cars.
+  //
+  // The shaping points hold the path 380 m or more off the centre of the
+  // `longwythePeak` landform (900,-1180, r 560, h 430) and out on its low east
+  // apron. Straight up the shoulder is a 3.6 slope, and a grade-limited carve
+  // through that is not a path, it is a 200 m trench.
+  n_peak_overlook: [1250, -1600],
+  n_crag_haven: [1500, -2100],
+
   // --- Duscae branches
   n_prairie: [-700, 1020],
   j_fallgrove: [-980, 1300],
@@ -161,7 +188,8 @@ export const ROUTES: RouteSpec[] = [
     path: [
       'n_insomnia', [3340, 470], 'j_formouth', [2900, 356], 'j_crestholm',
       [2280, 236], 'j_galdin', [1620, 130], 'j_threevalleys', 'n_longwythe',
-      [800, 52], 'j_keycatrich', [300, 30], 'n_hammerhead', [-300, -2],
+      [800, 52], 'j_keycatrich', [300, 30], 'n_hammerhead', 'j_southroad',
+      [-300, -2],
       'j_prairie', [-860, -76], 'j_alstor', [-1330, -170], 'n_norduscaen',
       'j_cauthess', [-1980, -356], 'n_taelpar', 'n_taelpar_bridge',
       [-2520, -574], [-2760, -636], 'n_lestallum',
@@ -269,6 +297,28 @@ export const ROUTES: RouteSpec[] = [
     id: 'route19', name: 'Vesperpool Causeway', cls: 'road',
     doc: 'A raised bank out to the water and the fishing stage.',
     path: ['j_vesper', 'n_vesper_dock'],
+  },
+  {
+    id: 'route20', name: 'Route 20 — The Old South Road', cls: 'track',
+    doc: 'South off the spine into the empty quarter. Due south of Hammerhead '
+      + 'was a 59-degree arc of the compass with nothing in it at all: no road, '
+      + 'no POI, no reason to turn the wheel that way. This is the reason. It '
+      + 'runs 2.9 km to a turning circle where the Solheim pilgrim road gives '
+      + 'up, and everything on it is authored around the fact that the player '
+      + 'chose to go there.',
+    path: ['j_southroad', [-20, 420], [140, 980], [280, 1880], 'n_pilgrims_rest', 'n_kingsroad_end'],
+  },
+  {
+    id: 'route21', name: 'The Longwythe Ascent', cls: 'trail',
+    doc: 'The first walking route in Lucis, and the first use of the `trail` '
+      + 'class. You park at the peak trailhead and walk: east round the foot of '
+      + 'the black horn, north up the apron to the overlook, on to the crag '
+      + 'camp. Nothing north-east of the peak had a reason to exist and it was '
+      + 'the largest void on the map; this is the thread the reasons hang on.',
+    path: [
+      'n_longwythe_peak', [1150, -830], [1310, -1000], [1350, -1290],
+      'n_peak_overlook', [1380, -1870], 'n_crag_haven',
+    ],
   },
 ];
 

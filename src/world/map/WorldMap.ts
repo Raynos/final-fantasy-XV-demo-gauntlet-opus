@@ -421,6 +421,33 @@ export const POIS: PoiSpec[] = [
     does: 'Camp on the shelf below the peak. The first haven the player ever sees.' },
   { id: 'galdin_junction', name: 'Saulhend Pass', type: 'parking', zone: 'longwythe', at: 'j_galdin', r: 52, lv: 4,
     does: 'Where Route 1 forks south for the coast. Signposts, a bus shelter, a vending machine.' },
+
+  // ---- The Old South Road (route20) -----------------------------------
+  // Due south of the spine was a 59-degree arc of the compass containing
+  // nothing: no road, no POI, no encounter, no reason. A player who turned
+  // left out of Hammerhead drove until the world ran out. These five rows and
+  // the road that strings them are the whole of that quarter's content, so
+  // they are pitched as a *journey* rather than as a scatter: a landmark you
+  // can see from the junction, a haven at the halfway mark, a set-piece flat,
+  // a bed at the end and the turning circle beyond it.
+  { id: 'threshold_stones', name: 'The Threshold Stones', type: 'landmark', zone: 'longwythe', x: 120, z: 900, r: 300, lv: 8,
+    does: 'Leaning Solheim milestones on the old pilgrim road. Nine of them, and none of them upright.' },
+  { id: 'southwatch_haven', name: 'Southwatch Haven', type: 'haven', zone: 'longwythe', x: -260, z: 1400, r: 55, travel: true, lv: 10,
+    does: 'Camp on the last rise before the flats. The stones are still visible behind you.' },
+  { id: 'saltgrass_flats', name: 'The Saltgrass Flats', type: 'landmark', zone: 'longwythe', x: 300, z: 1900, r: 300, lv: 12,
+    does: 'A dry lake pan with a wreck field on it. Something large hunts the graze here.' },
+  { id: 'pilgrims_rest', name: "Pilgrim's Rest", type: 'reststop', zone: 'longwythe', at: 'n_pilgrims_rest', r: 140, travel: true, lv: 12,
+    does: 'The only bed and the only save south of Hammerhead. Caravan, pump, a very old vending machine.' },
+  { id: 'old_kingsroad_end', name: 'Old Kingsroad End', type: 'parking', zone: 'longwythe', at: 'n_kingsroad_end', r: 46, travel: true, lv: 12,
+    does: 'Turning circle where the south road gives up. The pilgrim road carries on as ruts.' },
+
+  // ---- The Longwythe ascent (route21) and what is beyond it ------------
+  { id: 'peak_overlook', name: 'The Northwatch Overlook', type: 'landmark', zone: 'longwythe', x: 1250, z: -1600, r: 300, lv: 10,
+    does: 'A shelf on the peak\'s east apron. Half of Leide below you, and the bone country ahead.' },
+  { id: 'crag_haven', name: 'Ravenscrag Haven', type: 'haven', zone: 'longwythe', x: 1500, z: -2100, r: 55, travel: true, lv: 18,
+    does: 'The last camp before the graveyard. You walk in; there is no road.' },
+  { id: 'adamantoise_graveyard', name: 'The Adamantoise Graveyard', type: 'landmark', zone: 'longwythe', x: 2600, z: -2800, r: 340, lv: 30,
+    does: 'Where the great turtles go. Ribcage arches you can walk under, and one shell you could park in.' },
   { id: 'three_valleys', name: 'The Three Valleys', type: 'landmark', zone: 'three_valleys', x: 1320, z: 1000, r: 460, lv: 6,
     does: 'Three parallel dry washes between hogbacks. The first real ambush ground.' },
   { id: 'three_valleys_haven', name: 'Merrioth Haven', type: 'haven', zone: 'three_valleys', x: 1050, z: 1140, r: 55, travel: true, lv: 9,

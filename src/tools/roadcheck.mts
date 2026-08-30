@@ -30,14 +30,39 @@ const g = worldMap.roadGraph;
 
 // ---------------------------------------------------------------- 1. reach
 console.log('\n1. drivable POIs reachable by road');
+/**
+ * Distance to the nearest **drivable** road centreline.
+ *
+ * `RoadGraph.nearest()` is class-agnostic, and that is right for what it is
+ * for -- ground materials, corridor distance, the minimap. It is wrong here.
+ * `trail` has `speed: 0`: it is a footpath, and a `parking` POI 20 m from one
+ * would have passed this test while being unreachable by any car in the game.
+ * That hole was open for as long as `trail` was unused; the Longwythe Ascent
+ * is the first route that could fall into it, so it is closed first.
+ *
+ * Brute force over samples rather than the spatial grid: 5000-odd samples on a
+ * ~30 km network, once per drivable POI, inside a gate that spends 16 s
+ * building the heightfield. It is not worth an index.
+ */
+function nearestDrivable(x: number, z: number) {
+  let best = Infinity;
+  for (const e of g.edges) {
+    if (e.clsDef.speed <= 0) continue;
+    for (const p of e.pts) {
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
 let unreachable = 0;
 for (const p of worldMap.pois) {
   const t = POI_TYPES[p.type as keyof typeof POI_TYPES];
   if (!t || !t.drive) continue;
-  const n = g.nearest(p.x, p.z, 900);
+  const d = nearestDrivable(p.x, p.z);
   const limit = p.type === 'town' ? 320 : p.type === 'outpost' ? 220 : 90;
-  if (!n || n.dist > limit) {
-    fail(`${pad(p.name, 32)} ${n ? n.dist.toFixed(0) : '>900'} m from the nearest road (limit ${limit})`);
+  if (d > limit) {
+    fail(`${pad(p.name, 32)} ${d === Infinity ? '>inf' : d.toFixed(0)} m from the nearest DRIVABLE road (limit ${limit})`);
     unreachable++;
   }
 }
@@ -84,15 +109,24 @@ console.log(`  tightest sustained corner ${tightest.r === Infinity ? 'none' : ti
 
 // ------------------------------------------------------------ 4. dead ends
 console.log('\n4. turning circles at dead ends');
+let walked = 0;
 for (const id of g.deadEnds()) {
   // `deadEnds()` reads the ids straight off `nodes`, so this one is there
   const nd = g.nodes.get(id)!;
+  // What this rule means is *a car that drives up here has to be able to turn
+  // around*. It used to be class-agnostic, which made it demand a turning
+  // circle at the end of a footpath -- and the only way to satisfy that would
+  // have been a `parking` POI no car can reach, i.e. to lie to the map screen
+  // in order to please the audit. A dead end whose every edge is a zero-speed
+  // class is a trailhead, and a trailhead does not need tarmac to turn on.
+  const drivable = nd.edges.some((ei) => g.edges[ei].clsDef.speed > 0);
+  if (!drivable) { walked++; continue; }
   const near = worldMap.pois.filter(
     (p) => (p.type === 'parking' || p.type === 'town' || p.type === 'outpost')
       && Math.hypot(p.x - nd.x, p.z - nd.z) < 90);
   if (!near.length) fail(`dead end ${id} has no turning circle`);
 }
-console.log(`  ${g.deadEnds().length} dead ends checked`);
+console.log(`  ${g.deadEnds().length} dead ends checked (${walked} walk-in only)`);
 
 // ----------------------------------------------------------- 5. road level
 console.log('\n5. road surface above water');
