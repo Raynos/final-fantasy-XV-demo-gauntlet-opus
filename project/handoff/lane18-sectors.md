@@ -166,12 +166,17 @@ whole table, and every objective of the three new contracts resolves --
 is the moved pin plus its `near()` offset, so the territory travelled with the
 POI as intended.
 
-**`perfpoi` came back under budget** on the types the retained output covered:
-`menace` max 14.7 ms over 8 sites, `chocobo` 22.9 ms over 2 — the gate's limit
-is 33 ms per site. The `landmark` row (the one this lane changed) scrolled out
-of the captured buffer; a re-run redirected to `tmp/lane18/perfpoi.json` was
-queued at hand-off. **Redirect the probe's stdout to a file** — the task buffer
-only keeps the last ~30 lines and this report is ~200.
+**`perfpoi` came back GREEN** (`tmp/lane18/perfpoi.json`): **129 sites built,
+`over33: 0`**, median 8.7 ms, worst 27.9 ms at `coernix_alstor` (an `outpost`,
+and not this lane's). The row that matters here is **`landmark`: n 30, median
+1.9 ms, max 11.7 ms** — the two authored branches are inside it and the whole
+type is a third of the 33 ms budget, so the ribcage and the alignment cost
+nothing anyone will feel. `over16: 8`, all of them aprons on havens and
+outposts.
+
+Practical note for the next agent: **redirect a probe's stdout to a file.** The
+background-task buffer keeps roughly the last thirty lines and this report is
+two hundred, so the first capture of it lost every row above `menace`.
 
 **The re-shoot came back and is read above.** `drawcheck --worst 30`, `probe
 src/tools/probes/perfpoi.mts` and `probe src/tools/probes/questaudit.mts` did
