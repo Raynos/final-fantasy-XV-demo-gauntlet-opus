@@ -278,11 +278,18 @@ function report(name: string, r: ColdRead, wallMs: number, readyMs: number) {
  * 50 Mbit connection in fourteen.
  *
  * The budget is a ratchet, not a target. Lower it when a tier lands; never raise
- * it to make a run pass.
+ * it to make a run pass. It has come 120 -> 90 -> 78 MB: 90 was this instrument's
+ * first honest reading, and 78 is 72.2 MB of measured first-frame load (bundle
+ * 1.02 + terrain 25.51 + tex 25.11 + texc 20.51) plus eight percent, after `h`
+ * and `far` moved to `q16d` and `dgn/*` moved behind the first frame.
+ *
+ * A run taken while `texc.bin.gz` or `geo.bin.gz` is missing reads about 20 MB
+ * or 27 MB light and still passes; that is what the artifact table in the report
+ * above is for, and why it flags anything under 10 kB.
  */
 const BLOCKS_MIN = 8;
 const BLOCK_MS_MAX = 3500;
-const TRANSFER_MAX = 90e6;
+const TRANSFER_MAX = 78e6;
 
 function gate(r: ColdRead, readyMs: number): boolean {
   const gaps: number[] = [];
