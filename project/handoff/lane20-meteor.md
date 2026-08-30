@@ -108,3 +108,56 @@ Author the two layers, capture, read, iterate.
 **`Megastructures.ts` is in `GEO_SOURCES`: editing it deletes `geo.bin.gz` for
 every lane until `node src/tools/texbake.mts --geo` is re-run.** Announced to
 the coordinator.
+
+---
+
+## Measured, 2026-08-31 (all with `probes/discglow.mts`)
+
+**The closed negative, reproduced.** On the tree as I found it: **19 of the 22
+emissive slabs sealed inside the rock, the other 3 behind terrain, `visible = 0`
+from all five stands** (`landmark_meteor`, `zone_mencemoor`, the highway spur by
+day and by night, the Lestallum lookout). That is the entombment as a number
+rather than a quotation. **verified.**
+
+**Night is not where the corpus thinks it is.** `landmark_meteor` runs t 17.6 and
+`Props._night` returns **0** there. `zone_mencemoor` is **0** too. Both judged
+Disc shots are dusk shots. **verified.**
+
+**`prep()` was deleting the vein attribute.** `PartBuilder.KEEP` is a delete
+list and `aEmissive` was not on it, so the stamp was stripped at `B.add`, before
+the merge, silently — the material declaring the attribute, the shader reading
+it, and the geometry that reached the GPU never having had it. It would have
+read back as "the veins are too dim" for as many rounds as anyone was willing to
+raise the radiance. One name added (`09202c6`), cross-lane, reported.
+**verified.**
+
+**Half this landmark has been underground since it was built.** Sampling each
+meteor mesh's vertices and subtracting `Terrain.heightAt`: the apron-and-rim
+mesh has a **median of −70 m**, the ground fissures **−79 m**. `ground()`
+returns a *relative* height, the group origin is sunk 90 m on purpose, and every
+apron shard and rim block was placed at `ground() + a small lift` — which
+composes to `seatY(here) − 90 + lift`. Right for a 585 m mass, total burial for
+a 30–96 m shard or a 52–155 m rim block. **This is why no capture in this
+project has ever shown a crater rim, and a crater with no rim is a hill.**
+Fixed in `bf0b78a` with absolute `seatLocal()` / `coverLocal()` helpers.
+**verified by measurement, not yet by eye.**
+
+**The veins render and are seen.** With `aEmissive` surviving `prep()`, 1530 of
+6051 sampled skin vertices were lit and **120 of them clear every occluder from
+`landmark_meteor`, 190 from `zone_mencemoor`** — the first non-zero this
+landmark's glow has ever produced from a judged stand. **verified.**
+
+### What the frames showed
+
+- `tmp/l20/v2-landmark_meteor-on.png`: the veins are unmistakably there and they
+  read as **snow**. White patches lying on the crown, blotchy rather than linear.
+  Three causes, all fixed in `bf0b78a` and **not yet re-captured**: a hairline
+  octave whose band was ~3 m on a mesh with 7 m triangles (drawn as speckle, so
+  deleted); a core colour of (0.62, 0.87, 1.00), which is a white with a blue
+  bias and which a dusk exposure clips to flat white (now 0.26, 0.66, 1.00); and
+  emissive landing on up-facing surfaces, which is exactly where the eye expects
+  snow (now damped 72% by the vertex normal's y, so the wound is in the walls).
+- The same frame shows a large dark faceted mass at screen left that the
+  baseline did not have — an apron shard poking its top through the hillside,
+  consistent with the −70 m median. Watch it after the seat fix: it should
+  become talus rather than a blob.
