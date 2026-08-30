@@ -307,25 +307,34 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
 /**
  * The wound: molten fissures stamped onto a Meteor mass's own surface.
  *
- * Writes `aEmissive` per vertex on a geometry that is about to go into the
- * `meteorSkin` batch. The field is a **domain-warped ridge** -- `1 - |fbm|`,
- * which is bright only where the field crosses zero, so what it draws is a
- * network of meandering *lines* rather than a field of blotches. Two octaves
- * of it: wide trunks a two-kilometre camera can resolve, and a hairline set at
- * three times the frequency and a third of the weight, which is what keeps the
- * trunks from reading as painted stripes.
+ * Writes `aEmissive` per vertex on a geometry about to go into the
+ * `meteorSkin` batch.
+ *
+ * **The line is authored and the noise only bends it**, and that is the third
+ * mechanism this function has had. The first two were ridged fbm -- `1 - |fbm|`,
+ * bright where the field crosses zero -- on the theory that a zero set draws
+ * lines. It does not, on a closed surface: it draws closed loops, and a loop
+ * seen from one side is a patch. Both were captured and both came back as
+ * *blotches*, the second one as blotches with a bloom halo, which is worse.
+ * Biasing the noise domain to make the loops vertical helped and did not fix
+ * the kind of the thing.
+ *
+ * So `veins` meridians run crown to foot around the mass's own vertical axis,
+ * and an fbm wobble in the angle makes each one wander as it descends. They
+ * are lines by construction, whatever the noise does, and they cannot close
+ * into a ring. A second low-frequency field fades each vein in and out along
+ * its length, so it reads as a fissure that is hotter in places rather than as
+ * a painted stripe.
  *
  * **Width is the whole engineering constraint and it comes from the range.**
- * Lestallum stands 2.33 km out at fov 30, which is 2.18 m per pixel; a vein has
- * to be ten pixels to survive TAA and the distance haze, so **nothing narrower
- * than about 22 m is worth authoring**. The ridge band's half-width in unit
- * radius is roughly `1 / (k * |grad fbm|)`, and on a 585 m bounding radius that
- * puts `k` in the low tens -- hence 13 against a 3.2 base frequency, which
- * measures out at roughly a 15 m band: ten pixels at `landmark_meteor`'s
- * 1.45 m/px and five at Lestallum, where bloom widens it back. Not the 7.0 the
- * gully incision uses for a crease that is *meant* to be sub-pixel, and not the
- * two octaves at 8.5 the first pass ran, which lit a quarter of the surface
- * and produced a lava ball.
+ * Lestallum stands 2.3 km out, which is about 2.2 m per pixel; a vein has to be
+ * ten pixels to survive TAA and the distance haze, so **nothing narrower than
+ * about 22 m is worth authoring**. This mechanism makes that arithmetic
+ * possible instead of approximate: `k` is spacings-per-band, and the spacing is
+ * the mass's circumference over `veins`. Eight veins around a 400 m mass is a
+ * 315 m spacing, so `k = 26` is a 24 m band -- eleven pixels at Lestallum and
+ * thirty-three at the highway spur. The ridged version could only be tuned by
+ * capture, because its width depended on the gradient of an fbm.
  *
  * The colour is the human's direction: **molten blue**. A near-white-blue core
  * with a warm halo at the band's edge, which is what a crack full of something
@@ -341,7 +350,7 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * @param k band tightness -- LOWER is wider. See the width note above.
  * @param amp peak core radiance before `uGlow`
  */
-function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 13, amp = 1) {
+function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 8, k = 26, amp = 1) {
   const n = new Noise(seed * 13 + 7);
   const p = geo.attributes.position;
   const count = p.count;
@@ -356,32 +365,36 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 13, amp = 1) {
   const h = Math.max(1e-4, yMax - yMin);
   if (!geo.attributes.normal) geo.computeVertexNormals();
   const nrm = geo.attributes.normal;
-  // Cycles per unit radius, and the y term is deliberately a third of it.
-  //
-  // At 1.9 isotropic there were only about three crack cells across a whole
-  // mass, so what any one camera saw was two or three isolated POCKETS of the
-  // zero set rather than a line running anywhere — captured, and with bloom on
-  // top they read as glowing blobs stuck to a flank. 3.2 puts four or five
-  // lines across a visible face, and squashing the field's y domain to 0.35
-  // makes it vary slowly with height, so its zero contours run roughly
-  // VERTICALLY: a fissure runs down the face the way a cooling crack does,
-  // instead of wandering across it like a contour line.
-  const F = 3.2;
   let lit = 0;
   for (let i = 0; i < count; i++) {
-    const x = p.getX(i) / rMax, y = p.getY(i) / rMax, z = p.getZ(i) / rMax;
-    // Domain warp. Without it the zero set of an fbm reads as contour lines on
-    // a topographic map: smooth, parallel, and unmistakably a texture.
-    const wx = n.fbm3(x * 1.3 + 4, y * 1.3, z * 1.3 - 2, 2) * 0.6;
-    const wy = n.fbm3(x * 1.3 - 9, y * 1.3 + 6, z * 1.3, 2) * 0.6;
-    const f = n.fbm3(x * F + wx, y * F * 0.35 + wy, z * F - 3, 4);
-    // **One octave, not two.** The first pass added a hairline set at 3.1x the
-    // frequency for "detail", and its band came out about three metres wide on
-    // a mesh whose triangle edge is seven -- so it could not be drawn as a
-    // line and was drawn as speckle instead. Captured, and it read as snow
-    // lying on the crown. A feature the mesh cannot express does not become
-    // subtle when you shrink it; it becomes noise.
-    const t0 = Math.max(0, 1 - Math.abs(f) * k);
+    const px = p.getX(i), py = p.getY(i), pz = p.getZ(i);
+    const x = px / rMax, y = py / rMax, z = pz / rMax;
+    // **A meridian, not a contour.** Two passes of ridged fbm are in the
+    // history of this function and both were captured and both read as
+    // BLOTCHES: the zero set of an fbm on a closed surface is a family of
+    // closed loops, and a loop seen from one side is a patch. Squashing the
+    // noise domain in y to bias the loops vertical helped and did not fix it.
+    //
+    // So the line comes first and the noise only bends it. `az` is the angle
+    // around the mass's own vertical axis, in turns, so `veins * az` is a set
+    // of `veins` meridians running crown to foot, and they are lines by
+    // construction, whatever the noise does to them. The wobble is a full
+    // 3D fbm, so a vein wanders horizontally as it descends and no two masses
+    // wander alike, but it can never close into a ring.
+    const az = Math.atan2(z, x) / (Math.PI * 2);
+    const wob = n.fbm3(x * 1.6 + 3, y * 1.1, z * 1.6 - 7, 3) * 0.30
+      + n.fbm3(x * 3.4 - 11, y * 2.2 + 5, z * 3.4 + 2, 2) * 0.10;
+    const q = (az + wob) * veins;
+    // Distance to the nearest meridian, in units of one vein spacing.
+    const d = Math.abs(q - Math.round(q));
+    // `k` is spacings-per-band: at the equator of a 400 m mass the spacing is
+    // about 315 m, so k = 26 is a band about 24 m across -- ten pixels at
+    // Lestallum's 2.18 m/px, which is the width floor the whole lane turns on.
+    const t0 = Math.max(0, 1 - d * k);
+    // A crack is not equally hot along its length. This fades each vein in and
+    // out over a few hundred metres so it reads as fissure rather than as a
+    // painted stripe, and it never quite reaches zero.
+    const heat = 0.45 + 0.55 * (0.5 + 0.5 * n.fbm3(x * 2.3 + 17, y * 2.3, z * 2.3 - 5, 3) * 2);
     // **Not on the up-facing surfaces.** Half of why the first pass read as
     // snow is that emissive on a horizontal face is exactly where snow goes,
     // and the eye has a very strong prior about that. A crack full of
@@ -392,23 +405,23 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 13, amp = 1) {
     // The crown took the shock and is the most shattered; it is also the only
     // part of the cluster a 1.4 km camera can see over the foreground ridge,
     // which is the same conclusion arrived at from the other direction.
-    const up = 0.55 + 0.45 * ((p.getY(i) - yMin) / h);
-    const t = Math.min(1, t0 * up * face);
+    const up = 0.55 + 0.45 * ((py - yMin) / h);
+    const t = Math.min(1, t0 * up * face * Math.max(0, Math.min(1, heat)));
     if (t <= 0.001) continue;
     lit++;
     // `t*t` because a linear falloff off a ridge is a soft airbrushed smear;
     // the square keeps the core hot and the halo thin.
     const w = t * t * amp;
-    const core = THREE.MathUtils.smoothstep(t, 0.42, 0.95);
-    // Blue stays blue. The first pass put the core at (0.62, 0.87, 1.00),
-    // which is a *white* with a blue bias, and against a bright dusk sky the
-    // exposure took it to flat white -- a landmark with white patches on its
-    // crown, which is a snowline. The red channel is what has to give: a core
-    // at (0.26, 0.66, 1.00) still reads as hot because the blue channel is
-    // saturated, and it reads as CRYSTAL because the other two are not.
-    out[i * 3] = (1.00 * (1 - core) + 0.26 * core) * w;
-    out[i * 3 + 1] = (0.40 * (1 - core) + 0.66 * core) * w;
-    out[i * 3 + 2] = (0.10 * (1 - core) + 1.00 * core) * w;
+    // **The band is blue nearly all the way out.** The first pass ramped the
+    // core in over 0.42..0.95, which meant almost every lit vertex took the
+    // WARM colour and the night capture came back with a landmark mottled
+    // orange -- the one thing the direction is not. The warm note is a fringe,
+    // a couple of metres at the band's edge, and everything inside it is the
+    // crystal.
+    const core = THREE.MathUtils.smoothstep(t, 0.06, 0.40);
+    out[i * 3] = (0.95 * (1 - core) + 0.30 * core) * w;
+    out[i * 3 + 1] = (0.46 * (1 - core) + 0.70 * core) * w;
+    out[i * 3 + 2] = (0.18 * (1 - core) + 1.00 * core) * w;
   }
   geo.setAttribute('aEmissive', new THREE.BufferAttribute(out, 3));
   geo.userData.veinLit = lit;
@@ -1257,10 +1270,13 @@ export class Megastructures {
     // rampart, and the breach stops being an absence and becomes the thing the
     // eye follows in.
     //
-    // Each segment is a box that straddles the ground rather than sitting on
-    // it: 34 m tall with its centre 5 m proud, so the terrain cuts it and what
-    // renders is a bright band following the slope, which is a crack. A box
-    // *resting* on the ground is a glowing kerbstone.
+    // Each segment is a box SUNK a few metres into the ground rather than
+    // stood on it, so the terrain does the authoring: light comes through only
+    // where the ground dips, the segment opens and closes along its length,
+    // and its ends are cut by the slope instead of by a face of the primitive.
+    // A box resting on the ground is a glowing kerbstone, and a box standing
+    // proud of it is a glowing rectangle, which is what the first night
+    // capture showed.
     const SPOKE = [0.35, 1.90, 2.55, 3.40, 4.60, 5.25];
     for (let si = 0; si < SPOKE.length; si++) {
       const a0 = SPOKE[si];
@@ -1280,8 +1296,8 @@ export class Megastructures {
         // pixel is 0.66 m and at Lestallum's 2.33 km it is 2.18 m, so even the
         // narrow end is five pixels from the far stand and forty from the near
         // one. This is the width floor the whole lane turns on.
-        const len = 210 - t * 70 + rng.range(-20, 20);
-        const wid = 30 - t * 19;
+        const len = 230 - t * 80 + rng.range(-24, 24);
+        const wid = 19 - t * 11;
         // `atan2` in the group frame gives the outward radial; the box's long
         // axis is Z, so the yaw takes +Z onto it.
         const out = Math.atan2(pz, px);
@@ -1295,7 +1311,16 @@ export class Megastructures {
           // sample by `size`, so asking about a 210 m footprint on a slope
           // returns the high end of that footprint and floats the whole
           // segment off the ground at the low end.
-          mat4([px, coverLocal(px, pz, wid) + 5, pz],
+          // **Sunk, not stood.** At +5 m of a 34 m box the segment cleared the
+          // ground everywhere along its length and the night capture came back
+          // with clean glowing RECTANGLES lying on the crater floor -- a box,
+          // unmistakably, which is the one thing a crack must not look like.
+          // Seated a few metres UNDER the drawn surface, the terrain does the
+          // authoring: only where the ground happens to dip does the light
+          // come through, so the segment reads as a ragged fissure that opens
+          // and closes, and its ends are cut by the slope rather than by a
+          // face of the primitive.
+          mat4([px, coverLocal(px, pz, wid) + rng.range(-9, -2), pz],
             [rng.gauss(0, 0.05), -out + Math.PI / 2, rng.gauss(0, 0.05)]));
       }
     }
@@ -1424,11 +1449,15 @@ export class Megastructures {
       // **`emissiveIntensity` does not reach the veins.** `vertexEmissiveGlow`
       // adds `vEmissive` straight into `totalEmissiveRadiance`, downstream of
       // everything the standard material scales, so the masses' fissures ramp
-      // through their own uniform or not at all. 1.15 by day, 3.35 after dark:
-      // the night value clears bloom's 1.45 post-exposure threshold with room,
-      // and the day value sits under it so the Disc is a rock at noon with a
-      // seam of colour in it rather than a lamp.
-      this.mats.meteorSkin.userData.uGlow.value = 0.85 + 2.35 * night;
+      // through their own uniform or not at all. 0.6 by day, 1.9 after dark.
+      //
+      // The night figure was 3.2, chosen to clear bloom's 1.45 post-exposure
+      // threshold with room. Captured from the highway spur at t 21.2, that is
+      // a landmark covered in blown-out white patches: at night the exposure is
+      // already lifting the frame, so the headroom bloom needs is much smaller
+      // than the daylight arithmetic suggests, and past it every channel clips
+      // and the colour the direction asks for is the first thing lost.
+      this.mats.meteorSkin.userData.uGlow.value = 0.6 + 1.3 * night;
       this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
     }
   }
