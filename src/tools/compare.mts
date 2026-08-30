@@ -114,6 +114,21 @@ const PAIRING: Record<string, string[]> = {
   hud_field: ['combat-warpstrike-hud-02.jpg', 'hud-combat-full-01.jpg'],
   hud_night: ['hud-combat-full-01.jpg', 'combat-technique-hud-03.jpg'],
   poi_haven: ['night-campfire-haven-01.jpg', 'camp-cooking-01.jpg'],
+  // The five city and landmark rows lane 21 added with the corpus's 32 new
+  // content shots. **The plate library has exactly one town plate**
+  // (`town-daytime-altissia-01.jpg`) and no Lestallum or Galdin plate at all,
+  // which is a real gap in the test rather than a choice: three of these five
+  // rows are matched on light and subject-kind rather than on place, and that
+  // is the best the library allows. Filed in HUMAN_REVIEW.md.
+  //
+  // Every pair here is DISTINCT as an unordered set, from each other and from
+  // every row above, because `--control` emits one composite per distinct plate
+  // pair and two rows sharing a pair collapse into one control arm.
+  lest_market_day: ['town-daytime-altissia-01.jpg', 'party-four-casual-01.jpg'],
+  lest_street_night: ['night-insomnia-party-02.jpg', 'camp-cooking-01.jpg'],
+  lest_overlook_disc: ['behemoth-dread-skyline-03.jpg', 'night-campfire-haven-01.jpg'],
+  galdin_pier_sunset: ['golden-hour-water-02.jpg', 'party-roadtrip-galdin-01.jpg'],
+  galdin_angelgard: ['water-lake-01.jpg', 'golden-hour-water-02.jpg'],
 };
 const FALLBACK = ['duscae-plains-lake-01.jpg', 'duscae-wilderness-04.jpg'];
 

@@ -887,12 +887,27 @@ const SHOT_TABLE = {
   lest_market_day: {
     doc: 'Partellum Market at mid-morning: stalls, awnings and the city out shopping',
     time: 10.5, weather: 'clear',
-    pos: [-2970, 122.9, -691], target: [-2957, 121.9, -702], fov: 42,
+    pos: [-2971.3, 122.9, -692.5], target: [-2958.3, 121.9, -703.5], fov: 42,
   },
   lest_street_night: {
     doc: 'The square after dark under its festoon, the block black against the starfield',
     time: 21.5, weather: 'clear',
     pos: [-2968, 122.1, -707], target: [-2956, 123.2, -697], fov: 50,
+  },
+  lest_overlook_disc: {
+    // Posed off `probes/discview.mts`, not off a map pin. Lane 20 photographed
+    // two stands that looked obvious and both were blind: the lookout car park
+    // at ground+12 has its own boulder in the way, and the highway spur at
+    // `n_disc` stands *inside* the 790-1060 m rim ring. The probe marches
+    // `Terrain.heightAt` from the eye to the impact centre: crown y 829, waist
+    // 80, and from the Lestallum shelf the skyline cuts at ~316 m, so this
+    // frame is the upper 60% of the cluster and never the crater. Every stand
+    // in the 24x5 sweep that sees the rim is 800 m out and inside the rock.
+    // Night on purpose: `landmark_meteor` runs t 17.6 where `Props._night`
+    // reads 0, so this is the corpus's only night read of the Disc.
+    doc: 'The Disc of Cauthess from the Lestallum shelf after dark, its fissures still burning',
+    time: 21.4, weather: 'clear',
+    pos: [-2880, 133, -760], target: [-1020, 460, -2160], fov: 34,
   },
   lest_plaza_walk: {
     doc: 'Walkers crossing the square on a long lens — the city is lived in, not dressed',
@@ -902,7 +917,7 @@ const SHOT_TABLE = {
   lest_exineris: {
     doc: 'The EXINERIS stack over the market roofs, the reason this city has light',
     time: 15.0, weather: 'clear',
-    pos: [-2955, 122.4, -706], target: [-2938, 142, -718], fov: 46,
+    pos: [-2908, 128, -742], target: [-2938, 138, -718], fov: 44,
   },
   lest_leville: {
     doc: 'The Leville from the square — the hotel front over the pavement tables',
@@ -917,7 +932,7 @@ const SHOT_TABLE = {
   lest_night_high: {
     doc: 'The lit square from above the stalls, bulbs and awnings raking away',
     time: 21.6, weather: 'clear',
-    pos: [-2953, 130, -712], target: [-2961, 122.2, -700], fov: 46,
+    pos: [-2950, 136.5, -714], target: [-2962, 122.5, -698], fov: 44,
   },
 
   // --- cities : Galdin Quay ---------------------------------------------
@@ -929,6 +944,22 @@ const SHOT_TABLE = {
     doc: 'Galdin Quay at golden hour: the square full, warm rim light down the boards',
     time: 18.2, weather: 'clear',
     pos: [2324, 2.4, 2371], target: [2340, 1.9, 2386], fov: 44,
+  },
+  galdin_angelgard: {
+    // The sea is NOT in sight of Galdin's square: the ground under the plaza
+    // reads -0.4 m once streamed and never crosses -1 m within 500 m on any of
+    // sixteen bearings, while sea level is -6.5. The shoreline is ~230 m
+    // south-east, and Angelgard is a 48 m flat-topped island at about
+    // (2960, 3060), 940 m out. Both coastal shots stand on that shore, not on
+    // the deck the shot names.
+    doc: 'Angelgard across the shallows at last light, the jetty running out below',
+    time: 18.8, weather: 'clear',
+    pos: [2452, 3.4, 2536], target: [3089, 28, 2935], fov: 34,
+  },
+  galdin_beach: {
+    doc: 'The Galdin shoals in the morning: two wind-cut trees, the shallows, the island beyond',
+    time: 9.0, weather: 'clear',
+    pos: [2440, 4.0, 2500], target: [2820, 8, 2900], fov: 44,
   },
   galdin_restaurant: {
     doc: "Coctura's counter at the Mother of Pearl, the kitchen open behind her",
