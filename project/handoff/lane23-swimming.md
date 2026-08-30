@@ -132,6 +132,32 @@ Nothing has been looked at yet. Written but unseen:
 - the murk's colour and density;
 - the breath gauge's placement.
 
+## Blocked, not stuck — the harness queue
+
+At the end of this lifetime **four probe runs and one capture are queued and
+have not returned**: `swimcross` (`--dirty`), `nanunder` re-shoot, `divebreath`,
+`shotswim`. `daemon --health` says `"exclusive": "perf"` with a co-agent holding
+the lease and 0 of 4 workers busy against a queue depth of 16 in the `fix` lane
+alone. Nothing is wrong with the probes; they are waiting. Re-run them first
+thing:
+
+```
+node src/tools/probe.mts src/tools/probes/swimcross.mts     # task 72's number
+node src/tools/probe.mts src/tools/probes/divebreath.mts    # task 73's number
+node src/tools/probe.mts src/tools/probes/shotswim.mts      # the cross-lane risk
+node src/tools/framecam.mts --probe src/tools/probes/nanunder.mts \
+  --out tmp/shots/l23/w2 --jpeg                             # number AND picture
+```
+
+One earlier `swimcross` run at `f580459` DID come back, but only its tail
+survived the log tail: it showed the player at `y = -7.8` with the level at
+`-6.5` — feet exactly `FLOAT` = 1.30 m under the surface, so **buoyancy holds
+the swimmer at the water line** — swimming through 2.53 m, 1.99 m and 1.09 m of
+water on the way home and then `stillSwimming: false` at a final depth of
+0.85 m, which is the exit threshold. **He entered, he swam ~100 m out and back,
+and he exited at a bank.** The `floorWalk` counter was in the part of the log
+that was lost. Treat this as *strongly indicative, not verified*.
+
 ## Exact next step
 
 1. Read `tmp/l23/*.jpg` from the first `framecam --probe` run of
@@ -156,6 +182,31 @@ Nothing has been looked at yet. Written but unseen:
   Hence `nanunder` derives its framings from `Water.bodies` live.
 - `nanscan` command line in the plan is wrong repo-wide: it is a probe body —
   `node src/tools/probe.mts src/tools/probes/nanscan.mts`.
+
+## The biggest remaining visual gap: he swims in a walk cycle
+
+**Not fixed, deliberately, and not blind-fixable.** `Player.update` calls
+`character.update({ speed: this._gait, ... })` *inside* its own `update`, before
+any `lateUpdate` this lane runs, so the gait a swimmer is animated with is the
+ordinary locomotion gait. A person crossing a lake plays a walk cycle with their
+legs under the water.
+
+Two zero-edit levers exist and **neither has been looked at, so neither is
+landed**:
+
+1. **Pitch the root.** `Occupants` already overwrites `root.rotation` from
+   `lateUpdate` for seated poses, so a ~25° forward pitch on `player.root` while
+   `swimming` is available with no `src/characters/` edit, and an upright
+   figure going forward at 2.2 m/s is the single most obviously wrong thing in
+   the feature.
+2. **Hold the gait near idle.** `_gaitWant = speed * body.progress`, and
+   `progress` is produced by `CharacterController._score`, which this lane owns.
+   Reporting a reduced progress while swimming would settle the legs toward the
+   idle pose — closer to treading water than to walking. But `progress` also
+   scales the velocity the party chases, so it is not free.
+
+A real answer is a **swim stroke in the rig**, which is `src/characters/`
+(lanes 1/2/22). Filed below as a `TASKS.md` row.
 
 ## Open questions / cross-lane
 
