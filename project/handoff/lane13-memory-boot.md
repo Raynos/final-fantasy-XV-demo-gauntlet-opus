@@ -458,3 +458,58 @@ nothing in `PoiKits.ts`.
 3. The three levers in the residue block above, biggest first: the disposable
    CPU geometry (~213 MB, ~32 safe), the bake path's peak transient (~270 MB)
    and the town shadow proxies (~16 MB).
+
+## CORRECTION — I broke two gates, and the fix is one line
+
+`pnpm run check` came back at **16/19**, and two of the three are mine.
+
+    reachcheck  4 must-run paths did not execute   NOT mine (see below)
+    driftcheck  0.45 m against a 0.05 m tolerance   MINE
+    heightcheck asserts 0.000 m GPU vs CPU          MINE
+
+**`aClip` is a position attribute wearing a shading attribute's name.** It was
+the most tempting row in the table I added in `792e998`: two components, every
+single value already inside 0..1, no range check ever refuses it, 1.6 MB for
+free. It is the terrain clipmap's LOD **morph alpha**.
+`TerrainMaterial.ts:220-232` spends it as
+
+    tfH = mix(tfH, mix(mix(h00, h10, gt.x), mix(h01, h11, gt.x), gt.y), aClip.x);
+    ...
+    vec3 transformed = vec3(position.x, tfH, position.z);
+
+so one byte of alpha is one byte of **height** on every clipmap ring in the
+world. `heightcheck` asserts *0.000 m* GPU against CPU — a gate no quantisation
+of that alpha can ever satisfy. `Terrain.ts:390` describes this in prose. I read
+the attribute's measured range and did not read the shader that consumes it.
+
+Reverted; `aClip` is out of `RULES` and the docstring now carries the rule for
+whoever adds the next row: **an attribute is packable when it is spent on how a
+surface LOOKS, never on where it IS.** `aMat` is (roughness, metalness,
+thickness), `aTan`/`aGroom` are hair directions, `color` is a tint,
+`skinWeight` is a partition of 1 — all shading. A leading `a` proves nothing.
+
+The lane's cut goes from **-42.1 MB to -40.5 MB** of CPU attributes, and the
+same again on the GPU copy. Nothing else in the table is affected: the
+five-shot and eight-shot imgdiff windows both stand, because a 1/255 error in a
+morph alpha is far under a per-shot floor — **which is exactly why a numeric
+gate caught what four read frames did not.**
+
+`reachcheck` (4 unreached must-run paths) is **not mine**: my only behavioural
+change adds a loop to `Props.update` and removes no path. It arrived with
+tonight's content lanes and needs whoever added the must-run rows.
+`heightcheck` also failed on a 300 s page timeout rather than a number, so it
+must be re-run once `aClip` is out and the box is quiet.
+
+### `reachcheck`'s four dead paths are lane 17's, named
+
+    must-run: 52/56 reached
+      DEAD  RpgSystem.gainExp
+      DEAD  QuestLog.accept
+      DEAD  QuestLog.complete
+      DEAD  StorySystem.completeChapter
+
+Nobody gains EXP, no quest is accepted, no quest completes and no chapter
+completes in the instrumented session (1 986 methods instrumented, 947 ran).
+All four are `src/game/rpg/` and `src/game/` — **lane 17's files**, and its
+tasks 49 and 50 are about exactly this machinery. Lane 13 never touched
+`src/game/`. Handing it over untouched.
