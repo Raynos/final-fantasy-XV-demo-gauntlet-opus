@@ -56,10 +56,28 @@ export interface HubDef {
 }
 
 export const CHOCOBO_HUBS: HubDef[] = [
-  // Wiz stands at the POI + (26, 14) (`Npcs.ts` :254). The stable prompt sits
-  // four metres short of him and the board four metres past, so the three
-  // prompts never fight over one E press — `InteractionSystem` breaks ties on
-  // distance and facing, and three verbs inside one radius is a coin toss.
+  /*
+   * Wiz stands at the POI + (26, 14) (`Npcs.ts` :254). The stable prompt sits
+   * four metres short of her and the board four metres past, so the three
+   * prompts never fight over one E press — `InteractionSystem` breaks ties on
+   * distance and facing, and three verbs inside one radius is a coin toss.
+   *
+   * **These are world-axis offsets and the kit is yawed, which is why they are
+   * outside the fence rather than on the trough.** `PoiKits._chocobo` rotates
+   * its whole layout by a per-site yaw this table cannot see, so the only
+   * property an offset here has that survives the rotation is its *radius*.
+   * Measured off the frame: fence ring 20 m, gravel apron ~22 m, silo
+   * 13.6 +/- 1.9, signboard 17.7, and the barn spans 4.3 to 21.9 — which
+   * between them cover every radius inside the ring. There is no yaw-blind spot
+   * inside the paddock that is guaranteed empty. So the prompts sit at 23.7 and
+   * 35.4 m, on open ground just outside the rail, where nothing can be inside
+   * them.
+   *
+   * That is collision-free and it is not yet *legible* — a "Tend" verb floating
+   * on grass four metres the wrong side of a fence. The real fix is to read the
+   * site's own yaw at runtime and hang these off the trough and the signboard;
+   * it needs a live lookup from `Props` that this file does not have yet.
+   */
   { key: 'wiz', name: 'Wiz Chocobo Post', poi: 'wiz_chocobo', dx: 21, dz: 11, bdx: 31, bdz: 17, dyes: true },
   { key: 'alpine', name: 'Alpine Stable', poi: 'meldacio_layby', dx: 9, dz: 5, bdx: 15, bdz: -3, dyes: false },
 ];

@@ -93,19 +93,29 @@ const views = [
   { name: 'rear34', bearing: Math.PI * 0.80, dist: 1.55, eye: 0.64, aim: 0.52, fov: 34 },
 ];
 
+/**
+ * A ridden bird is a taller subject than a standing one.
+ *
+ * Every framing above is authored in multiples of the bird's own 2.34 m, and a
+ * rider adds about 0.8 m — 0.34 of that unit — above the saddle. Shot at the
+ * standing numbers, `side` and `front34` cut the rider's head off and `head`
+ * caught a companion's forearm crossing the frame. Pull back a quarter and
+ * lift the eye and the aim by a sixth of a bird when there is somebody on it.
+ */
+const RIDER = mode === 'stand' ? 0 : 1;
 const rig = g.get('CameraRig');
 for (const v of views) {
-  const d = v.dist * h;
+  const d = v.dist * (1 + 0.25 * RIDER) * h;
   const a = bird.heading + v.bearing;
   const cx = p.x + Math.sin(a) * d;
   const cz = p.z + Math.cos(a) * d;
-  const cy = Math.max(p.y + v.eye * h, terr.heightAt(cx, cz) + 0.30);
+  const cy = Math.max(p.y + (v.eye + 0.16 * RIDER) * h, terr.heightAt(cx, cz) + 0.30);
   // The head sits 0.62 m FORWARD of the root, so aiming at the root's own xz
   // at head height points the lens at the shoulder -- which is what the first
   // `head` framing photographed.
   const fx = p.x + Math.sin(bird.heading) * (v.fwd || 0);
   const fz = p.z + Math.cos(bird.heading) * (v.fwd || 0);
-  rig.setShot({ pos: [cx, cy, cz], target: [fx, p.y + v.aim * h, fz], fov: v.fov });
+  rig.setShot({ pos: [cx, cy, cz], target: [fx, p.y + (v.aim + 0.16 * RIDER) * h, fz], fov: v.fov });
   step(3);
   await window.__shot(`${mode}-${v.name}`);
 }
