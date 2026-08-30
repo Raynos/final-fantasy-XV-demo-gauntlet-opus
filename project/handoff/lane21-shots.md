@@ -117,6 +117,78 @@ framings through `framecam.mts` in six batches; every frame read as a JPEG.
   tuning fissure radiance live; the stand and framing are measured, the
   exposure is theirs.
 
+## Measured
+
+- **`nanscan` — `0 of 162 shots carry NaN`.** Verified, at `bc52a46`.
+  (162, not 174: 20 of the 32 are in; see above.)
+- **All 20 new shots capture clean, zero console errors**, `tmp/shots/l21-new`,
+  one pass at one sha (`bc52a46`), 87 s of run behind 973 s of queue.
+  Draw calls, against the 800 budget:
+
+```
+armiger_full 594   map_drive_there 592   tomb_claim 414
+regalia_night_road 624   dungeon_keycatrich_fight 143   dungeon_balouve_boss 132
+lest_market_day 551   lest_street_night 730   lest_overlook_disc 504
+lest_plaza_walk 607   lest_exineris 461   lest_leville 479
+lest_market_vendor 472  lest_night_high 480
+galdin_pier_sunset 471  galdin_angelgard 412  galdin_beach 444
+galdin_restaurant 442   galdin_pier_fishing 439  galdin_night_lanterns 472
+```
+
+  **Worst is `lest_street_night` at 730 of 800**, which matches lane 19's own
+  `citydraws` reading of 730 for the same square at night. No new shot needs a
+  `project/draw-baseline.json` entry, and that file still does not exist —
+  which is the outcome the brief asked for.
+
+## What the CORPUS capture showed, and the fix pass
+
+**The preview tool and the corpus disagree, and the corpus is the one that
+counts.** All 20 were captured through `shoot.mts` and read as JPEGs. Ten were
+broken or weak. Fixed in `8b52a85`:
+
+1. **Four Galdin cameras were UNDER the deck**, photographing its planks from
+   below, after previewing correctly in `framecam`. `PoiKits._make` runs at
+   BUILD_R against `Terrain.heightAt`, which reads **12.93** at the Galdin pin
+   before the clipmap settles there and **-0.4** after; `framecam` built the
+   site at y ~ 0.55 and `shoot` at y ~ 14. `anchorAt('galdin_quay','plaza')`
+   says 14.01 and agrees with the corpus. **Derive a Galdin camera from
+   `anchorAt`, never from `Terrain.heightAt`, and check it in `shoot.mts`.**
+   This also settles the "false pass" question filed earlier: the anchor is
+   right and my `heightAt` reading was the wrong one.
+2. **Neither dungeon fight had a fight in it.** `Dungeons._arm` spawns on the
+   party and arms a boss when the party walks into its room. A shot moves the
+   camera, not the party, so a fixed camera in a dungeon room photographs an
+   empty room forever. Both are now `follow: 'player'` + a scenario.
+3. `lest_market_vendor` had the camera inside an NPC's forearm; `lest_night_high`
+   was 60% flat roof and read as a level-editor viewport; `lest_exineris` had a
+   black featureless stack dead centre bisecting the frame; `lest_leville`
+   cropped both bodies mid-thigh so the shot had no ground plane;
+   `lest_plaza_walk` cropped a body in half on the right edge;
+   `regalia_night_road` had the car as a hundred-pixel speck; `tomb_claim`
+   caught a deposit marker and a floating prompt quad.
+
+**Re-captured to `tmp/shots/l21-fix`. NOT yet read — that is the next agent's
+first job.** If a Galdin frame is still wrong, the deck height moved again.
+
+## Defects found that belong to other lanes
+
+- **Every Lestallum body is cut off at mid-shin, no shoe, no contact shadow.**
+  Confirmed with four figures in `lest_market_day`, four in `lest_street_night`,
+  three in `lest_plaza_walk`. Lane 19 is on it. **`lest_market_day`,
+  `lest_street_night` and `lest_plaza_walk` are three of the five judged rows
+  and must be re-read after the fix.**
+- **`tomb_claim`'s kit is an untextured clay blockout** with an orange
+  placeholder sphere on a grey cone beside the steps and an unattached pale-blue
+  quad floating over the colonnade. Lane 18's `_tomb`.
+- **`landmark_meteor` clears 0.09 of its own subject** (lane 20's measurement,
+  confirmed by eye: the crown over a sunlit ridge, no crater, no rim). I did not
+  re-frame it — re-framing re-baselines a judged shot and there was no time to
+  do it with an `imgdiff` — but the sweep's stands are in `discview` output and
+  the successor should. **Filed for the coordinator.**
+- `map_drive_there` draws placeholder travel figures ("0.03 km · 1 s").
+- The night sky's stars render as fat white blobs the size of boulders over
+  torn black-and-white cloud noise, in every night frame.
+
 ## Not done / left to do
 
 1. **The 12 lane-18 arc shots.** Wait for its kit fixes, then frame from
