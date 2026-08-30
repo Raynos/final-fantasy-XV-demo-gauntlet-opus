@@ -723,7 +723,14 @@ export class Water {
            *
            * Named calmFar, not flat: flat is a GLSL interpolation qualifier.
            */
-          float calmFar = 1.0 - 0.78 * smoothstep(90.0, 1100.0, dist);
+          //
+          // Measured by eye rather than derived: at smoothstep(90, 1100) the
+          // Vesperpool still read as fine white sandpaper right out to three
+          // hundred metres, because almost none of the ramp had been spent by
+          // then. The onset is where a wave stops being a shape and starts
+          // being a texel, which on a 1600 px 46 deg frame is nearer forty
+          // metres than ninety.
+          float calmFar = 1.0 - 0.80 * smoothstep(45.0, 620.0, dist);
           // The swell reads the *other* map, on a rotated axis. Scaling one
           // texture three times looks exactly like what it is: the octaves
           // correlate with themselves and the surface comes out as regular
@@ -741,8 +748,14 @@ export class Water {
           // margin is covered in; both ride the set envelope.
           float swellW = 0.78 * mix(0.42, 1.30, groups) * (1.0 - 0.62 * shoal)
                        * mix(0.42, 1.0, uWaveScale);
-          float chopA  = (0.42 + 0.38 * fine) * mix(0.55, 1.25, groups) * (1.0 + 0.55 * shoal);
-          float chopB  = (0.50 * fine) * mix(0.28, 1.35, groups) * (1.0 + 0.80 * shoal);
+          // The shoal boosts are deliberately small. The first cut ran them at
+          // 0.55 and 0.80 and the Galdin margin came back as a coarse
+          // camouflage mottle: a shallow shelf is already the one place the bed
+          // shows through the water, so anything that also perturbs the normal
+          // there is added on top of contrast that is already high, and it
+          // reads as dirt rather than as chop.
+          float chopA  = (0.42 + 0.38 * fine) * mix(0.55, 1.25, groups) * (1.0 + 0.25 * shoal);
+          float chopB  = (0.50 * fine) * mix(0.28, 1.35, groups) * (1.0 + 0.35 * shoal);
           // blend in tangent space, then lift into world (plane normal is +Y)
           vec3 nt = vec3((nS.xy * swellW + nA.xy * chopA + nB.xy * chopB) * calmFar,
                          nS.z * nA.z * nB.z);
@@ -762,8 +775,8 @@ export class Water {
           vec2 up = vec2(bedU - bedY, bedV - bedY);
           float upLen = length(up);
           vec2 shoreDir = up / max(upLen, 1e-3);
-          float train = 0.52 * shoal * shoal * calmFar * mix(0.55, 1.15, groups)
-                      * smoothstep(0.02, 0.30, upLen);
+          float train = 0.38 * shoal * shoal * calmFar * mix(0.55, 1.15, groups)
+                      * smoothstep(0.05, 0.34, upLen);
           nt.xy += shoreDir * (train * cos(dot(vWorld.xz, shoreDir)
                      * (6.2831853 / mix(24.0, 9.0, shoal)) - uTime * 1.9));
           nt = normalize(nt);
