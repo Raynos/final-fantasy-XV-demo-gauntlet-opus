@@ -110,6 +110,20 @@ const d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const WEAPON_REACH = combat.weapon?.def?.reach ?? 2.0;
 /** Every live thing that will actually fight us. */
 const hostiles = () => (enemies.list || []).filter((e) => !e.dead && !e.passive);
+/**
+ * The den, as a **pack**, not as "every hostile alive in the world".
+ *
+ * The count this probe used to print was `hostiles().length`, which is global:
+ * round 1 of the first five-round run reported "Sabertusk x7" for a den that
+ * had three animals in it and four more a hundred metres away in a different
+ * den, and then reported `kills 3/7` as if the fight had been abandoned
+ * half-finished. Every per-den number computed off that count -- den HP, kills,
+ * "how much of the pack did we fight" -- was wrong by whatever else happened to
+ * be spawned. `Pack` is the authority: `EncounterDirector.activate` builds one
+ * per territory and hands it to every enemy it spawns.
+ */
+const packOf = (e) => (e && e.pack) || null;
+const packLive = (pk) => (pk ? pk.members.filter((m) => !m.dead) : []);
 const nearest = () => {
   let best = null, bd = 1e9;
   for (const e of hostiles()) { const d = d2(e.position, player.position); if (d < bd) { bd = d; best = e; } }
@@ -243,16 +257,28 @@ for (let round = 0; round < ROUNDS; round++) {
   // state machine accepts it. `combat`'s own `warp` event is the cast.
   const startEvents = events.length;
   const startMp = combat.mp;
+  // The den as authored: who is in the pack and how much HP it is worth. A
+  // fight that kills 3 of 3 is finished; one that kills 3 of 8 is a leash bug,
+  // and the old global count could not tell them apart.
+  const pack = packOf(found.e);
+  const denMembers = packLive(pack);
+  const denN = denMembers.length || hostiles().filter((e) => d2(e.position, player.position) < 45).length;
+  const denPool = denMembers.reduce((a, m) => a + (m.maxHp || 0), 0);
+  const startPlayerHits = events.filter((e) => e.name === 'playerHit').length;
 
   // The fight is the enemies *in this fight*, not every hostile in the world.
   // Scoping it to whatever is within 45 m is what stops the loop marching off
   // after the next den and reporting a two-minute "fight" that was a walk.
   const inFight = () => hostiles().filter((e) => d2(e.position, player.position) < 45);
   let overFor = 0;
+  // Why the fight ended. A duration is not a duration until you know whether
+  // the pack died, walked away, or ran out of probe.
+  let stopped = 'timeout';
   for (let f = 0; f < 60 * 120; f++) {
     const live = inFight();
-    if (!live.length) break;
+    if (!live.length) { stopped = packLive(pack).length ? 'nobody-within-45m' : 'wiped'; break; }
     if (enc.state !== 'combat') { overFor += dt; if (overFor > 2) break; } else overFor = 0;
+    if (overFor > 0 && enc.state !== 'combat') stopped = `left-combat(${enc.state})`;
     const n = nearest();
     // Re-aim only when the target has drifted well off screen, and then turn
     // until it is back near centre — hysteresis, the way a player does it. A
@@ -347,23 +373,32 @@ for (let round = 0; round < ROUNDS; round++) {
   const kills = enc.stats.kills - startKills;
   const roundEvents = events.slice(startEvents);
   const warpCasts = roundEvents.filter((e) => e.name === 'warp').length;
+  // What the den actually got through with. `hpPaid` says how much it cost;
+  // this says whether that is few big hits or many tiny ones, which is the
+  // difference between "the fight is too short" and "nothing the enemy does
+  // matters". It is the only way to tell those two apart from one number.
+  const incoming = roundEvents.filter((e) => e.name === 'playerHit');
+  const incomingDmg = incoming.reduce((a, e) => a + ((e.detail && e.detail.damage) || 0), 0);
+  const perHitPct = incoming.length ? 100 * (incomingDmg / incoming.length) / player.stats.maxHp : 0;
+  const denKilled = denMembers.filter((m) => m.dead).length;
   const denHp = hits.slice(startHits).reduce((a, h) => a + h.dmg, 0);
   const noctisShare = 100 * (bySrc.get('noctis') || 0) / dmgTotal;
   metrics.push({
-    round: round + 1, found: true, name: found.e.name, n: startHostiles,
-    level: found.e.level, hpEach: found.e.maxHp,
-    secs: fightSecs, hpPaid, kills, warpCasts, warpTaps: warps,
+    round: round + 1, found: true, name: found.e.name, n: denN, worldN: startHostiles,
+    level: found.e.level, hpEach: found.e.maxHp, denPool, denKilled,
+    secs: fightSecs, hpPaid, kills, warpCasts, warpTaps: warps, stopped,
     mpSpent: startMp - combat.mp, dodges, techs, denHp, noctisShare,
+    inHits: incoming.length, inDmg: incomingDmg, perHitPct,
     enemyAtkRate: enemyAttacks / Math.max(1, fightSecs),
   });
 
   emit([
-    `=== round ${round + 1}: ${found.e.name} x${startHostiles} (lv ${found.e.level}, ${found.e.maxHp} hp each), player (${player.position.x | 0}, ${player.position.z | 0})`,
+    `=== round ${round + 1}: ${found.e.name} x${denN} in pack (lv ${found.e.level}, ${found.e.maxHp} hp each, ${denPool} hp of den; ${startHostiles} hostiles alive worldwide), player (${player.position.x | 0}, ${player.position.z | 0})`,
     'APPROACH', ...approach.slice(-12),
     `  noticed at ${noticedDist.toFixed(0)} m; notice -> engaged = ${spottedT != null && noticedAt != null ? (spottedT - noticedAt).toFixed(2) + ' s' : 'never'}`,
     'FIGHT', ...beats,
-    `  duration ${fightSecs.toFixed(1)}s   kills ${enc.stats.kills - startKills}/${startHostiles}`,
-    `  noctis paid ${hpPaid.toFixed(1)}% of max HP   dodges ${dodges} techs ${techs}`,
+    `  duration ${fightSecs.toFixed(1)}s   pack dead ${denKilled}/${denN}   kills ${kills}   ended: ${stopped}`,
+    `  noctis paid ${hpPaid.toFixed(1)}% of max HP over ${incoming.length} hits (${Math.round(incomingDmg)} dmg, ${perHitPct.toFixed(2)}% of max HP per hit)   dodges ${dodges} techs ${techs}`,
     `  warp: ${warpCasts} casts from ${warps} Q taps (${(warpCasts / Math.max(0.1, fightSecs)).toFixed(2)} casts/s), mp ${(startMp - combat.mp).toFixed(0)} spent`,
     `  enemy attacks opened ${enemyAttacks} (telegraphs ${enemyTelegraphs}) = ${(enemyAttacks / Math.max(1, fightSecs)).toFixed(2)}/s over ${startHostiles} of them`,
     `  mean range ${(distSum / Math.max(1, distN)).toFixed(1)} m, inside melee ${(100 * framesInMelee / Math.max(1, frames)).toFixed(0)}% of it`,
@@ -396,7 +431,11 @@ if (!fights.length) {
   const medHp = median(fights.map((m) => m.hpPaid));
   agg.push(`  duration      ${col('secs')}  ->  MEDIAN ${one(medSecs)} s        [target 18-30]`);
   agg.push(`  hp paid %     ${col('hpPaid')}  ->  MEDIAN ${one(medHp)} %        [target >=15]`);
-  agg.push(`  pack size     ${fights.map((m) => m.n).join(' ')}  ->  median ${one(median(fights.map((m) => m.n)), 0)}`);
+  agg.push(`  pack size     ${fights.map((m) => m.n).join(' ')}  ->  median ${one(median(fights.map((m) => m.n)), 0)}   (killed ${fights.map((m) => `${m.denKilled}/${m.n}`).join(' ')})`);
+  agg.push(`  den hp pool   ${fights.map((m) => m.denPool).join(' ')}  ->  median ${one(median(fights.map((m) => m.denPool)), 0)}`);
+  agg.push(`  ended         ${fights.map((m) => m.stopped).join('  ')}`);
+  agg.push(`  hits taken    ${fights.map((m) => m.inHits).join(' ')}  ->  median ${one(median(fights.map((m) => m.inHits)), 0)}`);
+  agg.push(`  % max hp/hit  ${col('perHitPct', 2)}  ->  median ${one(median(fights.map((m) => m.perHitPct)), 2)} %`);
   agg.push(`  den hp dealt  ${fights.map((m) => Math.round(m.denHp)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp)), 0)}`);
   agg.push(`  party dps     ${fights.map((m) => one(m.denHp / Math.max(0.1, m.secs), 0)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp / Math.max(0.1, m.secs))), 0)} hp/s`);
   agg.push(`  noctis dmg %  ${col('noctisShare', 0)}  ->  median ${one(median(fights.map((m) => m.noctisShare)), 0)} %`);
