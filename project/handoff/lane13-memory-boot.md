@@ -602,3 +602,38 @@ is a *static* 0.520 m disagreement between the rendered ground and
 unchanged by 56 km of travel. That is terrain content or a grade, not this
 lane: `AttrPack` never touches `position`, and `heightcheck` now reads exactly
 0.000 GPU vs CPU at every sample.
+
+## Verified after the skinned-geometry exclusion (`bcb6c29`)
+
+**The merge errors are gone.** `driftcheck` re-run at `bcb6c29`, grepped for its
+`page errors` block: **nothing printed**. Before the fix that block carried two
+`mergeGeometries() failed while trying to merge the skinWeight attribute`
+lines. No NPC shadow is being deleted any more.
+
+**And the lane's saving is much smaller than I reported.** `packaudit` at
+`bcb6c29`:
+
+    Float32 attribute bytes   204.6 -> 188.1 MB
+
+So the honest final figure is **-16.5 MB of CPU attributes and the same again
+on the GPU copy, ~33 MB across both** — not the -40.5 MB in the section above,
+and not the -42.1 MB before the `aClip` revert. Both of those earlier numbers
+are superseded; **quote this one.**
+
+The drop is because excluding skinned geometry gave back nearly everything the
+characters were contributing: `skinWeight` 16.5 MB, `aMat` ~6.5, `aTan` ~6.2,
+`aGroom` ~4.0 and roughly 13 MB of the over-bright colour, since `npcs` (49.0
+MB of vertex bytes) and the party `Group` (38.3 MB) are where those attributes
+live. What survives is the half-precision colour pass plus `normal` over props,
+POI kits, megastructures and terrain — the mass, but the least attribute-dense
+part of it.
+
+Caveat: the 204.6 MB baseline was measured at the lane's start and 188.1 at
+`bcb6c29`, and other lanes added geometry in between (819 -> 832 geometries in
+`bootprof`), so the true delta is a little larger than 16.5. It is the right
+order and it is the number to quote until somebody re-measures both ends on one
+sha.
+
+**Restated against the exit:** ~33 MB across CPU and GPU, against a tab of
+1 382 MB and a target of 800. The three levers in the residue block are each an
+order of magnitude bigger than everything this lane's task list contained.
