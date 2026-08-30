@@ -41,6 +41,21 @@ import type { QuestUpdate } from './Quests.ts';
 import type { RestSummary } from './DayCycle.ts';
 import type { EmitterHandler } from './Emitter.ts';
 
+/**
+ * How much of the gap between a spawn's authored level and the party's own
+ * `enemyScaling` closes. 1 puts the anonymous country exactly at the party.
+ *
+ * 0.8 is deliberate rather than round: it keeps a residual sense that the wilds
+ * were authored at a level -- a Leide den still reads as easier than a Cleigne
+ * one at the same party level -- while removing the part of the gap that made a
+ * field fight a photo booth. Ten levels of lift is x1.085^10 = 2.26 on HP and
+ * x1.058^10 = 1.76 on damage, per `Enemies.levelScale`, so the lever moves both
+ * halves of "combat has no danger" at once and moves HP faster than damage.
+ *
+ * It only ever lifts upward, so it cannot make an over-level area easier.
+ */
+const PARTY_LIFT = 0.8;
+
 /** How a fresh `RpgSystem` is dealt out. */
 export interface RpgOpts {
   /** Level every member starts at. */
@@ -733,8 +748,43 @@ export class RpgSystem {
   /** Fire a party technique. */
   useTechnique(memberId: string, techId: string) { return this.party.useTechnique(memberId, techId); }
 
-  /** Enemy stat scaling for right now, given the party's level. */
-  enemyScaling(isDaemon = false) { return nightScaling(this.day.hour, isDaemon); }
+  /**
+   * Enemy stat scaling for right now, given the party's level.
+   *
+   * Two terms, and they are different in kind.
+   *
+   * - **The clock.** `nightScaling` is the world's own difficulty: what crawls
+   *   out of the ground after 19:00 is a higher level, hits harder, and if it
+   *   is a daemon has more HP as well. It does not care who is fighting it.
+   * - **The party.** `partyLift` is the difficulty *curve*, and it is the half
+   *   this method's own doc comment promised and its body never delivered:
+   *   "given the party's level" sat above a one-liner that read only
+   *   `this.day.hour` and never touched `this.party`. So an authored level-14
+   *   den stayed a level-14 den to a level-27 party, which is most of why a
+   *   wild fight cost Noctis 0.8% of his HP. `daemonPressure()` on the next
+   *   line already does exactly this read; this is the same one.
+   *
+   * `partyLift` closes `PARTY_LIFT` of the gap between what a spawn was
+   * authored at and where the party actually is, and **only upward**: a
+   * `max(0, gap)` means a party that walks into Cleigne under-levelled meets
+   * Cleigne, not a Cleigne scaled down to meet it. Because `PARTY_LIFT <= 1`
+   * the lift can never carry a spawn past the party's own level, so no cap is
+   * needed and none is written; the ceiling is structural.
+   *
+   * It is returned **separately from `levelBonus`** on purpose. Both callers
+   * dilute the night bonus by 0.4 for anything that is not a daemon — a goblin
+   * gets the whole night, a sabertusk a share of it — and running the party
+   * term through the same 0.4 would make it a rounding error on precisely the
+   * authored non-daemon spawns it exists to lift.
+   *
+   * @param [isDaemon=false]
+   * @param [baseLevel=0] the spawn's authored level; 0 asks for the clock only
+   */
+  enemyScaling(isDaemon = false, baseLevel = 0) {
+    const night = nightScaling(this.day.hour, isDaemon);
+    const gap = baseLevel > 0 ? this.party.averageLevel - baseLevel : 0;
+    return { ...night, partyLift: Math.round(Math.max(0, gap) * PARTY_LIFT) };
+  }
 
   /** Daemon spawn pressure for the Enemies system. */
   daemonPressure() { return this.day.daemonPressure(this.party.averageLevel); }

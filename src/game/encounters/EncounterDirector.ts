@@ -249,8 +249,11 @@ export class EncounterDirector {
     const already = this.active.get(def.id);
     if (already) return already;
     const pack = new Pack({ id: def.id, maxEngaged: def.maxEngaged, encounter: this });
-    const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon') : NEUTRAL;
-    const level = Math.max(1, Math.round(def.level + (def.faction === 'daemon' ? scaling.levelBonus : scaling.levelBonus * 0.4)));
+    // `partyLift` is added undiluted; the night bonus keeps its 0.4 share for
+    // anything that is not a daemon. See `RpgSystem.enemyScaling`.
+    const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon', def.level) : NEUTRAL;
+    const level = Math.max(1, Math.round(def.level + (scaling.partyLift || 0)
+      + (def.faction === 'daemon' ? scaling.levelBonus : scaling.levelBonus * 0.4)));
     const list: Enemy[] = [];
     const patrol = def.patrolRadius > 0 ? this._patrolRoute(def) : null;
 
@@ -362,8 +365,9 @@ export class EncounterDirector {
       id: `${def.id}-${this.rng.next() | 0}`, encounter: this,
       maxEngaged: total >= 5 ? 3 : 2,
     });
-    const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon') : NEUTRAL;
-    const level = Math.max(1, Math.round(def.level + scaling.levelBonus * (def.faction === 'daemon' ? 1 : 0.4)));
+    const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon', def.level) : NEUTRAL;
+    const level = Math.max(1, Math.round(def.level + (scaling.partyLift || 0)
+      + scaling.levelBonus * (def.faction === 'daemon' ? 1 : 0.4)));
     const bearing = this.rng.next() * Math.PI * 2;
     const dist = def.dropship ? 26 : 30 + this.rng.next() * 12;
     const cx = pp.x + Math.sin(bearing) * dist;
@@ -1099,7 +1103,7 @@ export class EncounterDirector {
   }
 }
 
-const NEUTRAL = { levelBonus: 0, attack: 1, defense: 1, hp: 1, depth: 0, isNight: false };
+const NEUTRAL = { levelBonus: 0, partyLift: 0, attack: 1, defense: 1, hp: 1, depth: 0, isNight: false };
 const MEMBER_BY_KEY: Record<CompanionKey, string> = { gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };
 
 /**
