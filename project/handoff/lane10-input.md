@@ -7,8 +7,18 @@ Owned: `src/ui/` (ControlsScreen, Prompts, Hints, ArmigerScreen, ui.css),
 `src/tools/uxcheck.mts` (its collision gate was the reason 30 shipped) and
 added two `src/tools/_probe/` instruments.
 
-**All four items landed.** Commits: `5be914f`, `a009d0e`, `b0da426`,
-`b3dbbdc`, `45c89f3`, `a55d16c`.
+**All four items landed.** Commits, in order: `5be914f` (Regalia rebinds +
+`inputcollide`), `a009d0e` (card + Prompts + Hints), `b0da426` (signed steering
+gate + `steerfalsify`), `b3dbbdc` (Armiger caption + `menufill`), `45c89f3`
+(dash column + stretched plates), `a55d16c` (uxcheck's exemption), `38ba6e9`
+(this handoff), `de565f8` (LANDMINES).
+
+Two known harness papercuts found on the way, for whoever meets them next:
+`ui-shoot.mts` has **no `--jpeg` flag** — it prints `unknown scene --jpeg` and
+writes PNGs anyway, which the plan's own command line suggests — and an
+untracked `shots/` directory appeared at the repo root tonight (not this
+lane's; `tmp/shots/` is where these captures live) which pre-commit flags as
+off-roster.
 
 ## 29 · The controls card — LANDED, verified by eye
 
@@ -136,11 +146,18 @@ against a re-runnable instrument.
 
 ## Gates run
 
-- `uxcheck.mts` **93/93 passed**, including the strengthened section 8.
-- `regaliadrive` at HEAD: **full PASS**, all five sections.
-- `pnpm run check`: running at the time of writing; pre-commit (build + both
-  typechecks + 4 cheap gates) passed on every one of the six commits.
-- No perf numbers taken — the tree was busy with seven other lanes all session.
+- `uxcheck.mts` **93/93 passed**, including the strengthened section 8, whose
+  line now reads `2 shared on purpose: KeyF, Space`.
+- `regaliadrive` at HEAD: **full PASS**, all five sections (including lane 17's
+  new map -> autodrive section 5, which coexists with section 2b).
+- **`pnpm run check` NOT run.** The coordinator took ownership of the full
+  suite mid-session — eight lanes each running a 19-gate suite jammed the box
+  (25 concurrent `check.mts`, 36% of harness time spent queueing). The one I
+  had started was killed. Individual lane-owned gates only from here.
+  `pre-commit` (build + both typechecks + 4 cheap gates) passed on all eight
+  commits regardless.
+- **No perf numbers taken, and none should be quoted from this session** — the
+  tree was never quiet; seven other lanes were capturing throughout.
 
 ## Residue
 
