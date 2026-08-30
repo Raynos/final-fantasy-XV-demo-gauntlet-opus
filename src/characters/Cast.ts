@@ -462,19 +462,19 @@ export const CAST = {
         //
         // The split is put where the AREA is — the coat against the trousers,
         // not the shirt against the coat, which is barely visible through a
-        // zipped front. Coat/skirt/sleeve go to 0x3d3b46 (Y 60), the lightest
+        // zipped front. Coat/skirt/sleeve go to 0x3c3936 (Y 57), the lightest
         // coat in the party (Gladiolus 46, Prompto 45, Noctis 42), which is
         // also the right read for him: he is the one who dresses grey. Trousers
         // drop to 0x27262b (Y 39) and the belt to 0x1f1e24 (Y 31), so the
         // largest two regions are 21/255 apart and the waist reads as a break
         // rather than a continuation. Cuff and collar keep their accents but
-        // invert against the new panel: the cuff darkens to 0x24232b so it is
-        // still a band, the collar lifts to 0x4b4857.
+        // invert against the new panel: the cuff darkens to 0x25231f so it is
+        // still a band, the collar lifts to 0x4a4640.
         { type: 'shirt', color: 0x2e2c2c, rough: 0.94, u0: 0.32, u1: 0.99, pad: 0.010, neckCut: 0.22 },
         { type: 'pants', color: 0x27262b, rough: 0.88, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.020 },
-        { type: 'jacket', color: 0x3d3b46, rough: 0.48, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarColor: 0x4b4857, collarRough: 0.34, zip: true, zipAt: 0.34, epaulettes: true, epauletteTh: 1.22, studColor: 0x8d9098 },
-        { type: 'skirt', color: 0x3d3b46, rough: 0.48, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
-        { type: 'sleeve', color: 0x3d3b46, rough: 0.48, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x24232b },
+        { type: 'jacket', color: 0x3c3936, rough: 0.48, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarColor: 0x4a4640, collarRough: 0.34, zip: true, zipAt: 0.34, epaulettes: true, epauletteTh: 1.22, studColor: 0x8d9098 },
+        { type: 'skirt', color: 0x3c3936, rough: 0.48, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
+        { type: 'sleeve', color: 0x3c3936, rough: 0.48, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x25231f },
         { type: 'belt', color: 0x1f1e24, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
         { type: 'boots', color: 0x2b2827, rough: 0.26, shaft: 0.82, height: 0.036, weltColor: 0x3c3945 },
         // Ignis without visible frames is just a man with a shiny patch on his
