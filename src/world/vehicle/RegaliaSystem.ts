@@ -48,17 +48,50 @@ import type { EcoSite } from '../props/EcoSites.ts';
 /**
  * The driving keymap.
  *
- * Every key here except `enter` only does anything while you are actually in
- * the car, but they are still chosen not to collide with anything on foot:
- * `I` for "let Ignis drive" (it was G, which is Gladiolus' technique) and `L`
- * for lights (it was H, which is now the global controls card).
+ * The comment that used to sit here said these keys "are still chosen not to
+ * collide with anything on foot". **That was false for four of them, and the
+ * reason it went unnoticed is worth writing down: driving is not a mode.**
+ * `CombatSystem.update` gates its input read on `input.enabled !== false` and
+ * on its own `scenarioLock`, and nothing anywhere sets either one when the
+ * player gets into the car — `isDriving` has exactly three readers in the tree
+ * and all three are UI. So combat and the car read the same keyboard on the
+ * same frame, and every key shared between them fires both verbs.
+ *
+ * Measured, not argued (`src/tools/_probe/inputcollide.mts`, driving on the
+ * highway, counting calls rather than outcomes because an outcome is
+ * conditional — `setLockOn(autoTarget())` with no enemy nearby changes nothing
+ * and would have read as "no collision"):
+ *
+ *   V -> camera + `setLockOn`      T -> Type-D + `drawEnergy`
+ *   B -> radio  + `castSlot(2)`    F -> exit    + `heavy`
+ *   Space -> handbrake + `dodge`   (this one is visible: `state: idle -> dodge`)
+ *
+ * All five combat verbs were called once per press. Three of them are rebound
+ * here, on the Regalia side, because they are in-car conveniences that no
+ * other document depends on:
+ *
+ *   camera  V -> Y   (V is lock-on, and the card printed a phantom `Y` for it)
+ *   typeD   T -> O   ("off-road"; T draws elemental energy)
+ *   radio   B -> U   (B is the third Elemancy quick-slot)
+ *
+ * **`enter` and `handbrake` are deliberately left shared**, and this is a
+ * decision rather than an oversight. `F` is the single most-documented binding
+ * in the game — it is on the card, in the first-run hint, in the Hammerhead
+ * interaction prompt, in `Prompts.ts` and in the probe that proves the car is
+ * a car — and the founding UI complaint about this project was "how do you get
+ * in the car"; moving it to buy back a heavy-attack swing nobody can see from
+ * the driver's seat is a bad trade. `Space` is the handbrake because a
+ * handbrake is `Space`. Both need the fix that actually belongs here, which is
+ * one line in `CombatSystem.update` — skip `_readInput` while
+ * `game.get('Regalia')?.isDriving` — and that file is not this lane's to edit.
+ * Filed for it. If that guard lands, all three rebinds above can revert.
  */
 const KEY = {
   enter: 'KeyF',
-  camera: 'KeyV',
+  camera: 'KeyY',
   auto: 'KeyI',
-  typeD: 'KeyT',
-  radio: 'KeyB',
+  typeD: 'KeyO',
+  radio: 'KeyU',
   radioPower: 'KeyN',
   lights: 'KeyL',
   handbrake: 'Space',
@@ -589,8 +622,12 @@ export class RegaliaSystem {
     // fiction instead, through the banter channel that does exist.
     const near = !this.isDriving && this.distanceToPlayer() < 6.5;
     this.prompt = this.isDriving
-      ? { key: 'F', label: 'Get out', extra: [['G', this.auto ? 'Take the wheel' : 'Let Ignis drive'], ['V', 'Camera'], ['B', 'Radio']] }
-      : near ? { key: 'F', label: 'Drive', extra: [] } : null;
+      // These three glyphs are the only in-car controls documentation a player
+      // sees without opening a menu, and they named `G` for a verb bound to
+      // `KeyI` — G is Gladiolus' technique. They are read off `KEY` now so a
+      // rebind cannot leave them behind again.
+      ? { key: KEY.enter.slice(3), label: 'Get out', extra: [[KEY.auto.slice(3), this.auto ? 'Take the wheel' : 'Let Ignis drive'], [KEY.camera.slice(3), 'Camera'], [KEY.radio.slice(3), 'Radio']] }
+      : near ? { key: KEY.enter.slice(3), label: 'Drive', extra: [] } : null;
     if (near && !this._wasNear) {
       this._wasNear = true;
       this.banter.trigger(this.auto ? 'autodrive' : 'takeover');
