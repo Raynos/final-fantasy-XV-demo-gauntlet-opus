@@ -529,6 +529,14 @@ export function poiMaterials() {
     rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
     steel: plain(0x8f959b, 0.48, 0.7),
     cream: plain(0xc8bfa6, 0.7),
+    /**
+     * **Bone.** Not `cream` and not `stone`: a thousand-year-old rib bleaching
+     * in Leide is paler and *less* saturated than either, and at the
+     * Adamantoise Graveyard the whole point of the site is that the arches read
+     * as bone against ochre ground rather than as more masonry. One material
+     * for the entire skeleton, so a hundred-and-fifty-piece kit is one draw.
+     */
+    bone: plain(0xd9d2c0, 0.84),
     red: plain(0x8f3a2c, 0.68, 0.1),
     magitek: plain(0x3a4048, 0.62, 0.45),
     cloth: canvasClothMaterial(0x3d4148),
@@ -2601,6 +2609,276 @@ export class PoiKits {
       return seatY(this.eco, s.poi.x + lx * cy + lz * sy, s.poi.z - lx * sy + lz * cy,
         size, BARE_SEAT_R) - ctx.base;
     };
+    /**
+     * **The Adamantoise Graveyard** — the NE sector's lore anchor, and the one
+     * place in Lucis that explains the rank-10 hunt.
+     *
+     * The composition is a *skeleton lying in the open*, read at the scale of
+     * the thing it came from: four rib arches walking away from you down a
+     * half-buried spine, and past the last of them the broken carapace, tipped
+     * on its edge and sunk to its rim. Ribs are the hero because a rib you can
+     * drive under is the only cheap way to state "this animal was a mountain" —
+     * a skull at that scale is one lump, an arch is a doorway with sky in it.
+     *
+     * Each rib is a chain of tapering drums swept along an ellipse in a
+     * vertical plane, and the pair on an arch is swept **past** the apex
+     * (`TH1 > π/2`) so the tips cross. That crossing is what makes a pair read
+     * as one pointed arch rather than as two tusks, and it costs nothing.
+     *
+     * Everything meets its own ground through `gy`: the ribs are bedded 2.3 m
+     * (the arc starts at a negative angle, so the buried stub comes for free)
+     * and the vertebrae are half-sunk, because a skeleton that has lain here
+     * for a thousand years is *in* the earth, not standing on it.
+     */
+    if (/graveyard/.test(s.poi.id)) {
+      const bn = bag();
+      const tvG = toneVariant(rng, { valueAmp: 0.08, warmAmp: 0.05 });
+      /**
+       * One bone: a chain of tapering drums swept along an elliptic arc in a
+       * vertical plane, then turned about Y and set down.
+       *
+       * `A`/`B` are the arc's half-span and height, `th0`/`th1` the sweep in
+       * radians (0 = the foot, π/2 = the apex), `r0`/`r1` the drum radius at
+       * each end. A negative `th0` buries the foot without a second primitive.
+       */
+      const boneArc = (o: {
+        A: number; B: number; th0: number; th1: number; r0: number; r1: number;
+        segs?: number; side?: number; ry?: number; x?: number; y?: number; z?: number;
+      }) => {
+        const { A, B, th0, th1, r0, r1, segs = 9, side = 1, ry = 0, x = 0, y = 0, z = 0 } = o;
+        const at = (t: number) => {
+          const th = th0 + (th1 - th0) * t;
+          return [side * A * Math.cos(th), B * Math.sin(th)];
+        };
+        for (let i = 0; i < segs; i++) {
+          const p = at(i / segs), q = at((i + 1) / segs);
+          const dx = q[0] - p[0], dy = q[1] - p[1];
+          const len = Math.hypot(dx, dy);
+          // The head of a rib is thicker than the shaft behind it, so the taper
+          // is not linear: it swells over the first fifth and then runs away.
+          const rad = (t: number) => {
+            const k = r0 + (r1 - r0) * t;
+            return k * (1 + 0.34 * Math.max(0, 1 - t * 6.5));
+          };
+          bn.shell.push(xform(xform(
+            new THREE.CylinderGeometry(rad((i + 1) / segs), rad(i / segs), len * 1.07, 7),
+            { rz: Math.atan2(-dx, dy), x: (p[0] + q[0]) * 0.5, y: (p[1] + q[1]) * 0.5 },
+          ), { ry, x, y, z }));
+        }
+      };
+      // Four arches, each smaller than the last, so the run has perspective
+      // built into it and reads as a cage seen end-on rather than as a fence.
+      const SPINE: [number, number, number, number][] = [
+        // [half-span, height, base radius, z along the spine]
+        [8.4, 19.0, 0.98, -13], [7.0, 15.8, 0.84, -1.5], [5.6, 12.6, 0.70, 9], [4.2, 9.2, 0.56, 18],
+      ];
+      SPINE.forEach(([A, B, r0, dz], i) => {
+        // The arch is one rigid piece, so it is seated at the LOWEST of its
+        // three contact points and bedded a further 0.6 m. Seating each foot
+        // separately would rack the arch; seating at the mean would put a foot
+        // in the air, which is the floating-bench defect one level down.
+        const y0 = Math.min(gy(0, dz, 6), gy(A, dz, 1.6), gy(-A, dz, 1.6)) - 0.6;
+        const spin = rng.gauss(0, 0.16);
+        for (const side of [-1, 1]) {
+          // One rib of the last arch is snapped: its sweep stops short and the
+          // broken-off length lies on the ground beside its own stump.
+          const snapped = i === 3 && side === 1;
+          boneArc({
+            A, B, th0: -0.13, th1: snapped ? 0.72 : 1.73, r0, r1: snapped ? r0 * 0.62 : r0 * 0.24,
+            segs: snapped ? 4 : 9, side, ry: spin, y: y0, z: dz,
+          });
+        }
+        if (i === 3) {
+          // The fallen half, lying where it broke.
+          boneArc({
+            A: 5.2, B: 0.5, th0: 0.1, th1: 1.5, r0: r0 * 0.6, r1: r0 * 0.2, segs: 6,
+            ry: spin + 1.1, x: A + 2.2, y: gy(A + 2.2, dz + 4, 2) + r0 * 0.5, z: dz + 4,
+          });
+        }
+      });
+      // The spine itself, half-sunk: a drum, a neural fin and two stubby
+      // transverse processes per vertebra, tapering away from the shoulders.
+      for (let i = 0; i < 10; i++) {
+        const vz = -18 + i * 4.4, sc = 1.55 - Math.abs(i - 3) * 0.085;
+        const vx = rng.gauss(0, 0.45), vy = gy(vx, vz, 2.2) + 0.30 * sc;
+        const vr = rng.gauss(0, 0.12);
+        bn.shell.push(xform(new THREE.CylinderGeometry(1.02 * sc, 0.94 * sc, 2.5 * sc, 9),
+          { rx: Math.PI / 2, ry: vr, x: vx, y: vy, z: vz }));
+        bn.shell.push(xform(box(0.42 * sc, 3.4 * sc, 1.35 * sc, { arris: 0.08 }),
+          { rz: rng.gauss(0, 0.11), ry: vr, x: vx, y: vy + 1.6 * sc, z: vz }));
+        for (const sx of [-1, 1]) {
+          bn.shell.push(xform(new THREE.CylinderGeometry(0.16 * sc, 0.4 * sc, 1.9 * sc, 6),
+            { rz: sx * (Math.PI / 2 - 0.35), x: vx + sx * 1.15 * sc, y: vy + 0.35 * sc, z: vz }));
+        }
+      }
+      /**
+       * The carapace, tipped on its edge and sunk to its rim.
+       *
+       * A lathe rather than a sphere cap, because the shell has to be **thick**:
+       * the profile runs up the outside, over the crown and back down an inner
+       * face 0.7 m in, so the broken edge is a real section and the inside is a
+       * surface rather than a backface hole. `phiLength` short of a full turn
+       * is the fracture — the two cut ends are 0.7 m slivers seen edge-on,
+       * which is what a break in a shell looks like.
+       */
+      {
+        const SR = 11.5, TH = 0.75, N = 11, FLAT = 0.5;
+        const prof: THREE.Vector2[] = [];
+        for (let i = 0; i <= N; i++) {
+          const th = (1 - i / N) * 0.60 * Math.PI;
+          prof.push(new THREE.Vector2(SR * Math.sin(th), SR * FLAT * Math.cos(th)));
+        }
+        for (let i = 0; i <= N; i++) {
+          const th = (i / N) * 0.60 * Math.PI, r = SR - TH;
+          prof.push(new THREE.Vector2(Math.max(0.02, r * Math.sin(th)), r * FLAT * Math.cos(th)));
+        }
+        prof.push(prof[0].clone());
+        const shell = bag();
+        shell.shell.push(new THREE.LatheGeometry(prof, 26, 0.16, Math.PI * 1.62));
+        // Scute ridges radiating from the crown: five arcs of a torus, each
+        // turned to its own meridian and then squashed with the dome. Without
+        // them an 11 m lathe is a bowl; with them it is a shell.
+        for (let k = 0; k < 5; k++) {
+          const t = xform(new THREE.TorusGeometry(SR - 0.1, 0.34, 5, 13, 0.56 * Math.PI),
+            { rz: Math.PI / 2 - 0.56 * Math.PI });
+          shell.shell.push(xform(t, { ry: 0.3 + k * 0.7 }));
+        }
+        const sg = mergeBag(shell).shell;
+        // Tipped 0.42 rad off flat and rotated so the fracture faces the
+        // approach; sunk so the low rim is a metre into the earth.
+        const sx = -7.5, sz = 31;
+        bn.shell.push(xform(xform(sg, { rz: 0.42 }), { ry: -0.9, x: sx, y: gy(sx, sz, 9) + SR * FLAT * 0.42 - 1.0, z: sz }));
+      }
+      // Shards: the small change of a skeleton, half of it lying flat.
+      for (let i = 0; i < 16; i++) {
+        const a = rng.next() * 6.28, d = rng.range(9, 34);
+        const px = Math.cos(a) * d, pz = Math.sin(a) * d * 0.9 + 4;
+        const ln = rng.range(1.1, 3.6), rr = rng.range(0.13, 0.34);
+        bn.shell.push(xform(new THREE.CylinderGeometry(rr * 0.7, rr, ln, 6), {
+          rz: Math.PI / 2 - rng.gauss(0, 0.24), ry: rng.next() * 6.28,
+          x: px, y: gy(px, pz, 1.2) + rr * 0.55, z: pz,
+        }));
+      }
+      const bg = mergeBag(bn);
+      for (const [role, g] of Object.entries(bg)) {
+        // Bleached white at the top of an arch, stained brown where the earth
+        // has been washing over it for a thousand years. `y0` is the earth
+        // line, not the geometry's minimum, so the buried stubs stay dark.
+        bakeTone(g, { y0: -1, y1: 17, grime: 0.58, bleach: 1.16, jitter: tvG.jitter, tint: tvG.tint, streak: 0.26 });
+        put(M.bone, g, [0, 0, 0]);
+        void role;
+      }
+      // Field boulders, so the bones have something that is not bone to be
+      // pale against, and the ground is not empty between the arches.
+      for (let i = 0; i < 9; i++) {
+        const a = rng.next() * 6.28, d = rng.range(6, 30);
+        const sr = rng.range(0.5, 1.6), bx2 = Math.cos(a) * d, bz2 = Math.sin(a) * d;
+        const brk = kitRock(rng, sr);
+        put(M.rock, brk.geo, [bx2, gy(bx2, bz2, sr * 2) + sr * 0.5, bz2],
+          [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)],
+          [brk.s * rng.range(0.9, 1.3), brk.s * rng.range(0.7, 1.0), brk.s]);
+      }
+      return { cast: true, r: 40, noApron: true };
+    }
+
+    /**
+     * **The Threshold Stones** — leaning Solheim milestones on the old pilgrim
+     * road, and the first thing the south sector gives you to look at.
+     *
+     * A *line*, not a ring: two gate stones flanking the near end, then five
+     * pairs receding, each smaller, more tilted and more broken than the last,
+     * so the avenue states the direction of a road that is no longer there.
+     * The kit's yaw points local **+Z away from the nearest road** (`_yaw`), so
+     * the mouth of the avenue is what you meet coming off Route 20.
+     *
+     * The stones are square tapered obelisks — a four-sided cylinder — because
+     * Solheim is the precise civilisation and a chamfered slab is the medieval
+     * one. The ruin is entirely in the *placement*: the geometry stays exact
+     * and the earth is what has gone wrong with it.
+     */
+    if (/threshold/.test(s.poi.id)) {
+      const st = bag();
+      const tvT = toneVariant(rng, { valueAmp: 0.12, warmAmp: 0.05 });
+      /** One milestone: tapered shaft, pyramidal cap, proud base band. */
+      const stone = (o: { x: number; z: number; h: number; w: number; lean: number; leanY: number; fallen?: boolean }) => {
+        const { x, z, h, w, lean, leanY, fallen = false } = o;
+        const g0 = gy(x, z, w * 2);
+        const loc = bag();
+        // Bedded a third of a metre; a milestone that has stood eight hundred
+        // years is founded, and the bed is what stops the sag on a slope
+        // reading as a stone hanging in the air.
+        loc.shell.push(xform(new THREE.CylinderGeometry(w * 0.72, w, h, 4), { y: h * 0.5 - 0.34 }));
+        loc.shell.push(xform(new THREE.CylinderGeometry(0.02, w * 0.755, w * 0.9, 4), { y: h - 0.34 + w * 0.44 }));
+        loc.shell.push(xform(new THREE.CylinderGeometry(w * 1.1, w * 1.14, 0.34, 4), { y: -0.2 }));
+        const merged = mergeBag(loc).shell;
+        if (fallen) {
+          // A felled stone lies on its side with its foot still in its socket.
+          st.shell.push(xform(xform(merged, { rz: Math.PI / 2 - 0.09 }), { ry: leanY, x, y: g0 + w * 0.8, z }));
+        } else {
+          st.shell.push(xform(xform(merged, { rz: lean }), { ry: leanY, x, y: g0, z }));
+        }
+      };
+      // The gate: two stones twice the height of the rest, leaning INTO each
+      // other, so the gap between them is the smallest thing in the frame and
+      // the eye is pulled down the avenue.
+      const gate: { x: number; z: number; h: number; lean: number; leanY: number }[] = [
+        { x: -4.6, z: -9, h: 6.4, lean: 0.10, leanY: 0.06 },
+        { x: 4.6, z: -9, h: 6.9, lean: -0.14, leanY: -0.10 },
+      ];
+      for (const gt of gate) stone({ ...gt, w: 0.72 });
+      // The rune face on the inner cheek of each gate stone: the only thing in
+      // the kit that is not stone-coloured, and it is 0.6 m² of it.
+      for (const sgn of [-1, 1]) {
+        const gt = gate[sgn > 0 ? 1 : 0];
+        put(M.runeface, new THREE.PlaneGeometry(0.72, 2.1),
+          [gt.x - sgn * 0.66, gy(gt.x, gt.z, 1.4) + 3.0, gt.z], [0, sgn * Math.PI / 2, gt.lean]);
+      }
+      // Five receding pairs. `k` runs the whole sequence: the far stones are
+      // shorter, lean harder and are likelier to be down, which is the whole
+      // narrative of the avenue told with three numbers.
+      for (let i = 0; i < 5; i++) {
+        const k = i / 4;
+        const z = -0.5 + i * 8.6 + rng.gauss(0, 0.7);
+        const half = 4.2 + i * 0.5;
+        for (const sx of [-1, 1]) {
+          const down = rng.next() < 0.16 + k * 0.5;
+          stone({
+            x: sx * half + rng.gauss(0, 0.5), z: z + rng.gauss(0, 0.9),
+            h: 4.3 - k * 1.5, w: 0.5 - k * 0.1,
+            lean: rng.gauss(0, 0.05 + k * 0.18), leanY: rng.gauss(0, 0.5), fallen: down,
+          });
+        }
+      }
+      const sg2 = mergeBag(st);
+      for (const [role, g] of Object.entries(sg2)) {
+        bakeTone(g, { y0: 0, y1: 7, grime: 0.62, bleach: 1.12, jitter: tvT.jitter, tint: tvT.tint, streak: 0.24 });
+        put(M.stone, g, [0, 0, 0]);
+        void role;
+      }
+      // The kerb of the vanished road: set stones half-swallowed by the grass,
+      // in two broken lines. This is the piece that says "road", and it is
+      // twenty dodecahedra.
+      for (let i = 0; i < 22; i++) {
+        if (rng.next() < 0.3) continue;
+        const t = i / 21, z = -11 + t * 52;
+        for (const sx of [-1, 1]) {
+          const px = sx * (3.4 + t * 2.6) + rng.gauss(0, 0.25);
+          const r = rng.range(0.26, 0.5);
+          put(M.dark, new THREE.DodecahedronGeometry(r, 0),
+            [px, gy(px, z, 0.6) + r * 0.34, z + rng.gauss(0, 0.5)],
+            [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)], [1.5, 0.8, 1.1]);
+        }
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = rng.next() * 6.28, d = rng.range(9, 22);
+        const sr = rng.range(0.4, 1.2), bx3 = Math.cos(a) * d, bz3 = Math.sin(a) * d + 12;
+        const brk = kitRock(rng, sr);
+        put(M.rock, brk.geo, [bx3, gy(bx3, bz3, sr * 2) + sr * 0.6, bz3],
+          [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)],
+          [brk.s * rng.range(0.9, 1.25), brk.s * rng.range(0.75, 1.0), brk.s]);
+      }
+      return { cast: true, r: 34, noApron: true };
+    }
     // Waymark stele on a two-course base, its face carved.
     const b = bag();
     const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.06 });
