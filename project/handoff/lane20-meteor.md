@@ -8,48 +8,68 @@ fissures in the crater, visible from the highway at night**, pairing with the
 
 ---
 
-## FOR LANE 21 — the framing I want for `lest_overlook_disc`
+## FOR LANE 21 — the framing for `lest_overlook_disc`, now measured
 
-**CORRECTION, verified by capture — read this before you pose the camera.**
-My first guess at this framing was wrong and I photographed it to find out.
+**Superseded twice. This version is from `probes/discview.mts`, which sweeps 24
+bearings at five ranges plus the named road nodes and reports how much of the
+mass cluster clears the terrain skyline from each. Numbers below are its
+output.** The two stands I first named are blind and I photographed both to
+find out — `tmp/l20/base-lest_night-on.jpg` (Lestallum lookout: a foreground
+boulder and the dreadnought, no Meteor at all) and
+`tmp/l20/base-spur_night-on.jpg` (the `n_disc` spur at eye height: the inside of
+a rim block, because 824 m puts it *on* the 790–1060 m rim ring).
 
-- **The Lestallum lookout parking (-2880, -760) cannot see the Disc at all.**
-  I stood a camera there at ground + 12 m, fov 30, aimed at (-1020, 340, -2160),
-  and captured it: `tmp/l20/base-lest_night-on.jpg`. The frame is a foreground
-  boulder filling the middle third, the Nifl dreadnought hanging in the sky
-  behind it, and **no Meteor whatsoever**. The shelf and its own outcrops are in
-  the way. Do not pose there.
-- **The highway spur at `n_disc` (-1220, -1360) is inside the rock.** It is
-  824 m from the impact centre, which puts it *on* the 790–1060 m rim ring, so
-  the camera stands among 52–155 m rim blocks. `tmp/l20/base-spur_night-on.jpg`
-  is a close-up of a rock face with a road sign in it.
-- I have built `src/tools/probes/discview.mts` to answer this properly: it
-  marches `Terrain.heightAt` from a candidate eye to the impact centre, turns
-  the highest occluding sample into an elevation angle, and reports how much of
-  the mass cluster clears it — crown only, down to the waist, or far enough to
-  include the crater rim. **Run it (or ask me for its output) before you pose
-  this shot.** A stand that sees only the crown gets a rock on a horizon; a
-  stand that sees the rim gets a crater, and the crater is the subject.
+The cluster runs **foot −324 m, waist +80 m, crown +829 m** in world y, and the
+terrain's own crater rim is at +173 m.
 
-What I want the shot to be, once the stand is a measured one:
+**Measured stands, `frac` = fraction of the cluster's height clearing the
+skyline:**
 
-- **Night, 21.0–21.6.** This is the whole point of the human's direction, and
-  `landmark_meteor` cannot carry it: that shot runs t 17.6 and `Props._night`
-  reports **night = 0** there, measured. `zone_mencemoor` is also night = 0. If
-  only one shot in the corpus is a night read of the Disc, it has to be this one.
-- **Target the waist, ~`(-1020, 300, -2160)`, not the crown.** The crater has to
-  be in the frame or the shot is a picture of a rock.
-- **fov 30–36 at 2.0–2.5 km**, which puts the 585 m cluster across a third of
-  the frame with the rim still in.
-- **The face:** the Disc's west face is exactly local −X in the meteor group's
-  frame (group yaw 0.6). The vein network this lane authors runs all the way
-  around the masses, so any bearing is served — but a west or south-west stand
-  gets the strongest read against the last of the sky.
-- **Aim to look down a rim breach.** The rim ring is deliberately broken at
-  **1.9 and 4.6 radians** in the group's own frame, and this lane lays two of
-  its six radial ground fissures on exactly those bearings, so a stand that
-  looks in through a breach sees a glowing crack running out of the crater
-  instead of a continuous rampart.
+| stand | at | eye y | range | frac | sees |
+|---|---|---|---|---|---|
+| **WNW ridge, bearing 150** | (-3618, -660) | 211 | 3000 | **0.50** | crown |
+| Lestallum shelf | (-3060, -680) | ~134 | 2520 | 0.46 | crown |
+| Lestallum lookout | (-2880, -760) | ~121 | 2328 | 0.42 | crown |
+| south-west, bearing 180 | (-3420, -2160) | 126 | 2400 | 0.43 | crown |
+| `zone_mencemoor` stand | (400, -1200) | 92 | 1714 | 0.28 | crown |
+| `landmark_meteor` stand | (-1020, -3560) | 150 | 1400 | **0.09** | crown |
+| **`n_disc` spur, 40 m up** | (-1220, -1360) | ~300 | 825 | **0.82** | crown, waist **and rim** |
+
+Two things fall out of that table and both matter to you:
+
+1. **`landmark_meteor` sees 9% of its own subject.** A foreground ridge eats
+   everything below the crown. That is not a defect this lane can fix from
+   inside the meteor group, and it is most of why the shot does not read as a
+   meteorite — you cannot see the crater from it, at any time of day.
+2. **Exactly one stand in the entire sweep sees the crater rim: the Disc
+   overlook off the Cauthess highway, from about 40 m above the parking.** It is
+   the only place in the world from which this landmark reads as an *impact*
+   rather than as a rock, and it is on the highway, which is where the human's
+   direction says the wound should be visible from.
+
+### What I would pose
+
+- **First choice, `lest_overlook_disc`:** `pos [-3618, 214, -660]`,
+  `target [-1020, 340, -2160]`, **fov 39**, **time 21.2**, clear. Best `frac` in
+  the sweep, high ground, and the Disc's west face — local −X in the meteor
+  group's frame — square to camera.
+- **If you want the Lestallum name to be literal**, the shelf at
+  `pos [-3060, 142, -680]`, `target [-1020, 340, -2160]`, **fov 34**, time 21.2
+  is only 0.04 worse and is actually on the shelf.
+- **The shot I would fight for, if the corpus has room:** the Disc overlook,
+  `pos [-1220, 300, -1360]`, `target [-1020, 200, -2160]`, **fov 55**, time
+  21.2. It is the only framing that contains a crater. Two of this lane's six
+  radial ground fissures are laid on the rim's own breaches at 1.9 and 4.6
+  radians so that a stand looking in through a gap sees a crack leaving the
+  crater rather than a wall.
+- **Night, 21.0–21.6, on whichever you take.** `landmark_meteor` runs t 17.6 and
+  `Props._night` returns **0** there; `zone_mencemoor` is 0 too. Both existing
+  judged Disc shots are dusk shots, so this is the corpus's only night read of
+  the human's direction.
+
+Captures of all of these are in `tmp/shots/l20-night/`. Message the coordinator
+if you want a face re-aimed; I would rather re-author the art than have the shot
+fight it.
 
 ---
 
