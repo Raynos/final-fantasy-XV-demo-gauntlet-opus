@@ -439,3 +439,39 @@ Also un-run: `probe.mts probes/nanscan.mts` and one `--cold` capture after the
 shader edits (both queued, neither returned). The shader change is a numeric
 retune of an existing block plus one `<alphatest_fragment>` replacement, so a
 link failure is unlikely, but the discipline says prove it.
+
+## `b31cb87` measured — mixed, and the next move is one constant
+
+`tmp/shots/lane1r-fc5`, same rect (0.44-0.62 x 0.02-0.22), against the same
+plate rows:
+
+```
+                      p50 Y            p99.5 Y
+  plate  prompto        81               176
+  before               94               227
+  after                62               201
+  plate  noctis        37               140
+  before                0               142
+  after                 1               101
+```
+
+**Verdict: keep, but it is not finished, and it is not a clean win.**
+
+- The stated defect moved the right way: blond's top end 227 -> **201**, half
+  the 51 Y gap to the plate, and the band draws on the crown for the first time
+  (verified by eye on the `--cold` `hero_portrait`).
+- But the energy I took out with it — `spec` 0.55 -> 0.46 and the rim
+  0.30 -> 0.20 — darkened everything. Blond's median overshot the plate the
+  other way, 94 (+13) -> 62 (-19), and **Noctis lost the one number that was
+  already right**: his bright extreme 142 -> 101 against a plate 140.
+
+So the exponent half of the change is correct and the energy half is too
+strong. The next move is **one constant**: put `spec` back to 0.55 and leave
+the rim at 0.20. The band is narrow and is the thing we want back on Noctis;
+the rim is broad and is what washed blond out. Predicted: Noctis' p99.5 climbs
+toward 140, blond's median climbs toward 81, and blond's p99.5 rises less than
+either because the rim stays cut. **Not done — I ran out of turns and would not
+land a constant I could not measure.**
+
+Noctis' `p50 Y 1` against a plate 37 did not move and was not expected to: that
+is the self-occlusion residue and no exponent reaches it.
