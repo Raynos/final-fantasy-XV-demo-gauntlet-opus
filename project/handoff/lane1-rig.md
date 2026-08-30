@@ -235,3 +235,164 @@ shows as limbs collapsing toward the model origin, which is unmissable.
   is a margin absorbing a drape bug, not a costume decision, and should shrink
   again once the drape is honest — but until then the party is measurably
   bulkier than it was this morning.
+
+
+---
+
+## Respawn 2 (2026-08-31) — log
+
+Baseline re-measured on `7dfa7e4` (`tmp/shots/lane1r-fc0`, facecheck on HEAD):
+
+```
+  noctis   L  2.87   88.3   99.20   134.9    96.3/30.61   VOID
+  gladio   L  3.37  -44.1   71.75    69.5    95.0/17.55   VOID
+  ignis    R  3.32  137.7   97.61   167.1    42.2/14.86
+  prompto  R  3.10  174.3  143.46   214.1    44.8/11.16
+```
+
+**Task 3 is VERIFIED as a positive.** The predecessor's exit condition was
+"Noctis' cheek range must come back at or below the 101.7 it was before any of
+this". It is **96.3**. The ~22 mm square pore cell stands; the 36 mm one stays
+recorded as the measured negative.
+
+**Looked at `tmp/shots/lane1r-fc0/noctis_facecheck.png` (and a 2x crop,
+`noc_zoom.png`, and a 6x crop of the eye, `noc_eye.png`).** What is on the
+frame, in order of loudness:
+
+1. **The eye.** The globe reads as a ball sitting on the face, not set into it:
+   below the lower lid margin there is a further band of grey-blue sclera
+   ending in a clean circular arc on the cheek — the sphere's own silhouette.
+   The iris is a flat navy disc with **no pupil**, no limbal gradient and no
+   catchlight on this frame. Confirmed by eye, cause NOT yet confirmed.
+2. **Hair** is dead matte black shards with hard staircase edges and no
+   anisotropic band anywhere on the crown.
+3. The cheek control (green box in the facecheck overlay) does have a dark
+   diagonal across it, consistent with the fringe-shadow diagnosis.
+4. Gladiolus' beard is still ~hundreds of separate dark chevrons, and they
+   reach up onto the malar under the eye where no beard grows.
+
+### `--dirty` is unusable tonight — landmine, cost me ~15 min
+
+`facecheck --dirty` died with `page.waitForFunction: Timeout 300000ms` in
+`preparePage`. Eight lanes are saving into one trunk, so the live tree is
+rebuilt out from under the page. **Commit and capture `--build HEAD`.**
+
+### Landed this session
+
+- **`b402eba` — coverage antialiasing on the hair** (task 4, first half).
+  `alphaToCoverage` gated on `sceneSamples() > 0` plus a *symmetric* ramp
+  replacing `<alphatest_fragment>` in the hair branch of `patch()`. Same
+  mechanism as `VegMaterial.patchVeg`; read that block before touching this.
+  Side effect that matters for the VOID: `getDepthMaterial` sets
+  `alphaTest = alphaToCoverage ? 0.5 : material.alphaTest`, so the fringe's
+  *shadow* cutout goes 0.35 -> 0.5 for free.
+
+### Measured, and it corrects two diagnoses in the tree
+
+**`coverageAA` does NOT clear Noctis' VOID.** cheek range 96.3 -> **96.2**.
+Landed anyway — it is right on its own terms and the hair edges needed it — but
+it is a measured negative against the exit it was supposed to serve.
+
+**The fringe-shadow diagnosis is wrong, and `facecheck.mts`'s own docstring at
+`:160-167` says it.** `facecheck --hide _hair` — the whole groom AND its cast
+shadow gone, same game build, only `facecheck.mts` differing — moves Noctis
+from **96.2 to 90.2**. The hair is worth **6 of the 96**. Whatever puts range on
+that control is the head's own form and paint, not the fringe. Hiding
+`noctis_shadow` (the merged shadow proxy) also leaves him VOID.
+
+Looked at the control patch at 8x (`tmp/shots/lane1r-fc1/noc_cheek.png`): the
+mark is **not hard-edged**. It is a broad soft ramp from lit skin at the
+lower-left to a dark brown mass at the upper-right, over about 7 px of
+transition, with `paintFace`'s mottle on top. `range` is p97-p03, so softening
+an edge does not reduce it — only reducing the *depth* of the dark end does.
+
+### The googly eyes — cause found, fix landed, not yet closed
+
+`facecheck --hide _eye` removes the crescent and leaves a small clean almond of
+socket, so it is the globe drawing over the lid and not the lid, the paint or
+the skin. The invariant nobody had written down:
+
+    EYE.lidR * 0.92  >  1 + EYE.dome
+
+because `eyePoint` squashes the lid shell's **z** by 0.92 and z is the axis the
+depth test uses. At `lidR 1.105` that is 1.017 globe radii against a cornea
+reaching 1.049 at the lower lid margin, so the globe wins. Solved in closed
+form for the same screen (x, y): **-0.20 mm at fissure fraction 0.40**,
+negative from f = 0.3 to f = 0.5, which is the width of the crescent on frame.
+
+`08a834d` took `dome` 0.072 -> 0.050 and `lidR` 1.105 -> 1.16 (+0.63 mm), and
+the waterline's inner row 1.012 -> 1.14 (it had been a millimetre INSIDE the
+globe, so the one cue that separates an eye from a bead never drew at all).
+
+**Verified by eye, partial**: `tmp/shots/lane1r-fc2/pr_eye.png` against
+`lane1r-fc1/pr_eye.png` — the pupil reads for the first time, the waterline
+draws, the crescent is smaller. **It is not gone.** `878499b` is a deliberate
+one-variable overshoot (`lidR 1.30`, `dome 0.035`, +1.7 mm) to settle whether
+the residue is depth or a second cause; dial back to the smallest value that
+holds. If it does not close, the next suspect is the socket floor sitting
+behind the globe where the lid band hands off to the skull.
+
+### Task 5 — blond, measured against the plate
+
+`regionstat` on the 0.55 m PNGs, rect 0.44-0.62 x 0.02-0.22, against
+`docs/reference/ART-DIRECTION.md` 12.3:
+
+```
+  plate  noctis (black)   p50 Y 37    p5 -> p99.5   20 -> 140
+  ours                    p50 Y  0                   0 -> 142
+  plate  prompto (blond)  p50 Y 81                  22 -> 176
+  ours                    p50 Y 94                   5 -> 227
+```
+
+**The medians are 13 Y apart at worst — the albedo is NOT the cause.** The
+brief's ranked hypothesis 1 (authored tip albedo) is therefore not it. What is
+50 Y out is the **top end on blond** (227 against 176) while the bright extreme
+on black is right (142 against 140), and the **bottom end on black is missing
+entirely** (p50 0 and p5 0 against 37 and 20).
+
+So: the additive terms pile onto a diffuse that is already high on pale hair,
+and dark hair gets no fill at all. The deeper cause of the blond half is that
+**our groom has no self-occlusion** — the plate's blond medians at Y 81 with an
+albedo far above that because nine strands in ten are shadowed by strands in
+front, and ours are all lit as if each were the only card on the head.
+
+### Eye — the second cause, measured negative on the lid
+
+`878499b` overshot to `lidR 1.30` / `dome 0.035` (+1.7 mm, 2.5x what the solve
+needs) and **the crescent is the same size as at 1.16**
+(`tmp/shots/lane1r-fc3/prompto_facecheck.png`). Reverted in `6976ef6`. So the
+depth loss at the lid margin was real and 1.16 closes it, but the residue is
+the globe **below and temporal to the aperture drawing over the skull** — the
+sculpted orbital rim there sits behind the globe's silhouette. No lid standoff
+buys that. It is a `buildHead` / `brushes()` job.
+
+## Respawn-2 residue, ready to paste into `project/TASKS.md`
+
+- **Lane 1 — the eye still reads googly, and the remaining half is the socket,
+  not the lid.** `EYE.lidR * 0.92 > 1 + EYE.dome` now holds (`08a834d`), which
+  gave every hero a pupil and a waterline for the first time, but a grey sclera
+  crescent still hangs below and temporal to each aperture, ending in the
+  globe's own silhouette arc. Proved not to be lid standoff by overshooting to
+  1.30 and measuring no change. The sculpted orbital rim below the outer
+  canthus is behind the globe. `Face.ts buildHead` / `brushes()`; judge at
+  `facecheck --shots` and crop the eye at 6x, the corpus shots are too far.
+- **Lane 1 task 47 — NOT LANDABLE and here is the number.** Making
+  `facecheck`'s VOID a failure needs both heads under `CONTROL_CEILING = 60`.
+  Noctis is **96.2** and `--hide _hair` — the whole groom and its cast shadow —
+  moves him only to **90.2**, so the fringe-shadow diagnosis in
+  `facecheck.mts:160-167` is wrong and `coverageAA` is a measured negative
+  against it (96.3 -> 96.2). The mark on his control is a broad soft ramp of
+  the head's own form and paint, not a hard edge, and `range` is p97-p03 so
+  softening cannot help — only reducing the depth of the dark end can.
+  Gladiolus is **88.6** and it is still his beard: hundreds of separate dark
+  chevrons that reach up onto the malar under the eye, where no beard grows.
+- **Lane 1 task 5 — blond is not an albedo problem.** Medians are within 13 Y
+  of the plate; the top decile is 50 Y hot (p99.5 227 against 176) while black
+  hair has no bottom at all (p50 0 and p5 0 against 37 and 20). The deeper
+  cause is that **the groom has no self-occlusion** — the plate's blond medians
+  at Y 81 with a far higher albedo because nine strands in ten are shadowed by
+  strands in front, and every card of ours is lit as if it were the only one on
+  the head. A root-to-tip occlusion ramp on `vMapUv.y` is the cheap
+  approximation and is untried.
+- **`facecheck --hide <substr>` exists now** (`e0b5211`) and is how any of this
+  was measurable at all, because `--dirty` does not come back on this trunk.
