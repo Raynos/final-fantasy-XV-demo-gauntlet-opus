@@ -35,6 +35,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'tex.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'tex.json');
+/** The tier the first frame does not wait for. Same hash and stamp as {@link OUT}. */
+const DEFERRED_OUT = path.join(BAKE_DIR, 'texd.bin.gz');
 const CANVAS_OUT = path.join(BAKE_DIR, 'texc.bin.gz');
 const CANVAS_STAMP = path.join(BAKE_DIR, 'texc.json');
 const GEO_OUT = path.join(BAKE_DIR, 'geo.bin.gz');
@@ -111,7 +113,10 @@ export async function pruneStaleGeoBake(): Promise<boolean> {
 
 /** @returns true when the artifact already matches the sources */
 export async function texIsFresh(): Promise<boolean> {
-  if (!existsSync(OUT) || !existsSync(STAMP)) return false;
+  // `DEFERRED_OUT` counts: it is written by the same run off the same hash, so a
+  // tree that has one and not the other is a half-applied bake, and the symptom
+  // — every dungeon interior silently regenerating — is one nobody would notice.
+  if (!existsSync(OUT) || !existsSync(DEFERRED_OUT) || !existsSync(STAMP)) return false;
   try {
     const stamp = JSON.parse(await readFile(STAMP, 'utf8'));
     return stamp.hash === (await texSourceHash()) && (await stat(OUT)).size > 1024;
@@ -251,16 +256,33 @@ export async function texBake(opts: {force?: boolean, quiet?: boolean} = {}): Pr
   for (const { w, h } of rec.values()) texels += w * h;
 
   const hash = await texSourceHash();
-  const raw = tb.encodeTexBake(hash) as Uint8Array;
-  const gz = gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 6 });
+  // ONE recording, TWO containers. `dgn/*` is 36 entries and 6.8 MB on the wire
+  // that nothing reads until the player first walks into a cave, so it is
+  // written to its own file and fetched after the first frame — see
+  // `TEX_DEFERRED_PATH` in `src/engine/TexBake.ts`. Same hash, same stamp: this
+  // is not a second bake and the two files can never disagree about their
+  // sources, which is the failure mode a second stamp would have introduced.
+  const isDeferred = tb.isDeferredKey as (k: string) => boolean;
+  const pack = (keep: (k: string) => boolean) => {
+    const raw = tb.encodeTexBake(hash, keep) as Uint8Array;
+    return { raw, gz: gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 6 }) };
+  };
+  const boot = pack((k) => !isDeferred(k));
+  const deferred = pack(isDeferred);
+  const nDeferred = [...rec.keys()].filter(isDeferred).length;
 
   await mkdir(BAKE_DIR, { recursive: true });
-  await writeFile(OUT, gz);
+  await writeFile(OUT, boot.gz);
+  await writeFile(DEFERRED_OUT, deferred.gz);
   await writeFile(STAMP, JSON.stringify({
-    hash, textures: rec.size, texels, bytes: gz.length, raw: raw.length, at: new Date().toISOString(),
+    hash, textures: rec.size, texels, bytes: boot.gz.length, raw: boot.raw.length,
+    deferred: { textures: nDeferred, bytes: deferred.gz.length, raw: deferred.raw.length },
+    at: new Date().toISOString(),
   }, null, 2));
-  log(`${rec.size} textures, ${(texels / 1e6).toFixed(1)} Mtexel — ${(gz.length / 1e6).toFixed(1)} MB gz `
-    + `(${(raw.length / 1e6).toFixed(1)} MB raw) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  log(`${rec.size} textures, ${(texels / 1e6).toFixed(1)} Mtexel — ${(boot.gz.length / 1e6).toFixed(1)} MB gz `
+    + `(${(boot.raw.length / 1e6).toFixed(1)} MB raw) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  log(`  + ${nDeferred} deferred (dgn/*) — ${(deferred.gz.length / 1e6).toFixed(1)} MB gz, `
+    + `off the first frame's bill`);
   return true;
 }
 

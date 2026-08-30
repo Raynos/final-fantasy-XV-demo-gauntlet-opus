@@ -199,7 +199,7 @@ export interface BakeArtifact {
 }
 
 /**
- * The four caches of our own generators under `src/public/baked/`.
+ * The caches of our own generators under `src/public/baked/`.
  *
  * Ordered as the boot needs them. `bootCostSec` are the numbers recorded in
  * `project/LANDMINES.md` §"Baked caches"; they are what makes this gate worth
@@ -215,6 +215,18 @@ export const ARTIFACTS: BakeArtifact[] = [
     file: 'tex.bin.gz', stamp: 'tex.json', sources: TEX_SOURCES,
     what: '143 procedural DataTextures (src/engine/TexBake.ts)',
     regenerable: true, remedy: 'node src/tools/texbake.mts --force', bootCostSec: 4,
+  },
+  {
+    // Written by the same `texbake` run as `tex.bin.gz`, off the same source
+    // hash, and stamped in `tex.json` rather than in one of its own: it is one
+    // bake split across two files so that the 6.8 MB of dungeon-interior texels
+    // nothing reads until the player enters a cave are not in front of the first
+    // frame. A tree with one and not the other is a half-applied bake whose only
+    // symptom is every interior silently regenerating, so `texIsFresh` requires
+    // both and so does this row.
+    file: 'texd.bin.gz', stamp: 'tex.json', sources: TEX_SOURCES,
+    what: 'the deferred tier of the same bake: dgn/* interior texels',
+    regenerable: true, remedy: 'node src/tools/texbake.mts --force', bootCostSec: 0,
   },
   {
     file: 'texc.bin.gz', stamp: 'texc.json', sources: CANVAS_SOURCES,

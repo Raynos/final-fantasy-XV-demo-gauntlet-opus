@@ -54,6 +54,24 @@ export const TEX_BAKE_VERSION = 1;
  */
 export const TEX_BAKE_PATH = 'baked/tex.bin.gz';
 export const TEX_CANVAS_PATH = 'baked/texc.bin.gz';
+/**
+ * The third file, and the only one the first frame does not wait for.
+ *
+ * `dgn/*` is 36 entries, 17.3 MB inflated and **6.8 MB on the wire** — a fifth
+ * of `tex.bin.gz` — and not one of its texels is read until the player first
+ * walks into a cave. `Dungeons.init()` nevertheless awaits `loadTexBake()` at
+ * boot, so before this split those 6.8 MB were in front of every first frame for
+ * a room nobody had entered.
+ *
+ * Same container format, same source hash, written by the same `texbake` run:
+ * it is one bake split across two files, not a second bake. The split is at the
+ * file, not at an HTTP Range, because a container is a single gzip member with
+ * its index at the front — there is no way to read the index without inflating
+ * all of it, and `Content-Encoding: gzip` defeats Range on most hosts anyway.
+ */
+export const TEX_DEFERRED_PATH = 'baked/texd.bin.gz';
+/** Keys that live in {@link TEX_DEFERRED_PATH} rather than in the boot tier. */
+export const isDeferredKey = (k: string): boolean => k.startsWith('dgn/');
 
 /** One texture's bytes in the container. */
 export interface TexEntry {
@@ -95,6 +113,7 @@ let recorder: Map<string, { w: number, h: number, data: Uint8Array }> | null = n
  */
 let recordDrawnOnly = false;
 let loading: Promise<boolean> | null = null;
+let deferredLoading: Promise<boolean> | null = null;
 
 /**
  * Collect every generated texture instead of reading the cache.
@@ -114,13 +133,15 @@ export function recorded() {
 /**
  * Pack recorded textures into the container. Build step only.
  * @param hash content hash of the generator sources, for freshness
+ * @param keep which keys go in this file — one recording, two containers
  */
-export function encodeTexBake(hash: string): Uint8Array {
+export function encodeTexBake(hash: string, keep: (key: string) => boolean = () => true): Uint8Array {
   if (!recorder) throw new Error('[texbake] nothing recorded');
   const entries: TexEntry[] = [];
   let off = 0;
   const bodies: Uint8Array[] = [];
   for (const [k, { w, h, data }] of recorder) {
+    if (!keep(k)) continue;
     // Split RGBA into four byte planes before compressing. Interleaved noise
     // defeats gzip's window; per-channel planes of the same noise do not.
     const planes = encodePlanes8(data, w, h, 4);
@@ -164,31 +185,52 @@ function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
  */
 export function loadTexBake(): Promise<boolean> {
   if (loading) return loading;
-  loading = (async () => {
-    if (recorder) return false;
-    if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return false;
-    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return false;
-    const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
-    // Both artifacts, in parallel, and a missing one is not an error: the
-    // canvas half is baked by a separate opt-in command and is routinely
-    // absent on a fresh clone.
-    const got = await Promise.all([TEX_BAKE_PATH, TEX_CANVAS_PATH].map(async (path) => {
-      try {
-        const res = await fetch(base + path);
-        if (!res.ok) return false;
-        // vite dev and preview both recognise `.gz` and send `Content-Encoding:
-        // gzip`, in which case the body is already inflated; inflating again
-        // aborts the stream. Only decode in JS when the transfer was opaque.
-        const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
-        const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
-        return decodeTexBake(new Uint8Array(await new Response(body).arrayBuffer()), null);
-      } catch {
-        return false;
-      }
-    }));
-    return got.some(Boolean);
-  })();
+  // Both boot artifacts, in parallel, and a missing one is not an error: the
+  // canvas half is baked by a separate opt-in command and is routinely absent
+  // on a fresh clone. `texd` is NOT here — see {@link loadDeferredTexBake}.
+  loading = fetchContainers([TEX_BAKE_PATH, TEX_CANVAS_PATH]);
   return loading;
+}
+
+/**
+ * Fetch the tier the first frame does not wait for.
+ *
+ * Kicked off past the first presented frame (below), so its bytes are not
+ * charged to the first visit. Every key in it is a clean cache miss until it
+ * lands, and a miss is not a failure — it is the generator, which is what
+ * produced these bytes in the first place and is only slower. So the worst case
+ * for a player who walks into a cave inside the first second of the session is
+ * the boot this had before the cache existed, for that room only.
+ *
+ * @returns true when the deferred tier is resident
+ */
+export function loadDeferredTexBake(): Promise<boolean> {
+  if (deferredLoading) return deferredLoading;
+  deferredLoading = fetchContainers([TEX_DEFERRED_PATH]);
+  return deferredLoading;
+}
+
+/** Fetch, inflate and index a set of containers. @returns true if any decoded */
+async function fetchContainers(paths: string[]): Promise<boolean> {
+  if (recorder) return false;
+  if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return false;
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return false;
+  const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
+  const got = await Promise.all(paths.map(async (path) => {
+    try {
+      const res = await fetch(base + path);
+      if (!res.ok) return false;
+      // vite dev and preview both recognise `.gz` and send `Content-Encoding:
+      // gzip`, in which case the body is already inflated; inflating again
+      // aborts the stream. Only decode in JS when the transfer was opaque.
+      const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
+      const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
+      return decodeTexBake(new Uint8Array(await new Response(body).arrayBuffer()), null);
+    } catch {
+      return false;
+    }
+  }));
+  return got.some(Boolean);
 }
 
 /** True once a usable cache is resident. */
@@ -429,5 +471,16 @@ if (typeof window !== 'undefined') {
     (window as unknown as { TEX_BAKE_POST: typeof postRecording }).TEX_BAKE_POST = postRecording;
   } else {
     void loadTexBake();
+    // The deferred tier, started after the first frame has been presented and
+    // not one millisecond earlier. `game-ready` fires at the end of
+    // `Game.init()`, in the same task as the warm render before it — so the
+    // frame that shows the game is the next animation frame, and the transfer
+    // has to start after THAT to be off the first visit's bill. One rAF plus one
+    // task is the smallest delay that is definitely on the far side of it, and
+    // it is a few hundred milliseconds before anything could ask for a dungeon
+    // texel: `Dungeons.enter()` is player-driven and the fetch is local.
+    addEventListener('game-ready', () => {
+      requestAnimationFrame(() => setTimeout(() => { void loadDeferredTexBake(); }, 0));
+    }, { once: true });
   }
 }
