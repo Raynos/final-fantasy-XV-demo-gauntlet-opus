@@ -85,6 +85,32 @@ threshold stones) on the `Tombs.ts` pattern, installed off the same lazy tick.
 Two micro-deposits (`dep_washes` lightning 20/4, `dep_saltgrass` fire 22/4).
 `old_book` listed twice in the `rock` forage pool. **None of it verified live.**
 
+## Verified by eye this session
+
+**The Threshold Stones — VERIFIED, ready to photograph.**
+`tmp/shots/l18c/th_obl.jpg` — the carved second pass, `d6a0353`; the threshold
+branch is unchanged since: a monumental
+gate stone with the collar and the three incised bands clearly legible at
+twenty-five metres, a felled stone lying with its foot still in its socket, the
+receding pairs behind it, the kerb reading as a vanished road. It reads as cut
+by someone. The one caveat is that from the south the whole alignment is
+backlit and the stones go nearly black — sun angle, not the kit.
+
+**The plaza paving — VERIFIED, lane 19's complaint is answered.** At two metres
+(`tmp/shots/l18c/plaza_down.jpg`) it is real 1.2 m flags with a half-slab
+course offset, a per-slab value jitter and joints in the normal. At fifteen
+(`plaza_high.jpg`) the square reads as laid ground rather than as a flat
+untextured plane. The disc's *edge* was the remaining defect — a bare 0.35 m
+cylinder wall with the ground stopping dead against it — and is fixed in
+`ea23699` by battering the disc into a shallow plinth (same walking surface,
+same `PLAZA_Y`, 40 segments instead of 22).
+
+**FOR THE COORDINATOR / whoever owns city NPC placement:** in
+`tmp/shots/l18c/plaza_down.jpg` the Lestallum townspeople are **sunk about 20 cm
+into the plaza deck** — every one of them is cut off mid-shin. `PLAZA_Y` is
+0.675 and published for exactly this; someone is placing on the terrain height
+instead. Five of lane 21's judged frames are city frames.
+
 ## Not done yet
 
 - **Fix the two landmark kits from the frames** (see the defects above) — this
