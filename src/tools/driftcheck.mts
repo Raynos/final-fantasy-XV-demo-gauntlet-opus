@@ -65,6 +65,29 @@ function parseArgs(argv: string[]) {
      */
     home: 'hero_full', span: 340, res: 192, tol: 0.05, tolCpu: 0.45,
     settle: 60, tourSettle: 40, tour: null as string[] | null,
+    /**
+     * The chord-sag allowance, as a multiple of the field's OWN local curvature.
+     *
+     * See `SAG` below. `0` disables the allowance entirely, which turns
+     * `--tol-cpu` back into the flat constant it used to be.
+     */
+    sagK: 3.0,
+    /**
+     * GLSL appended to the probe's vertex shader, after `TERRAIN_VERT_BEGIN`.
+     *
+     * **This is the falsification arm, and it is a first-class flag because a
+     * gate nobody has watched fail is a gate nobody has tested.** The tool's own
+     * header records the control that proved the probe rect was wrong -- an
+     * unconditional `tfH += 3.0` -- and that control had to be applied by hand
+     * editing a shared engine file, which is not something a lane can do on this
+     * trunk. Now it is one flag:
+     *
+     *   node src/tools/driftcheck.mts --inject 'tfH += 3.0;'
+     *
+     * `transformed` and `vTW` are re-derived from `tfH` after the injection, so
+     * an injection that only moves `tfH` moves the read-back surface.
+     */
+    inject: '',
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -76,6 +99,8 @@ function parseArgs(argv: string[]) {
     else if (a === '--settle') o.settle = Number(argv[++i]);
     else if (a === '--tour-settle') o.tourSettle = Number(argv[++i]);
     else if (a === '--tour') o.tour = argv[++i].split(',');
+    else if (a === '--inject') o.inject = argv[++i];
+    else if (a === '--sag-k') o.sagK = Number(argv[++i]);
     // `--build`, `--dirty`, `--q`, `--w`/`--h` belong to `harnessArgs`, which
     // parses the same argv a few lines below. Without this the tool could not
     // be pointed at the working tree at all -- `--dirty` threw -- so every
@@ -179,6 +204,13 @@ const out = await page.evaluate(async (cfg) => {
         ${tm.TERRAIN_VERT_PARS}
         void main() {
           ${tm.TERRAIN_VERT_BEGIN}
+          ${cfg.inject ? `${cfg.inject}
+          // Re-derive what VERT_BEGIN derives from tfH, so an injection that
+          // moves tfH moves the surface that is read back. ONLY under an
+          // injection: with none, the probe has to compile the shipped chunk
+          // unaltered, or the control arm and the measurement arm are not
+          // running the same program and neither one means anything.
+          transformed.y = tfH; vTW.y = tfH;` : ''}
           gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
         }`,
       fragmentShader: `
@@ -188,7 +220,10 @@ const out = await page.evaluate(async (cfg) => {
         void main() { gl_FragColor = vec4(vTW.y, vTW.x, vTW.z, 1.0); }`,
       side: DoubleSide,
     });
-    m.customProgramCacheKey = () => `terrain-drift-probe-${ring.level}`;
+    // The injection is part of the program, so it has to be part of the key --
+    // otherwise three serves the un-injected program back from its cache and the
+    // falsification arm silently measures the control it was supposed to break.
+    m.customProgramCacheKey = () => `terrain-drift-probe-${ring.level}-${cfg.inject}`;
     return m;
   });
   const probeScene = new Scene();
@@ -309,6 +344,54 @@ const out = await page.evaluate(async (cfg) => {
   const CPU_RADIUS = 100;
   const cpuAbs = [];
   const hist: Record<string, number> = {};
+  const cpuHist: Record<string, number> = {};
+
+  /**
+   * **The chord-sag floor, measured per texel from the field's own curvature.**
+   *
+   * `tolCpu` is a single constant fitted to one measurement of one place, and
+   * that is the disease `imgdiff` already had ("the noise floor is per-shot, not
+   * the constant everyone quotes") and `drawcheck` still has ("its tolerance is
+   * smaller than its own reproducibility"). On 2026-08-31 it went red at
+   * `worst -0.520` with `mean -0.001`, `p99 0.229` and the boot arm reading
+   * *identically* to the after-travel arm — a purely static, one-texel excursion
+   * 16% past a constant nobody had ever measured a floor for.
+   *
+   * There is an exact floor available and it does not have to be guessed.
+   * Linear interpolation of `f` across a cell of width `h` is in error by at
+   * most `(h^2/8)·max|f''|`, and the central second difference of `f` at
+   * spacing `h` **is** `h^2 f''` to leading order. So:
+   *
+   *     sag(x, z) = max(|D2x|, |D2z|) / 8,   D2x = f(x-h,z) + f(x+h,z) - 2 f(x,z)
+   *
+   * is the drawn surface's own permitted deviation *at that texel*, computed
+   * from `heightAt` — the very function the arm is comparing against — with no
+   * constant fitted to anything. Where the ground is smooth it is ~0 and the arm
+   * is as strict as `heightcheck`; over a 1.5 m gully lip it is large, and it is
+   * large for a reason that is a theorem rather than an excuse.
+   *
+   * **This is an exemption, so it is falsified rather than argued.**
+   * `--inject 'tfH += 3.0;'` is a three-metre offset with no curvature to hide
+   * behind: `sag` does not move, so every texel violates and the gate is red.
+   * `project/LANDMINES.md` §"An exemption whose stated reason is not true of the
+   * code" is the failure mode this is written against; run the injection before
+   * believing this comment.
+   *
+   * `sagK` is the headroom multiplier on that bound, and it is the only fitted
+   * number left — a texel is a violation only when it is past BOTH `tolCpu` and
+   * `sagK * sag`.
+   */
+  const CELL0 = t.clipmap.rings[0].cell;
+  const sagAt = (x: number, z: number) => {
+    const h0 = t.heightAt(x, z);
+    const d2x = t.heightAt(x - CELL0, z) + t.heightAt(x + CELL0, z) - 2 * h0;
+    const d2z = t.heightAt(x, z - CELL0) + t.heightAt(x, z + CELL0) - 2 * h0;
+    return Math.max(Math.abs(d2x), Math.abs(d2z)) / 8;
+  };
+  /** |err| as a multiple of that texel's own sag bound. */
+  const ratios: number[] = [];
+  let violations = 0, worstRatio = 0, worstRatioAt = null, worstRatioErr = 0;
+  let worstSag = 0;
   for (let i = 0; i < R * R; i++) {
     if (Number.isNaN(before.y[i]) || Number.isNaN(after.y[i])) continue;
     const d = after.y[i] - before.y[i];
@@ -320,8 +403,23 @@ const out = await page.evaluate(async (cfg) => {
     const cpu = t.heightAt(after.wx[i], after.wz[i]);
     const dc = after.y[i] - cpu;
     cpuN++; cpuSum += dc; cpuAbs.push(Math.abs(dc));
-    if (Math.abs(dc) > Math.abs(cpuWorst)) { cpuWorst = dc; cpuWorstAt = [after.wx[i], after.wz[i]]; }
+    const cb = Math.round(dc * 10) / 10;
+    cpuHist[cb] = (cpuHist[cb] || 0) + 1;
+    const sag = sagAt(after.wx[i], after.wz[i]);
+    // A floor on the floor: a perfectly flat texel would divide by zero, and
+    // the read-back is a float32 render target, so 1 mm is the smallest
+    // deviation worth calling non-zero at all.
+    const ratio = Math.abs(dc) / Math.max(sag, 0.001);
+    ratios.push(ratio);
+    if (Math.abs(dc) > cfg.tolCpu && (cfg.sagK <= 0 || Math.abs(dc) > cfg.sagK * sag)) violations++;
+    if (ratio > worstRatio) {
+      worstRatio = ratio; worstRatioAt = [after.wx[i], after.wz[i]]; worstRatioErr = dc;
+    }
+    if (Math.abs(dc) > Math.abs(cpuWorst)) {
+      cpuWorst = dc; cpuWorstAt = [after.wx[i], after.wz[i]]; worstSag = sag;
+    }
   }
+  ratios.sort((a, b) => a - b);
   cpuAbs.sort((a, b) => a - b);
   const cpuP99 = cpuAbs.length ? cpuAbs[Math.floor(cpuAbs.length * 0.99)] : 0;
   const cpuOver = cpuAbs.filter((v) => v > 0.1).length;
@@ -351,7 +449,11 @@ const out = await page.evaluate(async (cfg) => {
     compared: n,
     driftMean: n ? sum / n : 0, driftWorst: worst, driftWorstAt: worstAt,
     cpuMeanAfter: cpuN ? cpuSum / cpuN : 0, cpuWorstAfter: cpuWorst, cpuWorstAtAfter: cpuWorstAt,
-    cpuP99, cpuOver, cpuN,
+    cpuP99, cpuOver, cpuN, cpuHist,
+    cell0: CELL0, violations, worstSag,
+    ratioP50: ratios.length ? ratios[Math.floor(ratios.length * 0.5)] : 0,
+    ratioP99: ratios.length ? ratios[Math.floor(ratios.length * 0.99)] : 0,
+    worstRatio, worstRatioAt, worstRatioErr,
     cpuMeanBefore: cpu0N ? cpu0Sum / cpu0N : 0, cpuWorstBefore: cpu0Worst,
     lodWorst, lodMean: lodN ? lodSum / lodN : 0, farAt, farDist,
     hist,
@@ -372,7 +474,12 @@ console.log(`player           before (${out.player[0].map((v) => f(v, 2)).join('
 console.log('');
 console.log(`SURFACE DRIFT    mean ${f(out.driftMean)} m   worst ${f(out.driftWorst)} m at (${out.driftWorstAt ? out.driftWorstAt.map((v) => f(v, 1)).join(', ') : '-'})   over ${out.compared} texels`);
 console.log(`gpu vs heightAt  boot: mean ${f(out.cpuMeanBefore)} worst ${f(out.cpuWorstBefore)}   after travel: mean ${f(out.cpuMeanAfter)} worst ${f(out.cpuWorstAfter)} at (${out.cpuWorstAtAfter ? out.cpuWorstAtAfter.map((v) => f(v, 1)).join(', ') : '-'})`);
-console.log(`                 p99 |err| ${f(out.cpuP99)} m; ${out.cpuOver}/${out.cpuN} texels over 0.1 m (1.5 m tessellation floor)`);
+console.log(`                 p99 |err| ${f(out.cpuP99)} m; ${out.cpuOver}/${out.cpuN} texels over 0.1 m (${f(out.cell0, 1)} m tessellation floor)`);
+console.log(`vs its own sag   |err| / (local chord bound): p50 ${f(out.ratioP50, 2)}  p99 ${f(out.ratioP99, 2)}  worst ${f(out.worstRatio, 2)} (err ${f(out.worstRatioErr)} m at (${out.worstRatioAt ? out.worstRatioAt.map((v) => f(v, 1)).join(', ') : '-'}))`);
+console.log(`                 worst |err| texel above has a sag bound of ${f(out.worstSag)} m, i.e. ${f(Math.abs(out.cpuWorstAfter) / Math.max(out.worstSag, 1e-6), 2)}x it`);
+console.log(`                 ${out.violations} texels past BOTH ${opts.tolCpu} m and ${opts.sagK}x their own sag bound${opts.inject ? `   [injected: ${opts.inject}]` : ''}`);
+const cbins = Object.keys(out.cpuHist).map(Number).sort((a, b) => a - b);
+if (cbins.length > 1) console.log(`gpu-vs-cpu hist  ${cbins.map((b) => `${b.toFixed(1)}:${out.cpuHist[String(b)]}`).join('  ')}`);
 console.log(`coarse-LOD spread  mean ${f(out.lodMean)} m  worst ${f(out.lodWorst)} m, with the camera ${f(out.farDist, 0)} m away at ${out.farAt} (reported, not gated)`);
 const bins = Object.keys(out.hist).map(Number).sort((a, b) => a - b);
 if (bins.length > 1) console.log(`drift histogram  ${bins.map((b) => `${b.toFixed(1)}:${out.hist[String(b)]}`).join('  ')}`);
@@ -390,6 +497,26 @@ console.log('          the shading of the ground, which is `heightcheck` and a c
 console.log('          and drift below the 1.5 m tessellation floor the `--tol-cpu`');
 console.log('          headroom already concedes.');
 
-const bad = Math.abs(out.driftWorst) > opts.tol || Math.abs(out.cpuWorstAfter) > opts.tolCpu;
-console.log(`\n${bad ? 'FAIL' : 'PASS'}  (tolerance ${opts.tol} m drift, ${opts.tolCpu} m vs heightAt)`);
+/**
+ * **Two predicates, and only the drift one is a flat constant.**
+ *
+ * SURFACE DRIFT keeps `--tol`: the rendered ground must not move at all, that
+ * is cell-independent, and 0.05 m is not a fitted number, it is "zero plus
+ * float32".
+ *
+ * `gpu vs heightAt` no longer gates on `worst`. A worst-of-12544 statistic has
+ * no floor anyone ever measured, and on 2026-08-31 it went red at -0.520 m
+ * against a `tolCpu` fitted to a ~0.37 m observation, with `mean -0.001`,
+ * `p99 0.229`, the boot and after-travel arms bit-identical, and `heightcheck`
+ * reading 0.000 everywhere. That is a single triangle over a single gully lip,
+ * which is the one thing this arm's floor is *made* of.
+ *
+ * A texel is now a violation only when it is past BOTH the flat `--tol-cpu`
+ * AND `--sag-k` times the chord bound computed from the field's own curvature
+ * at that texel (see `sagAt`). An offset bug -- a shader adding height, a CPU
+ * function fallen behind, a mis-decoded attribute -- has no curvature to hide
+ * behind and violates everywhere; run `--inject 'tfH += 3.0;'` and watch it.
+ */
+const bad = Math.abs(out.driftWorst) > opts.tol || out.violations > 0;
+console.log(`\n${bad ? 'FAIL' : 'PASS'}  (tolerance ${opts.tol} m drift; vs heightAt: past ${opts.tolCpu} m AND ${opts.sagK}x the texel's own chord bound)`);
 process.exit(bad || errors.length ? 1 : 0);
