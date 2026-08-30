@@ -709,7 +709,7 @@ const SHOT_TABLE = {
   tomb_claim: {
     doc: 'The Tomb of the Wise: the sarcophagus under its colonnade, the royal arm still in it',
     time: 17.4, weather: 'clear',
-    pos: [55.1, 135.9, -1506.3], target: [58.9, 134.5, -1512.7], fov: 40,
+    pos: [56.4, 135.4, -1507.6], target: [59.4, 134.6, -1513.2], fov: 34,
   },
 
   // --- the world is inhabited -------------------------------------------
@@ -733,7 +733,7 @@ const SHOT_TABLE = {
   regalia_night_road: {
     doc: 'The Regalia stopped on Route 1 after dark, the highway running away under the stars',
     time: 22.4, weather: 'clear',
-    pos: [-44, 12.6, 34], target: [-14, 9.0, 6], fov: 46,
+    pos: [-31, 10.6, 25], target: [-19.3, 9.3, 14], fov: 46,
   },
   regalia_cockpit: {
     doc: 'Over the bonnet at dusk',
@@ -903,47 +903,61 @@ const SHOT_TABLE = {
     // 80, and from the Lestallum shelf the skyline cuts at ~316 m, so this
     // frame is the upper 60% of the cluster and never the crater. Every stand
     // in the 24x5 sweep that sees the rim is 800 m out and inside the rock.
+    // The stand is `lestallum_shelf` from that sweep (frac 0.46), and it is the
+    // one this shot should have: at 2.5 km with fov 34 the Meteor sits left of
+    // centre with the dreadnought crossing it and Lestallum's own roofs and the
+    // EXINERIS stack in the bottom-right foreground, which is what makes it an
+    // overlook OF the city rather than a landscape that happens to be near it.
+    // The sweep's higher-scoring stand at (-3618, 214, -660) (frac 0.50) has no
+    // city in it at all; 0.04 of subject is not worth the name going false.
     // Night on purpose: `landmark_meteor` runs t 17.6 where `Props._night`
     // reads 0, so this is the corpus's only night read of the Disc.
     doc: 'The Disc of Cauthess from the Lestallum shelf after dark, its fissures still burning',
     time: 21.4, weather: 'clear',
-    pos: [-2880, 133, -760], target: [-1020, 460, -2160], fov: 34,
+    pos: [-3060, 142, -680], target: [-1020, 340, -2160], fov: 34,
   },
   lest_plaza_walk: {
     doc: 'Walkers crossing the square on a long lens — the city is lived in, not dressed',
     time: 12.2, weather: 'clear',
-    pos: [-2966.5, 122.6, -706.5], target: [-2955, 121.8, -695], fov: 36,
+    pos: [-2967.5, 123.4, -707.5], target: [-2956, 122.0, -696], fov: 38,
   },
   lest_exineris: {
     doc: 'The EXINERIS stack over the market roofs, the reason this city has light',
     time: 15.0, weather: 'clear',
-    pos: [-2908, 128, -742], target: [-2938, 138, -718], fov: 44,
+    pos: [-2908, 128, -742], target: [-2948, 132, -710], fov: 48,
   },
   lest_leville: {
     doc: 'The Leville from the square — the hotel front over the pavement tables',
     time: 16.4, weather: 'clear',
-    pos: [-2959, 122.3, -699], target: [-2969.5, 125.5, -694], fov: 46,
+    pos: [-2957, 122.8, -700.5], target: [-2967.5, 124.2, -695], fov: 44,
   },
   lest_market_vendor: {
     doc: 'Randolph behind the Forge & Filigree counter, his rack behind him',
     time: 16.0, weather: 'clear',
-    pos: [-2960.6, 122.2, -708.6], target: [-2965.7, 121.9, -705.3], fov: 38,
+    pos: [-2957.2, 123.4, -711.0], target: [-2965.7, 122.0, -705.3], fov: 42,
   },
   lest_night_high: {
     doc: 'The lit square from above the stalls, bulbs and awnings raking away',
     time: 21.6, weather: 'clear',
-    pos: [-2950, 136.5, -714], target: [-2962, 122.5, -698], fov: 44,
+    pos: [-2951, 132.5, -711], target: [-2961, 122.3, -700], fov: 50,
   },
 
   // --- cities : Galdin Quay ---------------------------------------------
-  // Galdin's square is a raised deck: the paving disc sits at y ~ 0.55 over
-  // ground that reads -0.4, so eye height on it is y ~ 2.3. Same 12 m of open
-  // radius as Lestallum. Anchors: plaza (2330, 2380), stalls on a r 8 ring,
-  // bulbs 4.4 m up.
+  // **Galdin's plaza builds at a height that depends on when it streamed in,
+  // and the corpus and the preview tool disagree by 13.5 m.** `PoiKits._make`
+  // runs at BUILD_R against `Terrain.heightAt`, which reads 12.93 at the pin
+  // before the clipmap has settled there and -0.4 after. Under `framecam.mts`
+  // the deck came up at y ~ 0.55 and four cameras at y ~ 2.3 framed the square
+  // correctly; under `shoot.mts` the same four cameras were UNDER the deck,
+  // looking at its planks from below. `PoiKits.anchorAt('galdin_quay','plaza')`
+  // says 14.01, which agrees with the corpus, so these four are authored at the
+  // anchor's height. Derive a Galdin camera from `anchorAt`, never from
+  // `Terrain.heightAt`, and check it in `shoot.mts` rather than `framecam.mts`.
+  // Same 12 m of open radius as Lestallum; stalls on a r 8 ring, bulbs 4.4 m up.
   galdin_pier_sunset: {
     doc: 'Galdin Quay at golden hour: the square full, warm rim light down the boards',
     time: 18.2, weather: 'clear',
-    pos: [2324, 2.4, 2371], target: [2340, 1.9, 2386], fov: 44,
+    pos: [2324, 15.9, 2371], target: [2340, 15.4, 2386], fov: 44,
   },
   galdin_angelgard: {
     // The sea is NOT in sight of Galdin's square: the ground under the plaza
@@ -964,17 +978,17 @@ const SHOT_TABLE = {
   galdin_restaurant: {
     doc: "Coctura's counter at the Mother of Pearl, the kitchen open behind her",
     time: 12.0, weather: 'clear',
-    pos: [2343, 2.2, 2374], target: [2337, 1.7, 2376.2], fov: 40,
+    pos: [2343, 15.7, 2374], target: [2337, 15.2, 2376.2], fov: 40,
   },
   galdin_pier_fishing: {
     doc: 'Navyth folded over the rail by the ferry bell with his rod',
     time: 17.0, weather: 'clear',
-    pos: [2332, 2.3, 2379], target: [2339.1, 1.7, 2383], fov: 44,
+    pos: [2332, 15.8, 2379], target: [2339.1, 15.2, 2383], fov: 44,
   },
   galdin_night_lanterns: {
     doc: 'The festoon over Galdin after dark, the quay working under warm bulbs',
     time: 21.5, weather: 'clear',
-    pos: [2320, 2.5, 2372], target: [2333, 2.8, 2383], fov: 48,
+    pos: [2320, 16.0, 2372], target: [2333, 16.3, 2383], fov: 48,
   },
 
   // --- combat -----------------------------------------------------------
@@ -1206,9 +1220,14 @@ const SHOT_TABLE = {
     pos: [-106, -51.4, -315], target: [-122, -54.0, -330], fov: 56,
   },
   dungeon_keycatrich_fight: {
-    doc: 'Keycatrich barracks with the garrison still in it — the MTs lane 17 put underground',
-    time: 12.0, dungeon: 'keycatrich',
-    pos: [-102, -46.2, -262], target: [-116, -48.0, -272], fov: 52,
+    // A FIXED camera in a dungeon room comes back empty, and that is not a
+    // framing bug: `Dungeons._arm` spawns on the party and arms a boss when the
+    // party walks into its room, and a shot moves the camera, not the party. So
+    // both dungeon fight shots follow the player and let `Director` stage the
+    // encounter where the party actually stands.
+    doc: 'Keycatrich barracks mid-fight: the garrison lane 17 put underground, in the dark',
+    time: 12.0, dungeon: 'keycatrich', scenario: 'combat', follow: 'player',
+    offset: [4.6, 3.2, 6.4], lookOffset: [0, 1.4, -1.4], fov: 52,
   },
 
   // --- dungeons : Balouve Mines ------------------------------------------
@@ -1235,9 +1254,9 @@ const SHOT_TABLE = {
     pos: [300, -48.5, -298], target: [288, -52.0, -320], fov: 58,
   },
   dungeon_balouve_boss: {
-    doc: 'The Deep with its keeper: the cavern floor from the gallery, the fight in the middle of it',
-    time: 12.0, dungeon: 'balouve',
-    pos: [302, -47.0, -296], target: [288, -52.0, -322], fov: 62,
+    doc: 'The Deep with its keeper: a fight on the floor of forty metres of worked-out cavern',
+    time: 12.0, dungeon: 'balouve', scenario: 'boss_field', follow: 'player',
+    offset: [5.4, 3.6, 7.2], lookOffset: [0, 1.5, -1.8], fov: 58,
   },
 
   // --- dungeons : Fociaugh Hollow ----------------------------------------
