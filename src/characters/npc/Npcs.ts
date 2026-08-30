@@ -358,7 +358,12 @@ export const CITY: RemoteNpc[] = [
   },
   // Navyth on the rail, folded over it, watching water he has been watching
   // for eleven years. `side_legendary_fish` names him and he did not exist.
-  { castKey: 'navyth', at: 'galdin_quay', anchor: 'edge0', off: [-1.6, 0], posture: 'folded', talkRadius: 3.2 },
+  // **Five metres along the rail from the bell, not on it.** At `[-1.6, 0]` he
+  // stood on the `gald_ferrybell` anchor, and a `Talk` is priority 3 against a
+  // `Read` at 0 — so the bell was the one unreachable interactable in the whole
+  // `integration` sweep (1/65, `gald_ferrybell->npc_navyth`). Two verbs on one
+  // spot is one verb.
+  { castKey: 'navyth', at: 'galdin_quay', anchor: 'edge0', off: [-1.0, 5.0], posture: 'folded', talkRadius: 3.2 },
   { castKey: 'traveller', at: 'galdin_quay', key: 'gald_trav', seed: 41, anchor: 'edge1', off: [2.2, -1.4], posture: 'pockets', talkRadius: 2.8 },
 
   { castKey: 'trucker', at: 'galdin_quay', key: 'gald_a', seed: 42, anchor: 'stall1', off: [1.3, 1.8], posture: 'folded' },
