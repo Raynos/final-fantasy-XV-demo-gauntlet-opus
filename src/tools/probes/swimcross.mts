@@ -113,7 +113,7 @@ function step(keys, phase) {
     rec.exited = true;
     rec.exitDepth = +depth.toFixed(2);
   }
-  if (rec.samples % 30 === 0) {
+  if (rec.samples % 120 === 0) {
     rec.track.push([+pos.x.toFixed(1), +pos.y.toFixed(2), +pos.z.toFixed(1),
       +depth.toFixed(2), swim.swimming ? 1 : 0, phase]);
   }

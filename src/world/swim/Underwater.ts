@@ -43,10 +43,28 @@ import type { System } from '../../engine/System.ts';
  * for the frame the state ends.
  */
 
-/** Per-metre extinction of the murk. 1/0.075 = a 13 m e-folding distance. */
+/**
+ * Per-metre extinction of the murk. 1/0.075 = a 13 m e-folding distance.
+ *
+ * The same number the from-below branch in `Water.ts` uses to veil the ceiling,
+ * and it has to be, or the surface fades out at a different rate from
+ * everything under it and reads as a hole in the water.
+ */
 const MURK_DENSITY = 0.075;
-/** Inscattered colour of the water column, before the 1.6 the fog term applies. */
-const MURK_TINT = new THREE.Vector3(0.114, 0.290, 0.322);
+/**
+ * Inscattered colour of the water column, before the 1.6 the fog term applies.
+ *
+ * **Derived from the lake's own shader, not picked.** `Water._makeMaterial` has
+ * `uScatter` at 0x12363c = (0.070, 0.212, 0.235) — "the colour deep water
+ * keeps", the value the body term saturates on — and the from-below branch
+ * paints the ceiling `uScatter * downwelling * 1.55`. At midday `downwelling`
+ * is `uSunColor * sunY * 0.42 + uAmbient * 1.9` ≈ (0.46, 0.50, 0.53), so the
+ * ceiling converges on ≈ (0.05, 0.16, 0.19) * 1.55 ≈ (0.08, 0.25, 0.29). This
+ * is that, rounded. If somebody retunes `uScatter`, retune this with it: the
+ * fog and the underside of the surface meeting at two different colours is a
+ * seam along the whole ceiling.
+ */
+const MURK_TINT = new THREE.Vector3(0.085, 0.250, 0.292);
 /** How deep the tint goes toward black, and over how many metres. */
 const MURK_DEEP = new THREE.Vector3(0.031, 0.094, 0.122);
 const MURK_FALLOFF = 22;

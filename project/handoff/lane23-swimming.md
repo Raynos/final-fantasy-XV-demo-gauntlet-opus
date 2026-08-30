@@ -174,7 +174,28 @@ Nothing has been looked at yet. Written but unseen:
   poses the player in > 1.2 m of water, `Swim` will now engage in that frame and
   pin the party to the bank. Not yet measured. The check is one probe over
   `SHOTS`: `applyShot`, then read `game.get('Swim').depth`.
-- Underwater framings for lane 21 to author into `Shots.ts`: `under_alstor` and
-  `under_vesper`, derived live in `src/tools/probes/nanunder.mts` (seeds
-  −1355,745 and −2940,−2280; the probe finds the deep point itself and reports
-  the resolved pos/target in `_resolved.json`).
+- **Underwater framings for lane 21 to author into `Shots.ts`.** Resolved
+  against the live bake at `f580459` and confirmed genuinely under the surface
+  (the `heightAt + 1.35` shot clamp did not lift either):
+
+  ```
+  under_alstor  pos [-1355, -11.78, 745]    target [-1309, -6.28, 775]   fov 58
+                5.28 m under the level, bed 11.72 m down
+  under_vesper  pos [-2940, -13.50, -2280]  target [-2894, -4.50, -2250] fov 58
+                7.00 m under the level, bed 15.55 m down
+  ```
+
+  Both are `time: 11.5, weather: 'clear'`. Prefer re-deriving them with
+  `src/tools/probes/nanunder.mts` rather than pasting the numbers: the probe
+  walks rings out from a seed until it finds the deep point, so it survives a
+  bake that moves, and it reports where the lens *actually* ended up.
+
+## Harness notes for whoever picks this up
+
+- The queue was 60% of all harness wall-clock during this lifetime
+  (`harnessstats`: 1084 jobs, waited 2226 m, ran 1463 m; prewarm alone 1344 m
+  of wait). **Every commit costs a prewarm**, so batch commits when a capture
+  is queued behind them, and do not launch four probes at once as I did.
+- `framecam --probe src/tools/probes/nanunder.mts` gives the NaN report *and*
+  both pictures from one boot: the probe returns `specs` as well as its report,
+  so `probe.mts` reads the number and `framecam` shoots the same derivation.
