@@ -306,6 +306,44 @@ the mem page boots `?q=ultra`), from 1 246 MB.
 
 ---
 
+# Part D — Content: the 30-minute arc and two city hubs
+
+Added 2026-08-30 at the human's direction, designed from a verified content
+inventory and geographic survey. **The full detail lives in
+`2026-08-30-fable-content-arc.md`** — this section is its anchor in the lane
+structure. Headline evidence: the main story soft-locks at ch3 on an item
+nothing grants (`sword_wise`, with `mainchain`'s probe shim false-passing
+it); the POI `gate:` field has zero consumers so every "chapter-locked" POI
+is already reachable; Hammerhead is the only settlement with any
+interactable (123 POIs have none); dungeons are enterable but enemy-free;
+due south is a 59° arc with zero POIs; 8 royal arms are unobtainable.
+
+- **Lane 16 · Spine + dungeons + wayfinding** — un-soft-lock ch3 (and delete
+  the probe shim), make ch1 require real acts, wire `Layout.encounters`
+  into real dungeon fights via one new `EncounterDirector.spawnAt`, fix the
+  campable-looking-but-inert haven rock 15 m from spawn, map→autodrive,
+  persist discovery fog. Spine goes 12–15 → 50–65 guided minutes.
+- **Lane 17 · Sectors + discovery** — the Old South Road (five POIs filling
+  the 59° void), the Longwythe ascent + adamantoise graveyard (NE void),
+  N/SE/SW/E/W/NW infill, tombs→royal-arms loop (`Tombs.ts` on the Deposits
+  pattern), night road danger (wire the orphaned `nightDanger()`). Every
+  sector ≥30 activity-minutes.
+- **Lane 18 · City hubs** — Lestallum and Galdin Quay: the `_town` kits
+  already build plaza/stalls/lights, so this is verbs and inhabitants —
+  3+2 vendors on existing `TOWN_SHOPS`, both cities' already-authored
+  lodging rows wired, hunt board #2, 29 NPC bodies (Sania and Navyth get
+  bodies at last), 8 city quests, night-lit strings. Perf: `npcdraws` ≤60
+  colour draws per city; resurrect the demoted iris-program dedup iff it
+  forces the budget.
+- **Lane 19 · Content shots** — 32 new corpus shots (142 → 174), five
+  joining `compare.mts` PAIRING against real FFXV plates (Lestallum
+  street/night/overlook, Galdin pier/Angelgard) — the judged set grows with
+  the content. `Shots.ts` has one owner at a time: lane 3 first, then this.
+
+Lane 11's reserve remains for what the playtest finds *beyond* all this;
+its named candidates (Fociaugh's missing mouth, Balouve's missing adit,
+Malacchi's missing pond) stay where they are.
+
 ## Demoted to `project/TASKS.md` — audited out, not lost
 
 Real but serving neither 9 nor the launch: `Wear.ts:873` uuid program key;
@@ -322,18 +360,27 @@ artifact) and the `assertAttributeContract` wiring (already done, 4/4).
 
 ## What this costs
 
-Waves of 4–5 lanes on the shared trunk, one ~3 h/150-turn lifetime each:
-**two to four days of wall-clock** plus human playtest time. Lanes 1–3 may
-respawn from handoff. The opus draft's "one day" was unsupported.
+Waves of 4–5 lanes on the shared trunk, one ~3 h/150-turn lifetime each.
+Parts A–C: **two to four days of wall-clock**; lanes 1–3 may respawn from
+handoff. Part D adds **roughly 10–11 more lane-lifetimes** (arc ≈6, hubs
+≈4–5; sequencing in the content plan) — call it **four to seven days total**
+plus human playtest time. The opus draft's "one day" was unsupported.
 
 ## Definition of done
 
 - [ ] All tasks landed or closed with a measured negative.
-- [ ] `check` green, `nanscan` 0/142, both perf gates certifying.
+- [ ] `check` green, `nanscan` 0 over the full corpus (174 once Part D's
+      shots land), both perf gates certifying, draw peak ≤800 on every shot.
 - [ ] Tab <800 MB, first load ≤25 MB by task 41's instrument, idle <30% of a
       core, median den 18–30 s.
+- [ ] **Part D's own DoD met** (content-arc plan): spine completes ch1→ch5
+      with the probe shim deleted; every sector ≥30 activity-minutes; both
+      city hubs' vendors, lodging, board and 8 quests working end-to-end;
+      all 8 royal arms claimable; dungeons fight back; `longplay` 30 min
+      clean, day and night.
 - [ ] **Round 18 and the post-fix playtests run and published against §1's
-      bars — hesitation ≥30% with ≥2 fooled; fewer than three broken-feel
-      reports — hit or missed, with the numbers.**
+      bars — hesitation ≥30% with ≥2 fooled (the judged set now includes
+      the five city PAIRING rows); fewer than three broken-feel reports —
+      hit or missed, with the numbers.**
 - [ ] This file archives when the lanes and R2/R18 report. No section may be
       added to it.
