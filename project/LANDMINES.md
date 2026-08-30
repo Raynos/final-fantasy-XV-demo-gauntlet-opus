@@ -2477,3 +2477,32 @@ harness, not the game"* after capturing 16 of 47 shots. **A VOID is not a
 failure and not a pass** — it is no evidence, and it must be re-run rather than
 reported either way.
 
+## A fixed `regionstat` rect is not an A/B instrument across `facecheck` runs
+
+`facecheck` stabilises the **face**, not the **heading**. So a rect that reliably
+frames a hero's hair also frames whatever is behind him, and that moves between
+runs. Measured 2026-08-31: **Noctis's hair rect read black hair in one run and
+blown-out sky (p50 185) in the next, with no code change between them.**
+
+Any percentile taken through a fixed rect across two `facecheck` invocations is
+comparing two different populations. Use the same *run* for both arms, or mask
+to the subject, or measure something the background cannot enter.
+
+## Matching one percentile is not matching the distribution
+
+Fitting a hair-fill coefficient to the plate's median produced a frame whose
+median was right and whose **spread was wider** — a flat additive fill
+*widens* a distribution instead of translating it, so the tails miss in opposite
+directions. `ART-DIRECTION` §12.3 gives **five** percentiles per plate for
+exactly this reason, and the statistically best single-number fit was rejected on
+sight because at that value Noctis's black hair reads **grey**.
+
+    fill 0.30   prompto  15 / 89 / 209     noctis  1 / 46 / 149   <- best median fit, reads GREY
+    fill 0.18   prompto   9 / 76 / 206     noctis  0 / 26 / 135   <- landed
+    plate       prompto  22 / 81 / 176     noctis 20 / 37 / 140
+
+**Check the tails before accepting a fit, and look at the frame before accepting
+the tails.** This is the same lesson as the heavy-tailed-field entry above, in
+the opposite direction: there, one extreme value was noise; here, the extremes
+are the whole judgement.
+
