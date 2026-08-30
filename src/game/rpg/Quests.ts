@@ -427,6 +427,24 @@ const QUEST_TABLE: Quest[] = [
     rewards: { gil: 4200, exp: 6000, ap: 15, items: [{ id: 'behemoth_horn', count: 1 }, { id: 'hi_potion', count: 3 }] },
   },
   {
+    /**
+     * The south quarter's bounty, and the reason `king_of_the_flats` is armed
+     * at all. The set piece stands on a dry lake pan two kilometres from any
+     * road, so the reach objective is not a formality: `HuntRuntime` arms the
+     * boss when it lands, which is what stops a bandersnatch announcing itself
+     * across the whole sector while the party is still on Route 20.
+     */
+    id: 'hunt_king_of_the_flats', type: 'hunt', name: 'King of the Flats',
+    region: 'leide', level: 24, rank: 3, tipster: 'longwythe', requires: ['hunt_bloodhorn'],
+    target: 'Bandersnatch', timeOfDay: 'any', setPiece: 'king_of_the_flats',
+    summary: 'Something is eating the garula on the saltgrass, and it is not leaving much.',
+    objectives: [
+      reach('pan', 'saltgrass_pan', 'Cross the Saltgrass Flats to the wreck field', at('saltgrass_flats', 90, -70), 30),
+      kill('king', 'bandersnatch', 1, 'Put down the King of the Flats', at('saltgrass_flats', 90, -70)),
+    ],
+    rewards: { gil: 9000, exp: 12000, ap: 15, items: [{ id: 'bandersnatch_fur', count: 1 }, { id: 'hi_potion', count: 4 }] },
+  },
+  {
     id: 'hunt_magitek_armour', type: 'hunt', name: 'Steel at the Blockade',
     region: 'leide', level: 30, rank: 5, tipster: 'takka', requires: ['hunt_coeurl'],
     target: 'MA-X Cuirass', timeOfDay: 'any', setPiece: 'magitek_armour',
@@ -664,6 +682,44 @@ const QUEST_TABLE: Quest[] = [
       rest('camp', 'Camp at a haven and let Ignis cook'),
     ],
     rewards: { gil: 400, exp: 1800, ap: 15, items: [{ id: 'leiden_pepper', count: 3 }], recipes: ['lasagna_al_forno'] },
+  },
+
+  /* ------------------------------------------ the two empty quarters -- */
+  /*
+   * The south road and the graveyard existed as geometry before they existed
+   * as a reason, and a place with no reason is a place a player drives past.
+   *
+   * **Both are gated on the act, never on the conversation.** Lane 17 measured
+   * the failure these are written against: a boot seed that pre-satisfied an
+   * objective let the interactable sweep's own call into a talk handler close
+   * the quest, close the chapter and pay out unasked. So neither of these
+   * carries a `fetch_` (the one objective type a seeded inventory can satisfy
+   * before the player has done anything) and in both the `talk` is last,
+   * behind two `reach`es and a `kill` that can only tick out in the world.
+   */
+  {
+    id: 'side_old_road', type: 'side', name: 'The Old Road',
+    region: 'leide', level: 12, giver: 'Dave', requires: ['side_dog_tags'],
+    summary: 'A hunter drove south off the spine two weeks ago and the road down there does not go anywhere.',
+    objectives: [
+      reach('stones', 'threshold_stones', 'Find the Threshold Stones on the pilgrim road', at('threshold_stones'), 34),
+      kill('tusks', 'sabertusk', 6, 'Clear the pack working the verge', at('threshold_stones', 60, 120)),
+      reach('end', 'old_kingsroad_end', 'Follow the road to where it gives up', at('old_kingsroad_end'), 26),
+      talk('dave', 'dave', 'Tell Dave what is at the end of it', at('longwythe_rest')),
+    ],
+    rewards: { gil: 2400, exp: 3400, ap: 15, items: [{ id: 'debased_banknote', count: 3 }, { id: 'hi_potion', count: 3 }] },
+  },
+  {
+    id: 'side_the_graveyard', type: 'side', name: 'Where the Mountains Go to Die',
+    region: 'leide', level: 26, giver: 'Takka', requires: ['side_meat_magnificent'],
+    summary: 'Takka has heard there are bones up past Longwythe the size of a diner. He would like that settled.',
+    objectives: [
+      reach('overlook', 'peak_overlook', 'Take the trail up to the Northwatch Overlook', at('peak_overlook'), 34),
+      kill('cats', 'coeurl', 3, 'Clear the coeurls off the crag road', at('peak_overlook', 90, -60)),
+      reach('bones', 'adamantoise_graveyard', 'Walk in under the ribs', at('adamantoise_graveyard'), 44),
+      talk('takka', 'takka', 'Tell Takka what you found up there', at('hammerhead')),
+    ],
+    rewards: { gil: 5200, exp: 9000, ap: 15, items: [{ id: 'adamantite', count: 1 }, { id: 'rare_coin', count: 1 }] },
   },
 
   /* ---------------------------------------------------------- the cities -- */
