@@ -18,9 +18,18 @@
  * `computeSmoothNormals` accumulates and exactly what THREE culls on.
  */
 const g = window.GAME;
-const ch = g.get('Player').character;
+// Every hero, not only the player. The winding defect these builders carried
+// was in `Geo.ts`'s shared `sweepTube`/`blob`, so it was identical on all four
+// — but "identical" is a claim, and this is the four rows that prove it.
+const party = g.get('Party');
+const chars = [g.get('Player').character];
+for (const m of (party && party.members) || []) {
+  const c = m && (m.character || (m.actor && m.actor.character));
+  if (c && c.root && !chars.includes(c)) chars.push(c);
+}
 const meshes = [];
-ch.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) meshes.push(o); });
+for (const ch2 of chars) ch2.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) meshes.push(o); });
+const ch = chars[0];
 const L = [];
 for (const fm of meshes) {
   const pos = fm.geometry.attributes.position, nr = fm.geometry.attributes.normal;

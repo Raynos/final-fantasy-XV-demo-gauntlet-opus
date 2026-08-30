@@ -208,6 +208,10 @@ export class Character {
       gp.position.x += sg * eyes.cx;
       rig.byName.head.add(gp);
       const eyeMesh = new THREE.Mesh(eyes.geometry, this.eyeMat);
+      // Named, because an unnamed mesh is invisible to every per-mesh sweep in
+      // the harness: `facewind.mts` printed two anonymous `-` rows carrying a
+      // negative signed volume for months and nobody could tell whose they were.
+      eyeMesh.name = `${this.name}_eye${sg > 0 ? 'L' : 'R'}`;
       eyeMesh.castShadow = false;
       eyeMesh.frustumCulled = false;
       gp.add(eyeMesh);

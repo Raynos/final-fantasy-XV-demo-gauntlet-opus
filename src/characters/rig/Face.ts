@@ -1328,7 +1328,7 @@ function buildLid(B: MeshBuilder, o: LidOpts) {
       cr.push(rw);
     }
     for (let v = 0; v < 5; v++) {
-      for (let u = 0; u < 7; u++) B.quad(cr[v][u], cr[v][u + 1], cr[v + 1][u + 1], cr[v + 1][u]);
+      for (let u = 0; u < 7; u++) B.quad(cr[v][u], cr[v + 1][u], cr[v + 1][u + 1], cr[v][u + 1]);
     }
     B.color(0xffffff).mat(0.5, 0, 0);
   }
@@ -1401,7 +1401,11 @@ export function buildEyes(rig: Rig, look: Look) {
       rows.push(row);
     }
     for (let v = 0; v < segV; v++) {
-      for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v][u + 1], rows[v + 1][u + 1], rows[v + 1][u]);
+      // wound OUTWARD. The globe is a polar sphere about +Z, and the naive
+      // (u, u+1, v+1) order gives MINUS the radial normal — both eyes were
+      // inside-out and only survived because a sphere's silhouette is the same
+      // either way round. `probes/facewind.mts` reads the signed volume.
+      for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v + 1][u], rows[v + 1][u + 1], rows[v][u + 1]);
     }
   }
   return { geometry: B.build(), cx: cx0 };

@@ -404,7 +404,12 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
     shell.push(row);
   }
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) B.quad(shell[r][c], shell[r][c + 1], shell[r + 1][c + 1], shell[r + 1][c]);
+    // wound OUTWARD, checked against each vertex's own `aGroom` (the sculpted
+    // skull normal under the shell) by `probes/geowind.mts` — it read 0.3%
+    // outward before this order was swapped. `DoubleSide` hid it in the beauty
+    // pass, but `shadowSide = BackSide` meant the scalp cast its shadow from
+    // the wrong surface.
+    for (let c = 0; c < cols; c++) B.quad(shell[r][c], shell[r + 1][c], shell[r + 1][c + 1], shell[r][c + 1]);
   }
 
   // ---- lie the hair on the head ------------------------------------------

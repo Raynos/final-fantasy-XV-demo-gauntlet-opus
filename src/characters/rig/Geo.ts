@@ -453,7 +453,13 @@ export function sweepTube(B: MeshBuilder, o: SweepTubeOpts) {
     for (let j = 0; j < seg; j++) {
       const j2 = (j + 1) % cols;
       if (!closed && j + 1 >= cols) break;
-      B.quad(A[j], A[j2], C[j2], C[j]);
+      // wound OUTWARD: the ring frame is right-handed as (_r, _f, tan) and the
+      // ring runs (sin th, cos th) — clockwise in it — so the naive
+      // (A[j], A[j2], C[j2], C[j]) order gives a geometric normal of MINUS the
+      // radial direction, i.e. every sweep in this file faced into itself. See
+      // `Sculpt.ts`'s copy of this loop, which has always had it right, and
+      // `probes/geowind.mts`, which measures it per primitive.
+      B.quad(A[j], C[j], C[j2], A[j2]);
     }
   }
 
@@ -497,11 +503,11 @@ export function sweepTube(B: MeshBuilder, o: SweepTubeOpts) {
       const A = domeRows[k], C = domeRows[k + 1];
       for (let j = 0; j < seg; j++) {
         const j2 = (j + 1) % cols;
-        B.quad(A[j2], A[j], C[j], C[j2]);
+        B.quad(A[j2], C[j2], C[j], A[j]);
       }
     }
     const last = domeRows[domeRows.length - 1];
-    for (let j = 0; j < seg; j++) B.tri(last[(j + 1) % cols], last[j], tip);
+    for (let j = 0; j < seg; j++) B.tri(last[j], last[(j + 1) % cols], tip);
   }
 
   // Dome the *far* end. Every sweep in this codebase used to stop dead, leaving
@@ -552,11 +558,11 @@ export function sweepTube(B: MeshBuilder, o: SweepTubeOpts) {
       const A = domeRows[k], C = domeRows[k + 1];
       for (let j = 0; j < seg; j++) {
         const j2 = (j + 1) % cols;
-        B.quad(A[j], A[j2], C[j2], C[j]);
+        B.quad(A[j], C[j], C[j2], A[j2]);
       }
     }
     const last = domeRows[domeRows.length - 1];
-    for (let j = 0; j < seg; j++) B.tri(last[j], last[(j + 1) % cols], tip);
+    for (let j = 0; j < seg; j++) B.tri(last[(j + 1) % cols], last[j], tip);
   }
   return rings;
 }
@@ -589,13 +595,13 @@ export function sweepShell(B: MeshBuilder, o: SweepShellOpts) {
   }
   // rim along both open edges
   for (let i = 0; i < steps; i++) {
-    B.quad(outer[i][0], inner[i][0], inner[i + 1][0], outer[i + 1][0]);
-    B.quad(inner[i][cols - 1], outer[i][cols - 1], outer[i + 1][cols - 1], inner[i + 1][cols - 1]);
+    B.quad(outer[i][0], outer[i + 1][0], inner[i + 1][0], inner[i][0]);
+    B.quad(inner[i][cols - 1], inner[i + 1][cols - 1], outer[i + 1][cols - 1], outer[i][cols - 1]);
   }
   // caps at the sweep ends
   for (let j = 0; j < cols - 1; j++) {
-    B.quad(inner[0][j], outer[0][j], outer[0][j + 1], inner[0][j + 1]);
-    B.quad(outer[steps][j], inner[steps][j], inner[steps][j + 1], outer[steps][j + 1]);
+    B.quad(inner[0][j], inner[0][j + 1], outer[0][j + 1], outer[0][j]);
+    B.quad(outer[steps][j], outer[steps][j + 1], inner[steps][j + 1], inner[steps][j]);
   }
   return { outer, inner };
 }
@@ -765,7 +771,7 @@ export function roundedBox(B: MeshBuilder, o: RoundedBoxOpts) {
     }
     grid.push(rows);
     for (let i = 0; i < seg; i++) {
-      for (let j = 0; j < seg; j++) B.quad(rows[i][j], rows[i][j + 1], rows[i + 1][j + 1], rows[i + 1][j]);
+      for (let j = 0; j < seg; j++) B.quad(rows[i][j], rows[i + 1][j], rows[i + 1][j + 1], rows[i][j + 1]);
     }
   }
   return grid;
@@ -840,7 +846,7 @@ export function blob(B: MeshBuilder, o: BlobOpts) {
     rows.push(row);
   }
   for (let v = 0; v < segV; v++) {
-    for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v][u + 1], rows[v + 1][u + 1], rows[v + 1][u]);
+    for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v + 1][u], rows[v + 1][u + 1], rows[v][u + 1]);
   }
   return rows;
 }
