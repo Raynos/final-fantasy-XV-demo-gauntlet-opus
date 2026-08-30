@@ -104,6 +104,10 @@ export const NODES: NodeTable = {
   j_daurell: [1560, 1180],
   n_keycatrich: [236, -1150],
   n_longwythe_peak: [905, -800],
+  // Route 9 carried on north past the ruined town: the Mencemoor, which had
+  // nothing on it and no way to reach it. The shaping points swing east of the
+  // `keycatrichRim` mesa (300,-1740, r 290, h 156) rather than over it.
+  n_northwatch: [280, -2340],
 
   // --- The Old South Road (route20) and the Longwythe ascent (route21).
   //     Due south of Hammerhead was a 59-degree arc of the compass with no
@@ -245,8 +249,14 @@ export const ROUTES: RouteSpec[] = [
   },
   {
     id: 'route9', name: 'Keycatrich Track', cls: 'track',
-    doc: 'North off the highway to the ruined town and the trench.',
-    path: ['j_keycatrich', [480, -380], [360, -780], 'n_keycatrich'],
+    doc: 'North off the highway to the ruined town and the trench, and on -- '
+      + 'since the Mencemoor pass -- another 1.5 km over the moor to the '
+      + 'obelisk field. The town was the end of the road and the whole of the '
+      + 'north sector past it was unreachable and empty.',
+    path: [
+      'j_keycatrich', [480, -380], [360, -780], 'n_keycatrich',
+      [620, -1500], [680, -1900], [520, -2200], 'n_northwatch',
+    ],
   },
   {
     id: 'route10', name: 'Longwythe Peak Track', cls: 'track',

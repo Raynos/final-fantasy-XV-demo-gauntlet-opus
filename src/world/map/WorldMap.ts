@@ -421,6 +421,8 @@ export const POIS: PoiSpec[] = [
     does: 'Camp on the shelf below the peak. The first haven the player ever sees.' },
   { id: 'galdin_junction', name: 'Saulhend Pass', type: 'parking', zone: 'longwythe', at: 'j_galdin', r: 52, lv: 4,
     does: 'Where Route 1 forks south for the coast. Signposts, a bus shelter, a vending machine.' },
+  { id: 'saulhend_overlook', name: 'The Saulhend Overlook', type: 'landmark', zone: 'kelbass', x: 2200, z: 400, r: 300, lv: 15,
+    does: 'The shoulder above the Galdin fork. Half of eastern Leide, and the sea beyond it.' },
 
   // ---- The Old South Road (route20) -----------------------------------
   // Due south of the spine was a 59-degree arc of the compass containing
@@ -450,6 +452,9 @@ export const POIS: PoiSpec[] = [
     does: 'Where the great turtles go. Ribcage arches you can walk under, and one shell you could park in.' },
   { id: 'three_valleys', name: 'The Three Valleys', type: 'landmark', zone: 'three_valleys', x: 1320, z: 1000, r: 460, lv: 6,
     does: 'Three parallel dry washes between hogbacks. The first real ambush ground.' },
+  // The south-east had the Three Valleys and Galdin and nothing between them.
+  { id: 'washes_lookout', name: 'The Washes Lookout', type: 'landmark', zone: 'three_valleys', x: 700, z: 650, r: 260, lv: 6,
+    does: 'A low bluff over the head of the first wash. You can see the whole ambush from here.' },
   { id: 'three_valleys_haven', name: 'Merrioth Haven', type: 'haven', zone: 'three_valleys', x: 1050, z: 1140, r: 55, travel: true, lv: 9,
     does: 'Camp on a rock shelf between the second and third valley.' },
   { id: 'daurell_parking', name: 'Schier Heights Parking', type: 'parking', zone: 'three_valleys', at: 'n_daurell', r: 48, travel: true, lv: 35,
@@ -506,6 +511,20 @@ export const POIS: PoiSpec[] = [
     does: 'Post-game endless descent.' },
   { id: 'keycatrich_haven', name: 'Entethina Haven', type: 'haven', zone: 'keycatrich', x: 430, z: -1270, r: 55, travel: true, lv: 10,
     does: 'Camp on the rim above the ruined town.' },
+
+  // ---- The Mencemoor: the north sector past the ruined town --------------
+  // Route 9 used to stop at Keycatrich and everything north of it was empty
+  // ground you had no reason to walk into. The obelisks are the reason, the
+  // parking is the turning circle Route 9's new terminal needs, and the
+  // garrison is what the empire put on the only road onto the moor.
+  { id: 'mencemoor_parking', name: 'Mencemoor Head', type: 'parking', zone: 'keycatrich', at: 'n_northwatch', r: 46, travel: true, lv: 20,
+    does: 'Turning circle at the top of the Keycatrich track, on the moor edge.' },
+  { id: 'mencemoor_obelisks', name: 'The Mencemoor Obelisks', type: 'landmark', zone: 'keycatrich', x: 300, z: -2400, r: 300, lv: 20,
+    does: 'Twelve black stones in a ring on open moor. Nobody agrees who cut them.' },
+  { id: 'moor_haven', name: 'Mencemoor Haven', type: 'haven', zone: 'keycatrich', x: 520, z: -2700, r: 55, travel: true, lv: 22,
+    does: 'Camp in the lee of a peat bank. The obelisks are on the skyline.' },
+  { id: 'northwatch_ruin', name: 'Northwatch Garrison', type: 'imperial', zone: 'keycatrich', x: 150, z: -3100, r: 170, lv: 26,
+    does: 'A blockhouse and two towers covering the north end of the moor.' },
 
   // ============================== DUSCAE =============================
   { id: 'prairie_outpost', name: 'Prairie Outpost', type: 'outpost', zone: 'fallgrove', at: 'n_prairie', r: 160, travel: true, lv: 10,

@@ -251,7 +251,11 @@ export const TERRITORIES: Territory[] = [
   T({
     id: 'night_giant', name: 'The Pride of the King', at: near('costlemark', 150, 130), radius: 30,
     when: 'night', level: 46, danger: 5, faction: 'daemon',
-    nightDepth: 0.55,                 // only in the small hours
+    // 0.55 was "only in the small hours" and in practice meant "only if you
+    // camp badly": `nightDepth` peaks around 1 and 0.55 is a window a player
+    // driving through a normal evening never opens. 0.4 keeps it a late-night
+    // beast and lets a player who chose to be out after dark actually meet it.
+    nightDepth: 0.4,
     spawn: [{ key: 'irongiant', count: [1, 1] }],
     respawn: 600,
   }),
@@ -261,6 +265,92 @@ export const TERRITORIES: Territory[] = [
     nightDepth: 0.7,
     spawn: [{ key: 'redgiant', count: [1, 1] }],
     respawn: 900,
+  }),
+
+  /* ---- the Old South Road, the Mencemoor and the crag ---------------- */
+  // Nine new rows, and they are the whole of the encounter content in four
+  // sectors that had none. The south quarter, the Mencemoor, the peak's east
+  // apron and the bone country beyond it were empty of enemies as well as of
+  // places, so a player who drove into them found silence -- which reads as
+  // the world ending rather than as a quiet stretch.
+  T({
+    id: 'southroad_tusks', name: 'The Old South Road', at: near('threshold_stones', 60, 120), radius: 30,
+    when: 'day', level: 8, danger: 1,
+    spawn: [{ key: 'sabertusk', count: [3, 5] }],
+    patrolRadius: 22, respawn: 160,
+  }),
+  T({
+    // Passive: the flats are a grazing ground, and the danger on them is the
+    // thing that hunts the graze -- `king_of_the_flats`, armed by a rank-3
+    // hunt. A player who wanders in without the bounty gets a herd and a view.
+    id: 'saltflat_graze', name: 'The Saltgrass Flats', at: near('saltgrass_flats', -90, 70), radius: 42,
+    when: 'any', level: 12, danger: 0, passive: true,
+    spawn: [{ key: 'garula', count: [2, 4] }, { key: 'anak', count: [0, 2], level: 9 }],
+    patrolRadius: 34, respawn: 300,
+  }),
+  T({
+    id: 'peak_coeurls', name: "The Northwatch Overlook", at: near('peak_overlook', 90, -60), radius: 34,
+    when: 'any', level: 24, danger: 3,
+    spawn: [{ key: 'coeurl', count: [1, 2] }],
+    patrolRadius: 28, respawn: 240,
+  }),
+  T({
+    id: 'graveyard_watch', name: 'The Adamantoise Graveyard', at: near('adamantoise_graveyard', 120, -90), radius: 46,
+    when: 'night', level: 30, danger: 4, faction: 'daemon',
+    spawn: [{ key: 'bussemand', count: [2, 3] }, { key: 'hobgoblin', count: [0, 3], level: 24 }],
+    respawn: 260, maxEngaged: 3,
+  }),
+  T({
+    id: 'moor_watch', name: 'The Mencemoor Obelisks', at: near('mencemoor_obelisks', -80, 110), radius: 36,
+    when: 'any', level: 20, danger: 2,
+    spawn: [{ key: 'voretooth', count: [3, 4] }],
+    patrolRadius: 28, respawn: 200,
+  }),
+  T({
+    id: 'northwatch_garrison', name: 'Northwatch Garrison', at: near('northwatch_ruin', 60, 80), radius: 40,
+    when: 'any', level: 26, danger: 3, faction: 'imperial',
+    spawn: [{ key: 'mt', count: [3, 5] }, { key: 'axeman', count: [1, 2], level: 24 }],
+    patrolRadius: 24, respawn: 320, maxEngaged: 3,
+  }),
+  T({
+    id: 'wash_pack', name: 'The Washes Lookout', at: near('washes_lookout', 70, 90), radius: 30,
+    when: 'day', level: 8, danger: 1,
+    spawn: [{ key: 'sabertusk', count: [2, 4] }, { key: 'voretooth', count: [0, 2], level: 10 }],
+    patrolRadius: 22, respawn: 180,
+  }),
+
+  /* ---- the south-west: three rows, no geometry ------------------------ */
+  // The Fallgrove/Alstor quarter already has places; what it had no reason to
+  // stop in was the ground between them.
+  T({
+    id: 'prairie_verge', name: 'The Prairie Verge', at: near('prairie_outpost', 150, 180), radius: 34,
+    when: 'day', level: 12, danger: 2,
+    spawn: [{ key: 'dualhorn', count: [1, 2] }, { key: 'sabertusk', count: [2, 4], level: 9 }],
+    patrolRadius: 26, respawn: 220,
+  }),
+  T({
+    // Guards the Neeglyss Pond fishing spot: a fishing hole you can walk to
+    // unopposed is scenery with a minigame on it.
+    id: 'slough_shallows', name: 'The Alstor Shallows', at: near('alstor_dock', -70, 90), radius: 32,
+    when: 'any', level: 18, danger: 3,
+    spawn: [{ key: 'arachne', count: [1, 2] }, { key: 'voretooth', count: [1, 3], level: 15 }],
+    patrolRadius: 22, respawn: 240,
+  }),
+  T({
+    id: 'fallgrove_dark', name: 'The Fallgrove After Dark', at: near('fallgrove_haven', -180, 210), radius: 38,
+    when: 'night', level: 24, danger: 4, faction: 'daemon',
+    spawn: [{ key: 'hobgoblin', count: [2, 4] }, { key: 'goblin', count: [2, 4], level: 18 }],
+    respawn: 240, maxEngaged: 3,
+  }),
+
+  /* ---- the west: Saxham after dark ----------------------------------- */
+  T({
+    // The ghost town is a `dualhorn_pair` grazing ground by day and was
+    // nothing at all by night, which is the wrong way round for a ghost town.
+    id: 'night_saxham', name: 'Saxham Outpost', at: near('saxham', -110, 60), radius: 36,
+    when: 'night', level: 20, danger: 3, faction: 'daemon',
+    spawn: [{ key: 'goblin', count: [3, 5] }, { key: 'hobgoblin', count: [1, 2], level: 22 }],
+    respawn: 220, maxEngaged: 3,
   }),
 ];
 
@@ -376,6 +466,17 @@ export const SET_PIECES: Record<string, SetPiece> = {
    * needs *every* chapter quest done before the next one opens. The story
    * stopped here.
    */
+  /**
+   * The Saltgrass Flats' resident. The south quarter's one boss fight, on a dry
+   * lake pan with a wreck field for cover and nothing else within 2 km -- which
+   * is the whole reason it is *there* rather than beside a road.
+   */
+  king_of_the_flats: {
+    id: 'king_of_the_flats', name: 'King of the Flats', kind: 'field',
+    at: near('saltgrass_flats', 90, -70), radius: 42, level: 24, boss: 'bandersnatch',
+    adds: [{ key: 'sabertusk', count: 3, level: 16 }],
+    music: 'boss-field',
+  },
   deadeye: {
     id: 'deadeye', name: 'Deadeye', kind: 'field',
     at: near('nebulawood'), radius: 46, level: 28, boss: 'deadeye',
