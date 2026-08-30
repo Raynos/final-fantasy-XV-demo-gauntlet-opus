@@ -385,3 +385,63 @@ with the respawned lane, not backlog, and are deliberately not listed here.*
   this must first convert the spec into the instrument's units — see the
   LANDMINES entry. `lane5`
 
+
+## From lane 16 (gates), 2026-08-31
+
+- **The `prewarm` queue is not superseding, and it is why nothing gets a page
+  tonight.** `daemon.mts`'s `prewarm()` docstring says "newest sha wins — a
+  second commit supersedes the first rather than queueing two boots". The code
+  did not: `prewarming` is set at submit and cleared in the job's `finally`, so
+  it only ever rejected a duplicate request for the *same* sha, while a request
+  for a new sha queued a second boot behind the first. With eight lanes and a
+  `post-commit` hook firing one per commit, the queue grows faster than four
+  workers drain it. Measured at 01:0x: **sweep depth 55, of which 54 were
+  prewarm**, `queuedSec 86663` against `ranSec 16072` (84% queue), RSS 10.2 GB,
+  and `preparePage` timing out at 300 s — which killed both arms of lane 16's
+  driftcheck A/B and, per lane 1's commit message, its `--dirty` ablation too.
+  **Fixed in `src/tools/daemon.mts` (supersede at the front of the queue), but
+  the RUNNING daemon still has the old code.** It needs `node
+  src/tools/daemon.mts --stop`; the next tool call restarts it with the fix and
+  the 54 stale prewarms go with it. That closes every leased page, so it is the
+  coordinator's call, not a lane's. `harness`
+- **The shared bake cache is whatever sha was materialised last, not HEAD.**
+  `bakecheck.mts`'s first run found `terrain.bin.gz` stamped from `c898bb4e`'s
+  sources and `tex.bin.gz` from `3187d788`'s while HEAD was `4a6c840`
+  (`src/tools/_probe/bakeorigin.mts` names the commit). `src/public/baked/` is
+  symlinked into every materialised tree, so each `--build <sha>` build re-bakes
+  the SHARED artifacts from that sha's sources. Every lane is capturing against
+  some other lane's terrain. Not fixable without per-branch bakes (33 MB and
+  ~40 s each); made honest instead — `announceBuild` now warns on any `--build
+  <ref>` whose bake is not that tree's. `harness`
+- **`texc.bin.gz` and `geo.bin.gz` have been absent all night**, ~3.7 s of cold
+  boot per load, and every boot number and first-load figure taken tonight was
+  taken without them. `pnpm run build:full` before the final measurements.
+  `bakecheck` is red until then, which is the gate working. `harness`
+
+### NaN sweep (plan task 48) — `node src/tools/nansweep.mts`
+
+113 unguarded GLSL call sites, 9 HIGH. Triaged by hand; two of the three
+`normalize(cross(...))` hits are false positives (the anti-parallel ternary
+idiom, documented in the tool). **Seven real ones, and six of them are the same
+shape**: a gaussian written `exp(-pow(x, 2.0))` where `x` is a *difference*.
+`pow(x, y)` is undefined for `x < 0` in every GLSL spec, **for every exponent,
+integral or not** — this is precisely the trail-ribbon `pow(vUv.x, k)` bug in a
+costume that reads as "squared". The fix is `x * x`, which is defined everywhere
+and cheaper. Drivers commonly return the right answer anyway, which is why
+`nanscan` reports 0 of 142 shots and why this is a latent defect rather than a
+visible one.
+
+| file:line | expression | owner |
+|---|---|---|
+| `src/engine/postfx/SsrPass.ts:75` | `vec3 N = normalize(cross(dy, dx));` — `dx`/`dy` are depth-reconstructed world deltas; on a depth plateau or at a range where two adjacent texels resolve to one world point they are parallel or zero, `cross` is `vec3(0)`, and `normalize` is `0/0`. **The two guards below it do not catch it**: `N.y < 0.0` and `N.y < 0.86` are both FALSE for NaN, so the pass falls through and reflects using a NaN normal, in a post pass, where it smears. This is the one worth fixing first. | postfx |
+| `src/world/terrain/TerrainMaterial.ts:1837` | `exp(-pow((la - 1.85) / 0.75, 2.0))` | terrain |
+| `src/world/terrain/TerrainMaterial.ts:1877` | `exp(-pow((abs(roadLat) - 1.85) / 0.70, 2.0))` | terrain |
+| `src/world/weather/Rain.ts:210` | `exp(-pow((r - 0.82) / (0.16 + 0.22 * vLife), 2.0))` — `r = length(vUv*2-1)`, so the base is negative over most of the quad | weather |
+| `src/engine/postfx/BloomPass.ts:299` | `exp(-pow((r - 0.055) * 50.0, 2.0))` | postfx |
+| `src/characters/rig/Materials.ts:374` | `exp(-pow((q - 0.30) / 0.10, 2.0))` | characters |
+
+Checked and **safe**, recorded so nobody re-triages them: `VolumePass.ts:132`'s
+`pow(1.0 + g*g - 2*g*cosT, 1.5)` has a minimum of `(1-g)^2 = 0.1444` at `g =
+0.62`; `CrystalShards.ts:280-284` and `sky.glsl.ts:116-117` both guard their
+cross with the anti-parallel ternary; every `pow(1.0 - clamp(...), k)` Fresnel
+term is in `[0,1]` by construction.
