@@ -2454,3 +2454,26 @@ actually see.** A corpus shot that cannot see its subject will produce a stable,
 reproducible, entirely honest verdict about nothing — and this one had been
 doing so for the life of the judged set.
 
+## A queued job measures the sha it had when it was QUEUED, not when it ran
+
+Observed 2026-08-31 on a busy wave: a `drawcheck` sat 1803 s in the sweep queue,
+ran for 49 s, and announced `sha:36a2ba52d2b4` — **where HEAD stood when it was
+submitted, eight commits earlier.** Its report reads as current. Nothing in the
+output says "this number is half an hour old".
+
+On a fast-moving shared trunk that is a silent staleness of exactly the queue
+depth. The 30-minute queue times this project hit on a ten-lane wave therefore
+translate directly into 30-minute-old verdicts presented as fresh ones — and the
+`[harness] sha:` line is the *only* place the truth appears, which is why it must
+never be grepped away.
+
+**Read the announce line on every queued result, and compare it to `git rev-parse
+HEAD` before you believe a verdict.** Same discipline as `--build` pinning code
+but not content: the harness is honest about what it measured, in one line, and
+the line is easy to lose.
+
+The same run also VOIDed with *"daemon socket idle for 2700 s — this is the
+harness, not the game"* after capturing 16 of 47 shots. **A VOID is not a
+failure and not a pass** — it is no evidence, and it must be re-run rather than
+reported either way.
+
