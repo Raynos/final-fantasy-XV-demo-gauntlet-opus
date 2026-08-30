@@ -221,9 +221,33 @@ export class GroundFX {
   /**
    * Expanding shockwave ring on the ground.
    * @param o {pos, terrain, radius, color, life, t0, thickness, intensity}
+   *
+   * **`intensity` and `opacity` default low on purpose.** They used to be 3.2
+   * and 1.0, and `PATCH_FRAG` draws a ring's crest as
+   * `mix(uColor, vec3(1.0), hot * 0.75) * uIntensity` over **additive**
+   * blending — so a crest already 75% white was then multiplied past 3, which
+   * on any ground brighter than mud clips to 255 and paints a hole in the
+   * frame rather than a shockwave through it.
+   *
+   * Measured, not guessed (`probes/groundbloom.mts`, five posed arms off one
+   * page, `imgdiff` against the clean plate): the warp-strike landing ring at
+   * the old defaults came out **mean 8.76/255, max 255 over 17.7% of the
+   * frame**, and the parry ring **9.91/255, max 255 over 21.8%** — a fifth of
+   * a daylight frame clipped to flat white by one effect. Looked at, it is not
+   * a wave at all: a thick opaque lump of paint-white with a lumpy outline and
+   * a filled centre, sitting on the badlands with no terrain visible through
+   * it. At 1.35/0.6 the same call is a pale blue-white ring you can read the
+   * ground through, and it reads as a shockwave.
+   *
+   * The defaults are the right place for this rather than the call sites,
+   * because the split runs exactly along "did anyone choose?": the four calls
+   * in `CombatSystem` — stagger, warp landing, parry, phase — pass **neither**
+   * number and take whatever is here, while every call that was tuned by hand
+   * (`VFX.impact` at 2.4/0.7, `VFX.shockwave` at 3.4/1, the warp pool at
+   * 0.55/0.4) passes its own and is untouched by this.
    */
   ring({ pos, terrain, radius = 4, color = 0x9fd8ff, life = 0.75, thickness = 0.09,
-    intensity = 3.2, opacity = 1, age = 0 }: RingOpts) {
+    intensity = 1.35, opacity = 0.6, age = 0 }: RingOpts) {
     const p = this._take('rings');
     p.place(pos, radius * 2.2, terrain, 0.08);
     p.uniforms.uRing.value = 1;
