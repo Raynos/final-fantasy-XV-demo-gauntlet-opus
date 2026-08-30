@@ -396,3 +396,35 @@ buys that. It is a `buildHead` / `brushes()` job.
   approximation and is untried.
 - **`facecheck --hide <substr>` exists now** (`e0b5211`) and is how any of this
   was measurable at all, because `--dirty` does not come back on this trunk.
+
+### coverageAA — verified by eye
+
+`tmp/shots/lane1r-fc0/pr_edge.png` against `lane1r-fc1/pr_edge.png` (the same
+120x80 px of Prompto's hair silhouette against sky, 8x nearest-neighbour).
+Before: every strand boundary is a blocky staircase and the silhouette against
+the sky is a hard binary step. After: the same strands have graded edges and
+the silhouette ramps. The mechanism landed and it is visible.
+
+### Still pending when I stopped — DO THIS FIRST
+
+`b31cb87` (the aniso retune: exp1 110 -> 45, exp2 20 -> 9, spec 0.55 -> 0.46,
+shift 0.30 -> 0.25, rim 0.30 -> 0.20) **has not been looked at or measured.**
+The harness was at 61% queue time and the run never came back. Do exactly this:
+
+```
+node src/tools/facecheck.mts --only prompto,noctis --shots tmp/shots/l1-fc5
+node src/tools/regionstat.mts tmp/shots/l1-fc5/prompto_facecheck.png 0.44 0.02 0.62 0.22 --label prompto-hair
+node src/tools/regionstat.mts tmp/shots/l1-fc5/noctis_facecheck.png  0.44 0.02 0.62 0.22 --label noctis-hair
+node src/tools/crop.mts tmp/shots/l1-fc5/noctis_facecheck.png /tmp/n.png 430 0 380 260 3
+```
+
+Keep it if Prompto's `Y p99.5` comes down from **227** toward the plate's
+**176** and a band is visible on the crown of the crop; **revert `b31cb87`** if
+p99.5 does not move or the crown goes flatter than it already is. Noctis'
+`p50 Y 0` is not expected to move — that is the self-occlusion residue and no
+exponent fixes it.
+
+Also un-run: `probe.mts probes/nanscan.mts` and one `--cold` capture after the
+shader edits (both queued, neither returned). The shader change is a numeric
+retune of an existing block plus one `<alphatest_fragment>` replacement, so a
+link failure is unlikely, but the discipline says prove it.
