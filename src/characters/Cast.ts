@@ -449,12 +449,33 @@ export const CAST = {
         ],
       },
       outfit: [
+        // **Value, not garment construction.** Measured on `party_formation`
+        // (Ignis stands 4.4 m from the lens at slot [1.85, -1.45]): every
+        // constant he wore was within 8.6/255 of luma of every other —
+        // jacket/skirt/sleeve 0x25242c (Y 37), boots 0x2b2827 (41), pants
+        // 0x2e2b2c (44), shirt 0x2e2c2c (44), belt 0x2e2c38 (45). At that range
+        // the seam/wear/mottle break-up in `clothShade` is sub-pixel, so eight
+        // garments with no value between them composite to one black column,
+        // which is exactly how he read. He is also the only hero with no skin
+        // below the jaw (sleeve `u1: 0.92` plus full gloves), so the silhouette
+        // cannot do the separating either.
+        //
+        // The split is put where the AREA is — the coat against the trousers,
+        // not the shirt against the coat, which is barely visible through a
+        // zipped front. Coat/skirt/sleeve go to 0x3d3b46 (Y 60), the lightest
+        // coat in the party (Gladiolus 46, Prompto 45, Noctis 42), which is
+        // also the right read for him: he is the one who dresses grey. Trousers
+        // drop to 0x27262b (Y 39) and the belt to 0x1f1e24 (Y 31), so the
+        // largest two regions are 21/255 apart and the waist reads as a break
+        // rather than a continuation. Cuff and collar keep their accents but
+        // invert against the new panel: the cuff darkens to 0x24232b so it is
+        // still a band, the collar lifts to 0x4b4857.
         { type: 'shirt', color: 0x2e2c2c, rough: 0.94, u0: 0.32, u1: 0.99, pad: 0.010, neckCut: 0.22 },
-        { type: 'pants', color: 0x2e2b2c, rough: 0.88, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.020 },
-        { type: 'jacket', color: 0x25242c, rough: 0.62, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarGap: 0.16, zip: true, zipAt: 0.34, epaulettes: true, epauletteTh: 1.22, studColor: 0x8d9098 },
-        { type: 'skirt', color: 0x25242c, rough: 0.62, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
-        { type: 'sleeve', color: 0x25242c, rough: 0.62, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x33313d },
-        { type: 'belt', color: 0x2e2c38, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
+        { type: 'pants', color: 0x27262b, rough: 0.88, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.020 },
+        { type: 'jacket', color: 0x3d3b46, rough: 0.48, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarColor: 0x4b4857, collarRough: 0.34, zip: true, zipAt: 0.34, epaulettes: true, epauletteTh: 1.22, studColor: 0x8d9098 },
+        { type: 'skirt', color: 0x3d3b46, rough: 0.48, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
+        { type: 'sleeve', color: 0x3d3b46, rough: 0.48, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x24232b },
+        { type: 'belt', color: 0x1f1e24, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
         { type: 'boots', color: 0x2b2827, rough: 0.26, shaft: 0.82, height: 0.036, weltColor: 0x3c3945 },
         // Ignis without visible frames is just a man with a shiny patch on his
         // face; the rim geometry is the whole silhouette read
