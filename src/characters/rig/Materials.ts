@@ -331,7 +331,7 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // light hair and vanishes on dark, which is backwards — a backlit silhouette
   // is the *transmission* term and it is strongest on fine pale hair, but not
   // by a factor of forty.
-  kk += uSunColor * rim * 0.30 * strand * hueC * ( 0.20 + 0.55 * luminance );
+  kk += uSunColor * rim * 0.20 * strand * hueC * ( 0.20 + 0.55 * luminance );
   // Sky sheen. Near-black hair under a directional key has nothing at all in
   // shadow, which is why the whole cast read as wearing black helmets: the
   // silhouette went to a single flat value the moment it turned away from the
@@ -888,7 +888,31 @@ export function hairMaterial() {
   if (sceneSamples() > 0) m.alphaToCoverage = true;
   return patch(m, {
     sss: 0,
-    hair: { spec: 0.55, shift: 0.30, exp1: 110.0, exp2: 20.0, tint: 0.85 },
+    // Measured against ART-DIRECTION 12.3's plate table, which is the only
+    // calibrated statement of what hair is supposed to read as, on the 0.55 m
+    // `facecheck` frames:
+    //
+    //   plate  noctis (black)  p50 Y 37   p5 -> p99.5   20 -> 140
+    //   ours                   p50 Y  0                  0 -> 142
+    //   plate  prompto (blond) p50 Y 81                 22 -> 176
+    //   ours                   p50 Y 94                  5 -> 227
+    //
+    // So the top end is 50 Y too hot on blond while the bright *extreme* is
+    // right on black — i.e. the defect is not the albedo (the medians are 13 Y
+    // apart at worst) and not the straw-specular normalisation, which landed.
+    // It is that the additive terms pile onto a diffuse that is already high on
+    // pale hair.
+    //
+    // `exp1: 110` is the other half. A 110 exponent on the *macro* normal is a
+    // lobe about 8 degrees wide, and the macro normal is the scalp, not the
+    // strand — so the band it places is narrower than any part of a head that
+    // faces the half-vector, and at hour 16.2 it lands nowhere at all. That is
+    // why the groom reads as flat shards with no highlight anywhere while the
+    // *broad* terms (rim, sky dome, the `mask` floor) carry the whole value
+    // range and blow out on blond. Broadening the primary to 45 and the
+    // secondary to 9 puts a band on the crown that a viewer can see, and taking
+    // `spec` and the rim down keeps the total energy from rising with it.
+    hair: { spec: 0.46, shift: 0.25, exp1: 45.0, exp2: 9.0, tint: 0.85 },
   });
 }
 
