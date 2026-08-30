@@ -370,14 +370,41 @@ const { readFile } = await import('node:fs/promises');
 const claimed = new Map();
 for (const [owner, file] of Object.entries(SRC)) {
   const text = await readFile(path.join(ROOT, file), 'utf8');
-  for (const m of text.matchAll(/'(Key[A-Z]|Digit\d|Backquote)([A-Z0-9]*)'/g)) {
+  // `Space` is in the pattern now. It was not, so the one collision in this
+  // game that a player can SEE -- handbrake and dodge roll on the same key,
+  // `state: idle -> dodge` while driving -- was invisible to the check that
+  // exists to find collisions.
+  for (const m of text.matchAll(/'(Key[A-Z]|Digit\d|Backquote|Space)([A-Z0-9]*)'/g)) {
     const code = m[1] + m[2];
     if (!claimed.has(code)) claimed.set(code, new Set());
     claimed.get(code).add(owner);
   }
 }
-// Driving and on-foot combat are mutually exclusive states, so a key may be in
-// both. Everything else sharing an owner pair is a genuine clash.
+/**
+ * **This gate used to exempt the Regalia, and the exemption was false.**
+ *
+ * The line was `if (owners.has('regalia') && owners.size === 2 && ...) continue;`
+ * under a comment reading "Driving and on-foot combat are mutually exclusive
+ * states, so a key may be in both". They are not mutually exclusive.
+ * `CombatSystem.update` gates its input read on `input.enabled` and its own
+ * `scenarioLock`; nothing in the tree sets either when the player gets into
+ * the car. Combat and the car read the same keyboard on the same frame, and
+ * `src/tools/_probe/inputcollide.mts` counts the calls: pressing V, T, B,
+ * Space and F while driving called `setLockOn`, `drawEnergy`, `castSlot`,
+ * `dodge` and `heavy`, once each.
+ *
+ * So the check was skipping exactly the population the defect lived in — and
+ * passing green over four real collisions for as long as it has existed. The
+ * exemption is gone. What replaces it is an allowlist of individual keys that
+ * are shared **on purpose**, each of which has to carry its reason, so that a
+ * new collision cannot be absorbed by a category.
+ */
+const SHARED_ON_PURPOSE = new Map([
+  ['KeyF', 'enter/exit the car vs the heavy attack — F is the most documented '
+    + 'binding in the game and moving it costs more than the overlap does; the '
+    + 'real fix is a mode guard in CombatSystem.update'],
+  ['Space', 'handbrake vs dodge roll — a handbrake is Space; same mode guard'],
+]);
 const MODAL_OK = new Set(['regalia|menus']);
 const clashes = [];
 for (const [code, owners] of claimed) {
@@ -386,12 +413,13 @@ for (const [code, owners] of claimed) {
   owners.delete('audio');
   if (owners.size < 2) continue;
   const pair = [...owners].sort().join('|');
-  if (owners.has('regalia') && owners.size === 2 && !owners.has('menus')) continue;
+  if (SHARED_ON_PURPOSE.has(code)) continue;
   if (MODAL_OK.has(pair)) continue;
   clashes.push(`${code}: ${[...owners].join(' + ')}`);
 }
 ok('no keyboard binding is claimed by two systems in the same mode',
-  clashes.length === 0, clashes.join(', '));
+  clashes.length === 0, clashes.length ? clashes.join(', ')
+    : `${SHARED_ON_PURPOSE.size} shared on purpose: ${[...SHARED_ON_PURPOSE.keys()].join(', ')}`);
 
 /* -------------------------------------------------------------------- */
 

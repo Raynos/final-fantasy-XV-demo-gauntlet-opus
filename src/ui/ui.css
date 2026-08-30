@@ -905,7 +905,7 @@
 .crow .cr-b { flex: 1; min-width: 0; }
 .crow .cr-t { font-size: 10.5px; font-weight: 300; letter-spacing: .1em; color: var(--ink-2); text-shadow: var(--sh-text); }
 .crow .cr-n { font-size: 8px; letter-spacing: .12em; color: var(--ink-4); margin-top: 2px; }
-.crow .cr-p.none { color: var(--ink-4); opacity: .5; letter-spacing: 0; }
+.crow .cr-p.none { color: var(--ink-4); opacity: .8; letter-spacing: 0; }
 .crow .cr-p { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-4);
   text-align: right; min-width: 74px; flex: none; }
 .crow.on .cr-t { color: #fff; }
