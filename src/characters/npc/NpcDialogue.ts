@@ -524,9 +524,50 @@ export const NPC_DIALOGUE = {
           { label: 'About the birds', next: 'birds', when: () => status !== 'available' },
           { label: 'You are short of chocobos', next: 'offer', when: () => status === 'available' },
           { label: 'About the stray', next: 'nag', when: () => status === 'active' },
+          // The post's three services (plan task 71). These are *directions*,
+          // not transactions: the dye stall, the feed and the race board are
+          // each a prompt on the prop itself, registered by
+          // `game/chocobo/ChocoboHub.ts`. Wiz cannot open one from here --
+          // `Dialogue._pick` (:280) runs `end()` after an `action`, so a script
+          // started from inside a choice is closed on the same key press. The
+          // shop rows elsewhere in this file get away with it only because a
+          // *screen* is not a dialogue.
+          { label: 'The dye stall', next: 'dye' },
+          { label: 'Sylkis greens', next: 'greens' },
+          { label: 'The race board', next: 'racing' },
           { label: 'Deadeye', next: 'deadeye' },
           { label: 'Good day to you', next: 'bye' },
         ]),
+        dye: {
+          lines: [
+            'Round the side of the barn. Dye, not breeding — same bird underneath, and she knows the difference even if you do not.',
+            'Black is the dear one. Everybody wants the black one.',
+          ],
+          next: 'menu',
+        },
+        greens: {
+          lines: () => {
+            const cb = game.get('Chocobo');
+            const tier = cb && typeof cb.feedTier === 'number' ? cb.feedTier : 0;
+            return tier > 0
+              ? ['Sylkis. Best greens in Lucis and priced like it.',
+                'She has had some, I can tell — she is carrying more wind than she was. Keep going and she will hold a gallop all day.']
+              : ['Sylkis. Best greens in Lucis and priced like it, and worth every gil.',
+                'Feed her at the trough. Two bunches to start; she will not run any faster on the flat but she will hold the burst twice as long.'];
+          },
+          next: 'menu',
+        },
+        racing: {
+          lines: () => {
+            const cb = game.get('Chocobo');
+            const best = cb?.races?.bestSummary?.();
+            return best
+              ? ['Board is on the paddock fence. Entry up front, purse on the line, and double it if you beat par.', best]
+              : ['Board is on the paddock fence. Two courses posted here and one up at the Alpine Stable, if you fancy a mountain.',
+                'Entry is up front and the purse doubles if you beat par. Nobody beats par their first time out.'];
+          },
+          next: 'menu',
+        },
         offer: {
           lines: [
             'Half my stock will not come in. They can smell that behemoth from four miles off and they are not wrong to.',
@@ -551,9 +592,13 @@ export const NPC_DIALOGUE = {
           next: 'menu',
         },
         done: {
+          // She no longer hands over the whistle: `RpgSystem.STARTING_ITEMS`
+          // does, from the first minute, because the mount has no unlock gate
+          // (plan task 70). What the quest pays is the sylkis that buys the
+          // first feed tier, and a dye on the house at her own stall.
           lines: [
             'She walked in behind you like she had never left. Whole yard settled after that.',
-            'Whistle is yours. Any post in Lucis, you blow it and something comes.',
+            'Take the greens, and pick yourself a colour at the stall — that one is on me. Any post in Lucis, you whistle and something comes.',
           ],
           next: 'menu',
         },
