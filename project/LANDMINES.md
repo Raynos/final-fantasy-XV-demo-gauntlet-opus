@@ -2217,3 +2217,34 @@ project and silence must not.
 agent can price it against a better-matched instrument: it is not a regression on
 any band, and its frames were read by eye.)
 
+## `skinWeight` quantisation broke a merge three separate times in one night
+
+Three lanes, three independent attempts at the same ~15 MB saving, three
+different victims. Recorded together because the *pattern* is the lesson, not
+any one of them:
+
+1. **`AttrPack`, post-hoc, boot pass.** `MIN_VERTS` guards vertex count, which is
+   the wrong axis for a character: an NPC's hair is 17-25 k verts and its hands,
+   eyes and teeth are under 8 000. So the hair packed to `Uint8`, the rest did
+   not, `mergeGeometries` saw `Uint8` beside `Float32`, returned **null**, and
+   **deleted that person's shadow**. Built during play, long after the boot pass,
+   so thirteen posed-shot imgdiffs could not see it.
+2. **`mergeCreature`.** **23 of 23 species lost 6% of their vertices to the mesh
+   origin**; `creaturecheck` read a deadeye's foot at **-3.768 m**. Reverted in
+   `ce162a3`.
+3. **`mergeParts`.** Its array-type table was hard-coded to `Float32Array`, so
+   deriving type *and* `normalized` from the first part was load-bearing —
+   without it every merged character would have shrunk to the origin.
+
+**The rule.** Characters and creatures are the one family that is **re-merged
+after the geometry is built**, and `THREE.mergeGeometries` requires every input
+to agree on array type *and* `normalized`. So an attribute on anything that gets
+merged can only be quantised **in the generator**, where every mesh gets one
+format and no merge can ever see two — `rig/Geo.ts`, `rig/Sculpt.ts`,
+`enemies/RigBuilder.ts`. Never as a post-hoc pass, however careful its guard.
+
+**And note what caught each one:** a numeric gate, every time. A deleted shadow
+appears only once an NPC streams in; 6% of vertices at the origin is a pose
+statistic; neither is visible in a posed frame diff. Two of the three were found
+by reading a gate's **full output** rather than its verdict line.
+
