@@ -20,10 +20,13 @@ import type { Game } from '../../game/Game.ts';
  * call that implements it, not against the previous version of this file.
  *
  * The pad column is held to the same standard. A verb with no
- * `gpButton`/`gpDown` behind it now says **Keyboard only** instead of naming
- * a button that does nothing: Point Warp, the heavy attack, the firearm, Let
- * Ignis Drive, the whole in-car secondary cluster and the shop's quantity
- * keys were all promising a controller that was never wired. Where a pad
+ * `gpButton`/`gpDown` behind it leaves `pad` **empty**, and an empty `pad`
+ * prints as a dash: Point Warp, the heavy attack, the firearm, Let Ignis
+ * Drive, the whole in-car secondary cluster, the shop's quantity keys and
+ * this card's own close key were all promising a controller that was never
+ * wired. Seventeen of the forty-four rows are keyboard-only, which is why
+ * they are a dash and a footnote rather than the words "Keyboard only"
+ * printed seventeen times down a card that is already dense. Where a pad
  * button IS bound the index is the standard mapping, so `gpEdge(4)` is L1 and
  * `gpEdge(5)` is R1 — Lock On used to be printed as R3, which is `10`/`11`,
  * the stick clicks.
@@ -38,27 +41,27 @@ const GROUPS = [
       [['E'], 'A / Cross', 'Interact', 'Talk, shop, rest, refuel, drive'],
       [['Tab'], 'Start', 'Menu', 'Closes from any screen'],
       [['H'], 'Start ▸ Controls', 'Controls', 'This card. Press again to close'],
-      [['M'], 'Keyboard only', 'World Map', 'Menu ▸ Map is the region chart'],
-      [['C'], 'Keyboard only', 'Photo Mode', 'Prompto takes the shot'],
-      [['`'], 'Keyboard only', 'Mute Audio', 'Volume sliders live in System'],
+      [['M'], '', 'World Map', 'Menu ▸ Map is the region chart'],
+      [['C'], '', 'Photo Mode', 'Prompto takes the shot'],
+      [['`'], '', 'Mute Audio', 'Volume sliders live in System'],
     ],
   },
   {
     name: 'Combat', icon: 'sword',
     rows: [
       [['LMB'], 'Square', 'Attack', 'Hold to keep the combo going'],
-      [['F'], 'Keyboard only', 'Heavy Attack', 'Opens on the finisher; heavy poise damage'],
+      [['F'], '', 'Heavy Attack', 'Opens on the finisher; heavy poise damage'],
       [['RMB'], 'Circle (hold)', 'Phase / Parry', 'Hold to evade; costs MP'],
       [['Space'], 'Circle', 'Dodge', 'Invulnerable for a third of a second'],
       [['Q'], 'Triangle', 'Warp-Strike', 'Counters when the parry window is open'],
-      [['E'], 'Keyboard only', 'Point Warp', 'Perch to recover MP; yields to a prompt'],
+      [['E'], '', 'Point Warp', 'Perch to recover MP; yields to a prompt'],
       [['R'], 'L1', 'Armiger', 'When the gauge is full'],
       [['V'], 'R1', 'Lock On', 'Toggles the nearest target'],
       [['1', '-', '5'], 'D-Pad (1–4)', 'Swap Weapon', 'Sword, greatsword, polearm, daggers; 5 is the firearm'],
-      [['Z', 'X', 'B'], 'Keyboard only', 'Cast Magic', 'Elemancy quick-slots one, two and three'],
-      [['G'], 'Keyboard only', 'Gladiolus Technique', 'Spends tech bars'],
-      [['J'], 'Keyboard only', 'Ignis Technique', ''],
-      [['K'], 'Keyboard only', 'Prompto Technique', ''],
+      [['Z', 'X', 'B'], '', 'Cast Magic', 'Elemancy quick-slots one, two and three'],
+      [['G'], '', 'Gladiolus Technique', 'Spends tech bars'],
+      [['J'], '', 'Ignis Technique', ''],
+      [['K'], '', 'Prompto Technique', ''],
     ],
   },
   {
@@ -69,12 +72,12 @@ const GROUPS = [
       [['S'], 'LT', 'Brake / Reverse', 'One pedal, like an automatic'],
       [['A', 'D'], 'Left Stick', 'Steer', ''],
       [['Space'], 'A / Cross', 'Handbrake', 'Shared with the dodge roll'],
-      [['I'], 'Keyboard only', 'Let Ignis Drive', 'Auto-drives to the next stop'],
-      [['Y'], 'Keyboard only', 'Change Camera', 'Chase, bonnet, cinematic'],
-      [['U'], 'Keyboard only', 'Next Radio Station', ''],
-      [['N'], 'Keyboard only', 'Radio On / Off', ''],
-      [['L'], 'Keyboard only', 'Headlights', 'Auto, on, off'],
-      [['O'], 'Keyboard only', 'Type-D Off-Road', 'Suspension for the dirt'],
+      [['I'], '', 'Let Ignis Drive', 'Auto-drives to the next stop'],
+      [['Y'], '', 'Change Camera', 'Chase, bonnet, cinematic'],
+      [['U'], '', 'Next Radio Station', ''],
+      [['N'], '', 'Radio On / Off', ''],
+      [['L'], '', 'Headlights', 'Auto, on, off'],
+      [['O'], '', 'Type-D Off-Road', 'Suspension for the dirt'],
     ],
   },
   {
@@ -85,8 +88,8 @@ const GROUPS = [
       [['Enter'], 'A / Cross', 'Confirm', ''],
       [['↑', '↓'], 'D-Pad', 'Select', 'WASD works too'],
       [['←', '→'], 'D-Pad', 'Change Tab', ''],
-      [['Q', 'E'], 'Keyboard only', 'Quantity', 'In a shop; hold Shift for ten'],
-      [['H'], 'Keyboard only', 'Close This Card', 'On a pad: Start ▸ Controls'],
+      [['Q', 'E'], '', 'Quantity', 'In a shop; hold Shift for ten'],
+      [['H'], '', 'Close This Card', 'On a pad: Start ▸ Controls'],
     ],
   },
 ];
@@ -138,7 +141,12 @@ export class ControlsScreen {
             el('div.cr-t', { text: label }),
             note ? el('div.cr-n', { text: note }) : null,
           ]),
-          el('div.cr-p', { text: pad }),
+          // An empty `pad` means the verb has no controller binding, and it
+          // prints as one dash rather than the words "Keyboard only" fifteen
+          // times down a card that is already dense. The footnote says what
+          // the dash means; the alternative was a column that read as a single
+          // repeated phrase and stopped being read at all.
+          el(pad ? 'div.cr-p' : 'div.cr-p.none', { text: pad || '—' }),
         ]);
         return { node, bg };
       });
@@ -153,9 +161,10 @@ export class ControlsScreen {
     root.appendChild(this.grid);
 
     this.note = el('div.ctrl-note', { text:
-      'Escape is claimed by the browser to release the mouse — the game hands the '
-      + 'pointer back and opens this menu when that happens, so Tab, Backspace and '
-      + 'Circle are the reliable way out of anything.' });
+      'A dash in the right-hand column means that verb has no gamepad binding — it is '
+      + 'keyboard and mouse only.   ·   Escape is claimed by the browser to release the '
+      + 'mouse: the game hands the pointer back and opens this menu when that happens, '
+      + 'so Tab, Backspace and Circle are the reliable way out of anything.' });
     root.appendChild(this.note);
   }
 

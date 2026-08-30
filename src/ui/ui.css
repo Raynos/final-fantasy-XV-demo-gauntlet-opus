@@ -884,8 +884,13 @@
 .syrow.disabled .ico { color: rgba(198,214,240,.18); }
 
 /* ---- controls card --------------------------------------------------- */
+/* `align-items: stretch`, not `flex-start`. Four plates sized to their own row
+ * counts left four different bottom edges floating in the top two-thirds of the
+ * card with a 160px void under them, which reads as an unfinished layout rather
+ * than as four groups. Stretched, they share one baseline and the card is a
+ * band between the title rule and the footnote. */
 .ctrl-grid { position: absolute; left: 68px; right: 68px; top: 162px; bottom: 132px;
-  display: flex; gap: 18px; align-items: flex-start; }
+  display: flex; gap: 18px; align-items: stretch; }
 .ctrl-col { flex: 1; padding: 16px 18px 16px; display: flex; flex-direction: column; overflow: hidden; }
 .crow .cr-k .cr-dash { font-size: 11px; color: var(--ink-4); line-height: 1; }
 .ctrl-col .cc-h { display: flex; align-items: center; gap: 10px; }
@@ -900,6 +905,7 @@
 .crow .cr-b { flex: 1; min-width: 0; }
 .crow .cr-t { font-size: 10.5px; font-weight: 300; letter-spacing: .1em; color: var(--ink-2); text-shadow: var(--sh-text); }
 .crow .cr-n { font-size: 8px; letter-spacing: .12em; color: var(--ink-4); margin-top: 2px; }
+.crow .cr-p.none { color: var(--ink-4); opacity: .5; letter-spacing: 0; }
 .crow .cr-p { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-4);
   text-align: right; min-width: 74px; flex: none; }
 .crow.on .cr-t { color: #fff; }
