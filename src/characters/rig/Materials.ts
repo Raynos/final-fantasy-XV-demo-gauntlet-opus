@@ -376,7 +376,16 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   vec3 fillN = clamp( vColor.rgb / max( 1e-4, luminance ), 0.0, 3.0 );
   vec3 fillC = mix( fillN, vec3( 0.76, 0.90, 1.20 ), 0.45 );
   float dome = clamp( dot( gN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  kk += uSunColor * pow( dome, 1.2 ) * 0.11 * strand * fillC * ( 0.30 + 0.30 * luminance );
+  //
+  // The coefficient is 0.30 and it was 0.11. At 0.11 the rewrite above measured
+  // as a clean positive in the right direction on every number and about a
+  // third of the distance: Prompto p5 1 -> 5 and p50 62 -> 69 against a plate
+  // 22 / 81, Noctis p50 1 -> 15 against 37, with both top ends untouched
+  // (Prompto 203 -> 204). Scaling by the shortfall is legitimate here precisely
+  // because the term is additive and small next to the specular, so it buys the
+  // dark end at almost no cost to the bright one -- the measured 0.11 step cost
+  // Prompto exactly 1 Y at p99.5.
+  kk += uSunColor * pow( dome, 1.2 ) * 0.30 * strand * fillC * ( 0.30 + 0.30 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
