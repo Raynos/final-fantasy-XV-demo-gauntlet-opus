@@ -1310,7 +1310,25 @@ export class CombatSystem {
     }
 
     /* input --------------------------------------------------------- */
-    if (input.enabled !== false && !this.scenarioLock) this._readInput(input, dt);
+    // **Driving is a mode, and this is the line that makes it one.**
+    //
+    // Until this guard existed it was not one: the only things that stopped
+    // combat reading the keyboard were `input.enabled` (a menu, a shop, a
+    // conversation) and `scenarioLock` (a cutscene). Getting into the Regalia
+    // set neither, so combat and the car read the same keys on the same frame
+    // and five verbs fired from the driver's seat -- `setLockOn` on V,
+    // `drawEnergy` on T, `castSlot(2)` on B, `heavy` on F and, visibly,
+    // `dodge` on Space, which put Noctis into a dodge roll at 90 km/h.
+    // Measured by counting calls rather than outcomes in
+    // `src/tools/_probe/inputcollide.mts`, because an outcome is conditional
+    // and `setLockOn(autoTarget())` with no enemy nearby changes nothing.
+    //
+    // A cross-lane one-liner, authorised by the coordinator: the Regalia's
+    // keymap is another lane's file and this is the line it was asking for.
+    // Nothing else changes -- on foot `isDriving` is false and every verb
+    // behaves exactly as before, which the same probe checks in its second arm.
+    const driving = !!(game.get && game.get('Regalia')?.isDriving);
+    if (input.enabled !== false && !this.scenarioLock && !driving) this._readInput(input, dt);
 
     /* MP ------------------------------------------------------------ */
     this._drain(dt);
