@@ -361,8 +361,24 @@ export function shadowProxy(meshes: THREE.Object3D[], name: string): THREE.Mesh 
   return mesh;
 }
 
-/** Attributes a merged prop geometry is allowed to carry, and the only ones. */
-export const KEEP = ['position', 'normal', 'uv', 'color'] as const;
+/**
+ * Attributes a merged prop geometry is allowed to carry, and the only ones.
+ *
+ * `aEmissive` is here because the Meteor's fissures are a per-vertex glow on
+ * the rock's own surface (`Megastructures.meteorVeins`), and this list is a
+ * *delete* list: an attribute not named here is dropped by {@link prep} at
+ * `B.add`, before the merge, silently. That is the exact failure mode the rest
+ * of this docblock is about, arriving one step earlier — the stamp is applied,
+ * the material declares the attribute, the shader reads it, and the geometry
+ * that reaches the GPU never had it.
+ *
+ * **A batch must be all-or-nothing on it.** {@link PartBuilder.merge}
+ * synthesises a missing `color` and nothing else, so a piece carrying
+ * `aEmissive` dropped in with pieces that do not makes `mergeGeometries`
+ * return null and takes the whole compound with it. The Meteor's masses have
+ * their own material for that reason.
+ */
+export const KEEP = ['position', 'normal', 'uv', 'color', 'aEmissive'] as const;
 
 /**
  * Normalise one piece so a merge cannot fail on it, and so nothing it is
