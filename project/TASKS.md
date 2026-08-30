@@ -13,9 +13,6 @@ plan's negatives table is the list of things already decided against.
 
 ## Live defects nobody had recorded
 
-- **No gate drives the car.** The steering was mirrored (D turned left) and shipped, because `AutoDrive` is self-consistent in the same flipped frame so the AI drove fine, all five posed regalia shots are a parked car, and `regaliadrive` asserts the car steers *at all*, never which way. Fixed 2026-08-29 by a human playing it. **A gate that holds a key and asserts the sign is the gap.**
-
-- **`KeyT` is bound twice** — `CombatSystem.ts:1519` `drawEnergy()`, `RegaliaSystem.ts:60` Type-D — and `ControlsScreen.ts:57` lists `T` as Type-D only. Deposits are visible and prompted now (`c220833`), so a live mechanic has no correct in-game statement of its key. `water-fix`
 - **Nothing in `check` fails when a bake artifact is missing.** `geo.bin.gz` was absent for a day (~1.2 s of cold boot) while five handoffs said "whoever is next should re-bake". `daemon --health` warns; no gate does.
 
 ## Memory — 1.5 GB the tab, 2.5 GB the tree
@@ -251,4 +248,31 @@ two instruments lying, which is the more useful half.*
 - **The plan's `node src/tools/probes/nanscan.mts` command line is wrong**
   repo-wide: nanscan is a probe *body* and needs
   `node src/tools/probe.mts probes/nanscan.mts`. `lane4`
+
+## UI and input: what lane 10 left behind (2026-08-31)
+
+*Lane 10 closed all four of its items. The steering-sign gap is closed by
+`b0da426`, which falsifies itself: `steerfalsify.mts` negates `c.steer` -- the
+shipped bug exactly -- and the gate flips from PASS to FAIL. The `KeyT` double
+binding is closed by `5be914f`. Both lines above are deleted rather than ticked.*
+
+- **`CombatSystem._readInput`'s comment claims "gamepad face buttons mirror the
+  keyboard verbs one for one"** -- Point Warp, heavy attack and the firearm have
+  **no** pad binding at all. Bind them or soften the comment; 17 of the controls
+  card's 44 rows print a dash for exactly this reason. `lane10`
+- **Five menu screens sit 29-54% empty below their last line, measured.**
+  elemancy 54 · inventory 49 · system 40 · photo 38 · quests 35 · armiger 29,
+  rest under 8%. `src/tools/_probe/menufill.mts` measures lowest *ink* in the
+  reading band and is the before/after for anyone who takes them. **Lane 12
+  candidate** -- deliberately not acted on, because five screens' layout is not
+  lane 10 and plan rule 1 says no section may grow. Note the instrument's own
+  first version said 0-6% for all sixteen screens, because it counted any
+  painted box and the plates and Armiger divider run the full band height.
+  `lane10`
+- **`ui-shoot.mts` has no `--jpeg` flag** -- it prints `unknown scene --jpeg`
+  and writes PNGs regardless, though several briefs' command lines offer one.
+  A trap for any lane that follows its brief literally. `lane10`
+- **An untracked `shots/` directory appeared at the repo root** and `pre-commit`
+  flags it as off-roster. `tmp/shots/` is the default `--out`; something wrote
+  a full corpus to the root instead. Delete it once no lane is live. `lane10`
 

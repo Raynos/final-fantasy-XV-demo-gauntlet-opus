@@ -2087,3 +2087,45 @@ minutes apart — a 69 MB spread larger than most of what a lane can cut — and
 every arm printed `CONTENDED throughout`. Certify behind
 `daemon.mts --wait exclusive-free`, or do not certify.
 
+## `Math.abs` is an exemption wearing the clothes of an absolute value
+
+`regaliadrive`'s steering assertion was `Math.abs(h1 - h0) > 0.3`. It is
+**symmetric under negation of `steer` by construction**: no car it can tell from
+its own mirror image. The steering shipped mirrored -- D turned left -- past 19
+gates, 142 shots and both perf gates, and a human found it in about a minute.
+
+The fix that holds (`b0da426`, 2026-08-31): drive `KeyA` **and** `KeyD`, require
+**opposite signs**, and measure the **path** -- travel direction from world
+positions, accumulated group by group so it cannot wrap -- rather than
+`body.heading`, *because `body.heading` is the quantity the bug lived in*. The
+chassis heading is then separately checked to agree with the path.
+
+**And falsify the gate against the bug.** `src/tools/_probe/steerfalsify.mts`
+wraps `_playerControls` to negate `c.steer`, reproducing the shipped bug exactly,
+and runs the gate's own predicate: `as shipped -> PASSES`, `steer negated ->
+FAILS`. A gate nobody has watched fail is a gate nobody has tested.
+
+Two false failures were designed out and are worth knowing before you touch it:
+four seconds of full lock at 159 km/h is more than a full circle, so `atan2`
+wraps +245 deg into -115; and running on from the top-speed test leaves the car
+in a ditch rotating 75 deg while its path moves 0.1 m -- hence the explicit
+`it is moving while it steers` precondition.
+
+## An exemption whose stated reason is not true of the code
+
+`uxcheck` section 8 exempted every Regalia key pair under the comment *"driving
+and on-foot combat are mutually exclusive states"*. **Nothing in the code makes
+them exclusive.** `CombatSystem.update` gates `_readInput` on `input.enabled`
+and `scenarioLock` only; nothing sets either on entering the car, and
+`isDriving` has three readers, all of them UI. Measured with
+`src/tools/_probe/inputcollide.mts`, which counts combat **calls** rather than
+outcomes -- an outcome is conditional, so `setLockOn(autoTarget())` with no enemy
+in range reads as "no collision" -- pressing V, T, B, Space and F while driving
+called `setLockOn`, `drawEnergy`, `castSlot`, `dodge` and `heavy`, one each.
+`Space` was not even in the exemption's pattern.
+
+Replaced with `SHARED_ON_PURPOSE`, a per-key allowlist carrying a reason each,
+and replayed against the parent commit to prove the new gate flags what the old
+one excused. **An exemption states a claim about the code; check that the claim
+is still true, because the exemption is exactly where nobody looks.**
+
