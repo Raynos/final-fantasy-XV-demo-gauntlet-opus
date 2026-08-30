@@ -29,6 +29,38 @@ x2.25 again at dpr 1.5. The harness default is `q=ultra`, so every bootprof
 memory number this project has quoted carries the 8x line. **Not verified as a
 lever yet** — 8 -> 4 is a quality change and has not been diffed.
 
+## Task 44 is a measured negative, and the reason is that the name lies
+
+**`post.render` is 74-77% of the frame and 85% of `post.render` is the scene
+draw.** `probes/perfpasses.mts`, `party_walk`, q=high, calm frame 6.7 ms,
+accounted 5.2 ms:
+
+| pass | calm ms | on a spike | worst |
+|---|---|---|---|
+| 0. ScenePass | **4.40** | 33.8 | 211.9 |
+| 1. VelocityPass | 0.70 | 0.7 | 44.8 |
+| 10. BloomPass | 0.10 | 0.0 | 0.2 |
+| 2 GTAO, 3 ContactShadow, 5 TAA, 6 DoF, 7 MotionBlur, 8 GodRays, 11 Grade, 13 CAS | **0.00 each** | 0.0 | <=0.2 |
+
+`ScenePass` is `renderer.render(scene, camera)` -- the game's own geometry
+submission. It is *inside* the composer only because it is the composer's first
+pass, and `idlecpu` wraps `post.render`, so the whole scene draw has been
+filed under post-processing for as long as that row has existed. **Every actual
+post pass in the chain sums to about 0.3 ms.** There is nothing there to gate.
+
+Confirmed independently by ablation, which is the check that does not depend on
+per-pass timing at all: `idlecpu --q high --dpr 1.5 --post plain` -- DoF,
+bloom, GTAO, contact shadows, motion blur, grain, vignette and CAS all off --
+reads **102.4% of a core at 60 Hz against the baseline's 119.6%**. Turning off
+eight effects buys **14%**. (Both runs CONTENDED; the comparison is
+like-for-like but neither is a baseline.)
+
+So the exit `idle < 30% of a core at 60 Hz` is **not reachable from this
+lane's files**. It needs 5 CPU ms a frame across every browser process and the
+scene draw alone is 4.4 ms of main thread before the GPU process is counted.
+The lever is draw-call submission or drawing fewer frames, and neither lives in
+`postfx/`. Recorded as a measured negative per contract rule 2; residue below.
+
 ## Measured
 
 ### Idle CPU baseline — `idlecpu --q high --dpr 1.5`, sha 6ea61aef, CONTENDED
