@@ -8,10 +8,10 @@ Plan: `docs/plans/2026-08-30-fable-to-nine.md`, lane section :148-159, brief
 
 | # | task | state |
 |---|------|-------|
-| 8 | print at the authored resolution | **LANDED** `55d6f08` — one-line derivation, not verified by eye yet |
+| 8 | print at the authored resolution | **LANDED** `55d6f08`, **verified by eye** at 1.1 m |
 | 9 | triangular skin hole at the collar | **LANDED** `55d6f08`, **verified by eye** at 0.6 m |
-| 10 | Ignis value separation at 4 m+ | **LANDED** `d366962`, verification pending |
-| 7 | cloth folds | **LANDED** `55d6f08`, verification pending |
+| 10 | Ignis value separation at 4 m+ | **LANDED** `d366962` + `b3c328e`, **verified**: 19/255 by `regionstat` at 4.5 m |
+| 7 | cloth folds | **LANDED** `55d6f08`, **verified by eye** at 1.1 m and 1.9 m; reads but is soft at 4.5 m |
 | — | `drape()` re-derivation (from lane 1 / `TASKS.md`) | **measured negative** — see below |
 
 ## What was actually wrong, per task
@@ -47,9 +47,24 @@ The split is put where the *area* is — coat against trousers, not shirt agains
 coat, which is barely visible through a zipped front. Coat/skirt/sleeve 0x3d3b46
 (Y 60, the lightest coat in the party), trousers 0x27262b (Y 39), belt 0x1f1e24
 (Y 31): **21/255** between his two largest regions, against the plan's bar of 12.
-Cuff inverts dark (0x24232b), collar lifts (0x4b4857), coat roughness 0.62 ->
-0.48. **Not yet confirmed with `regionstat` on a captured frame** — that is the
-next step.
+Cuff inverts dark, collar lifts, coat roughness 0.62 -> 0.48.
+
+**Then corrected in `b3c328e`:** at 0x3d3b46 the coat rendered *periwinkle*. The
+albedo is only 9 points bluer than neutral, but it is lit almost entirely by
+sky, and a near-neutral albedo under a blue sky reads lavender — which is what
+`3e71366` already took him out of once. Warm-biased to 0x3c3936 (Y 57).
+
+**Verified numerically.** `regionstat` on `tmp/shots/lane2-r2/ignis_far.png`
+(Ignis at ~4.5 m, PNG, the rects are on him and not on terrain):
+
+    ignis-coat       0.478 0.330 0.556 0.450   p50 #1a1716   Y p50 24   R-B +4 (warm)
+    ignis-trousers   0.480 0.545 0.535 0.700   p50 #060406   Y p50  5   R-B +0
+
+**19/255 between his two largest regions on the rendered frame**, against the
+plan's bar of 12 and against 8.6 authored before. The `R-B +4` is the lavender
+gone. By eye at the same distance he now reads as a light coat over black
+trousers with a dark shirt panel, a belt break and dark cuffs, where before he
+was one black column.
 
 **7 — cloth folds.** The diagnosis in the brief is right that fold geometry
 already exists; what it misses is *why* it does not read. On a panel at Y 37-46
@@ -103,21 +118,53 @@ at a fixed density in the body's parameter (`DRAPE_DU = 0.030`) instead of at
 whatever `count` the caller passed. It costs no draw, no triangle and no vertex
 data — nodes are spline control points.
 
-**It did not close Gladiolus' bare mid-back.** Captured from behind at 2.3 m
-with the change live (`tmp/shots/lane2-cam1/back_gladio.jpg`): a large clean-
-edged lens of bare skin remains on his flank/back with jacket panel on all sides
-of it. So the weight-composition error is *not* the carrier either, or not the
-whole of it. **`SKIN_CLEARANCE` therefore stays at 30 mm** and the
-`HUMAN_REVIEW` line about the party being measurably bulkier stays open.
+**And "Gladiolus' bare mid-back" is probably not a defect at all.** Framed
+properly at 2.2 m (`tmp/shots/lane2-r1/cos_gladio.jpg` and `cos_gladio_back.jpg`)
+the large tan mass on him resolves into his **bare arm**, from deltoid to
+fingers: he wears `sleeve u1: 0.40` and no shirt at all, both authored, both
+correct for the character. His torso is covered. What is genuinely open on him
+is a narrow gap at the armpit where the jacket yoke meets the sleeve, and a
+sliver at the waist — millimetres, not the panel-sized hole the earlier handoff
+describes. **My own first read of `hero_full` made the same mistake**, which is
+worth recording: at party range a bare arm crossing a black torso reads exactly
+like a hole in the torso, and neither of us checked the framing before believing
+it. Ablate or frame close before calling skin-through-cloth.
 
-What has *not* been ruled out, and is the next thing to try: the jacket's
-`padFn` collapses the pad to 38 % of `base` above `t = 0.70` (`piece('jacket')`,
-"the pad tucks in toward the yoke"), which lands exactly where `torsoShape`'s
-trapezius term multiplies the body radius by up to 1.8 on a heavy build. That
-product is untested. The instrument for it is `--hide _body` on `gladio_closeup`
-against the same shot unhidden, both `--raw`, plus `imgdiff --heat`; note
-`framecam.mts` has **no `--hide`** (only `shoot.mts` does), so it has to be a
-corpus shot.
+## The clearance experiment (measured, not landed)
+
+The coordinator asked whether closing the drape would let `SKIN_CLEARANCE` come
+back from 30 mm. Two probes and two capture rounds say the 30 mm is **not**
+buying bind-pose coverage at all, and is therefore entirely pose-time margin.
+
+`src/tools/_probe/l2clear.mts` and `l2legclear.mts` (new; they need no daemon
+and run in under a second) evaluate garment-minus-body radius over
+(theta, t) in the bind pose for every hero's shirt, jacket, pants and sleeve.
+At **`SKIN_CLEARANCE = 0`**:
+
+| | worst bind-pose clearance |
+|---|---|
+| shirt | 9.9 mm (noctis) · 9.9 (ignis) · 10.9 (prompto) |
+| jacket | 8.8 mm (noctis) · 12.9 (gladio) · 11.2 (ignis) · 11.6 (prompto) |
+| pants | 10.0 mm (noctis) · 16.0 (gladio) · 12.0 (ignis) · 11.0 (prompto) |
+| sleeve | negative only at t <= 0.08, which is the deliberately buried root |
+
+So nothing is inside the skin before the character is posed. Every millimetre of
+the 30 is absorbing skinning divergence.
+
+Captured at 12 mm (`tmp/shots/lane2-clear12/`, `--dirty`): the silhouette gain
+is **large** — Noctis and Ignis both get a waist, a chest and a tailored sleeve
+where they had a balloon — but it opens real holes: bare skin at both of
+Ignis's hips and a bare triangle at his crotch, and a bare patch on Noctis's
+thigh. 12 mm is not shippable. 20 mm was captured next
+(`tmp/shots/lane2-clear20/`); **read those frames before changing the
+constant.** If the hip and crotch leaks are still there at 20 mm, the constant
+stays at 30 and the real fix is the one below.
+
+**The real fix, stated so nobody re-derives it:** the garment's skin weights
+must come from the body's own node knots, not from `drape`'s resampled nodes
+eased a second time. Getting that exact needs `sweepTube` to accept a weight
+function rather than reading `weightsAt` off its own node list — and `Geo.ts` is
+lane 1's file, so it is a cross-lane change, not something this lane could land.
 
 ## Files
 
