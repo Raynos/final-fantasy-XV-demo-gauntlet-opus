@@ -12,8 +12,8 @@ Owns `src/world/swim/**`, `src/world/collision/CharacterController.ts`,
 
 | task | state |
 |---|---|
-| 72 surface swimming | **code landed `f580459`, NOT yet seen in a frame** |
-| 73 diving | murk + breath + forced ascent landed `f580459`; the from-below shader branch **not written**; `nanunder` probe written, first run pending |
+| 72 surface swimming | code landed `f580459`; `swimcross` trajectory instrument landed `9b39b41`; **numbers pending** |
+| 73 diving | murk + breath + forced ascent `f580459`; **the from-below shader branch landed `9b39b41`**; `nanunder` baseline taken and **looked at**; re-shoot pending |
 
 ## What landed, and why it is shaped this way
 
@@ -83,6 +83,41 @@ Owns `src/world/swim/**`, `src/world/collision/CharacterController.ts`,
   ascend = Space/E or gp(0). Space is safe because combat is `scenarioLock`ed.
 - **`reset()` on both systems.** A reused capture page must not start a shot
   mid-stroke with the party pinned to a bank on the far side of the world.
+
+## The first two frames ever taken from under a water surface
+
+`tmp/shots/l23/base/`, at `f580459` — **read by eye, verified**. Both are the
+predicted failure and then some:
+
+- **`under_vesper.jpg`** (7.0 m under the Vesperpool) is a **pure white flare
+  across the whole top of the frame**, blooming, with the grass below it in
+  bright unattenuated daylight green. Diagnosis: from below `V` points down, so
+  `H = normalize(uSunDir + V)` lines up with `N` over most of the ceiling and
+  the `spec * 2.4` glint — a term whose whole job is to be a narrow glitter
+  road — becomes a full-screen light.
+- **`under_alstor.jpg`** (5.3 m under Alstor) is a **dark navy ceiling with grey
+  clouds and green tree-blobs pasted on it**, over a crisp, dry, fully-lit
+  rockfield and green sward. Two separate defects in one frame:
+  1. `fres → 1` because `dot(N, V)` is negative, so the fragment is 100% planar
+     reflection — and that target is not even refreshed down there
+     (`_shouldReflect` bails at `cam.y < level`), so it is a **stale mirror of
+     the sky, on the ceiling, at full strength**;
+  2. **no water between the lens and the world at all.** The murk was keyed off
+     the *player swimming*, and an authored underwater framing has no swimmer
+     in it.
+
+Both are fixed in **`9b39b41`** (Snell's window + TIR mirror + distance murk in
+`Water.ts`; camera-depth keying in `Underwater.ts`). **The fix has not been
+looked at yet** — `tmp/shots/l23/w1/` was captured at `63f77f6d` with the shader
+change still uncommitted, so it is a picture of the OLD shader. Re-shoot at HEAD.
+
+Also measured at `f580459`, both **verified**:
+- `nanunder`: **0 NaN, 0.00% black** on both framings, before any from-below
+  work. The predicted `refract`-TIR / zero-vector NaNs are not being hit.
+- **8/8 body meshes visible from below** — `Water._visible`'s `level - 2` slab
+  does *not* cull the surface from underneath, which was an open question.
+- The camera clamp left both framings alone: they resolved 5.28 m and 7.00 m
+  below the water level.
 
 ## Not verified — everything visual
 
