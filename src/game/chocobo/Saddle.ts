@@ -1,0 +1,232 @@
+import * as THREE from 'three';
+import type { Character } from '../../characters/rig/Character.ts';
+import type { Ground } from '../../world/Terrain.ts';
+import type { Player } from '../../characters/Player.ts';
+import type { Party } from '../../characters/Party.ts';
+
+/**
+ * One rider on one bird — the `Occupants` pattern, for a saddle instead of a car.
+ *
+ * The design decision this file encodes is the whole architecture of the lane:
+ * **the player is attached to the chocobo, not replaced by it.** `Player.update`
+ * keeps running; what changes is that the ground beneath it is a kilometre down
+ * (so the foot IK has nothing to plant on and stops fighting the saddle), its
+ * speed is zero, and every `lateUpdate` this module writes the player's root
+ * onto the saddle anchor. Nothing in `Player.ts`, `CameraRig.ts`, `Minimap.ts`
+ * or the lock-on has to know a chocobo exists, because `player.position` stays
+ * truthful the entire time.
+ *
+ * The alternative — a mount mode that takes over the player controller — was
+ * rejected because every one of those consumers would have needed a branch.
+ */
+
+/** A `Ground` a kilometre down, so the walkers' foot IK finds nothing. */
+const NO_GROUND: Ground = {
+  heightAt: () => -1000,
+  normalAt: (_x: number, _z: number, out?: THREE.Vector3) => (out || new THREE.Vector3()).set(0, 1, 0),
+};
+
+/**
+ * Astride: thighs up and splayed round the barrel, shins swept back into the
+ * stirrups, a forward lean off the hips, and both hands closed on the reins.
+ *
+ * Everything above the collarbones is deliberately absent so the animator keeps
+ * the head — a rider whose skull is nailed to a pose table stops looking at the
+ * world, and looking at the world is most of what makes a passenger read as
+ * alive (`Occupants` learned this the same way).
+ */
+const POSE_RIDE: Record<string, number[]> = {
+  hips: [-0.12, 0, 0],
+  spine01: [-0.08, 0, 0], spine02: [-0.07, 0, 0], spine03: [-0.04, 0, 0],
+  thighL: [-1.08, 0.34, 0.30], thighR: [-1.08, -0.34, -0.30],
+  shinL: [1.32, 0, 0], shinR: [1.32, 0, 0],
+  footL: [0.22, 0, 0.08], footR: [0.22, 0, -0.08],
+  toeL: [0, 0, 0], toeR: [0, 0, 0],
+  clavicleL: [-0.12, 0, -0.06], clavicleR: [-0.12, 0, 0.06],
+  upperArmL: [-0.86, 0.22, 0.40], lowerArmL: [-0.62, 0.24, 0.10], handL: [0.14, 0, 0.48],
+  upperArmR: [-0.86, -0.22, -0.40], lowerArmR: [-0.62, -0.24, -0.10], handR: [0.14, 0, -0.48],
+  fingersL: [-1.00, 0, 0], fingersR: [-1.00, 0, 0],
+  thumbL: [-0.45, 0, 0], thumbR: [-0.45, 0, 0],
+};
+
+const _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _q = new THREE.Quaternion();
+const _v = new THREE.Vector3();
+const _up = new THREE.Vector3();
+
+/** What the walkers were doing before anyone got on, so `exit` hands them back. */
+interface SavedWalkers {
+  playerTerrain: Ground | undefined;
+  partyTerrain: Ground | undefined;
+  speedMul: number[];
+}
+
+export interface SaddleRider {
+  key: string;
+  char: Character;
+  root: THREE.Object3D;
+  /** The bird's seat anchor this rider is written onto. */
+  anchor: THREE.Object3D;
+  /** This rig's own hip height, so a tall man does not sit on the cantle. */
+  hipY: number;
+}
+
+export class Saddle {
+  _saved!: SavedWalkers | null;
+  _t!: number;
+  party!: Party | null;
+  player!: Player | null;
+  riders!: SaddleRider[];
+  /** True while anyone is up. */
+  seated!: boolean;
+  constructor() {
+    this.riders = [];
+    this.seated = false;
+    this._saved = null;
+    this._t = 0;
+  }
+
+  bind(player: Player | null, party: Party | null) {
+    this.player = player;
+    this.party = party;
+  }
+
+  /**
+   * Put the named people on the given anchors.
+   * @param seats rider key -> the anchor on the bird carrying them
+   */
+  enter(seats: Array<{ key: string, anchor: THREE.Object3D }>) {
+    const p = this.player, party = this.party;
+    if (!p || !party) return false;
+    this.riders.length = 0;
+
+    for (const s of seats) {
+      const isPlayer = s.key === 'noctis';
+      const m = isPlayer ? null : party.get(s.key);
+      const char = isPlayer ? p.character : (m && m.character);
+      const root = isPlayer ? p.root : (m && m.root);
+      if (!char || !root) continue;
+      this.riders.push({
+        key: s.key, char, root, anchor: s.anchor,
+        hipY: char.rig && char.rig.P && char.rig.P.hips ? char.rig.P.hips.y : 0.98,
+      });
+    }
+    if (!this.riders.length) return false;
+
+    if (!this._saved) {
+      this._saved = {
+        playerTerrain: p.terrain,
+        partyTerrain: party.terrain,
+        speedMul: party.members.map((m) => m.speedMul),
+      };
+    }
+    p.terrain = NO_GROUND;
+    party.terrain = NO_GROUND;
+    for (const m of party.members) m.speedMul = 0;
+    for (const r of this.riders) if (r.char.groundShadow) r.char.groundShadow.visible = false;
+
+    this.seated = true;
+    return true;
+  }
+
+  /**
+   * Put everyone back on their feet beside the bird.
+   *
+   * **The `_saved` guard is load-bearing.** `Occupants.exit` early-returns on a
+   * null `_saved` and leaves `seated` set; here a dismount that never entered
+   * would otherwise strand the player on `NO_GROUND` — feet at -1000, falling
+   * forever, with no error anywhere. Clearing `seated` before the guard is what
+   * makes a spurious dismount a no-op instead of a soft-lock.
+   */
+  exit(worldPos: THREE.Vector3, heading: number) {
+    const p = this.player, party = this.party;
+    this.seated = false;
+    if (!p || !party || !this._saved) { this.riders.length = 0; return; }
+    p.terrain = this._saved.playerTerrain;
+    party.terrain = this._saved.partyTerrain;
+    const saved = this._saved;
+    party.members.forEach((m, i) => { m.speedMul = saved.speedMul[i] ?? 1; });
+    this._saved = null;
+
+    const terrain = p.terrain;
+    // step off to the near side, spread so nobody lands inside anybody
+    const spots = [[-1.55, 0.1], [-1.75, -1.3], [1.75, 0.2], [1.75, -1.4]];
+    const cos = Math.cos(heading), sin = Math.sin(heading);
+    for (let i = 0; i < this.riders.length; i++) {
+      const r = this.riders[i];
+      const [ox, oz] = spots[i % spots.length];
+      const x = worldPos.x + ox * cos + oz * sin;
+      const z = worldPos.z - ox * sin + oz * cos;
+      r.root.position.set(x, terrain ? terrain.heightAt(x, z) : worldPos.y, z);
+      r.root.rotation.set(0, heading + (ox > 0 ? -1.1 : 1.1), 0);
+      r.root.quaternion.setFromEuler(r.root.rotation);
+      if (r.char.groundShadow) r.char.groundShadow.visible = true;
+      r.char.setLookTarget(null);
+    }
+    p.velocity.set(0, 0, 0);
+    p.speed = 0;
+    p.heading = heading;
+    this.riders.length = 0;
+  }
+
+  /**
+   * Write the seat transforms and the riding poses.
+   *
+   * **Runs in `lateUpdate`, after `CameraRig`.** `Player.update` keeps running
+   * while mounted and will happily move the root; if this ran in `update` the
+   * rider would be written a frame behind the bird and would visibly swim in
+   * the saddle at 11 m/s.
+   *
+   * @param bounce 0..1 how hard the gait is throwing the rider about
+   */
+  update(dt: number, bounce: number, lean: number) {
+    if (!this.seated) return;
+    this._t += dt;
+    for (let i = 0; i < this.riders.length; i++) {
+      const r = this.riders[i];
+      r.anchor.getWorldPosition(_v);
+      r.anchor.getWorldQuaternion(_q);
+      _up.set(0, 1, 0).applyQuaternion(_q);
+      r.root.position.copy(_v).addScaledVector(_up, -r.hipY);
+      r.root.quaternion.copy(_q);
+      // the animator writes rotation.y directly; keep the Euler honest
+      r.root.rotation.setFromQuaternion(_q, 'YXZ');
+      this._applyPose(r, i, bounce, lean);
+      r.root.updateMatrixWorld(true);
+    }
+  }
+
+  /** Overwrite the seated bones on top of whatever the animator produced. */
+  _applyPose(r: SaddleRider, i: number, bounce: number, lean: number) {
+    const bones = r.char.rig.byName;
+    const t = this._t + i * 1.7;
+    // Posting: a rider absorbs the bird's bounce in the hips and the spine
+    // rather than being rigid on it. Without this the party read as four
+    // crash-test dummies bolted to four birds.
+    const post = Math.sin(this._t * 11.0 + i * 0.9) * 0.055 * bounce;
+    const sway = Math.sin(t * 0.63 + i) * 0.014 + Math.sin(t * 1.9 + i * 2.1) * 0.004;
+    for (const name in POSE_RIDE) {
+      const b = bones[name];
+      if (!b) continue;
+      const e = POSE_RIDE[name];
+      let x = e[0], y = e[1], z = e[2];
+      if (name === 'hips') { x += post + sway; z += lean * 0.55; }
+      else if (name === 'spine01' || name === 'spine02') { x += post * 0.55 + sway * 0.6; z += lean * 0.35; }
+      else if (name === 'spine03') { x += post * 0.30; z += lean * 0.25; }
+      else if (name === 'upperArmL' || name === 'upperArmR') { x += post * -0.35; }
+      _e.set(x, y, z, 'YXZ');
+      b.quaternion.setFromEuler(_e);
+    }
+    /**
+     * The pelvis must sit where the saddle is, not where the walk cycle wants
+     * it. `Anim` writes `hips.position` every frame for the stride bob, and
+     * without this the rider slowly sinks into the bird's back over a long
+     * ride — the same fix, for the same reason, as `Occupants._applyPose`.
+     */
+    const hips = bones.hips;
+    if (hips) {
+      const P = r.char.rig.P.hips;
+      hips.position.set(P.x, P.y, P.z);
+    }
+  }
+}

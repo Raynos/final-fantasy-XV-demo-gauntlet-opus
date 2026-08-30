@@ -21,6 +21,7 @@ import { AudioSystem } from '../audio/AudioSystem.ts';
 import { Director } from './Director.ts';
 import { RpgSystem } from './rpg/RpgSystem.ts';
 import { RegaliaSystem } from '../world/vehicle/RegaliaSystem.ts';
+import { ChocoboSystem } from './chocobo/ChocoboSystem.ts';
 import { InteractionSystem } from './interaction/Interactables.ts';
 import { Hammerhead } from '../world/town/Hammerhead.ts';
 import { CityHub } from '../world/town/CityHub.ts';
@@ -58,6 +59,7 @@ export interface SystemRegistry {
   Combat: CombatSystem;
   Camera: CameraRig;
   Regalia: RegaliaSystem;
+  Chocobo: ChocoboSystem;
   Audio: AudioSystem;
   Rpg: RpgSystem;
   HUD: HUD;
@@ -290,6 +292,10 @@ export class Game {
       step('Camera', () => new CameraRig()),
       // After Camera: the drive camera writes the lens in lateUpdate.
       step('Regalia', () => new RegaliaSystem()),
+      // After Regalia and after Camera: the mount writes the player's root onto
+      // the saddle in lateUpdate, so it must observe the camera's final lens
+      // the same way the drive camera does.
+      step('Chocobo', () => new ChocoboSystem()),
       step('Audio', () => new AudioSystem()),
       // Before HUD — the HUD reads it during init. Start mid-game so the
       // capture shots show a party with real progression, not a level 1 save:
