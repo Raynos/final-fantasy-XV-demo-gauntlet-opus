@@ -56,11 +56,21 @@ export interface RaceCourse {
 /**
  * The three courses.
  *
- * Distances are laid out against the honest cruise number: a ridden bird holds
- * 11.0 m/s, so a 400 m lap is a 36-second lap and par is set a little over the
- * straight-line time — enough that a clean line beats it and a wandering one
- * does not. The Alpine course is priced slower than its length because it runs
- * a mountain pass and the ground fights you.
+ * ### Par is measured, not guessed
+ * The first pass set par "a little over the straight-line time at cruise",
+ * which was wrong by nearly a factor of two, because a racing bird is not
+ * cruising: it opens on the burst and drops to 11.0 only when the tank is
+ * empty. `chocoborace.mts`'s autopilot — perfect line, sprint held from the
+ * gun, every gate cut at its radius — ran the paddock course in **21.75 s
+ * against a par of 44**, so the purse's beat-par bonus was not a bonus, it was
+ * the price. Par is now set about 15% over the measured perfect lap, which is
+ * a bar a good rider clears and a wandering one does not.
+ *
+ * The measured decomposition, for whoever re-authors a course: the tank is
+ * `STAMINA_MAX * tier * ascension` seconds of `CHOCOBO_SPRINT * sprintMul`,
+ * then it is 11.0 m/s until the rider stops asking. Gate radius is cut off
+ * every leg, so the *ridden* length of a course is roughly its centre-to-centre
+ * length minus `r` per gate.
  */
 export const RACES: RaceCourse[] = [
   {
@@ -72,7 +82,8 @@ export const RACES: RaceCourse[] = [
       { dx: 96, dz: -68, r: 9 },
       { dx: 6, dz: -24, r: 10 },
     ],
-    entry: 100, prizeGil: 900, prizeAp: 4, par: 44, limit: 130,
+    // 348 m centre-to-centre, ~310 m ridden; measured perfect lap 21.75 s.
+    entry: 100, prizeGil: 900, prizeAp: 4, par: 25, limit: 110,
   },
   {
     id: 'race_weaverwilds', hub: 'wiz', name: 'Weaverwilds Circuit',
@@ -85,7 +96,9 @@ export const RACES: RaceCourse[] = [
       { dx: 58, dz: -178, r: 11 },
       { dx: -18, dz: -16, r: 12 },
     ],
-    entry: 400, prizeGil: 3200, prizeAp: 9, par: 118, limit: 300,
+    // 1102 m centre-to-centre, ~1035 m ridden. One tank of burst is a much
+    // smaller share of a lap this long, so the average sits nearer cruise.
+    entry: 400, prizeGil: 3200, prizeAp: 9, par: 100, limit: 280,
   },
   {
     id: 'race_alpine', hub: 'alpine', name: 'The Alpine Ascent',
@@ -97,7 +110,9 @@ export const RACES: RaceCourse[] = [
       { dx: 158, dz: -164, r: 11 },
       { dx: 22, dz: -62, r: 12 },
     ],
-    entry: 700, prizeGil: 5200, prizeAp: 13, par: 96, limit: 260,
+    // 620 m centre-to-centre, ~565 m ridden, on ground that fights you: the
+    // pass is the one course where the slope refusal costs real seconds.
+    entry: 700, prizeGil: 5200, prizeAp: 13, par: 80, limit: 240,
   },
 ];
 
