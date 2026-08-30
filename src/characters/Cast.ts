@@ -328,13 +328,31 @@ export const CAST = {
           // carries almost no contrast and only the aggregate does. The
           // geometry's job is the silhouette and the break-up; the value is the
           // map's.
-          { n: 520, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0026, width: 0.0009, thick: 0.45, spike: 0.55, clump: 4, splay: 0.80, steps: 3, dirJit: 0.26, lenVar: 0.34, color: 0x6d5942, tipColor: 0x8f7a5e },
-          { n: 320, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0034, width: 0.0009, thick: 0.45, spike: 0.55, clump: 4, splay: 0.80, steps: 3, dirJit: 0.24, lenVar: 0.32, color: 0x6d5942, tipColor: 0x8f7a5e },
+          // **The lever was the CLUMP, not the count and not the width.**
+          // Two previous passes measured both and both came back negative
+          // (see above). What neither looked at is that every beard root was
+          // emitting `clump: 4` ribbons splayed `0.80 * len` apart at the tip:
+          // on a 2.6 mm strand that is four filaments radiating from one point
+          // over about 2 mm, which at facecheck's 3.4 px/mm is a seven-pixel
+          // ASTERISK. That is the shape in `tmp/shots/p5-fc` and in
+          // `tmp/shots/lane1-fc2/gladio_facecheck.png` — the marks are not
+          // thick strands, they are little four-pointed stars, which is
+          // exactly why they read as flies and why making them smaller or
+          // more numerous never helped: a smaller star is still a star.
+          //
+          // One filament per root, splay down to a nudge, count doubled and
+          // the strand thinned to 0.6 mm to hold the same total cross-section.
+          // That is FEWER ribbons than before (2 136 against 4 272) so it is
+          // cheaper as well. Ablation check first: `--hide _hair` on
+          // `gladio_closeup` removes the marks entirely, so they are the tuft
+          // geometry and not `paintFace`'s stubble field.
+          { n: 1040, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0026, width: 0.0006, thick: 0.45, spike: 0.55, clump: 1, splay: 0.16, steps: 3, dirJit: 0.26, lenVar: 0.34, color: 0x6d5942, tipColor: 0x8f7a5e },
+          { n: 640, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0034, width: 0.0006, thick: 0.45, spike: 0.55, clump: 1, splay: 0.16, steps: 3, dirJit: 0.24, lenVar: 0.32, color: 0x6d5942, tipColor: 0x8f7a5e },
           // moustache
-          { n: 92, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0024, width: 0.0009, thick: 0.45, spike: 0.55, clump: 4, splay: 0.80, steps: 3, dirJit: 0.24, lenVar: 0.30, color: 0x6d5942, tipColor: 0x8f7a5e },
+          { n: 184, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0024, width: 0.0006, thick: 0.45, spike: 0.55, clump: 1, splay: 0.16, steps: 3, dirJit: 0.24, lenVar: 0.30, color: 0x6d5942, tipColor: 0x8f7a5e },
           // sideburns tying the beard into the hairline
-          { n: 68, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0034, width: 0.0009, thick: 0.45, spike: 0.55, clump: 4, splay: 0.74, steps: 3, dirJit: 0.20, lenVar: 0.28, color: 0x6d5942, tipColor: 0x8f7a5e },
-          { n: 68, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0034, width: 0.0009, thick: 0.45, spike: 0.55, clump: 4, splay: 0.74, steps: 3, dirJit: 0.20, lenVar: 0.28, color: 0x6d5942, tipColor: 0x8f7a5e },
+          { n: 136, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0034, width: 0.0006, thick: 0.45, spike: 0.55, clump: 1, splay: 0.16, steps: 3, dirJit: 0.20, lenVar: 0.28, color: 0x6d5942, tipColor: 0x8f7a5e },
+          { n: 136, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0034, width: 0.0006, thick: 0.45, spike: 0.55, clump: 1, splay: 0.16, steps: 3, dirJit: 0.20, lenVar: 0.28, color: 0x6d5942, tipColor: 0x8f7a5e },
         ],
       },
       outfit: [
