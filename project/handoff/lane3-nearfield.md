@@ -72,6 +72,93 @@ is bare cracked dirt with a scatter of thin hair-like blades. **Neither is
 right** — pushing the clump ring out is necessary but not sufficient; the blade
 ring has to carry 0–26 m afterwards.
 
+
+## What landed, and what it looks like (all verified by reading the JPEG)
+
+**`e5db679` — Shots.ts, four re-framings.** RELEASED to lane 21 at this sha.
+
+- **`vista_dawn`** moved 150 m forward along its own view axis to the scarp lip:
+  `pos [-502.1, 146.2, 371]`. Read `tmp/shots/l3-after/vista_dawn.jpg`: dawn over
+  the basin with a mist layer lying across it, the Insomnia skyline strung along
+  the far volcanic mesa on the left, a butte at centre, the sun breaking through
+  cloud on the right, boulders receding into haze across the pan, and a dark
+  thorn branch crossing the bottom-left corner as a foreground occluder. This is
+  the best landscape frame I have seen in this project and it replaces an
+  unusable one. 618 draws, 17.4 M tris.
+- **`zone_three_valleys`** clearance 50 → 20 m. The Insomnia skyline now reads
+  clean against blue where a cloud used to eat half of it; a hoodoo, a dead tree
+  and wheel ruts give the midground something to land on. 431 draws.
+- **`zone_vannath`** clearance 22.9 → 18 m. Sunlit dry prairie with savanna
+  trees, boulders and the balanced monolith against the hero peaks; the
+  information-free shadow band across the bottom third is gone. 595 draws.
+- **`zone_lestallum`** clearance 26 → 18 m. Town, smokestack and aqueduct arches
+  read at size against a tree band that silhouettes properly. The lower third is
+  still crushed dark green — that is a lighting item, not a framing one. 656
+  draws (the highest in my set; budget 800).
+- **`zone_longwythe` and `vista_dusk` deliberately unchanged** — see the negative
+  below.
+
+**`03089ba` — GrassField.ts, the near ring test.** Clean A/B against its own
+parent (only that file differs), PNG, `imgdiff`:
+
+| shot | mean | pixels >8/255 | floor | draws before → after |
+|---|---|---|---|---|
+| `hero_full` | **23.201**/255 | 53.77% | 2.25 | 549 → 541 |
+| `zone_longwythe` | 0.715/255 | 0.72% | 1.23 | 503 → 496 |
+
+Exactly the expected signature: a large change confined to the near field, none
+at all on a shot whose bottom of frame is 100 m out, and eight FEWER draw calls
+because both card rings now skip the tiles they should never have had. Tris
++300 k on `hero_full` from the extra blades.
+
+Looking at `tmp/shots/l3-after/hero_full.jpg`: **the star tufts are gone.** The
+ground under the party now reads as dry straw stubble over cracked Leide dirt
+with a scatter of real tussocks catching light on the left, where before it was
+a mat of flat pale-green six-armed rosettes. Not yet beautiful — see below — but
+no longer wrong.
+
+## MEASURED NEGATIVE — camera clearance does not put grass in the bottom third
+
+This was the lane's opening thesis and it is refuted. Twenty candidates over five
+shots (7, 10, 14, 18 and 20 m of clearance against baselines of 22.9-50 m), read
+one at a time by two independent look-loops: **individual grass blades appear in
+the bottom third of none of them.** What the near ground actually contains is
+dirt with sparse scrub dots in Leide and a crushed near-black olive mat in the
+green zones, at every clearance, and in the green zones a lower camera makes it
+*worse* by giving the mat more of the frame.
+
+`bottom-hit` is a real number and the arithmetic behind it is right; what was
+wrong was the inference that ground inside 26 m therefore reads as grass. It does
+not, because a Leide tuft is 0.12-0.29 m and the blade ring is sparse, and
+because the thing that WAS covering the near field was the mis-ringed clump card.
+
+`zone_longwythe` is a second, smaller negative worth recording as contested
+rather than settled: one look-loop scored 7 m of clearance 4/5 against the 35 m
+baseline's 3/5 for the foreground rock stack it promotes; the other kept the
+baseline for the layered ridges, the meteor, the skyline and the rest stop. A
+contested re-framing is not worth the noise-floor re-baseline, so it stayed.
+
+## Left / residue
+
+- **Foreground occluders on the other judged vistas (task 13)** — `vista_dawn`
+  has one now. `vista_night` and `zone_vesperpool` already had one. The rest do
+  not, and the recipe is `vista_dawn`'s own: place the camera against an existing
+  world tree rather than authoring a prop. **This needs `Shots.ts`, which I have
+  released**, so it is residue for whoever holds it next.
+- **The near field is correct but not yet beautiful.** With the cards pushed back
+  to 22 m the blade ring is alone in 0-22 m and reads as ground texture rather
+  than plants. Levers examined and NOT taken, with reasons: blade `lean` is
+  bounded at 0.58 rad and is innocent (ablation); Leide's tuft height is
+  authored and `Biomes.ts` says in terms not to "improve" it; `hero_full` sits
+  inside `scrubDensity`'s road corridor (`roadDist` ramp 3.4-13 m) and its
+  clearing mask, so its bareness is partly correct. The unexamined lever is
+  `swardProxyGeo` coverage — the caster gate is `hTuft > 0.16 * lod.hMul`, an
+  ABSOLUTE metre threshold despite a comment claiming it scales with the zone,
+  and Leide's mean tuft is 0.138 m, so only the top ~35% of tufts cast anything.
+  Ablate the sward proxy on `hero_full` before touching it.
+- **Task 14 (midground) not started** — it is a refuted claim in the plan and
+  only acts if a later judged round ranks it.
+
 ## Done / left
 
 - [x] Baseline measured (framedepth, vegcensus, draw counts) — verified
