@@ -374,10 +374,21 @@ const SHOT_TABLE = {
   },
 
   // --- vista ------------------------------------------------------------
+  // Moved 150 m forward along its own view axis, to the actual lip of the
+  // scarp. The old stand at [-640, 143, 430] is inside a wood that has grown
+  // over it: the frame was a wall of leaf cards at 17.8 M triangles with a
+  // trunk in the corner and no sky, no horizon and no ground plane -- the one
+  // frame in this corpus that ever made the blind judge stall, rendering as a
+  // bug. Six candidates were derived live with `framecam --probe`; a lateral
+  // slide of 12-26 m clears the crown but leaves the camera in the wood with
+  // no distant landform at all, and only walking out to the lip buys the shot
+  // its own name back. Bottom of frame is 330 m here against 20 m at the old
+  // stand, which is the trade: this is a vista, not a near-field frame, and
+  // the foreground is carried by the branch crossing the bottom-left corner.
   vista_dawn: {
-    doc: 'Dawn from the top of the West Scarp, the whole basin between here and the buttes',
+    doc: 'Dawn from the lip of the West Scarp, mist on the basin under the Insomnia skyline',
     time: 6.4, weather: 'clear',
-    pos: [-640, 143, 430], target: [743, 116, -162], fov: 44,
+    pos: [-502.1, 146.2, 371], target: [743, 116, -162], fov: 44,
   },
   vista_noon: {
     doc: 'Harsh midday under the strata of Blackrock Mesa, the pan running out east',
@@ -461,20 +472,32 @@ const SHOT_TABLE = {
     // 10.7 px -> 73.0 px.
     pos: [1282.6, 52.2, 312.9], target: [1080, 19.3, -140], fov: 44,
   },
+  // Camera clearance 50 -> 20 m. At 50 the near hill is a muddy low-contrast
+  // dome over 60% of the frame and a cloud eats half the Insomnia skyline; at
+  // 20 the skyline clears against blue and the foreground gains erosion
+  // channels, scrub and a dead tree to land on. Lower than this is worse, not
+  // better: at 7 m of clearance a foreground ridge occludes the whole valley
+  // system and the right third becomes a bare dirt wall.
   zone_three_valleys: {
     doc: 'The Three Valleys: hogback fins running away from the Insomnia skyline',
     time: 16.6, weather: 'clear',
-    pos: [1180, 79.2, 1420], target: [1400, 54.9, 1020], fov: 44,
+    pos: [1180, 49.2, 1420], target: [1400, 54.9, 1020], fov: 44,
   },
   zone_ostium_gorge: {
     doc: 'Ostium Gorge: the Wall of Insomnia under the 320 m crown scarp',
     time: 9.4, weather: 'overcast',
     pos: [3480, 61.4, 340], target: [3300, 104.3, -160], fov: 46,
   },
+  // Camera clearance 22.9 -> 18 m. Not for the near field -- a sweep at 7, 10,
+  // 14 and 18 m of clearance put NO grass in the bottom third at any of them --
+  // but because at 22.9 the bottom third is a crushed, information-free cloud
+  // shadow and at 18 it breaks into legible sunlit dune and scrub with the
+  // ridges behind it holding their aerial perspective. The 13/255 foreground
+  // itself is the sky lane's cloud-shadow item, not a vegetation one.
   zone_vannath: {
     doc: 'Vannath Coast: the fast dry prairie the Galdin road crosses',
     time: 17.2, weather: 'clear',
-    pos: [2400, 49.2, 1560], target: [2180, 30, 1300], fov: 46,
+    pos: [2400, 44.3, 1560], target: [2180, 30, 1300], fov: 46,
   },
   zone_galdin: {
     doc: 'Galdin Coast: Angelgard out of the shallows, the pier hotel on the right',
@@ -544,10 +567,15 @@ const SHOT_TABLE = {
   },
 
   // --- zones : Cleigne --------------------------------------------------
+  // Camera clearance 26 -> 18 m. This shot's real defect is a near-black lower
+  // half and no clearance fixes that, but 18 m is where the town's warm-lit
+  // walls and chimney, the aqueduct and the horizon hoodoo all read at size
+  // while the tree band still silhouettes -- a three-layer frame where 26 m
+  // had two. Below 14 m the foreground trees bury the town entirely.
   zone_lestallum: {
     doc: 'The Lestallum Shelf: a level basalt terrace 120 m above the plain',
     time: 18.0, weather: 'clear',
-    pos: [-3320, 159.2, -980], target: [-3040, 141.5, -760], fov: 44,
+    pos: [-3320, 151.2, -980], target: [-3040, 141.5, -760], fov: 44,
   },
   zone_pallareth: {
     doc: 'Pallareth Pass: the canyon floor between a 320 m and a 250 m wall',
