@@ -11,11 +11,12 @@ Owns `src/combat/`, `src/game/encounters/`, `src/game/rpg/` **minus**
 
 | # | item | state |
 |---|---|---|
-| 33 | `fightshape` computes a median | **landed** — `ed53de5`, `20405ce`, `fc05b7f` |
+| 33 | `fightshape` computes a median | **landed** — `ed53de5`, `20405ce`, `fc05b7f`, `7041897` |
 | 34 | `enemyScaling` implements its own doc | **landed** — `91cb6a5` |
 | 35 | pack size / engage tokens | **landed** — `4a588f4` |
 | 36 | warp throughput | **measured negative** — the plan's premise dissolved; `fc05b7f` |
 | — | danger (incoming damage) | **landed** — `4a588f4` |
+| — | `LEVEL_LIFT` 1.0 → 1.25 | **landed** — `7041897`, measuring |
 
 ## The instrument (task 33)
 
@@ -101,10 +102,46 @@ was no throughput problem to fix because there was no throughput measurement.
 The real one now exists in `fightshape`'s aggregate. Two instrument bugs were
 found on the way and fixed (phase-vs-cast, MP floor).
 
+## After the levers — **verified**, at `4a588f4`, three fights
+
+The page was torn down between rounds 3 and 4 ("Target page, context or browser
+has been closed"): fights are now 2–3x longer, so the probe outlives its own
+execution context. `7041897` makes the aggregate print after *every* round so a
+lost page no longer costs the median.
+
+```
+sabertusk x5  lv 28, 2 444 hp each   12 220 hp of den   16.3 s   15.0 % HP   wiped 5/5
+voretooth x6  lv 27, 2 361 hp each   14 166 hp of den   16.7 s   12.3 % HP   wiped 6/6
+imperial  x6  lv 25, 1 334 hp each    9 274 hp of den   25.8 s    5.5 % HP   wiped 6/6
+MEDIAN 16.7 s (was 11.4) and 12.3 % (was 3.2). Both still short.
+```
+
+Task 34 is visible in round 3: the Longwythe imperial patrol was **lv 18 /
+753 hp** in the baseline and is **lv 25 / 1 334 hp** here, and its round went
+11.5 s → 25.8 s, 1.5 % → 5.5 %. Every round now ends `wiped` with the whole pack
+dead, where the baseline left 3 of 7 and 4 of 8 standing.
+
+Per-hit cost separates the two failures: sabertusks cost **3.74 % of max HP per
+landed hit** and imperial MTs **1.10 %**. The MT round is long *and* safe; the
+animal rounds are dangerous *and* short.
+
+`combatloop` **35/35 verified** at `4a588f4`, dungeon rounds included.
+
+## The last lever — `7041897`, being measured
+
+`LEVEL_LIFT` 1.0 → 1.25. The comment calling 1.0 "the ceiling on this lever" was
+reasoning about a den of *three*, and said so in its own last sentence ("the rest
+of the gap is pack composition and party throughput"); pack composition landed in
+`4a588f4`. A mid-band cell now lands ~3 levels over the party rather than level
+with it — ×1.28 HP, ×1.18 damage — and `denLevel`'s clamp, already written as
+`max(levels[1], party + 5)`, caps the top-of-band cells. It should not touch the
+imperial round at all: that is an authored `SpawnTables` territory and does not
+go through `denLevel`.
+
 ## Not verified yet
 
-- the post-lever `fightshape` median (run in flight at `4a588f4`)
-- `combatloop` (run in flight)
+- the `7041897` median (run in flight, with `--shot tmp/shots/lane11/`)
+- the frames — captured but **not looked at yet**
 - both perf gates — **not taken**; must be behind `daemon.mts --wait
   exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
