@@ -2376,3 +2376,35 @@ does for every non-qualifying pixel. So its failure mode is **"no reflection
 here"**, never **"wrong reflection here"**. When you add a guard, check what it
 does when it is wrong, and prefer the branch the code already takes.
 
+## A flag accepted and never read is this repo's most repeated defect
+
+Counted 2026-08-31, in one night, in three separate tools:
+
+- `reliefstat --against` — accepted, never read, and **fatal**: its value was
+  collected as an input path, so the tool's own documented usage line crashed it.
+- `bakecheck --json` — accepted, never read. Written by the same agent that had
+  removed the `reliefstat` one **an hour earlier**, which is the part worth
+  recording: knowing the defect is not protection against writing it.
+- `shoot.mts --post` — parsed, never reaches the page. The manifest returns
+  `variant: ""` and the frame is unablated, so every A/B taken through it
+  compared a build with itself.
+
+**An unread flag is worse than a missing one.** A missing flag errors; an unread
+flag silently returns a confident answer to a question nobody asked. Two of the
+three above invalidated measurements that were then written down as fact.
+
+The cheap defence, and it is now the standing rule: **run a tool's own usage line
+before trusting anything downstream of it**, and when you add a flag, make its
+first commit the one that proves it changes the output.
+
+## Test a gate's edge cases, not its happy path — it is a gate
+
+Same night, same lane: `bakecheck --build <typo>` died in an unhandled rejection
+and **exited 0**. No answer, and a green exit code, for a run that never ran.
+A gate that exits 0 when it fails to execute is worse than no gate, because
+`check` and every hook read the exit code. It names the bad ref and exits 2 now.
+
+Pair this with the standing rule that a gate nobody has watched fail is a gate
+nobody has tested: **make it fail on purpose, and make it fail to *run* on
+purpose.** Those are two different tests and only the first is usually done.
+
