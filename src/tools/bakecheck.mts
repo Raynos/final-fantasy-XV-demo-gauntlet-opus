@@ -3,7 +3,7 @@
  * Is the shared bake cache there, and is it this tree's?
  *
  * **Why this exists.** `check` runs twenty-three gates and not one of them
- * looked at `src/public/baked/`, where four caches of our own generators live.
+ * looked at `src/public/baked/`, where the caches of our own generators live.
  * `project/LANDMINES.md` §"Baked caches" is three screens of what that costs,
  * and every entry in it is a bug that shipped:
  *
@@ -38,7 +38,7 @@
  * defeating an A/B".
  *
  * This cannot be fixed without per-branch bakes, which would be right and cost
- * 33 MB and 40 s a branch. It can be made honest, and that is cheap: re-hash
+ * tens of megabytes and ~40 s a branch. It can be made honest, and that is cheap: re-hash
  * each artifact's source list *as it stood in that tree* and compare it to the
  * hash the artifact's own stamp recorded. `announceBuild` now does this on
  * every `--build <ref>` run of every tool, so nobody has to remember.
@@ -126,7 +126,17 @@ if (cold.length) {
 
 // ---- the `--build <ref>` arm --------------------------------------------
 if (opts.build !== undefined) {
-  const id = resolveBuild(opts.build);
+  // `resolveBuild` throws on a ref git cannot name, and this is a GATE: it must
+  // print a verdict, not a stack trace. `--build typo` used to exit 0 through an
+  // unhandled rejection, which is the worst of both -- no answer, and a green
+  // exit code for a run that never ran.
+  let id;
+  try { id = resolveBuild(opts.build); }
+  catch (e) {
+    console.log(`\n--build ${opts.build} is not a ref git can resolve: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    console.log(`\nFAIL  (${rows.filter((r) => r.state === 'FRESH').length}/${rows.length} artifacts fresh, ${Date.now() - t0} ms)`);
+    process.exit(2);
+  }
   const sha = shaOf(id);
   console.log('');
   if (!sha) {
