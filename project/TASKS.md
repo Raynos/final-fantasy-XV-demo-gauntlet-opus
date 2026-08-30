@@ -515,3 +515,16 @@ verified: high-frequency energy in a box of clear blue at `vista_noon` falls
 - **`rtVel` -> RGFormat is refused, with a reason:** alpha is the "a mover drew
   here" flag and both consumers branch on it. Not a saving. `lane15`
 
+
+### Lane 7 addendum (2026-08-31): the waterline blocks
+
+- **Evenly spaced rectangular slabs lie along every sea waterline**, at a ~4 m
+  pitch, reading as if they sit slightly above the water, with a matching
+  rectangular light/dark patchwork in the shallows inboard of them. Read
+  `tmp/shots/l7/f4/l7-body1-sea.jpg`. Never seen before because every corpus
+  shoreline is 250 m+ from camera; found by the first bank-height frame of a sea
+  body. **Disproved cause:** it is not a contour of the bilinear bed in the
+  water alpha — breaking that threshold up with the foam's own `churn` noise
+  (`cf41e2f`) left the frame visibly unchanged against `9f5dd37`. **Ablate in
+  this order:** `water/Shore.ts`'s 21-row swash ribbon (`shoot.mts --hide`),
+  then the terrain clipmap's LOD stitching. Lane 7 owns the first one.

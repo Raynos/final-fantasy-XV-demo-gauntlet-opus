@@ -363,3 +363,35 @@ careful with the far-waterline blocks specifically: they are at the ~4 m pitch
 of the grid, but `water/Shore.ts`'s ribbon rows and the clipmap's own stitching
 are both candidates and **neither has been ablated**. `--hide` the shore ribbon
 first. Do not read `cf41e2f`'s message as having settled it.
+
+## MEASURED NEGATIVE: the waterline blocks are not the alpha contour
+
+`tmp/shots/l7/f4/l7-body1-sea.jpg` against `f3/l7-body1-sea.jpg`, same derived
+pose, `cf41e2f` against `9f5dd37`. **Unchanged.** Breaking the alpha threshold up
+with `churn` over 0.04–0.46 m did not move the rectangular blocks along the far
+waterline or the blocky mottle through the shallows by anything visible. So the
+inference in `cf41e2f`'s message — that the blocks are a contour of the bilinear
+bed — is **wrong**, and the commit is a no-op for this defect. (It is still
+defensible on its own terms: a hard isoline in the alpha is a stamped edge
+whether or not it is the thing making these blocks. It is not a fix.)
+
+**What the blocks actually look like**, described rather than named: evenly
+spaced flat rectangular slabs lying *along* the waterline, at a roughly 4 m
+pitch, foreshortening correctly with distance, and reading as if they sit
+slightly **above** the water rather than in it. They span the full width of the
+frame. The shallows inboard of them carry a matching rectangular light/dark
+patchwork.
+
+**The remaining candidates, in the order to ablate them:**
+1. `water/Shore.ts` — the swash ribbon is 21 elevation rows merged into one
+   mesh, and one row's worth of quads standing proud is exactly this shape.
+   `shoot.mts --hide` the ribbon; if the blocks go, it is this. **This is lane
+   7's own file** and the first thing a respawn should do.
+2. The terrain clipmap's LOD stitching at the level boundary that happens to
+   fall near the shore.
+3. The bed grid, still — but the `churn` disproof above argues against it.
+
+This is the largest visible defect left in any water frame I took, and it has
+never been in a judged shot because every corpus shoreline is 250 m+ away. It
+was found by the first bank-height frame of a sea body, which is the whole
+argument for task 25.
