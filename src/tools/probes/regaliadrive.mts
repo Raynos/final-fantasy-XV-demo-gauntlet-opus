@@ -8,8 +8,13 @@
 //
 // So this drives it. Get in, drive it manually, hand it to Ignis, and check the
 // four things that make a car a car rather than a set piece: it accelerates, it
-// steers, it stays on the road when the AI has it, and you can get out again
-// where you stopped.
+// steers THE WAY THE KEY SAYS, it stays on the road when the AI has it, and you
+// can get out again where you stopped.
+//
+// The capitals are the point. This gate used to assert `Math.abs(h1 - h0) > 0.3`
+// -- "the heading changed" -- and passed green through the entire life of a
+// Regalia that steered backwards, which a human found by driving it once. See
+// section 2b.
 //
 // Run: node src/tools/probe.mts src/tools/probes/regaliadrive.mts --dirty \
 //        --shot tmp/shots/regalia/r.jpg
@@ -81,18 +86,134 @@ ok('the throttle moves it', straight > 60, `${straight.toFixed(0)} m in 14 s, to
 ok('it reaches a road speed', topKmh > 45, `${topKmh.toFixed(0)} km/h`);
 if (window.__shot) await window.__shot('driving');
 
-// steering: hold a turn and see the heading actually come round
-const h0 = reg.body.heading ?? 0;
-inp.keys.clear();
-inp.keys.add('KeyW');
-inp.keys.add('KeyA');
-for (let f = 0; f < 60 * 5; f++) g.frame(1 / 60);
-const h1 = reg.body.heading ?? 0;
-let dh = Math.abs(h1 - h0) % (Math.PI * 2);
-if (dh > Math.PI) dh = Math.PI * 2 - dh;
-ok('it steers', dh > 0.3, `${(dh * 57.3).toFixed(0)} degrees in 5 s of left lock`);
+/* ---- 2b. steering, WITH A SIGN --------------------------------------- */
+//
+// This block used to be four lines that took `Math.abs(h1 - h0)` and asserted
+// the car turned *at all*. The Regalia shipped steering the wrong way round,
+// a human found it in about a minute, and nineteen gates, a hundred and forty
+// two shots and both perf gates could not see it — because the only question
+// any of them asked was "does the heading change", and a mirrored car changes
+// its heading beautifully. The sign was thrown away on purpose, by an
+// `Math.abs` nobody read twice.
+//
+// Two things have to be true of the replacement, and the second is the one
+// the mirrored bug would have defeated.
+//
+// 1. It is **two-sided.** A gate that only drives left cannot tell a mirrored
+//    car from a correct one under a global sign flip of `steer`; driving both
+//    keys and demanding opposite signs can.
+// 2. It measures the **path**, not the car. `body.heading` is the quantity
+//    the bug lived in, and the whole lesson of that day (LANDMINES, "a
+//    consistently-but-inversely wound shell") is that a self-consistent frame
+//    fools every check expressed inside it. So the instrument here is where
+//    the car actually WENT: the direction of travel, sampled from world
+//    positions, and the side of its old course it ends up on. Both are
+//    unambiguous in world space no matter what any internal frame believes.
+//
+// Convention, fixed once so the assertions below can be read: with +Y up and
+// a right-handed frame, a positive rotation about +Y carries a forward vector
+// toward its own left. `signedTurn(a, b) = atan2(a.z*b.x - a.x*b.z, a·b)` is
+// that rotation, so **left is positive**. `KeyA` sets `st += 1` and
+// `RegaliaSystem` documents "a positive steer raises `heading`, which turns
+// left", so `KeyA` must come out positive here and `KeyD` negative.
+const dirOf = (a, b) => {
+  const dx = b.x - a.x, dz = b.z - a.z;
+  const l = Math.hypot(dx, dz) || 1;
+  return { x: dx / l, z: dz / l };
+};
+const signedTurn = (a, b) => Math.atan2(a.z * b.x - a.x * b.z, a.x * b.x + a.z * b.z);
+
+/**
+ * Drive straight, then hold `key`, and report what the world saw.
+ *
+ * The turn is **accumulated frame group by frame group**, not measured
+ * endpoint to endpoint. `atan2` lands in `(-pi, pi]`, and the first version of
+ * this ran four seconds of full lock at 159 km/h — comfortably more than one
+ * full circle — so a +245 degree left turn came back as -115 and the gate
+ * failed a car that was steering correctly. An accumulated sum cannot wrap,
+ * and it also stops the assertion depending on how long the window happens to
+ * be. The car is also allowed to bleed some speed off first: full lock at a
+ * hundred and sixty is a drift, and a drift is not a steering test.
+ */
+const lockTest = (key) => {
+  // Put it back on the carriageway first, at rest, pointing up the road.
+  // The first version of this ran straight on from the fourteen-second
+  // full-throttle test, which leaves the car 381 m away in whatever ditch it
+  // reached; both locks then rotated the chassis 75 and -37 degrees while the
+  // path moved 0.1 m sideways, because the car was spinning in place against
+  // scenery. Heading rotating while the path does not is precisely the
+  // failure this section exists to notice, so the gate has to be handed a car
+  // that can actually drive off.
+  inp.keys.clear();
+  const hit = reg.path.nearest(reg.body.pos.x, reg.body.pos.z, reg.path.makeHit());
+  reg.body.reset(hit.x - hit.tz * 2.1, hit.z + hit.tx * 2.1, Math.atan2(hit.tx, hit.tz));
+  reg.body.converge && reg.body.converge();
+  step(10);
+  // up to a speed a road car corners at, not the 159 km/h the top-speed test
+  // leaves behind -- full lock at that is a drift, and a drift is not a
+  // steering test
+  inp.keys.add('KeyW');
+  for (let f = 0; f < 60 * 8 && reg.body.kmh < 55; f++) g.frame(1 / 60);
+
+  const sample = () => reg.body.pos.clone();
+  let prev = sample();
+  for (let f = 0; f < 6; f++) g.frame(1 / 60);
+  let dPrev = dirOf(prev, (prev = sample()));
+  const d0 = dPrev;
+  const p0 = prev.clone();
+  const hStart = reg.body.heading ?? 0;
+  let hPrev = hStart;
+
+  inp.keys.add(key);
+  let turn = 0, dh = 0, lateralAt1s = null;
+  for (let g6 = 0; g6 < 25; g6++) {              // 25 groups of 6 frames = 2.5 s
+    for (let f = 0; f < 6; f++) g.frame(1 / 60);
+    const now = sample();
+    const d = dirOf(prev, now);
+    turn += signedTurn(dPrev, d);
+    let step = (reg.body.heading ?? 0) - hPrev;
+    if (step > Math.PI) step -= Math.PI * 2;
+    if (step < -Math.PI) step += Math.PI * 2;
+    dh += step;
+    hPrev = reg.body.heading ?? 0;
+    dPrev = d; prev = now;
+    // one second in, while the turn is still well short of a quarter circle,
+    // ask the other question: which side of its old course is it on now
+    if (g6 === 9) {
+      const off = { x: now.x - p0.x, z: now.z - p0.z };
+      lateralAt1s = d0.z * off.x - d0.x * off.z;
+    }
+  }
+  inp.keys.delete(key);
+  return { turn, dh, lateral: lateralAt1s, kmh: reg.body.kmh, ran: prev.distanceTo(p0) };
+};
+
+out.push('');
+out.push('--- 2b. which way does it steer ---');
+const left = lockTest('KeyA');
+const right = lockTest('KeyD');
 inp.keys.clear();
 step(30);
+
+const deg = (r) => `${(r * 57.3).toFixed(0)} deg`;
+// A car that rotates without going anywhere is stuck against scenery, and its
+// turn direction means nothing; check it drove before believing either sign.
+ok('it is moving while it steers', left.ran > 20 && right.ran > 20,
+  `A covered ${left.ran.toFixed(0)} m at ${left.kmh.toFixed(0)} km/h, D ${right.ran.toFixed(0)} m at ${right.kmh.toFixed(0)} km/h`);
+ok('it steers at all', Math.abs(left.turn) > 0.5 && Math.abs(right.turn) > 0.5,
+  `A ${deg(left.turn)}, D ${deg(right.turn)} over 2.5 s of lock`);
+// THE assertion. Not "it turned" -- which way.
+ok('A turns the car LEFT', left.turn > 0.4 && left.lateral > 1,
+  `course rotated ${deg(left.turn)} (positive = left), ${left.lateral.toFixed(1)} m to the left of its old course after 1 s`);
+ok('D turns the car RIGHT', right.turn < -0.4 && right.lateral < -1,
+  `course rotated ${deg(right.turn)} (negative = right), ${right.lateral.toFixed(1)} m to the left of its old course after 1 s`);
+ok('and the two are opposite, not merely large', left.turn * right.turn < 0,
+  `A ${deg(left.turn)} vs D ${deg(right.turn)}`);
+// The path is the authority above; this checks the car's own frame agrees
+// with it, which is the check that would have caught a mirrored RENDER while
+// the physics stayed right (or the reverse).
+ok('the chassis heading agrees with the path it drove', left.dh > 0 && right.dh < 0,
+  `heading delta A ${deg(left.dh)}, D ${deg(right.dh)}`);
 
 /* ---- 3. hand it to Ignis --------------------------------------------- */
 out.push('');
