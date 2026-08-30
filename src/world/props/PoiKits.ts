@@ -22,7 +22,7 @@ import type { Ecology } from '../veg/Ecology.ts';
 import type { Game } from '../../game/Game.ts';
 
 /**
- * Built form for the hundred and twenty-four points of interest of Lucis.
+ * Built form for the hundred and thirty-nine points of interest of Lucis.
  *
  * Before this file the map had 124 named places and almost no geometry at any
  * of them: arriving at the Tomb of the Wise or Wiz Chocobo Post put you on the
@@ -38,7 +38,7 @@ import type { Game } from '../../game/Game.ts';
  *
  * Everything is **streamed and lazy**: a POI is built the first time the
  * camera comes within `BUILD_R`, at one POI per frame, and its group is hidden
- * beyond `DRAW_R`. Building all 124 up front cost 1.4 s of merge work and
+ * beyond `DRAW_R`. Building all 139 up front cost 1.4 s of merge work and
  * several hundred permanently resident draw calls for structures a thousand
  * metres behind the player.
  */

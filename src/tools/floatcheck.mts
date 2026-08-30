@@ -12,7 +12,7 @@
  * the renderer's arithmetic; this proves the things we actually placed obey it.
  *
  * It builds **every POI in the world in one boot** — `PoiKits._make` per site,
- * without moving the camera — so "the POI corpus" is all 124 of them and not
+ * without moving the camera — so "the POI corpus" is all 139 of them and not
  * the handful that happen to have streamed in around spawn. Then it pushes each
  * variant's support points through the **final instance matrix** and measures
  * them against `Terrain.drawnHeightAt` at the finest ring, which is the ground

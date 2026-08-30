@@ -3,7 +3,7 @@
  *
  *   node src/tools/probe.mts src/tools/probes/blobcensus.mts --dirty
  *
- * `c2e2295` fixed one instance of this class — every boulder in the 124 kits
+ * `c2e2295` fixed one instance of this class — every boulder in the 139 kits
  * was a bare platonic solid on a mapless `plain()` material — and named its own
  * blind spot in the commit message: four sites it deliberately left alone. The
  * coordinator then saw *"smooth dark ellipsoids beside the tomb"* in a judged

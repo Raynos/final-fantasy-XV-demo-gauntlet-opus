@@ -146,7 +146,7 @@ export class Ecology {
    *
    * `sites` only knows about the handful of landmarks Vegetation authored near
    * the origin. Once the forest streams across all 8 km it will happily close
-   * over Lestallum, Wiz's paddocks and every turning circle, so the 124 POIs
+   * over Lestallum, Wiz's paddocks and every turning circle, so the 139 POIs
    * get a say too. Two radii per POI: a **plateau** at the built pad's own
    * `PoiKits.PAD_R`, where the clearing is exactly 1, and a **skirt** running
    * out to a *fraction* of the discovery radius — a town really is cleared for
@@ -155,7 +155,7 @@ export class Ecology {
    *
    * That second half is why `FRAC` is not the whole story and a missing key is
    * not a "no clearing" instruction. `tomb` and `landmark` have none — 33 of
-   * the 124 POIs — and before the pad term they were the only two types with no
+   * the 139 POIs — and before the pad term they were the only two types with no
    * clearing of any kind, which is not what the table meant to say about a
    * built stone deck.
    */
@@ -172,7 +172,7 @@ export class Ecology {
       // retuned. It is the *plateau*; `FRAC * p.r` is the catchment the
       // plateau's skirt runs out over. A POI with no `FRAC` entry -- a tomb, a
       // waymark landmark -- still gets its pad, which is the whole point:
-      // before this, 33 of the 124 POIs had no clearing of any kind.
+      // before this, 33 of the 139 POIs had no clearing of any kind.
       const pad = PAD_R[p.type] ?? 0;
       const f = FRAC[p.type as keyof typeof FRAC] ?? 0;
       const r = Math.max(p.r * f, pad * PAD_SKIRT);
@@ -235,7 +235,7 @@ export class Ecology {
    * life two of the three did not.** `treeDensity` took `siteBlock` *and*
    * `poiClear`; `grassDensity` and `scrubDensity` took only `siteBlock`, which
    * knows about the handful of landmarks near the origin and nothing about the
-   * 124 POIs. Measured before the fix, at the pad centres: Galdin Quay's plaza
+   * 139 POIs. Measured before the fix, at the pad centres: Galdin Quay's plaza
    * `grassDensity` 0.746, Schier Heights parking `scrubDensity` 0.587, and
    * `poiClear` exactly 1.00 at both. Hammerhead only read 0.003 because it has
    * an authored `site` sitting on top of it, which is why the symptom looked

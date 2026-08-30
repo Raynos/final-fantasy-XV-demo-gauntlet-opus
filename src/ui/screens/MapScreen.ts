@@ -7,7 +7,7 @@ import { WorldMapScreen } from './WorldMapScreen.ts';
  * stylised blob with hand-placed pins that agreed with nothing else in the
  * game; it now shows the same atlas as the `world` slot — the real
  * heightfield, the real road graph, the real nineteen regions and the real
- * 124 points of interest — so whichever way the player opens the map, they get
+ * 139 points of interest — so whichever way the player opens the map, they get
  * the map.
  *
  * See `WorldMapScreen` for everything it does. This subclass exists only so

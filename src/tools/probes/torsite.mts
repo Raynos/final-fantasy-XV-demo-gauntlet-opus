@@ -5,7 +5,7 @@
  * test, so it never saw the road term, the site term or the POI term that
  * every other stone in the file is filtered by — and `q` itself read
  * `siteBlock` (the handful of authored landmarks near the origin) rather than
- * `cleared` (those plus the world map's 124 POIs), which is the same defect
+ * `cleared` (those plus the world map's 139 POIs), which is the same defect
  * `39d4d16` found in the vegetation one layer down.
  *
  * This calls the real generators and inspects what they EMIT, rather than

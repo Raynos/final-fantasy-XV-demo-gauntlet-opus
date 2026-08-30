@@ -45,7 +45,7 @@ export class Props {
    * How many entries of `poiKits.built` have been through {@link packSubtree}.
    *
    * `Dungeons.init` packs the *finished boot scene*, which is the only correct
-   * place for a whole-scene pass — but 115 of the 124 POI sites are not in it.
+   * place for a whole-scene pass — but 115 of the 139 POI sites are not in it.
    * They stream in one per frame during play and were never re-packed, so every
    * town, haven and outpost the player drives to arrived carrying `3x Float32`
    * colour and normals for the life of the session. `poi_kits` is the largest

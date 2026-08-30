@@ -372,7 +372,7 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
  * because they are drawn on a real 2D canvas. The geometry needs one because
  * `PoiKits._base` seats every compound against `Terrain.drawnHeightAt`, which
  * reads the **rasterised clipmap** — the renderer's own arithmetic, as
- * `seatcheck.mts` proves. A Node bake would seat 124 compounds at subtly
+ * `seatcheck.mts` proves. A Node bake would seat 139 compounds at subtly
  * different heights and ship aprons graded against ground that is not the
  * ground the player stands on: correct-looking geometry of the wrong world.
  *

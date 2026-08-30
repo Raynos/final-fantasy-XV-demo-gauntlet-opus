@@ -403,7 +403,7 @@ export class WorldMapScreen {
    *
    * `AutoDrive.setTargetPos` had no caller in the tree: the only way to pick a
    * destination was `nextDestination()`, which cycles the next name up the
-   * road, so a chart with 124 places on it could not send you to any of them.
+   * road, so a chart with 139 places on it could not send you to any of them.
    * `RegaliaSystem.driveTo` is the right entry point rather than
    * `setTargetPos` directly -- it flips `setAutoDrive(true)` and calls
    * `enter(true)` if the party is on foot, which is the difference between a

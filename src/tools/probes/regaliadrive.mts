@@ -288,7 +288,7 @@ if (window.__shot) await window.__shot('out');
 /* ---- 5. a destination picked off the world map ------------------------ */
 // `AutoDrive.setTargetPos` had no caller in the tree. The only way to choose
 // where Ignis went was `nextDestination()`, which cycles the next name up the
-// road -- so the chart could draw 124 places and send you to none of them.
+// road -- so the chart could draw 139 places and send you to none of them.
 // This drives the whole path: open the map, put the cursor on a pin, press the
 // key a player presses, and see whether the car goes there.
 out.push('');

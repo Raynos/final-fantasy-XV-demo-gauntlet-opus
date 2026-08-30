@@ -180,10 +180,10 @@ export class WearField {
 
   /**
    * Multiply the wear into a geometry's vertex colours, sampled at its own
-   * vertices — the cheap carrier, and the one the 124 POI aprons use.
+   * vertices — the cheap carrier, and the one the 139 POI aprons use.
    *
    * The plan asks for a texture and {@link applyWear} is that. It is the right
-   * answer where there is one pad (Hammerhead), and the wrong one at 124,
+   * answer where there is one pad (Hammerhead), and the wrong one at 139,
    * because a per-place field means a per-place material, and a material split
    * is a **draw call** — 8.7 µs each against a budget of 800, with ten POIs in
    * frame in a wide shot. So the aprons carry the field in `attributes.color`
