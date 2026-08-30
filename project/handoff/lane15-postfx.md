@@ -29,6 +29,19 @@ x2.25 again at dpr 1.5. The harness default is `q=ultra`, so every bootprof
 memory number this project has quoted carries the 8x line. **Not verified as a
 lever yet** — 8 -> 4 is a quality change and has not been diffed.
 
+## READ THIS FIRST if you captured between ff8f459 and 6b572ab
+
+**Every frame captured in that window is blank.** ff8f459 added `uNear`/`uFar`
+to `GradePass`'s uniform object and to the shader body but not to the GLSL
+`uniform float` declaration, so the whole grade program failed to compile
+(`ERROR: 0:272: 'uFar' : undeclared identifier`) and the composer's last colour
+stage wrote nothing. A shot came out as a 6 KB PNG against a normal 2.3 MB.
+Fixed in `6b572ab`. `pre-commit` cannot see this -- a shader is a string until a
+GPU sees it -- and neither could a probe that compiled the shader standalone
+with its own preamble, which returned `standaloneCompiles: true` about a
+shader three does not build. **The capture caught it.** Verified: yes, by the
+driver's own error text and by the file size.
+
 ## Task 44 is a measured negative, and the reason is that the name lies
 
 **`post.render` is 74-77% of the frame and 85% of `post.render` is the scene
