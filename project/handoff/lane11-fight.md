@@ -293,9 +293,25 @@ shadow, a windmill silhouette, garulas at different depths. **The fight frames
 are not.** By `BRIEF.md`'s bar this is not done, and the remaining work is
 mostly not in `src/combat/` or `src/game/encounters/`.
 
-## Not verified yet
+## Both perf gates — **verified PASS, on a CONTENDED box**
 
-- both perf gates — **not taken**; must be behind `daemon.mts --wait
+Taken behind `daemon.mts --wait exclusive-free`, which returned `exclusive-free
+after 0.0 s`. Both gates nevertheless printed `VERDICT: CONTENDED` naming other
+lanes' tools that started *during* the run — the known `contention()` weakness.
+
+```
+perf      PASS: every certified shot >= 60 fps, on a ruler that validated itself
+          per-shot floors: 162/162 shots clear the 60 fps target by more than their own noise
+          noise floor (hero_closeup, 24 ABBA pairs): IQR 0.20 ms, bias +0.00 ms
+gameplay  PASS: every segment >= 60 fps, on a ruler that validated itself
+          noise floor (walking): start IQR 1.02 ms / end IQR 0.53 ms = 21% of the 4.9 ms median
+```
+
+So the density increase — 5-8 hostiles per den instead of 3-5, four engage
+tokens instead of three — **cost the perf gates nothing measurable**. That was
+the landmine the brief named and it did not fire. Both exit 0.
+
+## Not verified yet — **not taken**; must be behind `daemon.mts --wait
   exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
 ## Files touched
