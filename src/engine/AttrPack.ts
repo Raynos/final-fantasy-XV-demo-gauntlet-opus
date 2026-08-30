@@ -64,9 +64,29 @@ export interface PackStats {
  *     aMat:3          9.5 MB   6.5 MB inside 0..1  <- packed
  *     aTan:3          9.5 MB   6.2 MB inside -1..1 <- packed
  *     aGroom:3        4.7 MB   4.0 MB inside -1..1 <- packed
- *     aClip:2         2.1 MB   2.1 MB inside 0..1  <- packed
+ *     aClip:2         2.1 MB   2.1 MB inside 0..1  <- REVERTED, see below
  *
- * **`position` is deliberately absent.** 71.1 MB of it fits `Int16`, but a
+ * **`aClip` is a position attribute wearing a shading attribute's name, and it
+ * cost this repo two red gates before that was noticed.** It looks like the
+ * safest row in the table — two components, every value already inside 0..1,
+ * no range check ever refuses it. But `aClip.x` is the terrain clipmap's LOD
+ * *morph alpha*, and `TerrainMaterial.ts:231` spends it as
+ * `tfH = mix(tfH, <next level's surface>, aClip.x)` two lines above
+ * `vec3 transformed = vec3(position.x, tfH, position.z)`. One byte of alpha is
+ * therefore one byte of **height**: `driftcheck` came back 0.45 m against a
+ * 0.05 m tolerance and `heightcheck` asserts *0.000 m* GPU against CPU, which
+ * no quantisation of that alpha can ever satisfy. It was worth 1.6 MB, the
+ * smallest row here, and it is the only one that feeds a vertex position
+ * rather than a shading term.
+ *
+ * The rule the table now follows: **an attribute is packable when it is spent
+ * on how a surface LOOKS, never on where it IS.** `aMat` is
+ * (roughness, metalness, thickness), `aTan` and `aGroom` are hair directions,
+ * `color` is a tint, `skinWeight` is a partition of 1 — all shading. A name
+ * beginning with `a` proves nothing; read the shader that consumes it.
+ *
+ * **`position` is deliberately absent**, for the milder version of the same
+ * reason. 71.1 MB of it fits `Int16`, but a
  * normalised integer position is only decodable with a per-geometry scale and
  * offset pushed onto the mesh — and the geometries here are merged, shared
  * between meshes, and read back by collision and raycasting. That is a
@@ -78,7 +98,7 @@ export interface PackStats {
  * three's `BufferAttribute` supports but no generator in this repo emits, so it
  * wants its own verification pass.
  */
-type Packable = 'color' | 'normal' | 'skinWeight' | 'aMat' | 'aTan' | 'aGroom' | 'aClip';
+type Packable = 'color' | 'normal' | 'skinWeight' | 'aMat' | 'aTan' | 'aGroom';
 
 /** How one attribute name is re-packed, once its values are proved in range. */
 interface Rule {
@@ -127,8 +147,8 @@ const RULES: Record<Packable, Rule> = {
   aTan: { fmt: 'i8' },
   // Groom normal, likewise a unit vector, and only hair carries it.
   aGroom: { fmt: 'i8' },
-  // Clip-fade parameters, 0..1.
-  aClip: { fmt: 'u8' },
+  // NO `aClip`. It is the terrain LOD morph alpha and it moves the vertex.
+  // See the note on the table above before adding anything back here.
 };
 
 /**
