@@ -86,11 +86,43 @@ export class Pack implements EnemyPack {
     return n;
   }
 
-  /** Spread ring slots evenly around whatever the pack is fighting. */
+  /**
+   * Spread ring slots evenly around whatever the pack is fighting.
+   *
+   * **Two rings, not one, and recomputed whenever the engage set changes.**
+   *
+   * `EnemyBase._chase` closes an attacker to `want * 0.7` and holds a flanker
+   * at `want * 1.6`, both along `slotAngle` — so an attacker and a flanker on
+   * the same bearing are on different circles and do not collide, but two
+   * attackers on adjacent bearings are on the *same small* circle and do.
+   * This used to spread every live member around one ring by its index in
+   * `members`, which meant the four engaged animals of a six-animal den got
+   * whatever four bearings their array positions happened to give them: with
+   * six members that is 60 degrees apart on a circle about a metre and a half
+   * across, and a sabertusk is a metre wide. A watched capture of a five-strong
+   * den showed exactly that — bodies drawn inside other bodies, three animals
+   * stacked in one screen quadrant, and nothing encircling the player. The
+   * comment in `_chase` calls that "the whole difference between a pack and a
+   * queue", and it was right; the slots simply were not being handed out that
+   * way.
+   *
+   * So the attackers get the inner ring evenly to themselves, the flankers get
+   * the outer ring evenly to themselves, and the outer ring is rotated half a
+   * slot out of phase so a flanker never queues up directly behind an attacker
+   * on the same bearing.
+   */
   _reslot() {
-    const live = this.members.filter((m) => !m.dead);
-    for (let i = 0; i < live.length; i++) {
-      live[i].slotAngle = (i / Math.max(1, live.length)) * Math.PI * 2;
+    const inner: Enemy[] = [];
+    const outer: Enemy[] = [];
+    for (const m of this.members) {
+      if (m.dead) continue;
+      (this.engaged.includes(m) ? inner : outer).push(m);
+    }
+    for (let i = 0; i < inner.length; i++) {
+      inner[i].slotAngle = (i / inner.length) * Math.PI * 2;
+    }
+    for (let i = 0; i < outer.length; i++) {
+      outer[i].slotAngle = ((i + 0.5) / outer.length) * Math.PI * 2;
     }
   }
 
@@ -125,14 +157,17 @@ export class Pack implements EnemyPack {
    */
   assign(e: Enemy) {
     // prune the dead and the disengaged
+    let dropped = false;
     for (let i = this.engaged.length - 1; i >= 0; i--) {
       const m = this.engaged[i];
-      if (m.dead || !m.inCombat) this.engaged.splice(i, 1);
+      if (m.dead || !m.inCombat) { this.engaged.splice(i, 1); dropped = true; }
     }
+    if (dropped) this._reslot();
     if (this.engaged.includes(e)) { e.packRole = 'engage'; return; }
     if (this.engaged.length < this.maxEngaged) {
       this.engaged.push(e);
       e.packRole = 'engage';
+      this._reslot();
       return;
     }
     // rotate the longest-held token out if this one has been waiting
@@ -143,6 +178,7 @@ export class Pack implements EnemyPack {
       this.engaged.push(e);
       e.packRole = 'engage';
       e._waited = 0;
+      this._reslot();
       return;
     }
     e.packRole = 'flank';

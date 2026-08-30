@@ -45,16 +45,28 @@ import type { EmitterHandler } from './Emitter.ts';
  * How much of the gap between a spawn's authored level and the party's own
  * `enemyScaling` closes. 1 puts the anonymous country exactly at the party.
  *
- * 0.8 is deliberate rather than round: it keeps a residual sense that the wilds
- * were authored at a level -- a Leide den still reads as easier than a Cleigne
- * one at the same party level -- while removing the part of the gap that made a
- * field fight a photo booth. Ten levels of lift is x1.085^10 = 2.26 on HP and
- * x1.058^10 = 1.76 on damage, per `Enemies.levelScale`, so the lever moves both
- * halves of "combat has no danger" at once and moves HP faster than damage.
+ * 1.0: an authored spawn lands at the party's own level, never past it.
+ *
+ * It shipped at 0.8 for one run, on the argument that a residual four-level
+ * deficit kept a sense that the wilds were authored. `fightshape` at 7041897
+ * showed what that actually buys, because the OTHER spawn path moved in the
+ * same commit: `WildTerritories.LEVEL_LIFT` puts a procedural den three to five
+ * levels OVER the party, and 0.8 left the authored territories four levels
+ * under it. Same field, same party, a nine-level disagreement about how hard
+ * the world is -- and it fell the wrong way round, so the hand-authored content
+ * was the easy content. Measured: a wild sabertusk den ran 21.4 s at level 32
+ * and cost Noctis 14.3% of his HP; an authored one forty metres away ran 14.3 s
+ * at level 23 and cost him 2.5%.
+ *
+ * At 1.0 an authored den is level with the party and a wild one is still three
+ * over, which is the ordering the two files' own comments ask for. Four levels
+ * of lift is x1.085^4 = 1.39 on HP and x1.058^4 = 1.25 on damage, per
+ * `Enemies.levelScale`, so it moves both halves of "combat has no danger" at
+ * once and moves HP faster than damage.
  *
  * It only ever lifts upward, so it cannot make an over-level area easier.
  */
-const PARTY_LIFT = 0.8;
+const PARTY_LIFT = 1.0;
 
 /** How a fresh `RpgSystem` is dealt out. */
 export interface RpgOpts {

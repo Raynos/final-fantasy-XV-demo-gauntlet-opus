@@ -225,9 +225,25 @@ const one = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '--');
  * carries a median, even if it is a median over three fights.
  */
 function aggregate() {
-const fights = metrics.filter((m) => m.found && m.kills > 0);
+/**
+ * A round counts only if **the pack it was measuring died**.
+ *
+ * `kills > 0` was not that test: `enc.stats.kills` is the world's counter, so
+ * a round could kill four things that belonged to some other group while the
+ * pack under measurement walked off. Round 5 of the run at 7041897 did exactly
+ * that -- `ended: nobody-within-45m, pack dead 0/5` -- and its 10.5 s went
+ * into the median as if it were a fight that ended in 10.5 s. It was a fight
+ * that did not end.
+ *
+ * Dropping rounds moves the headline, so the dropped ones are PRINTED with the
+ * reason they were dropped, and the median over everything that killed
+ * anything is printed underneath the real one. A filter you cannot see is a
+ * filter you cannot argue with.
+ */
+const fights = metrics.filter((m) => m.found && m.denN > 0 && m.denKilled === m.denN);
+const partial = metrics.filter((m) => m.found && m.kills > 0 && !fights.includes(m));
 const agg = [];
-agg.push('', `=== AGGREGATE over ${fights.length} fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${metrics.filter((m) => m.found && !m.kills).length} killed nothing)`);
+agg.push('', `=== AGGREGATE over ${fights.length} finished fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${partial.length} left the pack alive)`);
 if (!fights.length) {
   agg.push('  no fight completed -- nothing to aggregate');
 } else {
@@ -250,6 +266,11 @@ if (!fights.length) {
   const okSecs = medSecs >= 18 && medSecs <= 30;
   const okHp = medHp >= 15;
   agg.push(`  VERDICT: duration ${okSecs ? 'PASS' : `FAIL (${one(medSecs)} s, want 18-30)`}; danger ${okHp ? 'PASS' : `FAIL (${one(medHp)}%, want >=15%)`}`);
+  if (partial.length) {
+    const all = [...fights, ...partial];
+    agg.push(`  DROPPED (pack did not die): ${partial.map((m) => `round ${m.round} ${one(m.secs)}s ${one(m.hpPaid)}% dead ${m.denKilled}/${m.n} ${m.stopped}`).join('; ')}`);
+    agg.push(`  ...median over all ${all.length} rounds that killed anything: ${one(median(all.map((m) => m.secs)))} s, ${one(median(all.map((m) => m.hpPaid)))} %`);
+  }
 }
 return agg;
 }
