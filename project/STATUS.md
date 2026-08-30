@@ -11,35 +11,63 @@ decisions taken at dispatch. MEGA BUILD MODE: no judging until every lane lands.
 
 ## What is live
 
-Eight lanes at a time on the shared trunk. **Closed so far:** 4 (clouds),
-10 (input truth), 13 (memory and boot), 5+6 (light in shadow, hue), 1 (rig —
-respawned to finish). **Live:** 1-respawn, 3, 7, 15, 16, 17, 18, 19, 22.
-**Not yet staffed:** 2, 11, 12, 14, 20, 21, 23.
+Ten lanes at a time on the shared trunk. **Closed:** 3 (near-field), 4 (clouds),
+5+6 (light in shadow, hue), 7 (water and weather), 10 (input truth), 13 (memory
+and boot), 15 (postfx), 17 (spine and dungeons), 19 (city hubs). **Live:** 1, 2,
+11, 14, 16, 18, 20, 21, 22, 23. **Held by design:** 12, which is the playtest's
+own queue and cannot be staffed until R2 reports.
 
 Per-lane state is in `project/handoff/<lane>.md`; the directory length is the
 live headcount.
 
-## The gate that is red, and why it is interesting
+## The gate that was red, and what it turned out to be
 
-**`driftcheck` FAILS and it is not drift.** `SURFACE DRIFT mean 0.000 m, worst
-0.000 m over 36 864 texels` — the before and after probes are identical. What
-fails is a *static* disagreement between the rendered ground and
-`Terrain.heightAt()`: **mean −0.001 m, p99 0.229 m, and one texel in 36 864 at
-−0.520 m** at (−39.8, −68.2), 16% past a `tolCpu` of 0.45 that was fitted to a
-measured ~0.37 m chord sag. The sign is always negative, which is the only sign
-a tessellation chord can have.
+**`driftcheck` is green, and the diagnosis is worth more than the fix.** It was
+never drift: the before and after probes were identical (`mean 0.000, worst
+0.000 over 36 864 texels`). What failed was a *static* disagreement between the
+rendered ground and `Terrain.heightAt()` — and the error histogram is
+**symmetric**, `1 38 493 2836 5838 2809 499 28 2`, which is tessellation chord
+error shown rather than argued, and is what an offset provably cannot produce.
 
-It was PASS at the dispatch baseline and `check` invokes it with no extra
-arguments, so this is not the invocation-path landmine. **`--build` cannot
-bisect it**: `--build` *is* honoured (verified — it announces the right tree
-sha), but `src/public/baked/` is a shared cache symlinked into every
-materialised tree, so an old sha runs against tonight's bake, and `--build
-7da60d5` and `--build HEAD` return bit-identical numbers in every digit. Lane 16
-owns the repair; the proposal on the table is to gate p99 and *report* the worst
-texel, falsified against the tool's own `tfH += 3.0` control arm.
+The gate now tests **both** the flat tolerance **and** each texel against its own
+local sag bound, and it is **falsified**: `--inject 'tfH += 3.0;'` moves
+12 544 of 12 544 texels into violation against 0 at baseline, with the control's
+histogram being the baseline's shifted by exactly +3.0 in every bin. `--sag-k 0`
+restores the old flat predicate in one flag.
+
+**And the gate was partly reading a stale bake.** On fresh caches the worst error
+moved −0.520 → −0.397 — which at the old predicate would have passed by 12%. So
+the instrument that first reported the problem had itself been bitten by the
+shared-bake trap below. That is the argument *for* the repair, not against it:
+the gate was one gully lip from red either way.
 
 Everything else was green at dispatch (19/19) and `nanscan` reads 0 of 142.
 Draw calls 436–616 against a budget of 800.
+
+## The two harness faults that cost the most
+
+**The prewarm queue was unbounded.** `daemon.mts`'s `prewarm()` docstring
+promised "newest sha wins — a second commit supersedes the first rather than
+queueing two boots"; the code only ever rejected a duplicate of the *same* sha.
+Ten lanes plus a `post-commit` hook per commit outran four workers: **62% of all
+harness time was queue**, p50 prewarm wait 8.4 min, worst 33.1, daemon RSS
+10.2 GB. It presented as unrelated failures everywhere — 300 s `preparePage`
+timeouts, ablations timing out, three lanes reporting a `check` that never
+returned. Fixed; the daemon was restarted to discard 62 stale prewarms.
+
+**`--build <sha>` is not a bisect here.** `src/public/baked/` is one directory
+symlinked into every materialised tree, so a `--build` run re-bakes those shared
+artifacts from that sha's sources — every lane captures against whichever sha was
+materialised last. `bakecheck` caught three different shas in one capture. This
+retroactively explains two builds returning bit-identical numbers, one sha
+giving PASS then FAIL, and a lane's "big win" that was another lane's in-flight
+edit.
+
+**`texc.bin.gz` and `geo.bin.gz` cannot stay fresh while lanes commit** — any
+`pre-commit` `vite build` deletes them. MISSING is the safe state (regenerated
+at runtime, ~3.7 s slower); **STALE is the dangerous one**, silently rendering
+faces a version behind their sculpt. Rebake immediately before any judged or
+certified number, with commits held.
 
 ## No number taken tonight is a baseline
 
