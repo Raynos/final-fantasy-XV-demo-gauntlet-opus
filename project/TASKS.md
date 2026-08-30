@@ -171,3 +171,33 @@ said it was: the tab is **1 382 MB**, not 1 246, and everything plan tasks
   `PoiKits._town`'s block loop — skip a block whose jittered centre lands
   within ~15 m of the origin — and it would give both cities four more
   usable anchors. Re-run the probe after any change to `_town`. `lane19`
+- **The baked layer-texel cache is SHARED across build trees, so a `Layers.ts`
+  A/B by sha measures whichever tree booted last.** `src/public/baked/` is
+  symlinked into every materialised `sha:` tree, and `vite-plugin-bake` re-checks
+  its content hash only in `configResolved` — at server start. Two trees alive at
+  once with different `Layers.ts` therefore fight over one stamp file, and a page
+  already booted keeps the texels it built. Measured on 2026-08-30: a clean
+  `--build <parent>` vs `--build <child>` pair around commit `444a988` came back
+  **byte-for-byte identical on every huestat column**, because the shared bake had
+  been regenerated from the child tree between the two captures. The `--dirty`
+  path is worse and has no symptom at all: the daemon keeps one long-lived dirty
+  server, so a recipe edit made *after* that server started is served from the
+  stale cache — and the frame that looked like a large win from it turned out to
+  be another lane's in-flight edit arriving through the same shared tree. Either
+  key the bake directory by source hash rather than by repo, or have the runtime
+  verify the stamp it loads. `src/tools/vite-plugin-bake.mts`, `src/tools/bake.mts`.
+  `lane5`
+- **Props, rocks and characters do not get the terrain's new sky fill.** `lane5`
+  added `uSkyFill` in `TerrainMaterial.ts` — a terrain-local second helping of the
+  `SkyProbe` irradiance, gain 3.5 — because the probe delivers only ~6/255 to
+  shadowed ground and terrain then occludes it twice. Everything else in the scene
+  still gets the single helping, so a boulder standing on lifted ground is now
+  relatively darker in shadow than the ground it sits on. Nothing in a frame looks
+  wrong today, but the honest home for this is `sky/MaterialPatch.ts`, which
+  already patches every opaque material and could carry the same term for all of
+  them. `lane4`/`lane5`
+- **GTAO costs 5/255 in `zone_vannath`'s shadowed foreground.** Measured: the
+  foreground box reads Y p50 11 shipped and 16 under `?post=nogtao`, on top of a
+  cloud shadow that costs 21. GTAO is `postfx/`, not terrain, and its radius is
+  0.62 m — a metre-scale occluder should not be removing a fifth of the light from
+  a flat prairie 40 m away. Worth a look from the post lane. `lane15`
