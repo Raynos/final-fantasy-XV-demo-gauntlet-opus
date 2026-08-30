@@ -178,6 +178,15 @@ Practical note for the next agent: **redirect a probe's stdout to a file.** The
 background-task buffer keeps roughly the last thirty lines and this report is
 two hundred, so the first capture of it lost every row above `menace`.
 
+**`drawcheck` came back VOID — a harness fault, and against a stale sha.** It
+queued for **1803 s**, ran 49 s, captured 16 of its 47 shots and then aborted on
+batch 2 with *"daemon socket idle for 2700 s -- this is the harness, not the
+game."* It was also capturing `sha:36a2ba52d2b4`, which is where HEAD stood when
+it was **queued**, an hour and eight commits before the tree it was meant to
+measure. So it is not evidence either way about this lane's kits. **Re-run it,
+and check `daemon.mts --health` and `cleanup.mts` first.** Frames it did take
+are in the cache, so the re-run is cheaper than the first.
+
 **The re-shoot came back and is read above.** `drawcheck --worst 30`, `probe
 src/tools/probes/perfpoi.mts` and `probe src/tools/probes/questaudit.mts` did
 **not** — they were still queued at hand-off behind an exclusive lease that
