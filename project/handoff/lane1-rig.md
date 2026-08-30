@@ -477,3 +477,95 @@ land a constant I could not measure.**
 
 Noctis' `p50 Y 1` against a plate 37 did not move and was not expected to: that
 is the self-occlusion residue and no exponent reaches it.
+
+---
+
+## Respawn 3 (2026-08-31) — log
+
+### Priority 1 — `b31cb87` verified, and it is two changes with two verdicts
+
+Re-measured independently (`tmp/shots/l1-fc5`, `facecheck --only prompto,noctis
+--shots`, `--build HEAD` at `bf11a0b`) and got exactly the coordinator's
+numbers, rect 0.44-0.62 x 0.02-0.22:
+
+```
+                  p50 Y     p99.5 Y      (plate 12.3)
+  prompto  before   94         227        81 / 176
+  prompto  after    62         201
+  noctis   before    0         142        37 / 140
+  noctis   after     1         101
+```
+
+**The broadening (exp1 110 -> 45, exp2 20 -> 9) is right and is KEPT.** Verified
+by eye on a 3x crop of Noctis' crown (`tmp/shots/l1-fc5/noc_crown.png`): there is
+a visible highlight band on the crown where `lane1r-fc0` had none anywhere.
+
+**The energy cut that rode along with it was a measured negative**, per the
+predecessor's own read: blond's median overshot the plate the other way and
+Noctis lost his bright extreme. `eb0d40c` puts `spec` back to 0.55 and leaves the
+rim at 0.20.
+
+**Measured after `eb0d40c` (`l1-fc6`): Prompto p50 62 -> 62, p99.5 201 -> 203.**
+So `spec` is very nearly free on the blond rect — the band does not land there —
+and it is kept on the strength of §12.3 ("high-intensity, low-saturation and
+thin") plus the crown band being visible on Noctis. **Noctis could not be
+measured on that rect at all — see the landmine below.**
+
+`nanscan` after the shader edits: **0 of 142 shots carry NaN.**
+
+### LANDMINE — a fixed `regionstat` rect is NOT a valid A/B across `facecheck` runs
+
+`facecheck` stabilises the *face* in frame; it does not stabilise the character's
+heading, so **the background behind the head moves between runs**. The hair rect
+0.44-0.62 x 0.02-0.22 sits *above* the face box and is therefore background-
+contaminated. On Noctis it read black hair in `l1-fc5` and **blown-out white sky**
+in `l1-fc6` (`p50 185`, `p90 #ffffff`) — no code between them touched anything
+that could do that. Prompto's framing happened to be stable (p10/p50 hex
+identical across the two runs), which is why his numbers are usable and Noctis'
+are not.
+
+Every recorded Noctis hair number in this file, including the 142 -> 101 above,
+is contaminated to an unknown degree. **Crop the rect and LOOK at it before
+quoting a number off it** (`crop.mts <png> <out> 704 18 288 180 4`).
+
+### Task 5 re-diagnosed — the defect is a crushed FLOOR, not an excess of light
+
+The standing diagnosis (the groom has no self-occlusion, so it is over-lit) is
+**contradicted by the plate table on three of the four numbers**. Lining ours up
+against §12.3:
+
+```
+                   p5 / p50 / p99.5        plate p5 / p50 / p99.5
+  prompto (blond)    1  /  62  /  203        22  /  81  /  176
+  noctis  (black)    0  /   1  /  101 (*)    20  /  37  /  140
+```
+
+Only ONE number (blond's top end) asks for less light. Every other one asks for
+**more**, and the two floors ask for a lot more. Adding self-occlusion — which
+darkens — moves five of six numbers the wrong way. What §12.3's plates actually
+describe is a *lifted, compressed* range: no true blacks anywhere in hair, on a
+black head or a blond one.
+
+Confirmed by eye on the full 0.55 m frame (`l1-fc6/noctis_facecheck.png`, read
+whole): Noctis' groom is a flat black silhouette with three or four chalk-white
+streaks on the crown and no form at all elsewhere. That is the blind judge's
+"opaque hard-alpha shards" and it is a floor problem.
+
+### `9672122` — the sky fill was keyed off the card's own normal
+
+The term that should give hair its shadow-side value existed and did nothing.
+Three causes, one idea, landed together:
+
+- **`hN` is the CARD's normal.** Half of any groom's ribbons face away from the
+  sky at any instant, so `pow(dome, 1.6)` collapsed to ~0 over half the visible
+  hair — absent exactly where it was needed. Now `gN`, the sculpted scalp normal
+  (the same field the aniso band is placed against), exponent 1.6 -> 1.2.
+- **`hueC = vColor / max(0.10, luminance)`** returns unit luminance above 0.10
+  and a *fifth* of one at Noctis' 0.022 — a silent 5x penalty on the hair with
+  nothing else. The band and the rim are tuned around that floor and are
+  untouched; the fill normalises properly and clamps instead.
+- **Its albedo weight ran 0.14 -> 0.56** across the cast, against plates whose
+  dark ends land 10 Y apart. Now nearly flat (0.30 -> 0.36).
+
+Plus a 45% mix toward a cool sky hue, per §12.3's "hair shadows are blue-black
+where skin in the same frame is warm".
