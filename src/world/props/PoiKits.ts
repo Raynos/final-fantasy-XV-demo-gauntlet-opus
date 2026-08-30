@@ -1487,7 +1487,16 @@ export class PoiKits {
       }
     }
     // the square: a paved plaza, market stalls and strung lights
-    put(M.paving, worldUv(new THREE.CylinderGeometry(11, 11, 0.35, 22)), [0, 0.5, 0]);
+    // **The square is a plinth, not a slab lying on the dirt.** With the paving
+    // texture on it the disc's own edge became the thing you notice: a bare
+    // 0.35 m cylinder wall standing proud of the earth, faceted at 22 segments,
+    // with the ground stopping dead against it -- read `tmp/shots/l18c/
+    // plaza_high.jpg`, bottom centre. A laid square has a battered edge and the
+    // ground comes up to meet it, so the disc is now a shallow truncated cone:
+    // the walking surface is the same 11 m circle at the same {@link PLAZA_Y},
+    // and the 0.9 m of flare underneath is what turns a step into a kerb. 40
+    // segments rather than 22 because the facets were legible at 15 m.
+    put(M.paving, worldUv(new THREE.CylinderGeometry(11, 11.9, 0.7, 40)), [0, 0.325, 0]);
     // Named points on the square, published through `KitResult.anchors` so a
     // city hub can put a counter, a board and a person on real pavement. The
     // disc is 0.35 thick and sits at y 0.5, so its walkable top is PLAZA_Y.
