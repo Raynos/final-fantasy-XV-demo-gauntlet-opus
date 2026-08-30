@@ -195,9 +195,9 @@ for (const file of walk(SRC)) {
   // three.js `.normalize()`, which are neither undefined nor ours.
   const rel = path.relative(ROOT, file);
   const lines = src.split('\n');
-  let inGlsl = false, fence = 0;
+  let inGlsl = false, fence = 0, inBlockComment = false;
   for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i];
+    let ln = lines[i];
     if (!inGlsl && (/\/\*\s*glsl\s*\*\/\s*`/.test(ln) || /^\s*(export\s+)?const\s+\w*(GLSL|VERT|FRAG|SHADER|CHUNK|PARS|BEGIN)\w*\s*=\s*`/.test(ln))) {
       inGlsl = true; fence = i;
       continue;
@@ -208,19 +208,46 @@ for (const file of walk(SRC)) {
     if (/^\s*`\s*[;,)\]]?\s*$/.test(ln) || /`\s*;\s*$/.test(ln)) { inGlsl = false; continue; }
     if (i - fence > 4000) inGlsl = false;
 
+    /**
+     * Strip comments before scanning, or the tool reports its own prose.
+     *
+     * Caught on itself, within a minute of its first fix landing: the guard
+     * written for `SsrPass.ts:75` explains the defect in a block comment above
+     * the code that closes it, and the sweep re-reported the words
+     * `normalize(cross(dy, dx))` out of that explanation as a HIGH call site --
+     * one line below the fix. **A tool that cannot tell a fix's rationale from
+     * the defect keeps every fix it inspires permanently red**, which trains the
+     * reader to write the fix without the reason.
+     */
+    if (inBlockComment) {
+      const close = ln.indexOf('*/');
+      if (close < 0) continue;
+      inBlockComment = false;
+      ln = ln.slice(close + 2);
+    }
+    for (;;) {
+      const open = ln.indexOf('/*');
+      if (open < 0) break;
+      const close = ln.indexOf('*/', open + 2);
+      if (close < 0) { ln = ln.slice(0, open); inBlockComment = true; break; }
+      ln = ln.slice(0, open) + ' ' + ln.slice(close + 2);
+    }
+    const lineComment = ln.indexOf('//');
+    if (lineComment >= 0) ln = ln.slice(0, lineComment);
+
     // ---- pow ------------------------------------------------------------
     for (let m = ln.indexOf('pow('); m >= 0; m = ln.indexOf('pow(', m + 1)) {
       if (m > 0 && /[A-Za-z0-9_.]/.test(ln[m - 1])) continue;   // `tf_pow(`, `.pow(`
       const a = argsOf(ln, m + 3);
       if (!a || a.args.length < 2) continue;                      // wrapped over lines
-      if (powBaseSafe(a.args[0])) { if (opts.all) hits.push({ file: rel, line: i + 1, rule: 'pow', text: ln.trim(), severity: 'MED' }); continue; }
+      if (powBaseSafe(a.args[0])) { if (opts.all) hits.push({ file: rel, line: i + 1, rule: 'pow', text: lines[i].trim(), severity: 'MED' }); continue; }
       // A varying or an interpolated attribute is the HIGH case: it is the only
       // base whose sign the author cannot read off the line, and it is what bit
       // the trail ribbon (`pow(vUv.x, k)` on the tail quad, vUv.x < 0).
       const varying = /\bv[A-Z]\w*|\ba[A-Z]\w*|\bgl_PointCoord|\bvUv|\bUv\b/.test(a.args[0]);
       const signed = powBaseSigned(a.args[0]);
       hits.push({
-        file: rel, line: i + 1, text: ln.trim(),
+        file: rel, line: i + 1, text: lines[i].trim(),
         rule: signed ? 'pow(signed base)' : 'pow',
         severity: varying || signed ? 'HIGH' : 'MED',
       });
@@ -231,12 +258,12 @@ for (const file of walk(SRC)) {
       if (m > 0 && /[A-Za-z0-9_.]/.test(ln[m - 1])) continue;
       const a = argsOf(ln, m + 9);
       if (!a) continue;
-      if (normalizeArgSafe(a.args[0])) { if (opts.all) hits.push({ file: rel, line: i + 1, rule: 'normalize', text: ln.trim(), severity: 'MED' }); continue; }
+      if (normalizeArgSafe(a.args[0])) { if (opts.all) hits.push({ file: rel, line: i + 1, rule: 'normalize', text: lines[i].trim(), severity: 'MED' }); continue; }
       // `normalize(cross(a, b))` is the one that is not a corner case: two
       // parallel edges are what a degenerate triangle and a vertical wall both
       // hand it, and the result is exactly vec3(0).
       const cross = /\bcross\s*\(/.test(a.args[0]);
-      hits.push({ file: rel, line: i + 1, rule: cross ? 'normalize(cross)' : 'normalize', text: ln.trim(), severity: cross ? 'HIGH' : 'MED' });
+      hits.push({ file: rel, line: i + 1, rule: cross ? 'normalize(cross)' : 'normalize', text: lines[i].trim(), severity: cross ? 'HIGH' : 'MED' });
     }
   }
 }

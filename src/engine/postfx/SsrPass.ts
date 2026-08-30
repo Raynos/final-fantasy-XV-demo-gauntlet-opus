@@ -72,7 +72,43 @@ export class SsrPass extends FilterPass {
 
           vec3 dx = worldAt(vUv + vec2(uTexel.x, 0.0)) - P;
           vec3 dy = worldAt(vUv + vec2(0.0, uTexel.y)) - P;
-          vec3 N = normalize(cross(dy, dx));
+          /**
+           * The degenerate-derivative guard, and it has to come BEFORE the
+           * normalize.
+           *
+           * dx and dy are world-space deltas reconstructed from a depth
+           * texture. On a depth plateau, on a silhouette where both neighbours
+           * land on the same surface, and at any range where two adjacent texels
+           * resolve to one world point, they are parallel or zero -- and
+           * normalize(cross(dy, dx)) is then 0/0.
+           *
+           * The two tests that follow do NOT catch that: N.y < 0.0 and
+           * N.y < 0.86 are both FALSE for a NaN, so the pass fell straight
+           * through and marched a reflection ray built from a NaN normal. In a
+           * post pass that does not stay local -- a NaN written here survives
+           * the rest of the composer and lands on the canvas as a hole of pure
+           * black. project/LANDMINES.md: it is invisible to every gate, since
+           * it is not a page error, not a draw-count change, and against a
+           * baseline carrying the same hole not even a pixel diff.
+           *
+           * The test is on sin^2 of the angle between the deltas rather than
+           * on |cross|, because the deltas scale with distance: one texel is
+           * a millimetre of world at arm's length and metres of it at the far
+           * plane, so an absolute floor would either miss the degenerate case up
+           * close or delete the pass in the distance. dot(n,n) / (|dx|^2|dy|^2)
+           * is exactly sin^2, and is scale-free.
+           *
+           * Bailing writes src unchanged, which is what this pass already does
+           * for every pixel that does not qualify -- so the failure mode of the
+           * guard is "no reflection here", never "wrong reflection here".
+           *
+           * Found by src/tools/nansweep.mts; see project/TASKS.md.
+           */
+          vec3 nRaw = cross(dy, dx);
+          float nLen2 = dot(nRaw, nRaw);
+          float dScale2 = dot(dx, dx) * dot(dy, dy);
+          if (!(nLen2 > 1e-8 * dScale2)) { gl_FragColor = vec4(src, 1.0); return; }
+          vec3 N = nRaw * inversesqrt(nLen2);
           if (N.y < 0.0) N = -N;
           if (N.y < 0.86) { gl_FragColor = vec4(src, 1.0); return; }
 
