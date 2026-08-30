@@ -136,9 +136,44 @@ Also measured at `f580459`, both **verified**:
 - The camera clamp left both framings alone: they resolved 5.28 m and 7.00 m
   below the water level.
 
-## Not verified — everything visual
+## What the fixed frames show — `tmp/shots/l23/w3/`, at `3c59927`, READ BY EYE
 
-Nothing has been looked at yet. Written but unseen:
+**Both are now recognisably underwater, and this is the third look; the first
+two were wrong in different ways.**
+
+- **`under_vesper.jpg`** — a dark rippling ceiling with bright window openings
+  scattered across it where the wave normals tilt far enough to break total
+  internal reflection, over a mid-tone teal bed, with the far water going black
+  before the bed does. The white flare is **completely gone**.
+- **`under_alstor.jpg`** — teal-lit boulders in the near field losing contrast
+  into the murk behind them, a dark ceiling with cyan window flecks and cloud
+  shapes showing through the largest of them. It reads as a lake bottom.
+
+**Honest residue in those frames**, none of it a bug, all of it polish:
+1. the near boulders are brighter and more contrasty than the bed and do not
+   attenuate with range as fast as they should — a slightly "lit diorama"
+   near field;
+2. the far bed meets the dark far water on a **hard horizontal line** with no
+   transition band;
+3. the whole thing reads closer to a night dive than a midday one. The TIR
+   mirror is `uScatter * downwelling * 1.55`, which is deliberately dark, and
+   the exposure clamp takes it down further. At the grazing angle these two
+   framings use, dark is physically correct — but a shallower framing would
+   show more of the window, and no such framing has been taken.
+
+## Not verified
+
+- **`longplay` and `gameplay` were never run** — both need the exclusive lease,
+  which was held by co-agents for most of this lifetime. Task 72's done-when
+  says "`longplay` clean" and that half is **open**.
+- **`shotswim.mts` never returned** — the cross-lane question (does any corpus
+  shot now stand in >1.2 m of water and silently change?) is **unanswered**.
+  Its run was queued at `4af4d26` when this lifetime ended. **Run it first.**
+- The breath gauge's DOM has never been in a frame — it only draws while
+  swimming, and no capture has had a swimmer in it.
+- Older, superseded notes below.
+
+### Superseded — what was unseen before the third look
 - that the swim state actually engages at Alstor;
 - **the water surface from below**. Lane 7 confirms every framing it ever took
   was from above, and predicts the from-below fragment is wrong in four ways at
