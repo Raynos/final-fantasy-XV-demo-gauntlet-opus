@@ -796,7 +796,32 @@ export class Sky {
       uCloudTexel: { value: new THREE.Vector2(1 / 720, 1 / 405) },
       // Upsample Gaussian radius in march texels. See sky.glsl.ts; 1.4 was the
       // billboard defect. `?post=cloudtap0` collapses it to one bilinear fetch.
-      uCloudTap: { value: 0.90 },
+      //
+      // Task 16, the crisp sunlit top edge, and it IS this number after all.
+      // A march texel is 2.22 screen px at MARCH_SCALE 0.45, so a 3x3 Gaussian
+      // of radius 0.90 march texels smears every cloud silhouette over ~4 px
+      // before anything else touches it. Measured on vista_noon with
+      // `cloudstat.mts`'s `rampT` -- the median 10-90% luminance crossing of
+      // TOP edges only, sky above and cloud below, which is the crown:
+      //
+      //     uCloudTap 0.90   rampT 8 px   edgestat hard 0.0%  speck 0.00
+      //     uCloudTap 0.50   rampT 6 px   edgestat hard 0.2%  speck 0.00
+      //     uCloudTap 0.00   rampT 5 px   edgestat hard 1.4%  speck 0.10
+      //
+      // and at 4x on one crown (`tmp/l4/edge-*.png`) 0.90 is an airbrushed
+      // gradient, 0.50 has a ragged rim with no visible half-res staircase,
+      // and 0.00 has more micro-wisp than either at the cost of a faint texel
+      // step. 0.50 is the measured point that has the bite without the step.
+      //
+      // The r2 backlog recorded this as "not the lever", and the reasoning
+      // there was sound against the crossing it was measuring -- a 15-20 px
+      // sky-to-body ramp that is geometric, a 2.25 km cloud at 20 km
+      // subtending 160 px with a density ramp 10% of that. But the crossing
+      // this instrument reproduces is 8 px, not 15-20, and half of 8 px is the
+      // filter. `uCloudDetailAmt` 0.62 -> 0.85 is the measured negative in its
+      // place: rampT 8 -> 7, bought by taking the cloud mask from 35.7% of the
+      // sky box to 31.6%, i.e. it sharpens by eroding the deck away.
+      uCloudTap: { value: 0.50 },
       uCloudMode: { value: 1 },
       uPixelAngle: { value: 0.001 },
       uTime: { value: 0 },
