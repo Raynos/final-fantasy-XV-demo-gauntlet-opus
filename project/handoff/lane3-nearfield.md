@@ -157,6 +157,44 @@ baseline's 3/5 for the foreground rock stack it promotes; the other kept the
 baseline for the layered ridges, the meteor, the skyline and the rest stop. A
 contested re-framing is not worth the noise-floor re-baseline, so it stayed.
 
+## The near-field trade, isolated and read at 2x — THE ONE OPEN QUESTION
+
+The trunk moved under me twice, so the last round was done properly, with an
+ablation tree: `819dba0` is today's `cd1c1fb` with `GrassField.ts` alone
+reverted to its pre-lane state, so a capture of each differs by this lane's
+grass work and by nothing else.
+
+**`hero_full` (camera 1.3 m above its own ground, bottom of frame at 3 m).**
+Pre: the ground from 3 m to 40 m is covered in flat green six-armed rosettes
+lying on cracked dirt — sea urchins, unmistakably an artifact, and exactly what
+plan item 12 names. Post: clean dry Leide hardpan with a fine straw-green
+fibre and no rosettes anywhere. **Post is plainly right.**
+
+**`party_walk` (near-horizontal camera).** Pre: distinct green tussocks around
+the party's boots — at 2x they are the *same* splayed cards, but from a
+horizontal angle they read as plants rather than as stars, and the frame has
+life in it. Post: the same ground with far fewer, smaller tufts. Isolated diff
+**9.517/255 over 22.2% of pixels, floor 1.51**. **Pre arguably looks better
+here.** That is the honest trade and I am flagging it rather than burying it.
+
+Why the blade ring cannot simply take over, measured rather than argued: with
+`grass_sward` named so it could be ablated on its own (`3387c5c`), on `hero_full`
+at HEAD `--hide grass_sward` moves **0.188/255 over 0.80% of pixels** (under the
+2.25 floor — grass cast shadow is doing nothing in Leide, so raising the caster
+gate is a recorded negative, do not) and `--hide grass_blade` moves **1.075/255
+over 2.68%**. Against that, `--hide grass_clump` moved **16.734/255 over 35.3%**.
+A card is one whole tuft on three crossed quads; a blade instance is one blade.
+The blade ring is roughly fifteen times less coverage per instance and its ring
+cap is 240 000, so it cannot cover 0-12 m at any density this budget allows.
+Raising blades per tuft from 3-6 to 5-19 is already in, and it bought 1.075/255.
+
+**The real fix, not attempted, for whoever picks this up:** the star is a
+*look-down* artifact of three vertical quads, so the near LOD needs either real
+tuft geometry dense enough to stand alone inside 12 m, or a card whose planes
+are tilted / topped so its silhouette from above is not radial. Both change
+geometry that the silhouette and geo baselines key on, so neither is a
+last-half-hour change.
+
 ## Left / residue
 
 - **Foreground occluders on the other judged vistas (task 13)** — `vista_dawn`
