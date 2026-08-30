@@ -15,6 +15,7 @@ import type { BanterCtx, NearLandmark } from './Banter.ts';
 import type { Terrain } from '../Terrain.ts';
 import type { Landmark } from '../terrain/Field.ts';
 import type { EcoSite } from '../props/EcoSites.ts';
+import { ROAMERS } from '../../game/encounters/SpawnTables.ts';
 
 /**
  * The road trip.
@@ -128,6 +129,8 @@ export class RegaliaSystem {
   _brake!: number;
   _ctx!: BanterCtx | null;
   _distanceAp!: number;
+  /** Seconds until the next night-road roll; see {@link RegaliaSystem._nightRoadDanger}. */
+  _nightRoll!: number;
   _ducked!: boolean;
   _enterCooldown!: number;
   _gaze!: THREE.Vector3[];
@@ -191,6 +194,7 @@ export class RegaliaSystem {
     this._brake = 0;
     this._prompt = false;
     this._distanceAp = 0;
+    this._nightRoll = 70;
     this._enterCooldown = 0;
     this.startParked = opts.startParked !== false;
     this._tmp = new THREE.Vector3();
@@ -453,6 +457,7 @@ export class RegaliaSystem {
       this.fuel = Math.max(0, this.fuel - burn);
       this._refuelIfParked();
       this._awardDistance(game);
+      this._nightRoadDanger(dt, game);
     }
 
     // ---- weather / wetness --------------------------------------------------
@@ -740,6 +745,58 @@ export class RegaliaSystem {
     out.x = bn.l.x; out.z = bn.l.z; out.y = bn.l.h;
     out.dist = Math.max(0, best);
     return out;
+  }
+
+  /**
+   * **The night on the road.** The consumer {@link RegaliaSystem.nightDanger}
+   * never had.
+   *
+   * `nightDanger()` has been correct and orphaned: it returns the same daemon
+   * pressure the Enemies system reads and nothing called it, so driving after
+   * dark was exactly as safe as driving at noon and the headlights were the
+   * only thing the night changed. The whole point of a Lucian night is that the
+   * road stops being a corridor and starts being a place daemons stand in.
+   *
+   * Deliberately narrow, because the failure mode of a roadside ambush is that
+   * it fires while the player is parked at a haven reading a menu:
+   *
+   * - **only above 8 m/s and only while driving.** A stationary car is a camp,
+   *   not a road.
+   * - **only above 0.5 pressure**, which is `night_giant`'s old window and
+   *   about two hours either side of the small hours.
+   * - **never during a capture** (`game.currentShot`), because a pack that
+   *   arrives on frame 40 of a 60-frame settle is a different photograph every
+   *   run.
+   * - **never on top of a fight already happening** — 90 m, generous, because
+   *   the car covers 30 of them a second.
+   *
+   * The spawn itself is `EncounterDirector.spawnRoamer`, unmodified: it already
+   * picks a bearing 30–42 m out, scales to the party, alerts the pack and fires
+   * the `encounter:warn` HUD banner. At road speed a ring of that radius *is*
+   * the road ahead — the car is inside it in a second and a half — so nothing
+   * here needs to reach into the director to aim it, which matters because that
+   * file belongs to another lane.
+   */
+  _nightRoadDanger(dt: number, game: Game) {
+    if (game.currentShot || !this.isDriving || this.body.speed < 8) return;
+    this._nightRoll -= dt;
+    if (this._nightRoll > 0) return;
+    // Re-armed whether or not the roll lands, so a player who stays in a fight
+    // is not immediately handed a second one when it ends.
+    this._nightRoll = 55 + Math.random() * 55;
+    const depth = this.nightDanger();
+    if (depth <= 0.5) return;
+    const enc = game.get('Encounters');
+    if (!enc || enc.suppressRoamers || enc.boss) return;
+    const pos = this.body.pos;
+    if (enc.enemies && enc.enemies.countNear(pos, 90) > 0) return;
+    // `ronin_duel` carries its own 0.6 floor and is the rarer of the two; the
+    // pack is the ordinary answer.
+    const wantRonin = depth >= 0.6 && Math.random() < 0.25;
+    const def = ROAMERS.find((r) => r.id === (wantRonin ? 'ronin_duel' : 'daemon_pack'));
+    if (!def) return;
+    enc.spawnRoamer(def);
+    game.get('Story')?.talk?.react('nightfall');
   }
 
   /**
