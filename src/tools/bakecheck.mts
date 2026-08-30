@@ -53,11 +53,16 @@ import type { BakeStatus } from './bakesources.mts';
 import { resolveBuild, shaOf } from './identity.mts';
 
 function parse(argv: string[]) {
-  const o = { allowCold: false, build: undefined as string | undefined, json: false };
+  // No `--json`. The first draft parsed one and never read it, which is the
+  // exact defect this lane had just removed from `reliefstat.mts` an hour
+  // earlier: a flag that is accepted and ignored is strictly worse than one that
+  // is rejected, because a run that names an output format and does not produce
+  // it looks like it worked. If this ever needs machine-readable output, add the
+  // flag and the writer in the same commit.
+  const o = { allowCold: false, build: undefined as string | undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--allow-cold') o.allowCold = true;
-    else if (a === '--json') o.json = true;
     else if (a === '--build') o.build = argv[++i];
     else if (a === '--dirty') o.build = 'dirty';
     else throw new Error(`unknown flag ${a}`);
@@ -65,7 +70,21 @@ function parse(argv: string[]) {
   return o;
 }
 
-const opts = parse(process.argv.slice(2));
+/**
+ * A gate never exits on a stack trace.
+ *
+ * An unknown flag has to be rejected -- one that is accepted and ignored is the
+ * worse bug, and this file carries the comment saying so -- but rejecting it by
+ * letting the throw reach the top level prints twenty lines of node internals
+ * and buries the one line that helps. Say what is wrong and what the flags are.
+ */
+let opts;
+try { opts = parse(process.argv.slice(2)); }
+catch (e) {
+  console.error(e instanceof Error ? e.message : String(e));
+  console.error('usage: node src/tools/bakecheck.mts [--allow-cold] [--build <ref> | --dirty]');
+  process.exit(2);
+}
 const t0 = Date.now();
 const rows: BakeStatus[] = ARTIFACTS.map(statusOf);
 
