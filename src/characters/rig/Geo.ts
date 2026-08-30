@@ -247,7 +247,34 @@ export class MeshBuilder {
     // vertex and the shader's own guard falls back to the shading normal
     if (this._gnUsed) geo.setAttribute('aGroom', new THREE.Float32BufferAttribute(this.gn, 3));
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
-    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
+    // **Uint8-normalised skin weights — plan task 38, in the generator rather
+    // than as a post-hoc re-pack.** Four bytes a vertex instead of sixteen;
+    // measured by lane 13 at 16.5 MB of CPU across the 548 geometries this
+    // build makes, and the same again on the GPU copy. glTF's own format.
+    //
+    // It has to be here and NOT in `engine/AttrPack.ts`, and that is a measured
+    // negative lane 13 paid for: a re-pack that skips small meshes packs an
+    // NPC's hair (17-25 k verts) and skips its hands, eyes and teeth (<8 k),
+    // and `NpcShadow.skinnedShadowProxy` then merges Uint8 beside Float32,
+    // `mergeGeometries` returns null, and that person's shadow is deleted —
+    // during play, long after any boot-time audit could see it. In the
+    // generator every mesh gets one format and no merge can ever see two.
+    //
+    // Four weights are a partition of 1 and the skinning shader divides by
+    // nothing, so rounding each independently can leave a tuple summing to
+    // 253/255 and shrink the vertex toward the model origin. The residual goes
+    // on the largest component, which is `AttrPack.renormalize`'s rule.
+    const sw8 = new Uint8Array(this.sw.length);
+    for (let i = 0; i < this.sw.length; i += 4) {
+      let sum = 0, big = 0;
+      for (let k = 0; k < 4; k++) {
+        sw8[i + k] = Math.round(clamp01(this.sw[i + k]) * 255);
+        sum += sw8[i + k];
+        if (sw8[i + k] > sw8[i + big]) big = k;
+      }
+      if (sum !== 0 && sum !== 255) sw8[i + big] += 255 - sum;
+    }
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw8, 4, true));
     geo.setIndex(this.idx);
     computeSmoothNormals(geo, this.grp);
     return geo;
@@ -310,20 +337,29 @@ export function mergeParts(geos: THREE.BufferGeometry[]) {
   for (const g of list) { vc += g.attributes.position.count; ic += indexOf(g).count; }
 
   const out = new THREE.BufferGeometry();
-  const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor][] = [
-    ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
-    ['color', 3, Float32Array], ['aMat', 3, Float32Array], ['aTan', 3, Float32Array],
-    ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],
+  const names: [string, number][] = [
+    ['position', 3], ['normal', 3], ['uv', 2],
+    ['color', 3], ['aMat', 3], ['aTan', 3],
+    ['skinIndex', 4], ['skinWeight', 4],
   ];
-  for (const [name, size, Type] of specs) {
-    const arr = new Type(vc * size);
+  // The output array type and `normalized` flag come from the FIRST PART, not
+  // from a hard-coded table. `skinWeight` is Uint8-normalised now (see
+  // `build()`), and a table that said `Float32Array` here would silently copy
+  // 0-255 integers into a float buffer and shrink every vertex to the model
+  // origin — which is the same class of bug as the null merge that sent
+  // task 38 back to the generators in the first place, only quieter.
+  for (const [name, size] of names) {
+    const first = list[0].attributes[name] as THREE.BufferAttribute;
+    if (!first) continue;
+    const Ctor = first.array.constructor as new (n: number) => THREE.TypedArray;
+    const arr = new Ctor(vc * size);
     let off = 0;
     for (const g of list) {
       const src = g.attributes[name].array;
-      arr.set(src, off);
+      arr.set(src as unknown as ArrayLike<number> & { length: number }, off);
       off += src.length;
     }
-    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size, first.normalized));
   }
   const iarr = vc > 65535 ? new Uint32Array(ic) : new Uint16Array(ic);
   let io = 0, vo = 0;

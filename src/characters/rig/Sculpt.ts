@@ -506,10 +506,15 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
     ic += g.index!.count;
   }
   const out = new THREE.BufferGeometry();
-  const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor][] = [
+  const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor | Uint8ArrayConstructor][] = [
     ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
     ['color', 3, Float32Array], ['aEmissive', 3, Float32Array], ['aMat', 2, Float32Array],
-    ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],
+    // Uint8-normalised to match `Geo.ts`'s generator (plan task 38). Nothing
+    // in this file or in `CreatureGeo.ts` writes skin weights today, so the
+    // row is unreachable and the guard above skips it — it is kept in step so
+    // that the day something does, the two builders cannot disagree about the
+    // format and hand `mergeGeometries` a null.
+    ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Uint8Array],
   ];
   for (const [name, size, Type] of specs) {
     if (!geos[0].attributes[name]) continue;
