@@ -1,11 +1,13 @@
-# Status — 2026-08-28
+# Status — 2026-08-30
 
 > **A snapshot, REPLACED in place, never appended to.** Dated bullets belong in
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`, and there is no open plan.** `docs/plans/` holds its README and nothing
-else; `project/handoff/` the same. **Live lanes: none.**
+**`main`. One plan, LOCKED: `docs/plans/2026-08-30-fable-to-nine.md`** — the
+audited to-nine plan merged with the content arc, two city hubs, chocobos,
+swimming and the funded Meteor art round. **Lanes staff 2026-08-31 ~02:20
+CEST; live lanes: none until then.** `project/handoff/` holds only its README.
 
 `pnpm run check` **19/19**, `nanscan` **0 of 142**, draw calls **786/800**, and
 **`BRIEF.md`'s 33 ms rule is met** — `perf` and `gameplay` both certify with

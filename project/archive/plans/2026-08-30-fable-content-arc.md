@@ -1,4 +1,6 @@
-# The 30-minute arc — content in every direction, and two city hubs
+Status: SUPERSEDED (2026-08-30, fable) — merged verbatim into
+`docs/plans/2026-08-30-fable-to-nine.md` Parts D–E at the human's direction
+(one single plan). This file is the design record.# The 30-minute arc — content in every direction, and two city hubs
 
 Status: PROPOSED (2026-08-30, fable) — companion to
 `2026-08-30-fable-to-nine.md` (its Part D points here). Designed from a
