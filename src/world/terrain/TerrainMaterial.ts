@@ -52,6 +52,8 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *     indirect diffuse off, and at full occlusion. WS-2d's own ablation pair.
  *   `?post=nomeso` / `mesomax` — the tier-C 4-30 m mesorelief off, and at
  *     2.5x, which is what prices the whole band in one capture.
+ *   `?post=nomacroh` / `macrohmax` — the tier-B 30-300 m macro relief off, and
+ *     at 2.5x. The pair for the band above tier-C's.
  *   `?post=noshore` / `shoremax` — the strandline sand band off, and at full
  *     weight on every gentle surface regardless of height above the sea.
  *   `?post=drymax` — the same term forced to full cover. It is a product of
@@ -1760,6 +1762,56 @@ void tf_shade() {
   col *= mix(1.0, 0.82, mzL * mesoAmt * 0.85);
   rgh = mix(rgh, rgh * 1.10, mesoAmt * (1.0 - mesoPan) * 0.6);
   ao *= mix(1.0, 0.90, mzL * mesoAmt);
+
+  // ---- tier-B macro relief: the 30-300 m band, the other half of the hole ---
+  //
+  // Tier-C above closed 4-30 m and its own comment states where the energy
+  // came from: "every one of those points came from the HEIGHT". The band
+  // above it is still empty, and the two ends of it are shading rather than
+  // form -- GTAO's radius is 0.62 m and the horizon bake's shadow half only
+  // fades in from 300 m (uHorizonMix.zw), so between about 30 m and 300 m
+  // nothing in this frame occludes anything.
+  //
+  // The fields for it already exist and are already being spent. The macro
+  // tinting immediately below runs m1 / m2 / m3 at 588 m, 139 m and 37 m --
+  // exactly this band -- and spends all three on COLOUR. That is the shape
+  // tier-C was told not to repeat: "it is a HEIGHT, not a stain. A flat
+  // multiply adds value range without adding structure." So this reuses the
+  // same three fields and asks them for the thing they were never asked for.
+  //
+  // Amplitudes are set to a matched TILT rather than a matched height, which
+  // is the only way octaves an order of magnitude apart can be said to be at
+  // the same strength: 3.20 m over a 139 m wavelength, 0.85 m over 37 m and
+  // 2.10 m over the 87 m lineament are each an 8.2 degree slope, the same
+  // 8 degrees tier-C chose one band down and for the same reason -- every
+  // swell gets a lit side and a shaded side, so the contrast comes out of the
+  // sun rather than out of a stain and it survives a grade that moves.
+  //
+  // Ramped in from 60 m so it cannot argue with the ground the player is
+  // standing on, band-limited per octave by the same tf_lodW screen-footprint
+  // rule as everything else here, and off on steep ground and on roads, where
+  // the form is real geometry and a shading swell would fight it.
+  float macroAmt = smoothstep(60.0, 200.0, vTDist)
+                 * (1.0 - smoothstep(0.46, 0.78, slope))
+                 * (1.0 - 0.85 * road);
+  float mkA = m3 * tf_lodW(37.0, tfPx);
+  float mkB = m2 * tf_lodW(139.0, tfPx);
+  // The drainage lineament, one octave up from tier-C's. A ridged field is a
+  // network of lines; at this scale it is the trunk of the wash system whose
+  // braids tier-C draws, which is the "drainage as a network" the relief
+  // measurements say is missing rather than merely faint.
+  float mkL = 1.0 - tf_sabs(tf_snoise(P.xz * 0.0115 + 129.0));
+  mkL = clamp(mkL, 0.0, 1.0);
+  mkL = mkL * mkL * tf_lodW(87.0, tfPx);
+  float macroH = (0.85 * mkA + 3.20 * mkB - 2.10 * mkL) * macroAmt;
+  ${ABLATE.has('nomacroh') ? 'macroH = 0.0;' : ''}
+  ${ABLATE.has('macrohmax') ? 'macroH *= 2.5;' : ''}
+  Nw = tf_bump(Nw, P, macroH, tfBumpOk);
+  // The trunk floor is damp fines and shadow, exactly as tier-C's braids are,
+  // and this is the only colour this block asks for: the tinting below owns
+  // the rest of the band's colour and two systems tinting one field is how the
+  // macro wash got flat in the first place.
+  ao *= mix(1.0, 0.88, mkL * macroAmt);
 
   // ---- macro tinting -------------------------------------------------------
   // three overlapping colour fields at 600 m / 140 m / 40 m: the thing that
