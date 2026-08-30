@@ -135,12 +135,55 @@ interface Gate {
    * and called the run cold.
    */
   ownCacheFlag?: string;
+  /**
+   * This gate is NOT a pure function of the tree, so its verdict may never be
+   * cached.
+   *
+   * The gate cache's whole premise is that a gate reads the tree and nothing
+   * else, so a verdict recorded against a tree sha stays true until the tree
+   * moves. `bakecheck` reads `src/public/baked/`, which is git-ignored, shared
+   * between every worktree on the machine, and rewritten by any co-agent's
+   * `vite build`. A cached PASS would therefore survive exactly the event the
+   * gate exists to catch: someone prunes `geo.bin.gz`, the tree has not moved,
+   * and the suite replays yesterday's green.
+   */
+  uncacheable?: boolean;
 }
 
 /** Ordered cheapest-first; the pools re-sort by `cost`, this order is for reading. */
 const GATES: Gate[] = [
   { name: 'build', cmd: VITE, args: ['build'], expect: 'builds', kind: 'cpu', cost: 0.8 },
   { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`', kind: 'cpu', cost: 0.2 },
+  /**
+   * The four caches of our own generators under `src/public/baked/`, which
+   * twenty-three gates looked straight past.
+   *
+   * `project/LANDMINES.md` §"Baked caches": **a stale texel bake is the one
+   * cache failure with no symptom** — the keys resolve, the page boots, every
+   * gate here passes, and the world renders with a previous generator's output.
+   * A stale GEOMETRY bake is sharper still, because what it serves is
+   * *well-formed*: a viaduct correctly wound, contract-clean, standing in the
+   * air over a heightfield that moved. That section ends "nothing in this repo
+   * can see that". This is the something.
+   *
+   * It also gates the two artifacts that go missing rather than stale.
+   * `texc.bin.gz` and `geo.bin.gz` need a browser to record and the vite plugin
+   * only has a server, so all the plugin can do with a stale one is delete it —
+   * which any co-agent's `pre-commit` does. `daemon.mts --health` warned and
+   * nothing failed, and on the night this landed both had been absent for
+   * hours, costing ~3.7 s of cold boot per load, while a first-load number was
+   * being quoted from a cache nobody had looked at. `--allow-cold` is the
+   * escape if a wave of lanes makes that unmanageable; the default is strict
+   * and the remedy is one command, `pnpm run build:full`.
+   *
+   * 9 ms measured, which is what a gate has to cost to survive: it stats four
+   * files and hashes ~50 source files. `uncacheable`, because the bake
+   * directory is git-ignored and shared and the tree sha says nothing about it.
+   */
+  {
+    name: 'bakecheck', script: 'bakecheck.mts', kind: 'cpu', cost: 0.1, uncacheable: true,
+    expect: 'terrain/tex/texc/geo present and matching their own sources',
+  },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable', kind: 'cpu', cost: 0.2 },
   // Bare Node, ~3 s: it grows the trees and the bestiary in process and
   // compares outlines. A ratchet like `anycheck` -- it fails on a NEW pair of
@@ -467,7 +510,7 @@ function portOpen(port: number): Promise<boolean> {
 // not do not RECORD one. The first version conflated them, so the documented way
 // to re-derive a suite also threw the fresh answers away and left the next run
 // cold — which is the one run that had every right to be warm.
-const keyOf = (g: Gate): string | null => inputsKey(g);
+const keyOf = (g: Gate): string | null => (g.uncacheable ? null : inputsKey(g));
 /** Only for the ratchet and the ledger, which are about a commit, not a verdict. */
 const treeSha = workingTreeDirty() ? null : shaOf(resolveBuild('HEAD'));
 /**
@@ -565,7 +608,7 @@ function report(r: Result): void {
  */
 async function runGate(g: Gate): Promise<Result> {
   const key = keyOf(g);
-  if (opts.cache) {
+  if (opts.cache && key !== null) {
     const hit = lookup(g.name, key);
     // A measurement is not an assertion: a perf verdict taken on a busy box
     // says nothing about a quiet one, so it never replays as a pass.
@@ -620,10 +663,14 @@ async function runGate(g: Gate): Promise<Result> {
   });
   results.push(r);
   report(r);
-  store({
-    gate: g.name, sha: key ?? '', code: r.code ?? 1, ms: r.ms, tail: r.tail,
-    at: new Date().toISOString(), quiet, loadavg: Number(os.loadavg()[0].toFixed(2)),
-  });
+  // A null key means "this verdict is not a fact about the tree". Recording it
+  // under the empty string would let the next null-keyed gate read it back.
+  if (key !== null) {
+    store({
+      gate: g.name, sha: key, code: r.code ?? 1, ms: r.ms, tail: r.tail,
+      at: new Date().toISOString(), quiet, loadavg: Number(os.loadavg()[0].toFixed(2)),
+    });
+  }
   appendJob({
     t: new Date().toISOString(),
     kind: `gate:${g.name}`,

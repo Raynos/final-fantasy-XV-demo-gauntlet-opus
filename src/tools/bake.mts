@@ -18,10 +18,10 @@
  */
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { TERRAIN_SOURCES, hashSources } from './bakesources.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 /**
@@ -33,28 +33,19 @@ export const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'terrain.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'terrain.json');
 
-/** Everything whose contents can change the baked bytes. */
-const SOURCES = [
-  'src/world/terrain/Field.ts',
-  'src/world/terrain/Road.ts',
-  'src/world/terrain/FieldCodec.ts',
-  'src/world/terrain/FieldBake.ts',
-  'src/world/terrain/Layers.ts',
-  'src/world/map/WorldMap.ts',
-  'src/world/map/RoadGraph.ts',
-  'src/util/Noise.ts',
-  'src/util/Rng.ts',
-];
+/**
+ * Everything whose contents can change the baked bytes.
+ *
+ * The list itself lives in `bakesources.mts` — a leaf module with no imports
+ * but node builtins — so that a gate, or `announceBuild`, can ask what this
+ * artifact is a function of without dragging playwright and the daemon client
+ * in behind it. A duplicated source list is the stale-cache bug in its purest
+ * form.
+ */
+export { TERRAIN_SOURCES as SOURCES } from './bakesources.mts';
 
 /** @returns content hash of the generator sources */
-export async function sourceHash(): Promise<string> {
-  const hash = createHash('sha256');
-  for (const rel of SOURCES) {
-    hash.update(rel);
-    hash.update(await readFile(path.join(ROOT, rel)));
-  }
-  return hash.digest('hex').slice(0, 16);
-}
+export async function sourceHash(): Promise<string> { return hashSources(TERRAIN_SOURCES); }
 
 /** @returns true when the artifact already matches the sources */
 export async function isFresh(): Promise<boolean> {

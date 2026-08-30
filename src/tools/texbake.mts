@@ -24,11 +24,11 @@ import { readFile, writeFile, mkdir, stat, rm } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import { existsSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { lease, buildServer } from './harness.mts';
 import { resolveBuild } from './identity.mts';
+import { TEX_SOURCES, CANVAS_SOURCES, GEO_SOURCES, hashSources } from './bakesources.mts';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -41,136 +41,17 @@ const GEO_OUT = path.join(BAKE_DIR, 'geo.bin.gz');
 const GEO_STAMP = path.join(BAKE_DIR, 'geo.json');
 
 /**
- * Everything whose contents can change the baked texels. A file that feeds a
- * keyed generator and is missing from this list is a stale-cache bug, so the
- * list errs wide: `Rng`/`Noise` are here because every height function calls
- * them.
+ * The four source lists live in `bakesources.mts`, a leaf module importing
+ * nothing but node builtins, so that a gate and `announceBuild` can ask what an
+ * artifact is a function of without pulling playwright and the daemon client in
+ * behind them. Re-exported here because this is where callers expect them, and
+ * because a *second copy* of one of these lists is the stale-cache bug in its
+ * purest form: the copy nobody updated is the one that decides nothing re-bakes.
  */
-export const TEX_SOURCES = [
-  'src/engine/TexBake.ts',
-  'src/util/TextureGen.ts',
-  'src/util/Noise.ts',
-  'src/util/Rng.ts',
-  'src/world/town/TownMaterials.ts',
-  'src/world/props/PropMaterials.ts',
-  'src/world/dungeons/kit/InteriorMaterials.ts',
-  'src/world/sky/CloudTextures.ts',
-  // The chart is rasterised from the *terrain* — so everything that moves the
-  // heightfield moves the sheet. This list mirrors `bake.mts`'s own; a chart
-  // baked against a previous terrain is the stale-cache failure with no
-  // symptom, and the two artifacts are rebuilt together anyway.
-  'src/world/map/Chart.ts',
-  // The chart's water mask is decided per body by `findTarns`, which is shared
-  // with `Water.ts` precisely so the sheet and the world cannot disagree about
-  // where the water is. That makes it a chart generator, so it belongs here:
-  // a change to the tarn arithmetic that did not invalidate the chart bake
-  // would put the two back out of step with every gate green.
-  'src/world/water/Tarns.ts',
-  'src/world/map/WorldMap.ts',
-  'src/world/terrain/Field.ts',
-  'src/world/terrain/Road.ts',
-  'src/world/terrain/Layers.ts',
-  'src/world/map/RoadGraph.ts',
-];
-
-/**
- * Everything whose contents can change the *painted* texels.
- *
- * Wider than it looks necessary, on purpose. The face map is authored in
- * canonical head metres and projected through the head's own UV, so the
- * **sculpt** moves these pixels as surely as the paint does — a change to
- * `Sculpt.ts` or `Anatomy.ts` that nobody thought of as a texture change would
- * otherwise leave every face in the world one version behind, silently. See
- * `project/LANDMINES.md`, "a stale texel bake is the one cache failure with no
- * symptom".
- */
-const CANVAS_SOURCES = [
-  'src/engine/TexBake.ts',
-  'src/characters/rig/Face.ts',
-  'src/characters/rig/Look.ts',
-  'src/characters/rig/Sculpt.ts',
-  'src/characters/rig/Anatomy.ts',
-  'src/characters/rig/Skeleton.ts',
-  'src/characters/npc/NpcCast.ts',
-  'src/characters/npc/NpcRig.ts',
-  'src/characters/rig/Character.ts',
-  'src/characters/Cast.ts',
-  'src/util/Noise.ts',
-  'src/util/Rng.ts',
-];
-
-/**
- * Everything whose contents can change the baked **geometry**.
- *
- * The widest of the three lists, and it has to be: a POI compound is a
- * function of its kit code, of the building blocks that code lofts, of the
- * `Ecology` sampler that places it, of the terrain field it is seated and
- * graded against, and of the map that says where it is. `src/engine/GeoBake.ts`
- * is here because the container format and the quality-tier key prefix live in
- * it; `PropMaterials.ts` is here because a part is stored against its
- * `material.name`.
- *
- * `project/LANDMINES.md`: "a keyed generator whose file is not on that list is
- * the whole bug". There is no runtime check that can catch a stale entry —
- * geometry restored from the cache is well-formed geometry of the wrong world —
- * so this errs wide and the vite plugin deletes rather than serves.
- */
-const GEO_SOURCES = [
-  'src/engine/GeoBake.ts',
-  // the three consumers
-  'src/world/props/PoiKits.ts',
-  'src/world/props/Megastructures.ts',
-  'src/world/Water.ts',
-  // what they build with
-  'src/world/props/PartBuilder.ts',
-  'src/world/props/BuildKit.ts',
-  'src/world/props/Wear.ts',
-  'src/world/props/Seat.ts',
-  'src/world/props/Rocks.ts',
-  'src/world/props/ZoneDress.ts',
-  'src/world/props/PropMaterials.ts',
-  'src/world/water/Shore.ts',
-  // The shore ribbon is a pure function of the terrain bake and `Water.bodies`,
-  // and half of `Water.bodies` is now decided in `Tarns.ts`. Move a tarn's
-  // level without invalidating this and the ribbon comes back from the cache
-  // tracing a waterline the water is no longer at.
-  'src/world/water/Tarns.ts',
-  'src/world/water/contour.ts',
-  'src/world/water/geo.ts',
-  // Every plant, boulder and forage point now asks `Water.mask` where the water
-  // surface is, and the mask is the river sheet's own triangles — so the file
-  // that emits them decides where a bush may stand, and a POI compound graded
-  // against `Ecology` moves with it.
-  'src/world/water/River.ts',
-  'src/world/water/WaterMask.ts',
-  // where they are placed, and on what
-  'src/world/veg/Ecology.ts',
-  'src/world/Terrain.ts',
-  'src/world/terrain/Clipmap.ts',
-  'src/world/terrain/Field.ts',
-  'src/world/terrain/FieldCodec.ts',
-  'src/world/terrain/Road.ts',
-  'src/world/terrain/Layers.ts',
-  'src/world/map/WorldMap.ts',
-  'src/world/map/RoadGraph.ts',
-  'src/util/Noise.ts',
-  'src/util/Rng.ts',
-];
+export { TEX_SOURCES, CANVAS_SOURCES, GEO_SOURCES } from './bakesources.mts';
 
 /** @returns content hash of a source list */
-async function hashOf(sources: string[]): Promise<string> {
-  const hash = createHash('sha256');
-  for (const rel of sources) {
-    const p = path.join(ROOT, rel);
-    // A path that does not exist contributes nothing, so a typo in one of these
-    // lists is a source that is never watched -- the exact shape of the
-    // stale-cache bug the lists exist to prevent. Say so rather than skip.
-    if (!existsSync(p)) { console.warn(`[texbake] source not found, NOT hashed: ${rel}`); continue; }
-    hash.update(rel);
-    hash.update(await readFile(p));
-  }
-  return hash.digest('hex').slice(0, 16);
-}
+async function hashOf(sources: string[]): Promise<string> { return hashSources(sources); }
 
 /** @returns content hash of the generator sources */
 export async function texSourceHash(): Promise<string> { return hashOf(TEX_SOURCES); }
