@@ -2294,3 +2294,55 @@ commits the *file* and not your hunks.
 If a capture comes back tiny, look at the byte size before you look at the
 content. The file-size check is the cheapest shader-link canary available.
 
+## Every `--build <sha>` re-bakes the SHARED artifacts from that sha's sources
+
+The worst measurement trap found in this project so far, because it silently
+rewrites *other agents'* ground truth. Found 2026-08-31 by the new `bakecheck`
+gate on its first run.
+
+`src/public/baked/` is a single directory symlinked into every materialised
+build tree. A `--build <sha>` run whose sources differ **re-bakes those shared
+artifacts from that sha** — so on a wave, **every lane is capturing against
+whichever sha was materialised last**, not against the tree it asked for.
+Caught red-handed: `terrain.bin.gz` stamped from `c898bb4e`'s sources and
+`tex.bin.gz` from `3187d788`'s, while `HEAD` was `4a6c840`. Three different shas
+in one capture.
+
+This explains a whole evening of confusion downstream — `driftcheck --build
+<old sha>` and `--build HEAD` returning **bit-identical numbers in every digit**,
+and a lane reading a "big win" from an A/B that was really another lane's
+in-flight edit. It is why the same sha returned PASS and then FAIL.
+
+**Consequences to hold on to:**
+- **`--build <sha>` is not a bisect on a shared trunk.** It pins the *code* and
+  not the *content*.
+- A cached gate verdict must never be stored for anything reading
+  `src/public/baked/` — it is git-ignored, shared between worktrees, and
+  rewritten by any co-agent's `vite build`. A cached PASS would survive exactly
+  the event such a gate exists to catch.
+- `pnpm run build` **deletes** the painted-face cache without replacing it, and
+  every lane's `pre-commit` runs `vite build`. `pnpm run build:full` is what
+  makes them. `daemon --health` reports `paintedFaces` and `bakedGeometry`, and
+  both read `false` for most of the night without any gate caring.
+
+## An unbounded prewarm queue ate 62% of all harness time
+
+`daemon.mts`'s `prewarm()` docstring claimed *"newest sha wins — a second commit
+supersedes the first rather than queueing two boots"*. **The code never did
+that.** `prewarming` was set at submit and cleared in the job's `finally`, so it
+only rejected a duplicate request for the *same* sha; a request for a **new** sha
+queued a second boot behind the first, and nothing ever dropped a prewarm for a
+sha that had stopped mattering.
+
+Eight lanes plus a `post-commit` prewarm hook per commit is a queue that grows
+faster than four workers drain it. Measured twice, forty minutes apart:
+
+    01:0x  sweep depth 55, 54 of them prewarm · queued 86663 s vs ran 16072 s (84% queue) · RSS 10.2 GB
+    01:4x  sweep depth 63, 62 of them prewarm · queued 107085 s vs ran 16728 s
+    harnessstats: prewarm 75 jobs, waited 1062.7 m, ran 58.8 m — p50 queue 8.4 min, worst 33.1
+
+It presented as unrelated failures all over the wave: `preparePage` 300 s
+timeouts, an ablation timing out twice, and three lanes reporting a `check` that
+never returned. **A docstring describing behaviour the code does not have is
+worse than no docstring**, because it stops anyone reading the code beneath it.
+
