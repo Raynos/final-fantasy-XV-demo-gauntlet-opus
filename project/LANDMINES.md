@@ -2129,3 +2129,48 @@ and replayed against the parent commit to prove the new gate flags what the old
 one excused. **An exemption states a claim about the code; check that the claim
 is still true, because the exemption is exactly where nobody looks.**
 
+## A tool's own documented usage line crashed it, and the flag in it was never read
+
+`reliefstat.mts`'s header said, on line 7:
+
+    reliefstat.mts a.png --against FFXV-field-ground
+
+Running exactly that opens a file named `FFXV-field-ground` and dies. The arg
+filter skipped the value after `--roi` and after nothing else, so any other
+flag's *value* was collected as an input path. **And `--against` is never read
+anywhere** — the reference median is computed unconditionally from
+`GROUND_PLATES`. The flag was accepted, ignored, and fatal at the same time.
+
+Two consequences worth more than the parser fix (`1f799ae`):
+
+- **`--against` has almost certainly never been run by anyone**, because it
+  would have crashed for them too. Any claim in a handoff or journal citing a
+  `reliefstat --against` comparison did not come from this tool.
+- It cost **44 minutes of daemon queue** on a busy night — two runs, 22 minutes
+  each, both dying five characters into argument parsing. On a jammed box the
+  cost of a trivial bug is not the bug, it is the queue in front of it.
+
+The general rule: **a usage line is documentation, and documentation is not
+executed.** If a tool's header shows an invocation, run that exact string once
+before trusting anything downstream of it. The same night, a lane's own handoff
+was found telling the next agent to run the crashing command.
+
+## A `--dirty` A/B on a shared trunk measures every lane, not yours
+
+Recorded 2026-08-31 after it produced a confident, wrong, "big win": a lane read
+a large frame improvement from a `--dirty` before/after and it was **another
+lane's in-flight edit** reaching it through the shared working tree.
+
+Compounded by a second mechanism in the same measurement: `src/public/baked/` is
+a **shared cache symlinked into every materialised build tree**, and
+`vite-plugin-bake` re-checks its hash only at server start. So a clean
+parent/child pair came back byte-identical, and a recipe edit made after a
+long-lived dirty server started is served **stale**. This is also why
+`driftcheck --build <old sha>` and `--build HEAD` returned numbers matching in
+every digit on a night when the terrain had demonstrably changed: `--build` was
+honoured — it announces the correct tree sha — but the *content* both trees read
+came from one cache.
+
+**On a wave, an A/B against an old sha is not a bisect.** Rebake, or measure
+something the cache does not feed.
+
