@@ -83,10 +83,21 @@ export const EYE = {
    * 1.16 * 0.92 = 1.067 against 1.050, i.e. **+0.63 mm** of clearance at the
    * worst point of either lid, and a 1.7 mm standoff at the margin, which is
    * about what an eyelid is thick.
+   *
+   * **This closes the depth loss and it does NOT close the whole crescent —
+   * measured, one variable, deliberately overshot.** `lidR 1.30` / `dome 0.035`
+   * is +1.7 mm of clearance, two and a half times what is needed, and the grey
+   * sclera crescent below the lower lid on `prompto_facecheck` is the same size
+   * as at 1.16. So the residue is not the lid losing the depth test, and no
+   * further standoff will buy it: the globe below and temporal to the aperture
+   * is drawing over the **skull**, which means the sculpted orbital rim there
+   * sits behind the globe's silhouette. That is a `brushes()` / `buildHead`
+   * job, not a constant here, and it is filed as residue. Reverted to 1.16,
+   * which is what the arithmetic above justifies and no more.
    */
-  dome: 0.035,
+  dome: 0.050,
   /** Radius of the lid shell at its margin, as a fraction of globe radius. */
-  lidR: 1.30,
+  lidR: 1.16,
   /** Azimuthal span of the palpebral fissure: inner canthus .. outer canthus. */
   arc: [-1.02, 1.30],
   /** Extra x-spread at the canthi — a real fissure is wider than the globe. */
