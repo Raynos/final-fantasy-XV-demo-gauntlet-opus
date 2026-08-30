@@ -2,23 +2,39 @@
 
 Plan: `docs/plans/2026-08-30-fable-to-nine.md`, items 29–32.
 Owned: `src/ui/` (ControlsScreen, Prompts, Hints, ArmigerScreen, ui.css),
-`src/world/vehicle/RegaliaSystem.ts` (rebinds only),
+`src/world/vehicle/RegaliaSystem.ts` (keymap only),
 `src/tools/probes/regaliadrive.mts` (the sign gate). Also touched
 `src/tools/uxcheck.mts` (its collision gate was the reason 30 shipped) and
-added two `src/tools/_probe/` instruments.
+**`src/combat/CombatSystem.ts`, one line, as a coordinator-authorised
+cross-lane one-liner** (`da4530c`, committed alone). Three new instruments in
+`src/tools/_probe/`: `inputcollide.mts`, `steerfalsify.mts`, `menufill.mts`.
 
-**All four items landed.** Commits, in order: `5be914f` (Regalia rebinds +
-`inputcollide`), `a009d0e` (card + Prompts + Hints), `b0da426` (signed steering
-gate + `steerfalsify`), `b3dbbdc` (Armiger caption + `menufill`), `45c89f3`
-(dash column + stretched plates), `a55d16c` (uxcheck's exemption), `38ba6e9`
-(this handoff), `de565f8` (LANDMINES).
+**Status: finished. Nothing is mid-flight; no next step is owed.** A fresh
+agent picking this up would be starting new work, not continuing mine.
 
-Two known harness papercuts found on the way, for whoever meets them next:
+**All four items landed, and task 30 is closed at the root rather than worked
+around.** Commits, in order:
+
+| sha | what |
+|---|---|
+| `5be914f` | Regalia rebinds V/T/B → Y/O/U + `inputcollide.mts` |
+| `a009d0e` | the card + `Prompts.ts` + `Hints.ts` |
+| `b0da426` | signed steering gate + `steerfalsify.mts` |
+| `b3dbbdc` | Armiger caption + `menufill.mts` |
+| `45c89f3` | dash column + stretched plates |
+| `a55d16c` | uxcheck's regalia exemption removed |
+| `de565f8` | LANDMINES: two gates that excused their own population |
+| **`da4530c`** | **the cross-lane one-liner: combat stops reading the keyboard while driving** |
+| `b99c595` | V/T/B restored; uxcheck §7.5 *measures* the mode |
+| `fb2a507` | regaliadrive: settle the car on the road before §3 |
+| `f4ab3a5` | TASKS + LANDMINES ending |
+| `1592ac2` | TASKS de-duplication |
+| `38ba6e9`, `7c40a66`, (this) | handoff |
+
+Two harness papercuts met on the way, both filed in `TASKS.md`:
 `ui-shoot.mts` has **no `--jpeg` flag** — it prints `unknown scene --jpeg` and
-writes PNGs anyway, which the plan's own command line suggests — and an
-untracked `shots/` directory appeared at the repo root tonight (not this
-lane's; `tmp/shots/` is where these captures live) which pre-commit flags as
-off-roster.
+writes PNGs anyway, which several briefs' command lines suggest — and an
+untracked `shots/` directory appeared at the repo root (not this lane's).
 
 ## 29 · The controls card — LANDED, verified by eye
 
@@ -71,23 +87,52 @@ combat verbs CALLED during those five presses, while driving:
   tryArmiger 0 · warpToPoint 0     (controls — neither key was pressed)
 ```
 
-Rebound on the Regalia side: **camera V→Y, Type-D T→O, radio B→U.**
-`enter` (F) and `handbrake` (Space) deliberately left shared — F is the most
-documented binding in the game (card, first-run hint, Hammerhead's interaction
-prompt, `Prompts.ts`, `regaliadrive`) and Space is a handbrake. Their real fix
-is one line in `CombatSystem.update`; that is lane 11's file, **filed not
-taken** (see Residue).
+**Closed at the root, not worked around.** The keys were first rebound
+Regalia-side (V→Y, T→O, B→U) as a lane-local workaround, because the real fix
+was one line in lane 11's file. The coordinator then authorised that line as a
+named cross-lane one-liner and it landed alone in **`da4530c`**:
+
+    const driving = !!(game.get && game.get('Regalia')?.isDriving);
+    if (input.enabled !== false && !this.scenarioLock && !driving) this._readInput(input, dt);
+
+Same probe, same scene, before and after:
+
+```
+while driving   heavy  dodge  drawEnergy  castSlot  setLockOn
+  before          1      1        1          1          1
+  after           0      0        0          0          0
+on foot           1      1        1          1          1
+```
+
+**That last row is the one that matters.** A mode guard is one `&&` away from
+switching combat off altogether, and "no combat verb fired while driving" is
+exactly what a one-sided check wants to see — the widest possible guard scores
+a perfect green on it. So the probe grew a second arm: get out, stand in a
+field, press the same five keys, and require all five back.
+
+With the mode real, **V, T and B are back where every document in the game puts
+them** (`b99c595`), and the card, strip and hint say so again.
 
 Also fixed: the in-car HUD prompt printed `G` for "Let Ignis drive", which is
 `KeyI` (G is Gladiolus' technique). It reads its glyphs off `KEY` now.
 
-**And the gate that should have caught all of this**: `uxcheck.mts` section 8
-carried `if (owners.has('regalia') && owners.size === 2 …) continue;` under the
-comment "driving and on-foot combat are mutually exclusive states". It excused
-exactly the population the defect lived in, and `Space` was not even in its
-pattern. Replaced with `SHARED_ON_PURPOSE`, a per-key allowlist with a written
-reason each. Replayed against `5be914f^`: old gate green, new gate flags KeyV,
-KeyB, KeyT; on the tree as it is now, none.
+**And the gate that should have caught all of this**: `uxcheck.mts` §8 carried
+`if (owners.has('regalia') && owners.size === 2 …) continue;` under the comment
+"driving and on-foot combat are mutually exclusive states". It excused exactly
+the population the defect lived in, and `Space` was not even in its pattern, so
+the one collision a player could *see* could not be represented.
+
+It went through two fixes and the second is the durable one. While the mode did
+not exist, a per-key allowlist was right (`a55d16c`) — a category absorbs a new
+defect silently, a named key cannot. Once `da4530c` made the mode real, the
+allowlist became the same act of faith with more names on it, so the modal
+exemption is back and is now **earned by a measurement inside the same gate**:
+new §7.5 drives the car, presses the shared keys, asserts no combat verb
+answers, then gets out and asserts every one does. §8's exemption is documented
+as licensed by that pair — if 7.5 goes red the exemption is void.
+
+`Space` stays in the pattern. Replayed against `5be914f^`: old gate green, the
+intermediate gate flags KeyV/KeyB/KeyT; today, none.
 
 ## 31 · Steering sign gate — LANDED, falsified
 
@@ -146,32 +191,61 @@ against a re-runnable instrument.
 
 ## Gates run
 
-- `uxcheck.mts` **93/93 passed**, including the strengthened section 8, whose
-  line now reads `2 shared on purpose: KeyF, Space`.
-- `regaliadrive` at HEAD: **full PASS**, all five sections (including lane 17's
-  new map -> autodrive section 5, which coexists with section 2b).
-- **`pnpm run check` NOT run.** The coordinator took ownership of the full
-  suite mid-session — eight lanes each running a 19-gate suite jammed the box
-  (25 concurrent `check.mts`, 36% of harness time spent queueing). The one I
-  had started was killed. Individual lane-owned gates only from here.
-  `pre-commit` (build + both typechecks + 4 cheap gates) passed on all eight
-  commits regardless.
-- **No perf numbers taken, and none should be quoted from this session** — the
-  tree was never quiet; seven other lanes were capturing throughout.
+Individual lane-owned gates only. **`pnpm run check` was NOT run** — the
+coordinator took ownership of the full suite mid-session after eight lanes each
+running nineteen gates jammed the box (25 concurrent `check.mts`, 36% of
+harness time spent queueing); the run this lane had started was killed.
+`pre-commit` (build + both typechecks + 4 cheap gates) passed on all fourteen
+commits regardless.
+
+`uxcheck.mts`, verbatim, at HEAD:
+
+```
+PASS  combat does not read the keyboard while driving
+      — 0 combat verb calls from V/T/B/Space/F in the car
+PASS  and every one of those verbs still fires on foot
+      — 5/5 answered outside the car
+PASS  no keyboard binding is claimed by two systems in the same mode
+      — cross-mode pairs allowed only because 7.5 measured the mode
+95/95 passed
+```
+
+`regaliadrive.mts` at HEAD — **full PASS**, all five sections:
+
+```
+ok  it is moving while it steers   A covered 40 m at 50 km/h, D 40 m at 30 km/h
+ok  it steers at all               A 51 deg, D -45 deg over 2.5 s of lock
+ok  A turns the car LEFT           +51 deg, 4.0 m left of its old course after 1 s
+ok  D turns the car RIGHT          -45 deg, 4.0 m right
+ok  and the two are opposite, not merely large
+ok  the chassis heading agrees with the path it drove   A +103, D -127
+```
+
+One flake of my own making, found and fixed (`fb2a507`): both lock tests end
+2.5 s into a full-lock turn, so §3 was handing Ignis a different patch of scrub
+each run — 'rejoined after 5 s, 0% off' one run and a FAIL the next, on the
+same commit. §2b now snaps the car back to the carriageway before handing over:
+'handed over 2 m off it; rejoined after 0 s'.
+
+**No perf numbers taken, and none should be quoted from this session** — the
+tree was never quiet; seven other lanes were capturing throughout.
 
 ## Residue
 
-- **`CombatSystem.update` should skip `_readInput` while the Regalia is being
-  driven.** One line. Fixes F/heavy and Space/dodge, and would let camera,
-  Type-D and radio revert to V/T/B. Lane 11's file. When it lands, remove the
-  two entries from `uxcheck.mts`'s `SHARED_ON_PURPOSE`.
+Filed by the coordinator in `project/TASKS.md` under the lane-10 block; my own
+duplicate lines were removed in `1592ac2`.
+
 - `CombatSystem._readInput`'s comment claims "gamepad face buttons mirror the
   keyboard verbs one for one". Point Warp, the heavy attack and the firearm
-  have no pad binding at all. Bind them or soften the comment.
-- `project/TASKS.md` line 16 ("No gate drives the car… a gate that holds a key
-  and asserts the sign is the gap") is closed by `b0da426`.
-- Five menu screens sit 29–54% empty below their last line, measured. If
-  anyone takes them, `menufill.mts` is the before/after.
+  have **no** pad binding — which is why 17 of the card's 44 rows print a dash.
+  Bind them or soften the comment.
+- Five menu screens sit 29–54% empty below their last line (`menufill.mts`).
+  **Lane 12 candidate**, deliberately not taken: plan rule 1 is "no section may
+  grow".
+- `ui-shoot.mts` has no `--jpeg` flag though briefs suggest one.
+- An untracked `shots/` at the repo root; not this lane's.
+
+**Nothing needs the human.** Nothing was left half-done.
 
 ## Public surface kept stable
 
@@ -181,4 +255,9 @@ map→autodrive section 5 in `regaliadrive` passes alongside my section 2b.
 
 ## Open questions
 
-None.
+None. The one judgement call worth flagging to a future reader: `enter` (F) and
+`handbrake` (Space) are still in both keymaps, and that is now correct rather
+than tolerated — `CombatSystem` implements the mode, and `uxcheck` §7.5 proves
+each run that nothing answers those keys from the driver's seat. Do not
+"clean up" the overlap by rebinding either one; F is the most documented
+binding in the game and a handbrake is Space.
