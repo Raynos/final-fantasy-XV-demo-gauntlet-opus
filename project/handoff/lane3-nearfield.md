@@ -111,7 +111,26 @@ at all on a shot whose bottom of frame is 100 m out, and eight FEWER draw calls
 because both card rings now skip the tiles they should never have had. Tris
 +300 k on `hero_full` from the extra blades.
 
-Looking at `tmp/shots/l3-after/hero_full.jpg`: **the star tufts are gone.** The
+**`cd1c1fb` — the correction to `03089ba`, and read this before trusting either.**
+Fixing the sign without fixing the numbers it reads was itself a regression.
+`near` read 21 and 78 and never meant that: with the old centre test the rings
+actually started at `near - 1.25 * T`, i.e. **-9 m and 18 m**, so both card rings
+have drawn from zero for their whole existence and every density in `Biomes.ts`,
+every tuning decision in `GrassField.ts` and every shot in the corpus was tuned
+against *that* world. With the sign fixed and 21/78 left standing, `party_walk`'s
+near ground went from tufts around the party's boots to bare cracked dirt —
+crop `tmp/l3char/pw-before.png` against `pw-after.png` and it is unmistakable.
+A card is one whole tuft painted on three crossed quads and a blade instance is
+one blade, so per instance a card covers on the order of fifteen times the area;
+the blade ring cannot replace it at any density this budget allows.
+
+The artifact is only the last few metres — a camera two metres up looking DOWN
+on three crossed quads. So `near` is now **6 and 20**, which with the corrected
+corner test starts the cards at ~7 m and the far cards at ~22 m: where they have
+always been, less the band the star lives in.
+
+Looking at `tmp/shots/l3-after/hero_full.jpg` (captured at `03089ba`, i.e. the
+over-corrected state): **the star tufts are gone.** The
 ground under the party now reads as dry straw stubble over cracked Leide dirt
 with a scatter of real tussocks catching light on the left, where before it was
 a mat of flat pale-green six-armed rosettes. Not yet beautiful — see below — but
