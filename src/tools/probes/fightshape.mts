@@ -240,7 +240,7 @@ function aggregate() {
  * anything is printed underneath the real one. A filter you cannot see is a
  * filter you cannot argue with.
  */
-const fights = metrics.filter((m) => m.found && m.denN > 0 && m.denKilled === m.denN);
+const fights = metrics.filter((m) => m.found && m.n > 0 && m.denKilled === m.n);
 const partial = metrics.filter((m) => m.found && m.kills > 0 && !fights.includes(m));
 const agg = [];
 agg.push('', `=== AGGREGATE over ${fights.length} finished fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${partial.length} left the pack alive)`);
