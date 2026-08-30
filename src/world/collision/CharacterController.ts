@@ -44,6 +44,23 @@ export class CharacterController {
   riseRate!: number;
   stepDown!: number;
   stepUp!: number;
+  /**
+   * Swimming. **Owned by `world/swim/Swim.ts`**, which decides the state; this
+   * class only carries it out.
+   *
+   * The branch lives here rather than in the swim system for one reason: `vy`
+   * is the single vertical integrator, and buoyancy is a vertical velocity. A
+   * swim system that wrote `pos.y` from `lateUpdate` would be racing `move()`'s
+   * gravity every frame — the character would sink a frame's worth of 19.5
+   * m/s² and be pulled back up again, which is a 3 mm jitter at 60 fps and a
+   * 5 cm one whenever the frame is long. Gravity and buoyancy have to be the
+   * same `if`.
+   */
+  swim!: boolean;
+  /** World Y the feet are buoyed toward while `swim`. Set with `swim`. */
+  swimY!: number;
+  /** How fast the feet chase `swimY`, m/s. Bigger = more corklike. */
+  swimRate!: number;
   vy!: number;
   world!: CollisionWorld;
   constructor(world: CollisionWorld, opts: {radius?: number, height?: number, stepUp?: number, stepDown?: number, climbMax?: number, riseRate?: number} = {}) {
@@ -69,6 +86,9 @@ export class CharacterController {
     /** Cap on how fast the feet may rise onto a ledge, m/s — stops the pop. */
     this.riseRate = opts.riseRate != null ? opts.riseRate : 6.0;
     this.vy = 0;
+    this.swim = false;
+    this.swimY = 0;
+    this.swimRate = 2.6;
     this.grounded = true;
     this.onProp = false;
     /** How much of the wanted move actually happened last step, 0..1. */
@@ -89,6 +109,7 @@ export class CharacterController {
     const world = this.world;
     if (dt <= 0) return pos;
     this._from.copy(pos);
+    if (this.swim) return this._swimStep(pos, vx, vz, dt);
 
     // ---- 1. slope response --------------------------------------------
     const n = this.normal;
@@ -145,16 +166,7 @@ export class CharacterController {
       }
     }
 
-    // Progress is measured *along the wish direction*: a character grinding
-    // sideways down a wall has covered ground but has got nowhere, and scoring
-    // that as progress is what stops the scramble allowance from ever building.
-    if (want > 1e-5) {
-      const inv = 1 / (want / dt);
-      const got = (pos.x - this._from.x) * vx * inv + (pos.z - this._from.z) * vz * inv;
-      this.progress = THREE.MathUtils.clamp(got / want, 0, 1);
-    } else {
-      this.progress = 1;
-    }
+    this._score(pos, vx, vz, want, dt);
 
     // ---- 4. the scramble allowance -------------------------------------
     // Grows only while a real effort to move is being stopped by a ledge, and
@@ -175,6 +187,88 @@ export class CharacterController {
     } else {
       this.climb = Math.max(this.stepUp, this.climb - 2.4 * dt);
     }
+    return pos;
+  }
+
+  /**
+   * How much of the wanted move actually happened, along the wish direction.
+   *
+   * Measured *along* it and not as a distance: a character grinding sideways
+   * down a wall has covered ground but has got nowhere, and scoring that as
+   * progress is what stops the scramble allowance from ever building. The
+   * swimmer wants the same number for the same reason — the gait blend and the
+   * velocity the party chases are both scaled by it — so it is a method now
+   * rather than a paragraph inlined in one of the two branches.
+   */
+  _score(pos: THREE.Vector3, vx: number, vz: number, want: number, dt: number) {
+    if (want > 1e-5) {
+      const inv = 1 / (want / dt);
+      const got = (pos.x - this._from.x) * vx * inv + (pos.z - this._from.z) * vz * inv;
+      this.progress = THREE.MathUtils.clamp(got / want, 0, 1);
+    } else {
+      this.progress = 1;
+    }
+  }
+
+  /**
+   * One step of a swimmer: the horizontal move, then buoyancy instead of
+   * gravity.
+   *
+   * Three deliberate differences from the walking path, and each one is a bug
+   * that would otherwise be visible in the frame:
+   *
+   * - **No slope response.** The bed's normal is meaningless to something that
+   *   is not touching it, and a 40° silt slope under a swimmer would otherwise
+   *   push them downhill at `GRAVITY * (1 - n.y)` — a current that only exists
+   *   where the bottom happens to be steep.
+   * - **Walls still collide.** The horizontal half is unchanged, so a lake
+   *   under a cliff still has an edge and a jetty piling is still a piling.
+   *   Swimming is not noclip.
+   * - **The bed is a floor, not a support.** `pos.y` is clamped up out of the
+   *   ground rather than snapped onto it, so a dive that reaches the bottom
+   *   stops there without the character being re-grounded and walked home. In
+   *   shallow water the clamp *is* the floor-walk, which is correct: 40 cm of
+   *   water is waded, and `Swim` will not have entered the state anyway.
+   *
+   * `grounded` stays true throughout. It is read by `Player` and by the
+   * animator as "is this character being held up by something", and a swimmer
+   * is; publishing `false` puts Noctis into a falling pose in the middle of a
+   * lake.
+   */
+  _swimStep(pos: THREE.Vector3, vx: number, vz: number, dt: number): THREE.Vector3 {
+    const world = this.world;
+    const want = Math.hypot(vx, vz) * dt;
+    const steps = Math.min(4, Math.max(1, Math.ceil(want / (this.radius * 0.75))));
+    const h = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      pos.x += vx * h;
+      pos.z += vz * h;
+      world.resolve(pos, this.radius, this.height, this.stepUp);
+    }
+
+    // Buoyancy. First-order on the position and then differentiated back into
+    // `vy`, rather than a spring on `vy` integrated into the position: the
+    // spring form overshoots, and an overshooting swimmer bobs their head
+    // under the surface once per entry. This form cannot overshoot, and `vy`
+    // still reads as the true vertical rate for anything that asks.
+    const rise = THREE.MathUtils.clamp(
+      THREE.MathUtils.damp(pos.y, this.swimY, this.swimRate, dt) - pos.y,
+      -3.2 * dt, 3.2 * dt,
+    );
+    let ny = pos.y + rise;
+
+    const g = world.groundDisc(pos.x, pos.z, pos.y, this.radius, this.stepUp, 2.0, this._g);
+    if (ny < g.y) { ny = g.y; this.onProp = g.onProp; } else { this.onProp = false; }
+    this.vy = (ny - pos.y) / dt;
+    pos.y = ny;
+    this.grounded = true;
+    this.normal.set(0, 1, 0);
+    // The scramble allowance is a walking affordance; hold it at the free
+    // step-up so a swimmer who spent a while pushing at a bank does not climb
+    // out of the water onto a 1.25 m ledge the moment they touch bottom.
+    this.climb = this.stepUp;
+    this._hold = 0;
+    this._score(pos, vx, vz, want, dt);
     return pos;
   }
 

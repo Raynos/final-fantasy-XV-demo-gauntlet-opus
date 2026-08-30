@@ -30,6 +30,8 @@ import { Minimap } from '../ui/Minimap.ts';
 import { Cinematics } from './cinematics/Cinematics.ts';
 import { StorySystem } from './story/StorySystem.ts';
 import { Dungeons } from '../world/dungeons/Dungeons.ts';
+import { Swim } from '../world/swim/Swim.ts';
+import { Underwater } from '../world/swim/Underwater.ts';
 import { SHOTS, isFollowShot, isApplicableShot } from './Shots.ts';
 import type { ApplicableShot } from './Shots.ts';
 import type { System } from '../engine/System.ts';
@@ -73,6 +75,9 @@ export interface SystemRegistry {
   Npcs: Npcs;
   Director: Director;
   Dungeons: Dungeons;
+  /** Swimming and diving — `world/swim/`. Both write in `lateUpdate`. */
+  Swim: Swim;
+  Underwater: Underwater;
   /**
    * Registered by `Director` once the world is up, not by the boot order --
    * they tick after Player, Party and Combat have moved everything for the
@@ -296,6 +301,13 @@ export class Game {
       // the saddle in lateUpdate, so it must observe the camera's final lens
       // the same way the drive camera does.
       step('Chocobo', () => new ChocoboSystem()),
+      // After Chocobo and after Camera, before everything that reads the
+      // player's final position: `Swim` takes the world over the way
+      // `Occupants` does, in lateUpdate, and it must lose to a mount and win
+      // over `Party`'s recall teleport. `Underwater` is after it because it
+      // reads the state `Swim` decided this frame.
+      step('Swim', () => new Swim()),
+      step('Underwater', () => new Underwater()),
       step('Audio', () => new AudioSystem()),
       // Before HUD — the HUD reads it during init. Start mid-game so the
       // capture shots show a party with real progression, not a level 1 save:
