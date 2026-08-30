@@ -562,3 +562,33 @@ verified: high-frequency energy in a box of clear blue at `vista_noon` falls
   else's baseline. `src/tools/probes/shotswim.mts` answers it over the whole
   corpus in one boot; its run was still queued when lane 23's first lifetime
   ended. **Run it before the judged round.** `coordinator`
+
+## Combat: what lane 11 left behind (2026-08-31)
+
+*Median den 11.4 -> 17.3 s and danger 3.2% -> 15.2% HP, both against its own
+instrument, which it had to build first because `fightshape` computed no median.
+Task 36 closed as a measured negative: the "3-12 casts" warp figure was
+`dpsshare.mts:113-115`'s **distance labels** — `"from 3 m"`, `"from 12 m"` —
+feeding `warpMotion(dist)`. No throughput measurement ever existed.*
+
+- **`SpawnTables.ts` authored hostile `count` fields want widening two deeper on
+  both ends**, as `WildTerritories` got. **This is the last 0.7 s of lane 11's
+  duration exit** — the two rounds under 18 s are the same 4-animal authored
+  territory, and every *wild* den came in at 17.3/26.5/55.9. Leave passive lines
+  alone. Also the six `maxEngaged: 3` overrides now equal `Pack`'s raised
+  default — drop them or take them to 4. `lane18`/`lane11`
+- **The encounter camera has no collision push-out** — the frame where a fight
+  starts is 90% the inside of a boulder. `lane11`
+- **HUD nameplate, toast and damage-number stacking breaks at 5-8 enemies** —
+  they overprint into "SABERTUSKSABERTUSK" and land on the party HP row. `lane11`
+- **`Party`/`PartyAI` have no separation force between members at rest**, so
+  allies stand inside each other; and the retinue does 60-70% of a fight's damage
+  where `dpsshare` says Noctis should be 64%. `lane11`
+- **`src/combat/GroundFX.ts` — a white radial ground bloom washes out midfight.**
+  Observed, **not diagnosed**, no ablation run. `lane11`
+- **`BossFight.ts` 3->4 tokens deliberately not taken** — lane 17's Magitek
+  Commander round is new and no instrument was pointed at a boss. `lane11`
+- **Two `dpsshare` instrument bugs found**: a `warp` event is a phase
+  (`start`/`impact`/`point`), not a cast; and MP fully regenerates before a fight
+  is scored, so end-of-fight spend read 0 every round. `lane11`
+
