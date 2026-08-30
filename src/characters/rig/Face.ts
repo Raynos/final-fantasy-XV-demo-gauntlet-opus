@@ -52,10 +52,41 @@ export const EYE = {
    * the plates do without tipping into caricature.
    */
   iris: 0.640,
-  /** How far the cornea domes over the iris, as a fraction of globe radius. */
-  dome: 0.072,
+  /**
+   * How far the cornea domes over the iris, as a fraction of globe radius.
+   *
+   * This and `lidR` are ONE constraint, and it is not the obvious one. The lid
+   * shell is not a sphere: `eyePoint` squashes its **z** by 0.92, so a lid at
+   * `lidR` only stands `lidR * 0.92` off the globe centre *along the view
+   * axis*, which is the axis the depth test uses. At 1.105 that is 1.017 globe
+   * radii — and the corneal bulge reaches 1.049 at the lower lid margin, because
+   * the dome falls off as `q^0.55` over a 0.640 rad iris and the gaze carries a
+   * 0.11 rad downward bias. So the cornea won the depth test over the lower lid
+   * across the middle of the fissure and drew *in front of it*, onto the cheek.
+   *
+   * That is the "googly eyes" every hero read with once the winding fix made
+   * the globes draw their outside for the first time: the grey-blue crescent
+   * hanging below the lower lid margin, ending in the sphere's own silhouette
+   * arc, is the globe drawn over the lid. Measured, not inferred — solving the
+   * lid and globe profiles for the same screen (x, y) and differencing their z
+   * gives **-0.20 mm** at fissure fraction 0.40 on the lower lid with the old
+   * constants (negative = globe in front), and the `EYE.dome` note that this
+   * "bursts through the closed lid at 0.115" was recording the same failure
+   * without the 0.92 in the arithmetic, which is why lowering it to 0.072 did
+   * not close it.
+   *
+   * The invariant to hold when touching either number:
+   *
+   *     lidR * 0.92  >  1 + dome        (with margin; the sculpt and the skin
+   *                                      weights move both by a few tenths)
+   *
+   * 1.16 * 0.92 = 1.067 against 1.050, i.e. **+0.63 mm** of clearance at the
+   * worst point of either lid, and a 1.7 mm standoff at the margin, which is
+   * about what an eyelid is thick.
+   */
+  dome: 0.050,
   /** Radius of the lid shell at its margin, as a fraction of globe radius. */
-  lidR: 1.105,
+  lidR: 1.16,
   /** Azimuthal span of the palpebral fissure: inner canthus .. outer canthus. */
   arc: [-1.02, 1.30],
   /** Extra x-spread at the canthi — a real fissure is wider than the globe. */
@@ -1285,7 +1316,11 @@ function buildLid(B: MeshBuilder, o: LidOpts) {
         const m = lidMargin(f, upper, openU);
         // step inward (toward the globe) and up over the margin roll
         const e = m + 0.055 * k * Math.min(1, Math.abs(m) / 0.14);
-        const p = pt(a, e, R * lerp(EYE.lidR, 1.012, k), k === 0 ? f : undefined);
+        // 1.012 put the inner row a full millimetre INSIDE the globe once the
+        // 0.92 z-squash is counted (1.012 * 0.92 = 0.931 against a globe that
+        // reaches 1.03 at the margin), so the wet strip was buried in the ball
+        // and never drew. It has to clear the same invariant `EYE.dome` states.
+        const p = pt(a, e, R * lerp(EYE.lidR, 1.14, k), k === 0 ? f : undefined);
         const w = put(p);
         B.color(k === 0 ? 0xe8dcd4 : 0xfffaf4);
         B.mat(0.06, 0, 0.2);
