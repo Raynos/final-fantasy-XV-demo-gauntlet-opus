@@ -76,6 +76,20 @@ export interface WaterBasin {
   /** For the map and for debugging: what the body is. */
   name?: string;
   /**
+   * Characteristic wave size on this body, 1 = open sea.
+   *
+   * Fetch, in one number. A pond and an ocean were shading through the same
+   * three hard-coded octaves, so an eighty-metre tarn carried two-hundred-metre
+   * swell and read as a piece of sea that had been cut out and dropped on a
+   * hillside. Everything spatial in the spectrum scales by `1 / waveScale`, and
+   * the swell's own weight scales *with* it, because a pond does not have
+   * swell at all -- only the wind ripple.
+   *
+   * Left undefined, `_makeSurface` derives it from the basin's own short axis,
+   * which is the closest thing the scan has to a fetch.
+   */
+  waveScale?: number;
+  /**
    * How many metres of depth count as "shore", for the foam margin.
    *
    * A fixed band is wrong for anything but the sea. The first inland tarn was
@@ -478,7 +492,12 @@ export class Water {
   _makeSurface(game: Game, b: WaterBasin) {
     const geo = new THREE.PlaneGeometry(b.w, b.d, 1, 1);
     geo.rotateX(-Math.PI / 2);
-    const mat = this._makeMaterial(b.level, b.foamBand ?? 1.35);
+    // Fetch from the basin's short axis: 900 m of open water is a full sea,
+    // and the square root is there because wave height grows with the root of
+    // fetch, not with fetch. Floored, or a 40 m pond gets sub-metre ripple that
+    // is pure aliasing at any range worth drawing.
+    const waveScale = b.waveScale ?? Math.max(0.24, Math.min(1, Math.sqrt(Math.min(b.w, b.d) / 900)));
+    const mat = this._makeMaterial(b.level, b.foamBand ?? 1.35, waveScale);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(b.cx, b.level, b.cz);
     mesh.renderOrder = 5;
@@ -497,8 +516,9 @@ export class Water {
   /**
    * @param level this body's surface height — the depth model measures from it
    * @param foamBand metres of depth that count as shore on *this* body
+   * @param waveScale characteristic wave size, 1 = open sea (see `WaterBasin`)
    */
-  _makeMaterial(level: number, foamBand: number) {
+  _makeMaterial(level: number, foamBand: number, waveScale = 1) {
     const bed = this._bed;
     const uniforms = {
       uTime: { value: 0 },
@@ -544,6 +564,7 @@ export class Water {
       uCameraPos: { value: new THREE.Vector3() },
       uLevel: { value: level },
       uFoamBand: { value: foamBand },
+      uWaveScale: { value: waveScale },
       uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
       uRoughness: { value: 0.06 },
       uHeightTex: { value: bed ? bed.height : null },
@@ -571,7 +592,7 @@ export class Water {
       `,
       fragmentShader: /* glsl */`
         precision highp float;
-        uniform float uTime, uLevel, uRoughness, uHasBed, uFoamBand;
+        uniform float uTime, uLevel, uRoughness, uHasBed, uFoamBand, uWaveScale;
         uniform sampler2D uNormalA, uNormalB, uCaustics, uReflect;
         uniform sampler2D uHeightTex, uFarHeightTex;
         uniform vec4 uField;   // half, cell, N, blendOut
@@ -583,6 +604,19 @@ export class Water {
 
         vec3 sampleNormal(sampler2D t, vec2 uv){
           return normalize(texture2D(t, uv).xyz * 2.0 - 1.0);
+        }
+
+        // Value noise, for the group envelope and nothing else. Deliberately
+        // the same pair the river's RIVER_WAVES_GLSL carries, because the sea
+        // is being given the thing the river already had and the sea did not.
+        float wf_hash(vec2 p){
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+        float wf_noise(vec2 p){
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(wf_hash(i), wf_hash(i + vec2(1, 0)), f.x),
+                     mix(wf_hash(i + vec2(0, 1)), wf_hash(i + vec2(1, 1)), f.x), f.y);
         }
 
         // Bilinear fetch of the height grid. This is tf_grid() from
@@ -620,6 +654,46 @@ export class Water {
           vec2 w = uWindDir * uTime;
           float dist = length(uCameraPos - vWorld);
 
+          // --- the bed, before the waves -------------------------------------
+          // Hoisted above the spectrum because the spectrum now READS it. A
+          // wave field that does not know how deep the water under it is, is
+          // the definition of a slab: it puts open-ocean swell in fifty
+          // centimetres of water at the beach and the same chop a kilometre
+          // out. These are the taps the foam band was already paying for --
+          // three, unchanged, just earlier in the function.
+          float bedY = wf_bed(vWorld.xz);
+          float bedU = wf_bed(vWorld.xz + vec2(1.5, 0.0));
+          float bedV = wf_bed(vWorld.xz + vec2(0.0, 1.5));
+          float dropRaw = max(uLevel - bedY, 0.0);
+          // No terrain bound (or ablated): a fixed mid depth, so the surface
+          // still renders as water rather than as a black hole.
+          float dropDown = mix(3.0, dropRaw, uHasBed);
+          // 1 in the swash, 0 where the bed no longer touches the wave. Not
+          // half a wavelength -- that would be a hundred metres of swell -- but
+          // the last few metres, which is the band over which a beach visibly
+          // changes the water above it.
+          float shoal = 1.0 - smoothstep(0.30, 8.0, dropDown);
+
+          // --- wave groups ---------------------------------------------------
+          // **The sea had no envelope, and that is what "one slab" is.**
+          // water/Waves.ts wrote the diagnosis down for the river a fortnight
+          // ago -- "without one the surface is corduroy: every wave the same
+          // height for ever" -- gave the river a 30 m fbm envelope, and left
+          // the sea shading through three hard-coded octaves at three fixed
+          // weights. So every square metre of ocean in zone_galdin carries
+          // exactly the same wave statistics as every other, from the swash to
+          // the horizon, which is a tiled normal map and reads as one.
+          //
+          // Two scales: a ~190 m set envelope that drifts slowly downwind, and
+          // a ~60 m one for cats-paws. Remapped so the tails clamp -- the
+          // useful states are "slick" and "set", not a Gaussian around the
+          // mean.
+          float fk = 1.0 / uWaveScale;
+          vec2 gp = vWorld.xz * fk;
+          float groups = wf_noise(gp * (1.0 / 190.0) + vec2(uTime * 0.0135, uTime * 0.006)) * 0.62
+                       + wf_noise(gp * (1.0 /  61.0) + vec2(3.1, -uTime * 0.031)) * 0.38;
+          groups = clamp((groups - 0.30) / 0.40, 0.0, 1.0);
+
           // Three scales, because water is a spectrum and one normal map is a
           // texture. There used to be two, both short — 0.021 and 0.052 in world
           // units — which is why every lake read as a flat sheet of sandpaper:
@@ -631,6 +705,25 @@ export class Water {
           // the same argument as dropping a grass LOD that has become smaller
           // than a texel, and it costs one smoothstep.
           float fine = 1.0 - smoothstep(70.0, 300.0, dist);
+          /*
+           * And the whole perturbation falls off with range as well, which the
+           * ripple fade alone was never going to do.
+           *
+           * zone_vesperpool is the frame that proves it: a lake under nine
+           * hundred metres of cliff, with the cliff on REFLECT_LAYER, and no
+           * cliff anywhere in the water. The reflection was being fetched and
+           * then destroyed -- sUv += N.xz * 0.045 with a normal whose tangent
+           * terms sum to 2.08 against a 2.2 vertical is a +/-45 deg surface,
+           * per pixel, at any distance. That is not rough water, it is a
+           * scattering surface, and it turns a mirrored mountain into grey
+           * noise. Real water a kilometre away is optically flat: every slope
+           * inside the pixel has averaged out, which is exactly why the sea in
+           * a photograph is a smooth graded band with a glitter road on it and
+           * not blue corduroy to the horizon.
+           *
+           * Named calmFar, not flat: flat is a GLSL interpolation qualifier.
+           */
+          float calmFar = 1.0 - 0.78 * smoothstep(90.0, 1100.0, dist);
           // The swell reads the *other* map, on a rotated axis. Scaling one
           // texture three times looks exactly like what it is: the octaves
           // correlate with themselves and the surface comes out as regular
@@ -639,13 +732,41 @@ export class Water {
           // this same function, and redeclaring it is a GLSL compile error that
           // arrives as "VALIDATE_STATUS false" and nothing else.
           mat2 swellRot = mat2(0.857, -0.515, 0.515, 0.857);
-          vec3 nS = sampleNormal(uNormalB, (swellRot * vWorld.xz) * 0.0047 + w * 0.0031);
-          vec3 nA = sampleNormal(uNormalA, vWorld.xz * 0.021 + w * 0.012);
-          vec3 nB = sampleNormal(uNormalB, vWorld.xz * 0.052 - w * 0.021);
+          vec3 nS = sampleNormal(uNormalB, (swellRot * vWorld.xz) * (0.0047 * fk) + w * 0.0031);
+          vec3 nA = sampleNormal(uNormalA, vWorld.xz * (0.021 * fk) + w * 0.012);
+          vec3 nB = sampleNormal(uNormalB, vWorld.xz * (0.052 * fk) - w * 0.021);
+          // The weights, and they are now three different functions of place
+          // rather than three constants. Swell is a deep-water animal and dies
+          // as it feels the bottom; chop is the opposite and is what a shelving
+          // margin is covered in; both ride the set envelope.
+          float swellW = 0.78 * mix(0.42, 1.30, groups) * (1.0 - 0.62 * shoal)
+                       * mix(0.42, 1.0, uWaveScale);
+          float chopA  = (0.42 + 0.38 * fine) * mix(0.55, 1.25, groups) * (1.0 + 0.55 * shoal);
+          float chopB  = (0.50 * fine) * mix(0.28, 1.35, groups) * (1.0 + 0.80 * shoal);
           // blend in tangent space, then lift into world (plane normal is +Y)
-          vec3 nt = normalize(vec3(
-            nS.xy * 0.78 + nA.xy * (0.42 + 0.38 * fine) + nB.xy * (0.5 * fine),
-            nS.z * nA.z * nB.z));
+          vec3 nt = vec3((nS.xy * swellW + nA.xy * chopA + nB.xy * chopB) * calmFar,
+                         nS.z * nA.z * nB.z);
+          /*
+           * Refraction, which is the one wave behaviour that a viewer names
+           * without knowing they are naming it: swell turns to face the beach,
+           * so the last few wavelengths run **parallel to the shoreline**
+           * whatever direction the wind is. Three tiled normal maps can never
+           * produce that, because none of them knows where the shore is.
+           *
+           * The bed gradient does. up is the direction the bed rises, from
+           * the same two taps; a plane wave travels along it, and shortens as
+           * it shoals, which is what makes the lines crowd together onto the
+           * sand. Gated on there being a real slope, so a flat silt bottom does
+           * not get a wave train drawn out of rounding noise.
+           */
+          vec2 up = vec2(bedU - bedY, bedV - bedY);
+          float upLen = length(up);
+          vec2 shoreDir = up / max(upLen, 1e-3);
+          float train = 0.52 * shoal * shoal * calmFar * mix(0.55, 1.15, groups)
+                      * smoothstep(0.02, 0.30, upLen);
+          nt.xy += shoreDir * (train * cos(dot(vWorld.xz, shoreDir)
+                     * (6.2831853 / mix(24.0, 9.0, shoal)) - uTime * 1.9));
+          nt = normalize(nt);
           vec3 N = normalize(vec3(nt.x, nt.z * 2.2, nt.y));
 
           vec3 V = normalize(uCameraPos - vWorld);
@@ -658,23 +779,23 @@ export class Water {
           vec3 refl = texture2D(uReflect, clamp(sUv, 0.001, 0.999)).rgb;
 
           // --- metric depth ------------------------------------------------
-          // Straight down first, to know how far the bed is at all.
-          float bedY = wf_bed(vWorld.xz);
-          float dropDown = max(uLevel - bedY, 0.0);
-
-          // Then follow the refracted ray. One Snell step, air into water:
+          // bedY and dropRaw are up at the top of main() now: the wave
+          // field reads them, and reading the bed twice for the same fragment
+          // is two texture fetches for nothing.
+          //
+          // Follow the refracted ray. One Snell step, air into water:
           // eta = 1.0 / 1.333. This is what makes a grazing view across a
           // shallow margin correctly darker than a plan view of the same spot —
           // it is travelling through more water to reach the same bed.
           vec3 R = refract(-V, N, 0.7502);
           float down = max(-R.y, 0.10);
-          vec2 hit = vWorld.xz + R.xz * (dropDown / down);
+          vec2 hit = vWorld.xz + R.xz * (dropRaw / down);
           float path = max(uLevel - wf_bed(hit), 0.0) / down;
 
           // No terrain bound (or ablated): fall back to a fixed mid depth so the
           // surface still renders as water rather than as a black hole.
+          // (dropDown took the same mix at the top of main().)
           path = mix(3.0, path, uHasBed);
-          dropDown = mix(3.0, dropDown, uHasBed);
 
           // --- Beer-Lambert -------------------------------------------------
           vec3 T = exp(-uSigma * path);
@@ -717,9 +838,9 @@ export class Water {
           // the depth that corresponds to about three and a half metres of
           // beach — capped by the authored one, so a cliff and a tarn behave
           // exactly as they did. (No backticks: this is inside a glsl template.)
-          float bedU = wf_bed(vWorld.xz + vec2(1.5, 0.0));
-          float bedV = wf_bed(vWorld.xz + vec2(0.0, 1.5));
-          float bedSlope = max(0.035, length(vec2(bedY - bedU, bedY - bedV)) / 1.5);
+          // (bedU/bedV are the hoisted taps at the top of main(); the wave
+          // field's shore refraction reads the same two.)
+          float bedSlope = max(0.035, upLen / 1.5);
           float band = min(uFoamBand, max(0.10, 3.5 * bedSlope));
           float edge = 1.0 - smoothstep(0.0, band, dropDown);
           float churn = texture2D(uNormalB, vWorld.xz * 0.085 + w * 0.03).x;
@@ -736,10 +857,16 @@ export class Water {
           // pure white here made an overcast lake look sunlit along its edge.
           col = mix(col, vec3(0.90, 0.93, 0.95) * (downwelling * 0.75 + 0.10), foam * 0.85);
 
-          // sun glint — sharp specular on the wave normals
+          // Sun glint — sharp specular on the wave normals, and the lobe
+          // widens where the sets are running. A single roughness over a whole
+          // sea gives a single flat sheen; a glitter road is *made* of the fact
+          // that some patches of the surface are ruffled and some are glass,
+          // and it is the one feature of open water that a still photograph
+          // still reads as motion.
+          float rough = clamp(uRoughness * mix(0.55, 1.9, groups) * 6.0, 0.0, 1.0);
           vec3 H = normalize(uSunDir + V);
-          float spec = pow(max(dot(N, H), 0.0), mix(2000.0, 60.0, uRoughness * 6.0));
-          col += uSunColor * spec * 2.4 * (1.0 - foam * 0.6);
+          float spec = pow(max(dot(N, H), 0.0), mix(2000.0, 60.0, rough));
+          col += uSunColor * spec * 2.4 * mix(0.45, 1.5, groups) * (1.0 - foam * 0.6);
 
           // --- alpha ------------------------------------------------------------
           // The complement of transmittance, so a centimetre of water at the
