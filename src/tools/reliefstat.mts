@@ -4,7 +4,7 @@
  *
  *   node src/tools/reliefstat.mts "tmp/shots/x/*.png"
  *   node src/tools/reliefstat.mts a.png --roi 0.1,0.6,0.8,0.35
- *   node src/tools/reliefstat.mts a.png --against FFXV-field-ground
+ *   node src/tools/reliefstat.mts a.png            # the FFXV ground plates are ALWAYS the reference
  *
  * **Why this exists.** `imagestats.mts` measures twelve *global* statistics —
  * colour, exposure, saturation, clipping. Every one of them can be exactly on
@@ -196,7 +196,16 @@ async function main(): Promise<void> {
   };
   const roiArg = arg('--roi');
   const roi: Roi = roiArg ? (roiArg.split(',').map(Number) as Roi) : GROUND_ROI;
-  const files = argv.filter((a, i) => !a.startsWith('--') && (i === 0 || argv[i - 1] !== '--roi'))
+  // Skip the value after ANY flag, not just after `--roi`. The narrow version
+  // of this line meant the invocation on line 7 of this file's own header --
+  // `reliefstat.mts a.png --against FFXV-field-ground` -- handed
+  // `FFXV-field-ground` to the file list and died in `open()`, twenty-two
+  // minutes deep in the daemon queue, twice. `--against` was never read at all:
+  // the reference below is unconditional, so the flag is accepted and ignored
+  // rather than rejected, which is the worst of the three options. Documented
+  // usage that crashes is the same defect `imagestats.mts` warns about in its
+  // own prose -- an instrument that contradicts itself is worse than none.
+  const files = argv.filter((a, i) => !a.startsWith('--') && (i === 0 || !argv[i - 1]!.startsWith('--')))
     .flatMap(expand);
   if (!files.length) {
     console.error('usage: node src/tools/reliefstat.mts "tmp/shots/x/*.png" [--roi x,y,w,h]');
