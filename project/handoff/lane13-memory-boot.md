@@ -304,3 +304,57 @@ infinity is one vertex painted white for the session.
       (610 ms). Not geometry, so `bakedGeo` does not fit: it wants the instance
       matrices plus the streamer's tile bookkeeping. Restore side lands in
       `src/world/veg/`. `lane13`
+
+### Looked at the colour change too (VERIFIED)
+
+`4d16821` against `4d16821~1`, PNG, eight shots chosen to cover vertex colour
+everywhere it does work — towns, vegetation, terrain, characters, water. Every
+one under its per-shot floor:
+
+    hero_full        0.310 / 2.25      zone_galdin       0.334 / 2.00
+    town_wide        0.334 / 2.00      party_formation   0.344 / 2.85
+    zone_lestallum   0.223 / 2.00      zone_nebulawood   0.498 / 0.74
+    poi_reststop     0.095 / 2.00      vista_dawn        0.178 / 2.00
+
+Read `zone_lestallum`: the town sits complete on the plain, warm stone against
+the green, no missing merge and no colour banding on the long terrain gradient.
+Read `zone_nebulawood`, the tightest ratio to its floor: canopy, the faceted
+rock mass and its crack texture, the haven ring and the shore foam all
+unchanged. **No white vertices anywhere** — an `Infinity` out of
+`toHalfFloat` is what `halfSafe()` exists to prevent and it is what these two
+frames were read for.
+
+## FOR LANE 1
+
+**Nothing is required of you.** Task 38 (`skinWeight` Float32x4 -> Uint8) is
+banked and `src/characters/rig/Geo.ts` was never touched. It landed in
+`src/engine/AttrPack.ts` (`792e998`) as an end-of-boot re-pack instead, which
+gets the same 16.5 MB without two lanes editing one file on a shared trunk.
+Nothing in `rig/` needs to change and nothing in `rig/` is blocked by me.
+
+If, later, somebody wants the *peak-allocation* win as well — the re-pack still
+lets the Float32 arrays exist during boot and then orphans them, which showed
+up as ~28 MB of extra garbage in `bootprof`'s "was garbage" row — the
+source-level change is this, and it is four files, not one:
+
+    src/characters/rig/Geo.ts:250
+    -   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
+    +   const sw8 = new Uint8Array(this.sw.length);
+    +   for (let i = 0; i < this.sw.length; i += 4) {
+    +     let s = 0, big = 0;
+    +     for (let k = 0; k < 4; k++) { sw8[i + k] = Math.round(this.sw[i + k] * 255); s += sw8[i + k]; if (sw8[i + k] > sw8[i + big]) big = k; }
+    +     if (s !== 0 && s !== 255) sw8[i + big] += 255 - s;   // see AttrPack.renormalize
+    +   }
+    +   geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw8, 4, true));
+
+    src/characters/rig/Geo.ts:316    ['skinWeight', 4, Float32Array] -> Uint8Array
+    src/characters/rig/Sculpt.ts:512 the same row
+    src/characters/enemies/RigBuilder.ts:85,118,170  the same three constructions
+
+`npc/NpcShadow.ts:71-76` needs no change: it `clone()`s the attribute, which
+carries the format. `engine/postfx/VelocityPass.ts:156` needs no change either
+— its four-vertex proxy has its own geometry, and the `normalized` flag is
+per-attribute, not per-scene.
+
+It is filed, not recommended: the memory is already banked and every one of
+those four files belongs to a different lane.
