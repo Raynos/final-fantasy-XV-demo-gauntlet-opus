@@ -793,6 +793,25 @@ export class Enemy {
   reset(opts: SpawnOpts = {}) {
     this.maxHp = opts.maxHp ?? this.baseMaxHp;
     this.hp = this.maxHp;
+    /**
+     * **`maxPoise` from the species, not from the last life.**
+     *
+     * `maxHp` is restored from `baseMaxHp` and `damage` from `type.stats`
+     * one line down; `maxPoise` was the only one of the three level-scaled
+     * stats with nothing to come back to. It is written in exactly one place,
+     * `Bestiary.make()`, which runs only for a *fresh* instance -- so a pooled
+     * enemy kept whatever `Enemies.spawn`'s level scale had multiplied it to,
+     * and because that scale is `maxPoise = round(maxPoise * k.poise)`, the
+     * next life multiplied on top of the last one. Poise compounded without
+     * bound across respawns while HP and damage did not.
+     *
+     * `combatloop`'s stagger row is what caught it: it spawns a bare
+     * `sabertusk` with no level at all and reported `poise 5/71` against a
+     * species poise of **42**. 71 is not any single scale of 42 (level 24
+     * gives 70, level 25 gives 74) -- it is two rounded scales stacked, on a
+     * fixture that asked to be scaled zero times.
+     */
+    this.maxPoise = this.type.stats.poise;
     this.poise = this.maxPoise;
     this.level = opts.level ?? this.type.stats.level;
     this.damage = opts.damage ?? this.type.stats.damage;
