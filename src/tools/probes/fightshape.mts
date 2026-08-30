@@ -18,10 +18,20 @@
 //   3. how much of Noctis' HP it costs. A fight you cannot lose is a cutscene.
 //   4. what the enemies spent the fight *doing* — chasing is not fighting.
 //
-// Three fights per run, because one fight is an anecdote.
+// **Five fights per run, and the run ends in a median**, because one fight is
+// an anecdote and three of them are three anecdotes. Wild dens are drawn from
+// a weighted roster with a `count` range, so consecutive rounds legitimately
+// differ by 3x on every number here — a single round can neither pass nor fail
+// a duration target. The `AGGREGATE` block at the bottom is the lane's
+// instrument: median duration, median HP paid, and a VERDICT against the two
+// numbers phase 4 actually asks for (18-30 s, >=15% of Noctis' max HP).
+//
+// Only rounds that were a *fight* count toward the median: a round that found
+// no den, or that ended with nothing dead, is listed and excluded. Reporting a
+// median over rounds that never started is how an instrument flatters a build.
 //
 //   node src/tools/probe.mts src/tools/probes/fightshape.mts --dirty \
-//        --shot tmp/shots/fight/f.jpg
+//        --set rounds=5 --shot tmp/shots/fight/f.jpg
 //
 // Two traps, both already paid for elsewhere and both fatal here:
 //  - a posed page boots with the encounter loop OFF (`Director.setLive(false)`
@@ -171,12 +181,19 @@ const findDen = async (headings, secs) => {
 // evaluate), and a report that only exists in the return value dies with it.
 const rounds = [];
 const emit = (s) => { rounds.push(s); console.log(s); };
-const HEADINGS = [[0.9, 2.4, 4.1], [5.4, 3.2], [1.7, 0.3], [4.7, 2.0]];
+const HEADINGS = [
+  [0.9, 2.4, 4.1], [5.4, 3.2], [1.7, 0.3], [4.7, 2.0],
+  [2.9, 5.9], [0.4, 3.7], [4.4, 1.2], [3.9, 6.0],
+];
+/** Rounds to play. Five is the floor for a median worth quoting. */
+const ROUNDS = Math.max(1, Math.min(HEADINGS.length, Number(window.rounds) || 5));
+/** One row per round, for the aggregate. */
+const metrics = [];
 
-for (let round = 0; round < 3; round++) {
+for (let round = 0; round < ROUNDS; round++) {
   const shots = round === 0;
   const found = await findDen(HEADINGS[round] || [round], 28);
-  if (!found) { emit(`round ${round + 1}: no den found`); continue; }
+  if (!found) { emit(`round ${round + 1}: no den found`); metrics.push({ round: round + 1, found: false }); continue; }
 
   /* ---- the approach ------------------------------------------------- */
   // Walk, do not sprint: this is the beat where a player reads the pack and
@@ -221,6 +238,11 @@ for (let round = 0; round < 3; round++) {
   const startHits = hits.length;
   const startHostiles = hostiles().length;
   const startHp = player.stats.hp;
+  // Task 36 wants a CAST count, and `warps` below counts *key taps* — the
+  // policy taps Q on a stagger whether or not the warp is affordable or the
+  // state machine accepts it. `combat`'s own `warp` event is the cast.
+  const startEvents = events.length;
+  const startMp = combat.mp;
 
   // The fight is the enemies *in this fight*, not every hostile in the world.
   // Scoping it to whatever is within 45 m is what stops the loop marching off
@@ -320,13 +342,29 @@ for (let round = 0; round < 3; round++) {
   const hitLine = [...nBySrc].sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k} ${v} (${(v / Math.max(0.1, fightSecs)).toFixed(2)}/s)`).join('  ');
 
+  // What the fight actually cost and what actually fired, for the aggregate.
+  const hpPaid = 100 * (startHp - playerHpMin) / player.stats.maxHp;
+  const kills = enc.stats.kills - startKills;
+  const roundEvents = events.slice(startEvents);
+  const warpCasts = roundEvents.filter((e) => e.name === 'warp').length;
+  const denHp = hits.slice(startHits).reduce((a, h) => a + h.dmg, 0);
+  const noctisShare = 100 * (bySrc.get('noctis') || 0) / dmgTotal;
+  metrics.push({
+    round: round + 1, found: true, name: found.e.name, n: startHostiles,
+    level: found.e.level, hpEach: found.e.maxHp,
+    secs: fightSecs, hpPaid, kills, warpCasts, warpTaps: warps,
+    mpSpent: startMp - combat.mp, dodges, techs, denHp, noctisShare,
+    enemyAtkRate: enemyAttacks / Math.max(1, fightSecs),
+  });
+
   emit([
     `=== round ${round + 1}: ${found.e.name} x${startHostiles} (lv ${found.e.level}, ${found.e.maxHp} hp each), player (${player.position.x | 0}, ${player.position.z | 0})`,
     'APPROACH', ...approach.slice(-12),
     `  noticed at ${noticedDist.toFixed(0)} m; notice -> engaged = ${spottedT != null && noticedAt != null ? (spottedT - noticedAt).toFixed(2) + ' s' : 'never'}`,
     'FIGHT', ...beats,
     `  duration ${fightSecs.toFixed(1)}s   kills ${enc.stats.kills - startKills}/${startHostiles}`,
-    `  noctis paid ${(100 * (startHp - playerHpMin) / player.stats.maxHp).toFixed(1)}% of max HP   dodges ${dodges} warps ${warps} techs ${techs}`,
+    `  noctis paid ${hpPaid.toFixed(1)}% of max HP   dodges ${dodges} techs ${techs}`,
+    `  warp: ${warpCasts} casts from ${warps} Q taps (${(warpCasts / Math.max(0.1, fightSecs)).toFixed(2)} casts/s), mp ${(startMp - combat.mp).toFixed(0)} spent`,
     `  enemy attacks opened ${enemyAttacks} (telegraphs ${enemyTelegraphs}) = ${(enemyAttacks / Math.max(1, fightSecs)).toFixed(2)}/s over ${startHostiles} of them`,
     `  mean range ${(distSum / Math.max(1, distN)).toFixed(1)} m, inside melee ${(100 * framesInMelee / Math.max(1, frames)).toFixed(0)}% of it`,
     `  enemy time: ${occ}`,
@@ -337,7 +375,41 @@ for (let round = 0; round < 3; round++) {
   ].join('\n'));
 }
 
+/* ---- the aggregate: what the run as a whole says -------------------- */
+// One fight is an anecdote and its spread is 3x, so every claim this lane
+// makes is a median over the fights that actually happened.
+const median = (xs) => {
+  if (!xs.length) return NaN;
+  const a = [...xs].sort((p, q) => p - q);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+};
+const fights = metrics.filter((m) => m.found && m.kills > 0);
+const one = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '--');
+const agg = [];
+agg.push('', `=== AGGREGATE over ${fights.length} fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${metrics.filter((m) => m.found && !m.kills).length} killed nothing)`);
+if (!fights.length) {
+  agg.push('  no fight completed -- nothing to aggregate');
+} else {
+  const col = (k, d = 1) => fights.map((m) => one(m[k], d)).join(' ');
+  const medSecs = median(fights.map((m) => m.secs));
+  const medHp = median(fights.map((m) => m.hpPaid));
+  agg.push(`  duration      ${col('secs')}  ->  MEDIAN ${one(medSecs)} s        [target 18-30]`);
+  agg.push(`  hp paid %     ${col('hpPaid')}  ->  MEDIAN ${one(medHp)} %        [target >=15]`);
+  agg.push(`  pack size     ${fights.map((m) => m.n).join(' ')}  ->  median ${one(median(fights.map((m) => m.n)), 0)}`);
+  agg.push(`  den hp dealt  ${fights.map((m) => Math.round(m.denHp)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp)), 0)}`);
+  agg.push(`  party dps     ${fights.map((m) => one(m.denHp / Math.max(0.1, m.secs), 0)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp / Math.max(0.1, m.secs))), 0)} hp/s`);
+  agg.push(`  noctis dmg %  ${col('noctisShare', 0)}  ->  median ${one(median(fights.map((m) => m.noctisShare)), 0)} %`);
+  agg.push(`  warp casts    ${fights.map((m) => m.warpCasts).join(' ')}  (Q taps ${fights.map((m) => m.warpTaps).join(' ')})  ->  median ${one(median(fights.map((m) => m.warpCasts)), 0)} casts`);
+  agg.push(`  enemy atk/s   ${col('enemyAtkRate', 2)}  ->  median ${one(median(fights.map((m) => m.enemyAtkRate)), 2)}`);
+  const okSecs = medSecs >= 18 && medSecs <= 30;
+  const okHp = medHp >= 15;
+  agg.push(`  VERDICT: duration ${okSecs ? 'PASS' : `FAIL (${one(medSecs)} s, want 18-30)`}; danger ${okHp ? 'PASS' : `FAIL (${one(medHp)}%, want >=15%)`}`);
+}
+for (const line of agg) console.log(line);
+
 log.push(...rounds);
+log.push(...agg);
 log.push('', 'EVENTS');
 for (const e of events) {
   log.push(`  ${e.t.toFixed(1).padStart(7)}s ${e.name.padEnd(19)} ${brief(e.detail).slice(0, 120)}`);
