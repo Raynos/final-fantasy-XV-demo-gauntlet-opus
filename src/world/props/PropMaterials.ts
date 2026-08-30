@@ -141,9 +141,15 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
  * three handoffs have now photographed and none has attributed.
  *
  * The stretch objection does not apply here, for a structural reason: the
- * apron carries **world-metre UVs**. `gradePad` writes `uv.push(ct * s, st * s)`
- * in the field's own frame, in metres, precisely so "a wear texture stamped in
- * world metres lines up with the geometry whatever the pad's rotation". So a
+ * apron carries **world-metre UVs**. `gradePad` writes `uv.push(ct * arc,
+ * st * arc)` in the field's own frame, in metres of *surface* -- `arc` is the
+ * cumulative 3-D arc length out along the bearing, which equals the horizontal
+ * run `s` exactly on a flat deck and diverges only where the earthwork gets
+ * steep -- precisely so "a wear texture stamped in world metres lines up with
+ * the geometry whatever the pad's rotation". (It was `ct * s, st * s` until
+ * 2026-08-30; a plan projection gives a vertical retaining wall 16.25 m of
+ * surface per metre of UV, so the tile below arrived on the deck and smeared
+ * down the wall.) So a
  * map at `repeat = 1 / mpt` is a fixed texel density on a pad of any size — the
  * same device `PartBuilder.texelBox` uses for boxes and `Rocks` bakes into its
  * triplanar UVs — and there is nothing left to stretch.

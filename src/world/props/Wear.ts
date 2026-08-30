@@ -672,6 +672,11 @@ export function gradePad(o: PadOpts): PadResult {
     // about a metre a gully stops being erosion and starts being a canyon.
     const rillAmp = Math.min(1.05, 0.20 * Math.abs(hEdge)) * rill;
 
+    /*
+     * Cumulative surface arc along this bearing, for the V of the world-metre
+     * UV -- see the push at the bottom of the loop.
+     */
+    let arc = 0, prevS = 0, prevY = 0;
     for (let i = 0; i < rings.length; i++) {
       const t = rings[i];
       const s = t <= 1 ? e * t : e + (t - 1) * reachOut;
@@ -768,9 +773,39 @@ export function gradePad(o: PadOpts): PadResult {
       }
       pos.push(ct * s, y, st * s);
       col.push(c[0], c[1], c[2]);
-      // World-planar UVs in the field's own frame, so a wear texture stamped in
-      // world metres lines up with the geometry whatever the pad's rotation.
-      uv.push(ct * s, st * s);
+      /*
+       * World-metre UVs in the field's own frame, so a wear texture stamped in
+       * world metres lines up with the geometry whatever the pad's rotation --
+       * but laid out on the **surface**, not on its plan.
+       *
+       * It used to be `uv.push(ct * s, st * s)`, a straight planar projection
+       * of the horizontal position, and a planar projection of a vertical
+       * surface has no texture on it at all. The `cliff` branch above walks
+       * `reachOut = 1.6` m outward while `y` dives to `-min(26, deepest + 1.2)`:
+       * **16.25 metres of wall per metre of UV**, so the tile is smeared into
+       * vertical streaks down exactly the twenty-six-metre retaining curtain
+       * the LANDMINES entry about `gradePad` at a brink is about. The pad the
+       * texture was added for is the one place it could not land.
+       *
+       * The radius the UV is built from is therefore the cumulative 3-D arc
+       * length along the bearing -- `hypot(ds, dy)` summed out from the centre
+       * -- rather than the horizontal run. On the deck `y` is 0, so `arc === s`
+       * and every flat pad's UVs are bit-identical to before; on a 1:3 batter
+       * it stretches by 5%; only a genuinely steep face moves, and there it
+       * moves to 1:1 down the fall line, which is the axis the smear was on.
+       *
+       * The circumferential axis is then over-sampled by `arc / s` (2.7:1 at a
+       * haven's 26 m wall, since the 13 m deck radius dominates both), and that
+       * is the deliberate trade: keeping the planar form keeps the UV field
+       * continuous around the pad, where the metrically exact alternative --
+       * (s * theta, arc) -- puts a hard tile seam down one bearing of every
+       * deck in the game to fix a face most pads do not have. Worst-case
+       * anisotropy goes 16.25:1 -> 2.7:1, and finer-than-true reads as grain
+       * where stretched-past-true reads as a smear.
+       */
+      arc += Math.hypot(s - prevS, y - prevY);
+      prevS = s; prevY = y;
+      uv.push(ct * arc, st * arc);
     }
     // Spoil rides the isoline of the cut, one lump per few degrees.
     if (crestY > 0.35 && j % 3 === 0) {
