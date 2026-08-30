@@ -390,6 +390,25 @@ export const POIS: PoiSpec[] = [
     does: 'Garage, diner, fuel, weapon shop, hunt board. Cid, Cindy, Takka, Dave.' },
   { id: 'hammerhead_layby', name: 'Hammerhead Parking', type: 'parking', zone: 'longwythe', x: 246, z: 52, r: 46, travel: true, lv: 1,
     does: 'Park the Regalia. The road trip begins and ends on this apron.' },
+  // The rune-marked camp rock 37 m from where the Regalia breaks down.
+  // `Ecology._layoutSites` has built it since the vegetation pass was written
+  // -- correct geometry, FFXV's own glowing sigil -- and it was pure scenery:
+  // no POI, so no haven, so no prompt. The first campable-looking thing the
+  // player ever walks past taught them that campable-looking things are not.
+  //
+  // `x`/`z` are the site's RESOLVED position, not the (-62,-46) seed
+  // `_findFlat` is asked from: it walks to the nearest flat, which lands at
+  // (-31.4, -20.3), and `HAVEN_RADIUS` is 14 m, so the seed coordinates would
+  // have put the pin 39 m off its own rock. Keep this in step with
+  // `Ecology._layoutSites` if that search ever moves.
+  //
+  // `lv: 1` is deliberate and it has one side effect worth stating: `HAVENS`
+  // is level-sorted and `HAVENS[0].discovered = true`, so this takes the
+  // pre-discovered flag off Cotisse Haven (lv 5). That is the right answer --
+  // the haven you have already found should be the one at your feet on the
+  // first morning, not one 1.2 km up the highway.
+  { id: 'spawn_haven', name: 'Redlyn Haven', type: 'haven', zone: 'longwythe', x: -31, z: -20, r: 55, travel: true, lv: 1,
+    does: 'The rune rock south of the breakdown. First camp: rest, cook, level up, learn the system.' },
   { id: 'longwythe_rest', name: 'Longwythe Rest Area', type: 'reststop', zone: 'longwythe', at: 'n_longwythe', r: 140, travel: true, lv: 2,
     does: 'Caravan (rest and save), diner, fuel pump, item shop.' },
   { id: 'longwythe_layby', name: 'Fossil Wood Layby', type: 'parking', zone: 'longwythe', x: 1312, z: 76, r: 46, travel: true, lv: 2,
