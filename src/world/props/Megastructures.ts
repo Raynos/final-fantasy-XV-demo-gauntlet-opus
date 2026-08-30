@@ -320,10 +320,12 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * to be ten pixels to survive TAA and the distance haze, so **nothing narrower
  * than about 22 m is worth authoring**. The ridge band's half-width in unit
  * radius is roughly `1 / (k * |grad fbm|)`, and on a 585 m bounding radius that
- * puts `k` around ten -- hence 11, which measures out at roughly a 30 m
- * band, and not the 7.0 the gully incision uses for a crease that is *meant*
- * to be sub-pixel. At 11 about an eighth of the surface is lit; the first
- * pass ran two octaves at 8.5 and lit a quarter of it, which is a lava ball.
+ * puts `k` in the low tens -- hence 13 against a 3.2 base frequency, which
+ * measures out at roughly a 15 m band: ten pixels at `landmark_meteor`'s
+ * 1.45 m/px and five at Lestallum, where bloom widens it back. Not the 7.0 the
+ * gully incision uses for a crease that is *meant* to be sub-pixel, and not the
+ * two octaves at 8.5 the first pass ran, which lit a quarter of the surface
+ * and produced a lava ball.
  *
  * The colour is the human's direction: **molten blue**. A near-white-blue core
  * with a warm halo at the band's edge, which is what a crack full of something
@@ -339,7 +341,7 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * @param k band tightness -- LOWER is wider. See the width note above.
  * @param amp peak core radiance before `uGlow`
  */
-function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 11, amp = 1) {
+function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 13, amp = 1) {
   const n = new Noise(seed * 13 + 7);
   const p = geo.attributes.position;
   const count = p.count;
@@ -354,9 +356,17 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 11, amp = 1) {
   const h = Math.max(1e-4, yMax - yMin);
   if (!geo.attributes.normal) geo.computeVertexNormals();
   const nrm = geo.attributes.normal;
-  // Cycles per unit radius. 1.9 puts roughly three crack cells across a face,
-  // which on a 585 m mass is a trunk every ~300 m: a network, not a mesh.
-  const F = 1.9;
+  // Cycles per unit radius, and the y term is deliberately a third of it.
+  //
+  // At 1.9 isotropic there were only about three crack cells across a whole
+  // mass, so what any one camera saw was two or three isolated POCKETS of the
+  // zero set rather than a line running anywhere — captured, and with bloom on
+  // top they read as glowing blobs stuck to a flank. 3.2 puts four or five
+  // lines across a visible face, and squashing the field's y domain to 0.35
+  // makes it vary slowly with height, so its zero contours run roughly
+  // VERTICALLY: a fissure runs down the face the way a cooling crack does,
+  // instead of wandering across it like a contour line.
+  const F = 3.2;
   let lit = 0;
   for (let i = 0; i < count; i++) {
     const x = p.getX(i) / rMax, y = p.getY(i) / rMax, z = p.getZ(i) / rMax;
@@ -364,7 +374,7 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 11, amp = 1) {
     // a topographic map: smooth, parallel, and unmistakably a texture.
     const wx = n.fbm3(x * 1.3 + 4, y * 1.3, z * 1.3 - 2, 2) * 0.6;
     const wy = n.fbm3(x * 1.3 - 9, y * 1.3 + 6, z * 1.3, 2) * 0.6;
-    const f = n.fbm3(x * F + wx, y * F * 0.85 + wy, z * F - 3, 4);
+    const f = n.fbm3(x * F + wx, y * F * 0.35 + wy, z * F - 3, 4);
     // **One octave, not two.** The first pass added a hairline set at 3.1x the
     // frequency for "detail", and its band came out about three metres wide on
     // a mesh whose triangle edge is seven -- so it could not be drawn as a
@@ -1281,7 +1291,11 @@ export class Megastructures {
           // envelope is how you get pixels in the frustum that fail the depth
           // test. Centre 5 m proud of a 34 m box, so the terrain cuts it and
           // what renders is a band following the slope.
-          mat4([px, coverLocal(px, pz, len) + 5, pz],
+          // Probed at its WIDTH, not its length: `coverY` widens its envelope
+          // sample by `size`, so asking about a 210 m footprint on a slope
+          // returns the high end of that footprint and floats the whole
+          // segment off the ground at the low end.
+          mat4([px, coverLocal(px, pz, wid) + 5, pz],
             [rng.gauss(0, 0.05), -out + Math.PI / 2, rng.gauss(0, 0.05)]));
       }
     }
@@ -1304,13 +1318,21 @@ export class Megastructures {
     // rock came off the mass. Its job is the transition: the eye needs
     // *something* between a 900 m cliff and flat ground or it reads the cliff as
     // cut out and pasted on.
-    for (let i = 0; i < 44; i++) {
+    for (let i = 0; i < 110; i++) {
       const a = rng.next() * Math.PI * 2;
       // sqrt-biased so the count per unit area is roughly flat, then squared
       // back toward the middle: 240-720 m, thickest at 350.
       const t = Math.pow(rng.next(), 1.7);
       const r = 240 + t * 480;
-      const s = rng.range(30, 96) * (1.25 - 0.5 * t);
+      // **Sized for a seat that works.** `shard` normalises to a bounding
+      // radius of `r * 1.7` and this stretch puts the long axis vertical, so
+      // the old 30-96 m argument built shards up to 163 m TALL — which was
+      // invisible while they were 90 m underground and, the moment the seat
+      // was fixed, put two black faceted monoliths across the front of the
+      // judged frame. Talus is 10-50 m and there is a lot of it: 8-28 m here,
+      // 110 of them instead of 44, so the transition from a 900 m cliff to
+      // flat ground reads as a heap rather than as boulders.
+      const s = rng.range(8, 28) * (1.25 - 0.5 * t);
       const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
       B.add(M.stone, shard(2300 + i, s, [1.3, 1.6, 1.0], 0.5),
         mat4([px, seatLocal(px, pz, s) + s * 0.3, pz],
@@ -1335,21 +1357,28 @@ export class Megastructures {
     // **broken**: `gap` kills a run of three or four in two places, because a
     // continuous ring of equal blocks is a wall, and a real rim is breached
     // where the shock ran out.
-    for (let i = 0; i < 46; i++) {
-      const a = (i / 46) * Math.PI * 2 + rng.gauss(0, 0.035);
+    for (let i = 0; i < 62; i++) {
+      const a = (i / 62) * Math.PI * 2 + rng.gauss(0, 0.035);
       // two gaps, at roughly 1.9 and 4.6 radians, about 0.5 rad wide
       const gap = Math.min(Math.abs(a - 1.9), Math.abs(a - 4.6)) < 0.26;
       if (gap && rng.next() < 0.75) continue;
       const r = 790 + rng.range(0, 270);
-      const s = rng.range(52, 155);
+      // 30-72 m, against the 52-155 m this ring carried while it was buried.
+      // Same arithmetic as the apron: `shard` normalises to `r * 1.7`, so 155
+      // was a 260 m block, and a 260 m block on a rim 600 m in front of the
+      // judged camera is not a rampart, it is a wall across the subject. At
+      // this size a block stands 20-45 m proud, and there are sixty-two of
+      // them rather than forty-six so the run reads as continuous ground
+      // rather than as a line of separate stones.
+      const s = rng.range(30, 72);
       const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
       // Leaned outward, away from the centre: uplifted rim strata dip away from
       // the impact. `atan2` in the group frame, and the block is stretched along
       // the ring rather than across it so the run reads as one raised rampart
       // instead of as forty separate stones.
       const out = Math.atan2(pz, px);
-      B.add(M.stone, shard(2500 + i, s, [1.55, 0.86, 1.05], 0.42),
-        mat4([px, seatLocal(px, pz, s) + s * 0.16, pz],
+      B.add(M.stone, shard(2500 + i, s, [2.0, 0.55, 1.05], 0.42),
+        mat4([px, seatLocal(px, pz, s) + s * 0.15, pz],
           [rng.gauss(0.18, 0.16), out + Math.PI / 2 + rng.gauss(0, 0.35), rng.gauss(0, 0.22)]));
     }
 
