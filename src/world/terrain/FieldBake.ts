@@ -4,8 +4,10 @@ import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
 import type { LayerData } from './Layers.ts';
 import type { BakeMeta } from './FieldCodec.ts';
+import type { BakeSection } from './FieldCodec.ts';
 import {
-  decodeF32Planes, decodePlanes8, sectionField, encodeF32Planes, encodePlanes8, packContainer, unpackContainer,
+  decodeF32Planes, decodePlanes8, sectionField, encodePlanes8, packContainer, unpackContainer,
+  encodeQ16D, decodeQ16D,
 } from './FieldCodec.ts';
 
 /**
@@ -28,9 +30,29 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
  */
 export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData | null = null): Uint8Array {
   const roadY = field.network.captureElevations();
+  /**
+   * The two float grids are the two most expensive sections in the container —
+   * `h` is 11.98 MB gzipped and `far` 2.94, of a 33.2 MB artifact that a first
+   * visit waits for before its first frame — and they are the two that gzip can
+   * do least with. A noisy heightfield's f32 mantissa is close to random bits,
+   * and most of those bits describe distances no player can stand on: the field
+   * spans -48.1 m to 597.2 m, so sixteen bits over its own range is a step of
+   * 9.85 mm and a worst-case error of **4.9 mm**. Delta-coding along rows then
+   * turns a smooth surface into small numbers, which is what gzip is good at.
+   *
+   * Measured on the live artifact: `h` 11.98 -> 5.59 MB, `far` 2.94 -> 1.64,
+   * so 7.7 MB comes off every first visit for half a centimetre of height.
+   *
+   * `encodeQ16D`/`decodeQ16D` and the `min`/`scale` header fields have been in
+   * `FieldCodec` since the container was written and nothing had ever called
+   * them; this is the first caller. `applyBakedField` still reads `f32planes`,
+   * so a container written before this is decoded rather than rejected.
+   */
+  const hq = encodeQ16D(field.h, N, N);
+  const farq = encodeQ16D(field.far, FAR_N, FAR_N);
   const sections = [
-    { name: 'h', kind: 'f32planes', n: N * N, bytes: encodeF32Planes(field.h) },
-    { name: 'far', kind: 'f32planes', n: FAR_N * FAR_N, bytes: encodeF32Planes(field.far) },
+    { name: 'h', kind: 'q16d', n: N * N, w: N, h: N, min: hq.min, scale: hq.scale, bytes: hq.bytes },
+    { name: 'far', kind: 'q16d', n: FAR_N * FAR_N, w: FAR_N, h: FAR_N, min: farq.min, scale: farq.scale, bytes: farq.bytes },
     { name: 'ctrl', kind: 'planes8', w: N, h: N, ch: 4, bytes: encodePlanes8(field.ctrl, N, N, 4) },
     { name: 'farCtrl', kind: 'planes8', w: FAR_N, h: FAR_N, ch: 4, bytes: encodePlanes8(field.farCtrl, FAR_N, FAR_N, 4) },
     // The erosion pass's own outputs, for placement rather than for the splat.
@@ -54,6 +76,35 @@ export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData
 }
 
 /**
+ * A quantisation parameter the section kind guarantees.
+ *
+ * `sectionField` covers the geometry fields; these two are the `q16d` pair, and
+ * decoding an `undefined` step would silently produce a flat NaN heightfield
+ * rather than an error anybody could read.
+ */
+function q16Field(s: BakeSection, key: 'min' | 'scale'): number {
+  const v: number | undefined = s[key];
+  if (typeof v !== 'number') throw new Error(`bake: section '${s.name}' has no ${key}`);
+  return v;
+}
+
+/**
+ * A float grid, in whichever of the two encodings the container used.
+ *
+ * `q16d` is what {@link encodeField} writes now; `f32planes` is what every
+ * container written before it holds. Reading both is four lines and means a
+ * cache from either side of the change decodes instead of being thrown away —
+ * the artifact is 33 MB and re-baking it is forty seconds of somebody's commit.
+ */
+function floatGrid(s: BakeSection): Float32Array {
+  if (s.kind === 'q16d') {
+    return decodeQ16D(s.bytes, sectionField(s, 'w'), sectionField(s, 'h'),
+      q16Field(s, 'min'), q16Field(s, 'scale'));
+  }
+  return decodeF32Planes(s.bytes, sectionField(s, 'n'));
+}
+
+/**
  * Populate `field` from a container, replacing what `build()` would have done.
  * @param field a freshly constructed, unbuilt field
  * @param buf the uncompressed container
@@ -65,8 +116,8 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
   const roadY = c.section('roadY'), hydro = c.section('hydro');
   if (!h || !far || !ctrl || !farCtrl || !roadY || !hydro) throw new Error('bake missing a section');
 
-  field.h = decodeF32Planes(h.bytes, sectionField(h, 'n'));
-  field.far = decodeF32Planes(far.bytes, sectionField(far, 'n'));
+  field.h = floatGrid(h);
+  field.far = floatGrid(far);
   field.ctrl = decodePlanes8(ctrl.bytes, sectionField(ctrl, 'w'), sectionField(ctrl, 'h'), sectionField(ctrl, 'ch'));
   field.farCtrl = decodePlanes8(farCtrl.bytes, sectionField(farCtrl, 'w'), sectionField(farCtrl, 'h'), sectionField(farCtrl, 'ch'));
   field.hydro = decodePlanes8(hydro.bytes, sectionField(hydro, 'w'), sectionField(hydro, 'h'), sectionField(hydro, 'ch'));
