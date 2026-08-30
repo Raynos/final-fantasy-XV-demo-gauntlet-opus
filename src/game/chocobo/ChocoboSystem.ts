@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { buildChocoboPrototype, chocoboColours, CHOCOBO_BONES } from '../../characters/chocobo/ChocoboRig.ts';
+import { buildChocoboPrototype, chocoboColours, CHOCOBO_BONES, CHOCOBO_COLOURS } from '../../characters/chocobo/ChocoboRig.ts';
 import { ChocoboAnim } from '../../characters/chocobo/ChocoboAnim.ts';
 import type { PosableRig } from '../../characters/chocobo/ChocoboAnim.ts';
 import { ChocoboBody, CHOCOBO_RUN, STAMINA_MAX } from './ChocoboBody.ts';
 import { Saddle } from './Saddle.ts';
+import { ChocoboHub, FEED_TIERS } from './ChocoboHub.ts';
+import { Races } from './Races.ts';
 import type { Game } from '../Game.ts';
 import type { InteractableHandle } from '../interaction/Interactables.ts';
 import type { CollisionWorld } from '../../world/collision/CollisionWorld.ts';
@@ -90,6 +92,17 @@ export class ChocoboSystem {
   game!: Game;
   saddle!: Saddle;
   state!: ChocoboState;
+  /** The two stables, and what they sell. */
+  hub!: ChocoboHub;
+  /** The three courses and the run in progress. */
+  races!: Races;
+  /**
+   * Dyes the player has paid for. Yellow is the bird you start on, so it is
+   * the one colour that is never bought.
+   */
+  ownedColours!: Set<string>;
+  /** Index into `ChocoboHub.FEED_TIERS`. Sylkis greens buy the next one. */
+  feedTier!: number;
   constructor() {
     this.enabled = true;
     this.state = 'away';
@@ -98,6 +111,10 @@ export class ChocoboSystem {
     this.collision = null;
     this.colour = 'yellow';
     this.saddle = new Saddle();
+    this.hub = new ChocoboHub(this);
+    this.races = new Races(this);
+    this.ownedColours = new Set(['yellow']);
+    this.feedTier = 0;
     this._flock = [];
     this._handle = null;
     this._prototypes = new Map();
@@ -109,6 +126,8 @@ export class ChocoboSystem {
     this.game = game;
     this.collision = game.get('Collision') ?? null;
     this.saddle.bind(game.get('Player') ?? null, game.get('Party') ?? null);
+    this.hub.init(game);
+    this.races.init(game);
     // The geometry is NOT built here. A prototype costs real milliseconds and
     // every boot that never whistles would pay them; `LANDMINES` is explicit
     // that boot work whose output is discarded is still worth deleting when it
@@ -116,6 +135,92 @@ export class ChocoboSystem {
   }
 
   get isRiding() { return this.state === 'ridden'; }
+
+  /** The display name of the dye currently on the bird. */
+  colourName() { return chocoboColours(this.colour).name; }
+
+  /**
+   * Re-dye the bird.
+   *
+   * A colour is baked into the merged geometry — the whole animal is one
+   * `SkinnedMesh` and that is the perf argument for the whole rig path — so a
+   * dye is a rebuild, not a material swap. The prototype cache means the second
+   * time you wear a colour costs nothing.
+   *
+   * A rider is put down first. Swapping the mesh a `Saddle` is anchored to
+   * would leave the party parented to a node that is no longer in the scene,
+   * and "the stablehand asks you to get off before she dyes your bird" is a
+   * better sentence than the guard it replaces.
+   */
+  setColour(key: string): boolean {
+    if (!CHOCOBO_COLOURS.some((c) => c.key === key)) return false;
+    if (this.colour === key) return true;
+    if (this.state === 'ridden') this.dismount();
+    this.colour = key;
+    const old = this.bird;
+    if (!old) return true;
+    const pos = old.root.position.clone();
+    const heading = old.heading;
+    const visible = old.root.visible;
+    this.game.scene.remove(old.root);
+    if (this._handle) { this._handle.dispose(); this._handle = null; }
+    const nb = this._makeBird(this.colour);
+    nb.root.position.copy(pos);
+    nb.heading = heading;
+    nb.root.rotation.y = heading;
+    nb.root.visible = visible;
+    this.bird = nb;
+    this._ensureVerb();
+    return true;
+  }
+
+  /**
+   * Put the bird on a spot and get straight on it.
+   *
+   * The race start uses this instead of the whistle: `summon()`'s 22 m run-in
+   * is the right answer to "I want my chocobo" and the wrong answer to "the
+   * race starts now". Everything else is the same path — same legality test,
+   * same `Saddle.enter`.
+   */
+  mountAt(x: number, z: number, heading: number): boolean {
+    if (!this.enabled) return false;
+    if (!this.canStandAt(x, z)) return false;
+    if (this.state === 'ridden') this.dismount();
+    if (!this.bird) this.bird = this._makeBird(this.colour);
+    const terrain = this.game.get('Terrain');
+    this.bird.root.position.set(x, terrain ? terrain.heightAt(x, z) : 0, z);
+    this.bird.root.visible = true;
+    this.bird.heading = heading;
+    this.bird.root.rotation.y = heading;
+    this.bird.speed = 0;
+    if (!this.body) {
+      const collision = this.collision || this.game.get('Collision') || null;
+      if (collision) this.body = new ChocoboBody(collision);
+    }
+    if (this.body) {
+      this.body.position.copy(this.bird.root.position);
+      this.body.heading = heading;
+      this.body.speed = 0;
+      this.body.stamina = STAMINA_MAX * this._staminaMul();
+    }
+    this.state = 'waiting';
+    this._ensureVerb();
+    return this.mount();
+  }
+
+  /**
+   * The stamina tank multiplier: the sylkis tier times Ascension's own.
+   *
+   * `exp_choco2` ("Chocobo Whisperer", +50% stamina) has existed in the
+   * Ascension grid since long before there was a chocobo and **nothing read
+   * it** — `Ascension.value('chocoboStamina')` returned 0.50 into the void.
+   * This is where it lands.
+   */
+  _staminaMul() {
+    const asc = this.game.get('Rpg')?.ascension;
+    const grid = asc ? 1 + asc.value('chocoboStamina') : 1;
+    return FEED_TIERS[this.feedTier].stamina * grid;
+  }
 
   /** The player's bird, or null when it is away. */
   get position(): THREE.Vector3 | null { return this.bird ? this.bird.root.position : null; }
@@ -204,7 +309,7 @@ export class ChocoboSystem {
     if (this.body) {
       this.body.position.copy(this.bird.root.position);
       this.body.speed = 0;
-      this.body.stamina = STAMINA_MAX;
+      this.body.stamina = STAMINA_MAX * this._staminaMul();
     }
     this.state = 'arriving';
     this._ensureVerb();
@@ -306,6 +411,11 @@ export class ChocoboSystem {
   /* ----------------------------------------------------------------- tick */
 
   update(dt: number, game: Game) {
+    // The stables are furniture: they exist whether or not a bird has ever
+    // been whistled for, and their prompts must be there the first time a
+    // player walks into Wiz's yard.
+    this.hub.update();
+    this.races.update(dt);
     if (!this.enabled || !this.bird) {
       if (this.enabled && game.input.keyDown(KEY_WHISTLE) && !this._blocked()) this.summon();
       return;
@@ -342,6 +452,12 @@ export class ChocoboSystem {
     } else if (this.state === 'ridden' && this.body && player) {
       const inp = game.input;
       const sprint = inp.key('ShiftLeft') || inp.gpButton(10);
+      // The sylkis tier and the Ascension node are read every frame rather
+      // than cached on purchase: feeding her mid-ride and the grid node being
+      // unlocked mid-ride both have to take effect without a re-mount, and one
+      // multiply a frame is cheaper than the invalidation it replaces.
+      this.body.staminaMul = this._staminaMul();
+      this.body.sprintMul = FEED_TIERS[this.feedTier].sprint;
       game.camera.getWorldDirection(_v);
       const before = this.body.position.x, beforeZ = this.body.position.z;
       this.body.step(dt, inp.move, _v, sprint);

@@ -43,8 +43,17 @@ export class ChocoboBody {
   speed!: number;
   /** Seconds of burst left. */
   stamina!: number;
-  /** Multiplier on `stamina` and the sprint ceiling, from Ascension. */
+  /** Multiplier on the stamina tank, from Ascension and the sylkis tier. */
   staminaMul!: number;
+  /**
+   * Multiplier on the sprint ceiling, from the sylkis tier.
+   *
+   * **Cruise is deliberately not multiplied.** `CHOCOBO_RUN` is
+   * `WorldMap.SPEED.chocobo` to two decimal places and the world map's whole
+   * ETA table is priced on it; an upgrade that raised it would make every
+   * estimate the map has ever printed wrong again. See `ChocoboHub.FEED_TIERS`.
+   */
+  sprintMul!: number;
   /** Damp targets, so `converge()` can snap them. See `Player.converge`. */
   _speedWant!: number;
   velocity!: THREE.Vector3;
@@ -70,6 +79,7 @@ export class ChocoboBody {
     this.grounded = true;
     this.stamina = STAMINA_MAX;
     this.staminaMul = 1;
+    this.sprintMul = 1;
   }
 
   converge() { this.speed = this._speedWant; }
@@ -104,7 +114,7 @@ export class ChocoboBody {
     if (mag > 0.001) {
       wish.normalize();
       this.heading = Math.atan2(wish.x, wish.z);
-      const top = burst ? CHOCOBO_SPRINT : (mag > 0.55 ? CHOCOBO_RUN : CHOCOBO_WALK);
+      const top = burst ? CHOCOBO_SPRINT * this.sprintMul : (mag > 0.55 ? CHOCOBO_RUN : CHOCOBO_WALK);
       this._speedWant = top * mag;
       // Acceleration is slower than Noctis'. Eleven metres a second on an
       // animal that reaches it in a fifth of a second reads as a hoverboard;
@@ -115,7 +125,7 @@ export class ChocoboBody {
       this._speedWant = 0;
       this.speed = THREE.MathUtils.damp(this.speed, 0, 5.5, dt);
     }
-    this.effort = THREE.MathUtils.clamp(this.speed / CHOCOBO_SPRINT, 0, 1) * (burst ? 1 : 0.6);
+    this.effort = THREE.MathUtils.clamp(this.speed / (CHOCOBO_SPRINT * this.sprintMul), 0, 1) * (burst ? 1 : 0.6);
 
     this.velocity.set(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(this.speed);
     this.collision.ensure(4);
