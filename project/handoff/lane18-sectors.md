@@ -111,6 +111,38 @@ into the plaza deck** — every one of them is cut off mid-shin. `PLAZA_Y` is
 0.675 and published for exactly this; someone is placing on the terrain height
 instead. Five of lane 21's judged frames are city frames.
 
+## The graveyard: second pass landed, NOT yet re-photographed
+
+`5a2bac6` moved the POI and rebuilt three things after reading
+`tmp/shots/l18c/gv_axis.jpg`, where the first pass showed (a) half the cage
+buried in a hillside with the far arches cut off by a ridge, (b) eleven neural
+fins reading as a row of **white tower blocks** — they were chamfered boxes,
+which is this kit's *building* primitive — and (c) ribs reading as lengths of
+white pipe.
+
+- **Site moved (2600,−2800) → (3100,−2350), measured.** `tmp/lane18/flat.mts`
+  samples 24 points on two rings and reports the worst height deviation inside
+  110 m: **57.6 m** at the old pin (mean 12.6), **10.1 m** at the new one (mean
+  3.5). It is the flattest ground within 700 m that is still 1.6 km out from
+  Ravenscrag Haven. Nothing else within 900 m; the territory, the quest
+  waypoint and the PLACES row all anchor on the POI and move with it.
+- Fin is now a four-sided taper to a blade, half the height, and the vertebra
+  is sunk to a third rather than stood on the ground.
+- Each rib drum is squashed to 0.55 across the arc's own plane (the `rz` that
+  follows turns it *inside* that plane, so the squash stays perpendicular to
+  the sweep) plus per-segment jitter.
+- `bone` 0xd9d2c0 → 0xc6bba0, roughness 0.84 → 0.88, grime 0.44, streak 0.42.
+  At the old value the bleach put the top of an arch within a few per cent of
+  white and the whole thing read as painted polystyrene.
+
+**The re-shoot never came back.** `framecam --probe tmp/lane18/probe2.mts
+--out tmp/shots/l18d`, `drawcheck --worst 30`, `probe perfpoi` and `probe
+questaudit` were all queued and all still queued at hand-off:
+`daemon.mts --health` shows **`"exclusive": "perf"` with a lease held at
+`cpu: 0`** and 22 jobs behind it (fix 17, sweep 5) with `workers.busy: 0`.
+That is somebody else's stalled perf gate, not a fault in these jobs. **Re-run
+all four first thing.**
+
 ## Not done yet
 
 - **Fix the two landmark kits from the frames** (see the defects above) — this
