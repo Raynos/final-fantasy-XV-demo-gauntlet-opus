@@ -241,7 +241,61 @@ the field is `m.n` — fixed in `77fffdd`, but *after* this run. The medians abo
 are computed by hand from the five per-round lines, which were correct
 (`pack dead 5/5 ended: wiped`). The next run will print them itself.
 
-## `combatloop` is 34/35 and it is NOT this lane — but somebody must own it
+## `combatloop` 34/35 — DIAGNOSED (respawn), and it *is* a real bug
+
+**Not the lane's levers, and not the coordinator's hypothesis either.** The
+hypothesis handed to the respawn was "task 34 made `enemyScaling` real, so a
+plain `spawnAhead('sabertusk')` now gets level-scaled at spawn and its
+`maxPoise` rises out of reach of the test's fixed 5 poise". That is wrong on the
+code path: `spawnAhead` is `enemies.spawn(key, {pos, heading})`, `Enemies.spawn`
+only scales when `o.level ?? type.stats.level` **differs** from the species
+level, and `enemyScaling` is called from `EncounterDirector` only. Nothing
+scales that fixture at the moment it is spawned.
+
+**The real mechanism is the enemy pool.** `EnemyBase.reset()` — the recycled
+path — restores `maxHp` from `baseMaxHp` and `damage` from `type.stats.damage`,
+and then writes `this.poise = this.maxPoise` **without ever restoring
+`maxPoise`**. `maxPoise` is assigned in exactly one place, `Bestiary.make()`,
+which only runs for a *fresh* instance. So:
+
+1. a wild den spawns a sabertusk with `level: 29`, and `Enemies.spawn` does
+   `e.maxPoise = round(e.maxPoise * k.poise)` — 42 -> ~63;
+2. it dies, `despawn` pushes it into `pool.get('sabertusk')`;
+3. the next spawn `pop()`s it, `reset()` leaves `maxPoise` at 63, and if that
+   spawn also carries a level the scale multiplies **on top of the already
+   scaled value**.
+
+It compounds without bound across respawns, and `combatloop`'s fixture — which
+asks for no level at all — inherits whatever the pool last left there. The
+arithmetic is the tell: base 42 at a single level-24 scale is **70**, at
+level-25 it is **74**; the gate reported **71**, which is not any single scale
+of 42 and only falls out of two rounded scales stacked.
+
+Task 34 did not cause it; it made it fire, by putting a level on many more
+spawns than before.
+
+**Fix: restore `maxPoise` in `reset()`, next to the two lines that already
+restore `maxHp` and `damage`.** The gate's expectation was not wrong and
+`LEVEL_POISE` is not too steep — a pooled enemy was simply keeping the last
+life's poise. `src/characters/enemies/EnemyBase.ts` is not this lane's file, so
+it lands as its own one-line commit.
+
+**Landed as `c86e167`** (`EnemyBase.reset()` restores `maxPoise` from
+`type.stats.poise`). `combatloop` re-run against it is in flight.
+
+## Priority 2 — the last 0.7 s, landed as `ca90950`
+
+`SpawnTables.ts` (lane 18's, finished, so taken in its own commit). Beast and
+daemon hostile `count` lines two deeper on both ends, elites one deeper, roaming
+ambushes the same; **passive lines untouched** and **imperial lines untouched**
+— the one authored round ever measured whole was the Longwythe patrol at 25.8 s,
+already inside the band and the longest in the set, so widening it would push it
+out the top. All ten explicit `maxEngaged: 3` (equal to `Pack`'s default since
+4a588f4) are now 4, which is the lever aimed at the imperial round's *danger*
+(1.10 %/hit against the animals' 3.05-5.00). `fightshape --set rounds=6` against
+`ca90950` is in flight. **Not verified yet.**
+
+## (superseded) the original 34/35 note
 
 ```
 FAIL   poise breaks into a stagger with a damage window   poise 5/71 never broke
