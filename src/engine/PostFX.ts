@@ -286,6 +286,21 @@ export class PostFX {
     // walk segment, 50.0 -> 44.8 fps** on the gate that already fails. This
     // costs two instructions.
     this.gtao.setGBuffer(this.rtScene.depthTexture);
+    // three builds both GTAO targets as `new WebGLRenderTarget(w, h, { type:
+    // HalfFloatType })` (GTAOPass.js:143-144), and three's default is
+    // `depthBuffer: true`. Both are fullscreen-quad targets -- the AO gather
+    // and its poisson denoise -- drawn with `depthTest: false`, so the depth
+    // renderbuffer is allocated, cleared every frame, and never read or
+    // written. At 1600x900 that is 5.49 MB each, 10.98 MB of the chain's
+    // budget, and it scales with the square of the pixel ratio like everything
+    // else here: 24.7 MB on a Retina panel at q=high.
+    //
+    // Cleared before the first bind, so this is a cheaper allocation and not a
+    // free: three creates a render target's framebuffer lazily, on the first
+    // `setRenderTarget`, and `PostFX`'s constructor runs long before any frame.
+    // Verified as zero-pixel by the corpus gate rather than argued.
+    this.gtao.gtaoRenderTarget.depthBuffer = false;
+    this.gtao.pdRenderTarget.depthBuffer = false;
     const gm = this.gtao.gtaoMaterial;
     gm.uniforms.uAoFadeNear = { value: 220.0 };
     gm.uniforms.uAoFadeFar = { value: 650.0 };
