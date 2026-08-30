@@ -30,7 +30,11 @@ const imgBytes = (img) => {
   if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) {
     return ['ImageBitmap', img.width * img.height * 4];
   }
-  if (img.width) return [`${img.constructor ? img.constructor.name : 'object'} ${img.width}x${img.height}`, img.width * img.height * 4];
+  // A texture whose texels have already been released keeps `{width, height}`
+  // with `data` null -- `dropTexelsAfterUpload` does exactly that. It costs
+  // nothing and must NOT be priced at w*h*4, which is how a first run of this
+  // probe reported 160 MB when the true figure was 40.6.
+  if (img.width) return [`released (w/h only, 0 bytes) ${img.width}x${img.height}`, 0];
   return ['unknown', 0];
 };
 
