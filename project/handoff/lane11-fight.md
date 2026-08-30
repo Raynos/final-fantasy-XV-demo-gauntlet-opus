@@ -5,43 +5,123 @@ Exit: median den 18–30 s, Noctis pays ≥15% max HP, `combatloop` green (35/35
 since lane 17), both perf gates certify.
 
 Owns `src/combat/`, `src/game/encounters/`, `src/game/rpg/` **minus**
-`SpawnTables.ts` (lane 18), `Shops.ts` / `Npcs.ts` / `Quests.ts` (lane 19).
+`SpawnTables.ts` (lane 18) and `Shops.ts` / `Npcs.ts` / `Quests.ts` (lane 19).
 
 ## Status
 
-- **33 instrument — LANDED** (`ed53de5`).
-- 34 `enemyScaling` — in progress.
-- 35 pack size — not started.
-- 36 warp throughput re-measure — not started.
+| # | item | state |
+|---|---|---|
+| 33 | `fightshape` computes a median | **landed** — `ed53de5`, `20405ce`, `fc05b7f` |
+| 34 | `enemyScaling` implements its own doc | **landed** — `91cb6a5` |
+| 35 | pack size / engage tokens | **landed** — `4a588f4` |
+| 36 | warp throughput | **measured negative** — the plan's premise dissolved; `fc05b7f` |
+| — | danger (incoming damage) | **landed** — `4a588f4` |
 
-## 33 — `fightshape` now computes a median
+## The instrument (task 33)
 
 `src/tools/probes/fightshape.mts` printed three beat sheets and aggregated
-nothing, so "a wild den runs 5.8–17 s" was three anecdotes across a roster whose
-`count` fields are *ranges* — a 3x spread you get for free.
-
-What it does now:
+nothing, so "a wild den runs 5.8–17 s" was three anecdotes drawn from a roster
+whose `count` fields are *ranges* — a 3x spread you get for free.
 
 - `--set rounds=N`, default **5**, eight headings authored (was a hard 3).
-- one metrics row per round: duration, HP paid, kills, pack size, den HP dealt,
-  Noctis' damage share, enemy attacks/s, and **warp casts** taken from
-  `combat`'s own `warp` event, kept separate from Q key-taps (task 36 needs the
-  cast, and the policy taps Q whether or not the cast is accepted).
 - an `AGGREGATE` block: every round's value beside the median, then a `VERDICT`
-  against 18–30 s and ≥15% HP.
-- rounds that found no den, or killed nothing, are **listed and excluded** from
-  the median.
+  against 18–30 s and ≥15% HP. Rounds that found no den, or killed nothing, are
+  listed and excluded from the median.
+- **a den is a `Pack`, not every hostile alive in the world.** The old count was
+  `hostiles().length`, which is global: the first run reported `Sabertusk x7 …
+  kills 3/7` for a den of three, with four more a hundred metres away.
+- `ended:` — wiped / nobody-within-45 m / left-combat / timeout. A duration is
+  not a duration until you know which.
+- `hits taken` and **`% max HP per hit`**. "Noctis paid 1.5% over thirteen enemy
+  attacks" and "5.1% over three" are the same headline describing opposite
+  problems; per-hit cost separates them.
+- warp **strikes** (`phase: 'start'`), lands and perches, kept apart from Q taps;
+  and the **MP floor**, because MP fully regenerates before a fight is scored,
+  so end-of-fight spend read 0 in every round.
 
-Command: `node src/tools/probe.mts src/tools/probes/fightshape.mts --set rounds=5`
+Run it: `node src/tools/probe.mts src/tools/probes/fightshape.mts --set rounds=5`
 
-## Numbers
+## Baseline — **verified**, at `20405ce`, five rounds
 
-(baseline pending — first 5-round run in flight)
+```
+duration      8.3 11.9 11.5 11.2  ->  MEDIAN 11.4 s        [target 18-30]
+hp paid %     5.1 1.6 1.5 4.8     ->  MEDIAN  3.2 %        [target >=15]
+party dps     977 764 478 520     ->  median 642 hp/s
+noctis dmg %  30 29 26 38         ->  median 29 %
+enemy atk/s   0.36 0.76 1.13 0.53 ->  median 0.65
+VERDICT: duration FAIL (11.4 s); danger FAIL (3.2%)
+```
+
+Round 4 found no den (headings `[4.7, 2.0]` from where round 3 ended).
+
+Supporting arithmetic — **verified** by `tmp/lane11-dmgmath.mts` at party 27:
+Noctis has **4 877 max HP, 105 defence**. A level-28 sabertusk (already lifted to
+the party's level by `denLevel`) rolls **119** through `computeDamage`; the
+undocumented `* 0.55` made that **65 = 1.33 % of his max HP**.
+`imperial_mt` is not an `Enemies.def` key — the imperial roster is keyed
+differently; look it up before reusing that probe.
+
+## What landed
+
+**34 — `enemyScaling`.** The JSDoc said "given the party's level"; the body was
+`nightScaling(this.day.hour, isDaemon)` and never touched `this.party`. The doc
+is the better design, so the body now implements it. `partyLift` closes
+`PARTY_LIFT` = 0.8 of the gap between a spawn's authored level and the party
+average, **only upward** (`max(0, gap)`), and since the factor is ≤ 1 it can
+never carry a spawn past the party — the ceiling is structural, no cap written.
+Returned *separately* from `levelBonus` because both call sites dilute the night
+bonus by 0.4 for non-daemons, which would make the party term a rounding error
+on exactly the authored spawns it exists to lift.
+
+Wild dens do **not** feel this: `WildTerritories.denLevel` already lifts them and
+they come out at 24–28 against a party of 27, so the gap is specific to the
+authored `SpawnTables` territories — the level-18 imperial patrol that dies in
+11.5 s costing 1.5 % HP. Seven levels of lift is ×1.78 HP, ×1.49 damage.
+
+**35 — pack size.** Hostile wild roster lines drawn two deeper on both ends
+(sabertusk `[3,5]→[5,7]`, goblin `[4,7]→[6,9]`, …) across all six rosters.
+**Passive lines untouched** — anaks and garulas are scenery, and they are the
+largest meshes in the wild roster, so they buy skinned rigs and not a fight.
+Engage tokens: `Pack` default 2→3 (which every non-overriding `SpawnTables`
+territory inherits), wild dens 3→4, roamers 2/3→3/4.
+
+**Danger — `INCOMING_SCALE`.** `res.damage * 0.55`, written twice with no comment
+in either place (`CombatSystem._enemyStrike`, `EncounterDirector.damageThreat` —
+the live encounter path). Now one exported, documented constant, **set to 1.0**:
+removed rather than re-tuned, because nothing recorded a reason for it and the
+formula underneath already softens a blow four ways (240/(240+def) mitigation,
+level differential, the attacker's own ×0.9, dodge i-frames). At 1.0 a
+level-appropriate field animal costs 2.4 % of Noctis' max HP per landed hit.
+
+**36 — measured negative, and it closes the item.** The plan's "3–12 casts"
+warp-throughput figure is **not a cast count**: it is `probes/dpsshare.mts`
+lines 113–115, which print warp-strike damage *"from 3 m" / "from 12 m" /
+"from 24 m"* — metres of warp distance feeding `combat.warpMotion(dist)`. There
+was no throughput problem to fix because there was no throughput measurement.
+The real one now exists in `fightshape`'s aggregate. Two instrument bugs were
+found on the way and fixed (phase-vs-cast, MP floor).
+
+## Not verified yet
+
+- the post-lever `fightshape` median (run in flight at `4a588f4`)
+- `combatloop` (run in flight)
+- both perf gates — **not taken**; must be behind `daemon.mts --wait
+  exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
 ## Files touched
 
-- `src/tools/probes/fightshape.mts` — instrument (mine).
+`src/tools/probes/fightshape.mts`, `src/game/rpg/RpgSystem.ts`,
+`src/game/encounters/EncounterDirector.ts`, `src/game/encounters/Pack.ts`,
+`src/game/encounters/WildTerritories.ts`, `src/combat/CombatSystem.ts`.
+Scratch: `tmp/lane11-dmgmath.mts`.
 
-## Open questions
+## Residue / cross-lane
 
-- none yet.
+- **FOR LANE 18 (`SpawnTables.ts`)** — pack sizes there were not touched. The
+  authored territories now inherit `Pack`'s default of 3 engage tokens instead
+  of 2; the six explicit `maxEngaged: 3` overrides (lines 161, 194, 213, 221,
+  227, 237 as of `66b354ad`) are now *equal to* the default and could be dropped
+  or raised to 4 for the larger patrols.
+- `BossFight.ts` 3→4 engage tokens was on the plan's lever list and was **not
+  taken**: lane 17's Keycatrich Magitek Commander round is new and is a
+  Definition-of-Done content bar, and this lane had no instrument pointed at it.
