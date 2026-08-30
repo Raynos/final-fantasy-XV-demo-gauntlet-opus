@@ -254,6 +254,23 @@ is filed rather than attempted.
   one uniform value on the upsample's *radius* (the 3×3 tap count is unchanged),
   and a weather-map bake that is boot-time only.
 
+## Gates
+
+`pre-commit` (vite build + both typechecks + 4 cheap gates, concurrent) passed
+on **all six** of this lane's commits — that is the standing evidence.
+
+`pnpm run check` was started and **did not return inside the lane's window**:
+the shared daemon sat at queue depth 7–9 for the whole run and there were 14
+concurrent `check.mts` processes from other lanes at the stop. It needs
+re-running on a quiet tree.
+
+`node src/tools/probes/nanscan.mts` does not run that way either — it is a
+probe *body* and needs `node src/tools/probe.mts probes/nanscan.mts`. The
+plan's command line for it is wrong.
+
+**No perf number, deliberately** — see "not done" above for why, and why the
+four landed changes cannot move one.
+
 ## Cross-lane
 
 - Lane 5+6 owns a one-line `uCloudShadowStrength` change in `Sky.ts`
