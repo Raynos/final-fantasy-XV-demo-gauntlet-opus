@@ -15,6 +15,7 @@ import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
 import { loadTexBake } from '../engine/TexBake.ts';
 import { loadGeoBake, releaseGeoBake } from '../engine/GeoBake.ts';
+import { packSubtree, type PackStats } from '../engine/AttrPack.ts';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -40,6 +41,24 @@ export class Props {
   regaliaTail!: THREE.MeshStandardMaterial;
   roadKit!: RoadFurniture;
   rocks!: Rocks;
+  /**
+   * How many entries of `poiKits.built` have been through {@link packSubtree}.
+   *
+   * `Dungeons.init` packs the *finished boot scene*, which is the only correct
+   * place for a whole-scene pass — but 115 of the 124 POI sites are not in it.
+   * They stream in one per frame during play and were never re-packed, so every
+   * town, haven and outpost the player drives to arrived carrying `3x Float32`
+   * colour and normals for the life of the session. `poi_kits` is the largest
+   * single owner in `probes/memowners.mts` (85.3 MB of vertex bytes over 3.67 M
+   * vertices), so this is where the pass was missing.
+   *
+   * Packing the site the frame it is built is both the earliest and the
+   * cheapest moment: the kit's per-material merges are finished by the time it
+   * lands in `built`, and each site is scanned exactly once ever.
+   */
+  _poiPacked = 0;
+  /** Cumulative {@link PackStats} for the streamed sites, for `?debug`. */
+  _poiPackStats: PackStats = { seen: 0, packed: 0, refused: 0, saved: 0 };
   wildlife!: Wildlife;
   async init(game: Game) {
     this.game = game;
@@ -253,7 +272,13 @@ export class Props {
     if (this.outposts) this.outposts.update(dt, t, night, this._camPos);
     if (this.roadKit) this.roadKit.update(this._camPos);
     if (this.wildlife) this.wildlife.update(dt, t, night, this._camPos);
-    if (this.poiKits) this.poiKits.update(dt, t, night, this._camPos, game);
+    if (this.poiKits) {
+      this.poiKits.update(dt, t, night, this._camPos, game);
+      // At most one site is built per frame, so this loop runs at most once.
+      while (this._poiPacked < this.poiKits.built.length) {
+        packSubtree(this.poiKits.built[this._poiPacked++].group, this._poiPackStats);
+      }
+    }
     if (this.foraging) this.foraging.update(dt, game);
   }
 }
