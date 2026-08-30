@@ -30,11 +30,13 @@ Fixed by superseding at the **front** of the queue, which is the one moment the
 question can be answered honestly: a prewarm whose build is no longer
 `prewarmWanted` steps aside in microseconds and logs a running count.
 
-> **THE RUNNING DAEMON STILL HAS THE OLD CODE.** This takes effect on the next
-> daemon start. `node src/tools/daemon.mts --stop` installs it *and* discards the
-> 54 stale prewarms, at the cost of closing every leased page — so it is the
-> coordinator's call, not a lane's. Filed in `project/TASKS.md`. **This is the
-> single highest-value action available in the repo right now.**
+**RESOLVED.** The coordinator ran `daemon.mts --stop` and the daemon came back
+on pid 80709 carrying `3958370`. Confirmed before pulling the trigger: 9.13 GB
+daemon RSS, 32.9 GB across all chromium/node. After: **uptime 65 s, both lane
+queues at depth 0.** The transferable line the coordinator wrote into
+`LANDMINES.md` from it is *a docstring describing behaviour the code does not
+have is worse than no docstring*, because it stops anyone reading the code
+beneath it.
 
 ### Task 46 — the bake-artifact gate — `3734e4c`, `23c3d52`
 
@@ -52,11 +54,15 @@ question can be answered honestly: a prewarm whose build is no longer
 - `src/tools/bakecheck.mts` — the gate. 5–9 ms. FRESH / STALE / MISSING /
   TRUNCATED per artifact, with the boot cost and the remedy printed.
   `--allow-cold` downgrades *absent* `texc`/`geo` to a warning; STALE is red
-  under every flag. `--build <ref>` adds the belongs-to arm.
+  under every flag. `--build <ref>` adds the belongs-to arm. **Both verified**:
+  `--allow-cold` turned the same tree from `FAIL (1/4 fresh)` to
+  `PASS (3/4 fresh)` and exited 0.
 - Registered in `check.mts` as `uncacheable` — a new `Gate` flag. The bake
   directory is git-ignored and shared between worktrees, so a verdict keyed on
   the tree sha would survive exactly the event the gate exists to catch. `keyOf`
-  returns null and both `lookup` and `store` are skipped.
+  returns null and both `lookup` and `store` are skipped. **Verified**: two
+  consecutive `check --only bakecheck` runs on an unchanged tree both re-derived
+  (7 ms each) and neither reported `cached`.
 - `statusOf` **stats, never reads**: the first draft pulled 15 MiB of a 33 MB
   heightfield a co-agent's `vite build` was mid-write on. The stamp is now read
   on both sides of the stat and retried; `inFlight` is reported, never failed.
@@ -77,6 +83,10 @@ and `geo.bin.gz` absent all night, ~3.7 s of cold boot per load.
 > **`bakecheck` is RED until someone runs `pnpm run build:full`.** That is the
 > gate working, and `build:full` is the documented post-merge step anyway. Do it
 > before the final `check` and before quoting any boot or first-load number.
+> The coordinator started it; `paintedFaces` went `false -> true` and the gate
+> went `1/4 fresh` -> `3/4 fresh` while it ran, with `geo.bin.gz` still
+> outstanding at the time of writing. Re-run `node src/tools/bakecheck.mts`; it
+> costs 5 ms.
 
 ### Task 48 — the NaN sweep — `2718d53`
 
