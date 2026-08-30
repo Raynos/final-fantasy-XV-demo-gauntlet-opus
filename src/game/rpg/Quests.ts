@@ -570,7 +570,15 @@ const QUEST_TABLE: Quest[] = [
     id: 'side_scraps', type: 'side', name: 'Scraps of Mystery',
     region: 'leide', level: 9, giver: 'Sania', requires: ['main_ch2_galdin'],
     summary: 'Five torn map fragments. Assemble them and something buried turns up.',
-    objectives: [fetch_('scraps', 'old_book', 5, 'Find all five map scraps')],
+    // The hand-in is new: `side_scraps` is *given by Sania* and Sania did not
+    // exist, so the quest was handed out by nobody and closed itself the
+    // moment the fifth book landed in the bag. She stands on the Lestallum
+    // market square now, so it can end in a conversation like every other
+    // fetch in the table.
+    objectives: [
+      fetch_('scraps', 'old_book', 5, 'Find all five map scraps'),
+      talk('sania', 'sania', 'Take the scraps to Sania', at('lestallum')),
+    ],
     rewards: { gil: 3000, exp: 2600, ap: 10, items: [{ id: 'rare_coin', count: 1 }, { id: 'sages_stone', count: 1 }] },
   },
   {
@@ -656,6 +664,88 @@ const QUEST_TABLE: Quest[] = [
       rest('camp', 'Camp at a haven and let Ignis cook'),
     ],
     rewards: { gil: 400, exp: 1800, ap: 15, items: [{ id: 'leiden_pepper', count: 3 }], recipes: ['lasagna_al_forno'] },
+  },
+
+  /* ---------------------------------------------------------- the cities -- */
+  /*
+   * Five quests that only became possible when the cities got people.
+   *
+   * Every target below is a **verified key**, because a target that matches
+   * nothing is the failure mode this table has had twice: `magitek_trooper`
+   * matched nothing (`mt` is the bestiary key), and `at()` throws at boot on an
+   * unknown POI rather than quietly pointing at the origin.
+   *
+   *  - `iris`, `sania`, `surgate`, `holly`, `coctura`, `dino` are all cast keys
+   *    in `NPC_CAST` with bodies placed by `Npcs.CITY`/`REMOTE`, which is what
+   *    a `talk` objective matches on.
+   *  - `mt` is the trooper. `imperial_relay`, `ulwaat_berries`, `sky_gemstone`
+   *    and `sea_bass` are item ids in `Inventory.ITEMS`.
+   *  - `sea_bass` is on `galdin_pier`'s species list in `FishTable`, so the
+   *    `fish` objective is catchable at the hole the waypoint points at.
+   *  - `meteor` and `vista` are two of the four subjects `PhotoScreen`
+   *    can emit; it cannot name a *place*, which is why the Galdin postcards
+   *    ask for three vistas rather than three named landmarks. Filed.
+   */
+  {
+    id: 'city_lest_arrival', type: 'side', name: 'The Grand Tour',
+    region: 'cleigne', level: 30, giver: 'Iris', requires: ['main_ch4_lestallum'],
+    summary: 'Iris has waited a year to show somebody her city. Let her.',
+    // The tutorialising walk: it teaches the market, the camera and the
+    // Beanmine's counter in the order a player would find them anyway, and
+    // pays in the one ingredient nothing else in Leide sells.
+    objectives: [
+      talk('iris', 'iris', 'Meet Iris at the Lestallum parking', at('lestallum_lookout')),
+      buy('market', 'any', 'Buy something at Partellum Market', at('lestallum')),
+      photo('shot', 'meteor', 1, 'Photograph the Meteor from the lookout', at('lestallum')),
+      talk('coffee', 'surgate', 'Finish at Surgate\'s Beanmine', at('lestallum')),
+    ],
+    rewards: { gil: 1200, exp: 4200, ap: 8, items: [{ id: 'ulwaat_berries', count: 2 }] },
+  },
+  {
+    id: 'city_lest_market', type: 'side', name: 'Sania\'s Shopping',
+    region: 'cleigne', level: 30, giver: 'Sania', requires: ['main_ch4_lestallum'],
+    summary: 'A field biologist with no time, a grant that ran out, and a list of three things.',
+    objectives: [
+      fetch_('berries', 'ulwaat_berries', 1, 'Buy Ulwaat Berries at Partellum Market', at('lestallum')),
+      fetch_('stone', 'sky_gemstone', 1, 'Buy a Sky Gemstone at Partellum Market', at('lestallum')),
+      talk('back', 'sania', 'Take them back to Sania', at('lestallum')),
+    ],
+    rewards: { gil: 2400, exp: 5200, ap: 10, items: [{ id: 'rainbow_frog', count: 1 }] },
+  },
+  {
+    id: 'city_lest_lights', type: 'side', name: 'The Lights Go Out',
+    region: 'cleigne', level: 34, giver: 'Holly', requires: ['main_ch4_lestallum'],
+    summary: 'A relay station on the shelf has stopped answering, and so have the two people sent up to it.',
+    // The substation is 300 m north-west of the plant, out on the shelf: far
+    // enough to be a drive, near enough that the city lights are still behind
+    // you when it goes wrong.
+    objectives: [
+      talk('holly', 'holly', 'Hear Holly out at the power plant', at('exineris')),
+      kill('clear', 'mt', 8, 'Clear the substation', at('exineris', -180, -240)),
+      fetch_('relay', 'imperial_relay', 1, 'Recover the relay unit', at('exineris', -180, -240)),
+      talk('back', 'holly', 'Get the lights back on', at('exineris')),
+    ],
+    rewards: { gil: 7500, exp: 11000, ap: 22, items: [{ id: 'topaz_bracelet', count: 1 }] },
+  },
+  {
+    id: 'city_gald_postcards', type: 'side', name: 'Four Column Inches',
+    region: 'leide', level: 10, giver: 'Dino', requires: ['main_ch2_galdin'],
+    summary: 'Dino\'s column runs Thursday and he has four inches of nothing to run in it.',
+    objectives: [
+      photo('vista', 'vista', 3, 'Photograph Galdin Quay for Dino', at('galdin_quay')),
+      talk('dino', 'dino', 'Show Dino the pictures', at('galdin_carpark')),
+    ],
+    rewards: { gil: 2000, exp: 2400, ap: 8, items: [{ id: 'beautiful_bottle', count: 2 }] },
+  },
+  {
+    id: 'city_gald_catch', type: 'side', name: 'A Table of Eleven',
+    region: 'leide', level: 12, giver: 'Coctura', requires: ['main_ch2_galdin'],
+    summary: 'The boat that brings Coctura her sea bass has decided it is a ferry now.',
+    objectives: [
+      fish('catch', 'sea_bass', 3, 'Land three Sea Bass at the Galdin Shoals', at('galdin_pier')),
+      talk('deliver', 'coctura', 'Take them to Coctura', at('galdin_quay')),
+    ],
+    rewards: { gil: 3200, exp: 3400, ap: 10, items: [{ id: 'mega_potion', count: 3 }], recipes: ['sea_bass_meuniere'] },
   },
 ];
 

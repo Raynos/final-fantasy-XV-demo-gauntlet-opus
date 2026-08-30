@@ -266,6 +266,26 @@ export const REMOTE: RemoteNpc[] = [
 const REMOTE_RANGE = 420;
 
 /**
+ * The crowd budget, spent nearest-first. See the block in {@link Npcs.update}.
+ *
+ * `CROWD_DETAIL` bodies get LOD 0 — eyes, contact shadow, sun shadow and the
+ * shadow proxy. Up to `CROWD_MAX` get LOD 1. Everyone else, and everyone past
+ * `CROWD_FAR`, is not drawn.
+ *
+ * **The two numbers are measured, not derived.** The arithmetic says a LOD-0
+ * body is seven colour draws and a LOD-1 body four, so 4 and 12 should have
+ * come to sixty; `citydraws.mts` said **68**, because a LOD-0 body also makes
+ * its shadow proxy visible and an outfit can split across material groups. 3
+ * and 11 measure at the budget. Re-measure rather than re-derive if the rig
+ * changes: the arithmetic was wrong by 13% the first time.
+ */
+const CROWD_DETAIL = 3;
+/** @see CROWD_DETAIL */
+const CROWD_MAX = 11;
+/** Metres past which nobody is drawn at all. @see CROWD_DETAIL */
+const CROWD_FAR = 60;
+
+/**
  * The people of Lestallum and Galdin Quay.
  *
  * Twenty-nine bodies, and only five of them are new archetypes. That ratio is
@@ -290,12 +310,12 @@ const REMOTE_RANGE = 420;
 export const CITY: RemoteNpc[] = [
   /* ---------------------------------------------------------- Lestallum -- */
   // The three counters, each with the person whose name is on the shop row.
-  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [1.7, 1.6], posture: 'counter', talkRadius: 3.0 },
+  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [1.7, 1.6], posture: 'folded', talkRadius: 3.0 },
   { castKey: 'surgate', at: 'lestallum', anchor: 'stall2', off: [1.6, -1.7], posture: 'folded', talkRadius: 3.0 },
   { castKey: 'randolph', at: 'lestallum', anchor: 'stall4', off: [1.8, 1.5], posture: 'folded', talkRadius: 3.2 },
   // Sania at last, on the square with a specimen jar and no interest in
   // anybody's schedule.
-  { castKey: 'sania', at: 'lestallum', anchor: 'edge2', off: [2.4, -1.2], posture: 'counter', task: 'inspect', talkRadius: 3.0 },
+  { castKey: 'sania', at: 'lestallum', anchor: 'edge2', off: [2.4, -1.2], posture: 'pockets', task: 'inspect', talkRadius: 3.0 },
   // Two of the standing cast who already have scripts, so the square has
   // people to talk to that are not shopkeepers.
   { castKey: 'mechanic', at: 'lestallum', key: 'lest_mech', seed: 11, anchor: 'edge3', off: [1.8, 2.2], posture: 'wrench', task: 'wrench', talkRadius: 2.8 },
@@ -331,7 +351,7 @@ export const CITY: RemoteNpc[] = [
   { castKey: 'traveller', at: 'lestallum', key: 'lest_g', seed: 31, anchor: 'edge3', off: [-13.0, 5.0], posture: 'folded' },
 
   /* -------------------------------------------------------- Galdin Quay -- */
-  { castKey: 'coctura', at: 'galdin_quay', anchor: 'stall0', off: [1.7, 1.6], posture: 'counter', talkRadius: 3.0 },
+  { castKey: 'coctura', at: 'galdin_quay', anchor: 'stall0', off: [1.7, 1.6], posture: 'folded', talkRadius: 3.0 },
   {
     castKey: 'dino', at: 'galdin_quay', key: 'dino_bench', seed: 3, anchor: 'stall3',
     off: [1.8, -1.5], posture: 'lean', task: 'inspect', talkRadius: 3.0,
@@ -379,6 +399,8 @@ export class Npcs {
   _handles!: ReturnType<InteractionSystem['register']>[];
   /** {@link REMOTE} and {@link CITY} placements not yet built. @see _streamRemote */
   _pending!: RemoteNpc[];
+  /** Scratch for the per-frame crowd ranking. Reused; never reallocated. */
+  _rank!: { npc: Npc, d: number }[];
   /**
    * Raised, walkable decks the ground sampler has to know about.
    *
@@ -405,6 +427,7 @@ export class Npcs {
     this._handles = [];
     this._pending = REMOTE.concat(CITY);
     this._pads = [];
+    this._rank = [];
   }
 
   async init(game: Game) {
@@ -533,6 +556,7 @@ export class Npcs {
     const pos = route ? route[0].clone() : at(off[0], off[1]);
     pos.x += r.dx || 0;
     pos.z += r.dz || 0;
+    this._separate(pos);
     // An anchored body faces the middle of the square unless it says otherwise
     // — a market vendor with their back to the market is the single thing that
     // most makes a crowd read as scenery.
@@ -546,6 +570,39 @@ export class Npcs {
     if (!npc) return null;
     this._registerTalkFor(game, npc);
     return npc;
+  }
+
+  /**
+   * Push a new body clear of everyone already standing there.
+   *
+   * The offsets in {@link CITY} are authored per anchor and the anchors are
+   * 7.8 m apart on a ring, so on paper nobody overlaps. In the frame two of
+   * them did — `galdin_pier_sunset` had a pair standing about half a metre
+   * apart and reading as one four-armed person — because two rows offset
+   * toward the same plaza from adjacent anchors converge, and a walker's
+   * first route node is a placement like any other. Two people inside each
+   * other is the single fastest way to make a crowd read as a bug.
+   *
+   * Sixteen steps around a circle at a growing radius, first free spot wins:
+   * deterministic, no search, and a no-op for anybody already clear.
+   *
+   * @param pos the intended spot, moved in place
+   */
+  _separate(pos: THREE.Vector3) {
+    const MIN = 1.55;
+    const clear = (x: number, z: number) => {
+      for (const o of this.list) if (Math.hypot(o.pos.x - x, o.pos.z - z) < MIN) return false;
+      return true;
+    };
+    if (clear(pos.x, pos.z)) return;
+    for (let ring = 1; ring <= 4; ring++) {
+      const rad = MIN * ring;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        const x = pos.x + Math.cos(a) * rad, z = pos.z + Math.sin(a) * rad;
+        if (clear(x, z)) { pos.x = x; pos.z = z; return; }
+      }
+    }
   }
 
   /**
@@ -696,21 +753,50 @@ export class Npcs {
     const t = game.time.now;
     const talking = game.get('Interaction')?.talking;
 
+    // LOD before anything else: an NPC nobody can see does not need a skeleton
+    // solve, and the skeleton solve is the whole per-NPC cost.
+    //
+    // **Distance alone is not enough any more, and the numbers say so.** With
+    // eleven people at Hammerhead a pure distance ramp was fine. With
+    // twenty-nine more in two cities, `citydraws.mts` measured a Lestallum
+    // framing at **18 bodies and 159 colour draws** against a budget of twelve
+    // and sixty — because a market square is 22 m across, so *every* body in it
+    // is inside any distance threshold you would want for the people you are
+    // actually looking at. A budget cannot be bought with a radius when the
+    // whole crowd is inside the radius.
+    //
+    // So the crowd is **ranked** and the budget is spent nearest-first, which
+    // is how a shipped game does it: the closest {@link CROWD_DETAIL} get eyes,
+    // a contact shadow and a sun shadow, the next few get a body, and past
+    // {@link CROWD_MAX} people are not drawn. It caps the cost by construction
+    // instead of hoping a radius does, and at Hammerhead — eleven bodies,
+    // under both caps — it changes nothing at all.
+    // The ranking array is pooled rather than rebuilt: it is sorted every
+    // frame, and thirty short-lived objects per frame in an update loop is the
+    // kind of thing that does not show up in a profile and does show up in the
+    // `>16 ms` column. Entries past `n` are parked at `Infinity` so the sort
+    // pushes them off the end instead of the array having to be truncated.
+    const R = this._rank;
+    let n = 0;
     for (const npc of this.list) {
       const d = this._camPos.distanceTo(npc.pos);
-      // LOD before anything else: an NPC nobody can see does not need a
-      // skeleton solve, and the skeleton solve is the whole per-NPC cost.
-      // 25 m, not 38: LOD 1 drops the eye meshes, and a pair of eyes is two
-      // colour draws on a body that is four. With twenty-nine people in two
-      // cities that is the difference between a square inside the 60-draw
-      // budget and one at ninety. 60 m, not 85, for the same arithmetic: a
-      // person further away than that in a city is behind a building.
-      const lod = d > 60 ? 2 : d > 25 ? 1 : 0;
-      npc.body.setLod(lod);
       // The prompt anchor is not part of the LOD. It costs a vector copy, it
       // is what the interaction verb reads, and skipping it past 85 m is how a
       // `TALK / TAKKA` prompt came to hang over empty desert 594 m from Takka.
       this._anchor(npc);
+      if (d > CROWD_FAR) { npc.body.setLod(2); continue; }
+      if (!R[n]) R[n] = { npc, d };
+      R[n].npc = npc;
+      R[n].d = d;
+      n++;
+    }
+    for (let i = n; i < R.length; i++) R[i].d = Infinity;
+    R.sort((a, b) => a.d - b.d);
+
+    for (let i = 0; i < n; i++) {
+      const { npc, d } = R[i];
+      const lod = i >= CROWD_MAX ? 2 : (i < CROWD_DETAIL && d <= 25) ? 0 : 1;
+      npc.body.setLod(lod);
       if (lod === 2) continue;
 
       if (npc.route) this._walk(npc, dt);

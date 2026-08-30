@@ -269,10 +269,10 @@ export class CityHub {
     const plaza = kits.anchorAt(city.poi, 'plaza');
     if (plaza) {
       const l = new THREE.PointLight(city.bulb, 0, 44, 2);
-      l.position.set(plaza.x, plaza.y + 5.2, plaza.z);
+      l.position.set(plaza.x, plaza.y + 4.2, plaza.z);
       l.name = `city_plaza_light_${city.poi}`;
       this.root.add(l);
-      this.lights.push({ light: l, night: 70, day: 0 });
+      this.lights.push({ light: l, night: 120, day: 0 });
     }
   }
 
@@ -442,7 +442,11 @@ export class CityHub {
     // Same ramp shape as `PoiKits.update` gives `M.lamp`, one stop brighter,
     // because a festoon is the light source in the frame and a POI lamp is a
     // detail on a wall.
-    this.festoonMat.emissiveIntensity = 0.25 + night * 4.2;
+    // 1.9, not 4.2. At 4.2 the bulbs clipped to pure white through the
+    // tonemap and the one thing a festoon has to be -- WARM -- was gone; the
+    // measured frame had a string of small hard white dots over a blue square.
+    // Amber survives at 1.9 and the bloom still catches them.
+    this.festoonMat.emissiveIntensity = 0.25 + night * 1.9;
   }
 }
 
