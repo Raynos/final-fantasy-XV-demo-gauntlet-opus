@@ -910,9 +910,26 @@ export function hairMaterial() {
     // why the groom reads as flat shards with no highlight anywhere while the
     // *broad* terms (rim, sky dome, the `mask` floor) carry the whole value
     // range and blow out on blond. Broadening the primary to 45 and the
-    // secondary to 9 puts a band on the crown that a viewer can see, and taking
-    // `spec` and the rim down keeps the total energy from rising with it.
-    hair: { spec: 0.46, shift: 0.25, exp1: 45.0, exp2: 9.0, tint: 0.85 },
+    // secondary to 9 puts a band on the crown that a viewer can see.
+    //
+    // `spec` came down to 0.46 with that broadening, and **measurement says the
+    // two halves have to be separated**. Re-read at the retune (same rect, same
+    // 0.55 m frames):
+    //
+    //   plate  prompto (blond)  p50 81   p99.5 176
+    //   before                  p50 94   p99.5 227
+    //   at spec 0.46            p50 62   p99.5 201
+    //   plate  noctis (black)   p50 37   p99.5 140
+    //   before                  p50  0   p99.5 142
+    //   at spec 0.46            p50  1   p99.5 101
+    //
+    // The exponent half is right: blond's top end closed half its gap. The
+    // energy half took too much — blond's median overshot the plate the other
+    // way (+13 -> -19) and Noctis lost his bright extreme, which was the one
+    // hair number already correct. So `spec` goes back to 0.55 and the rim
+    // stays at 0.20: the band is narrow and is what §12.3 wants on Noctis; the
+    // *rim* is broad, scales with albedo, and is what washed blond out.
+    hair: { spec: 0.55, shift: 0.25, exp1: 45.0, exp2: 9.0, tint: 0.85 },
   });
 }
 
