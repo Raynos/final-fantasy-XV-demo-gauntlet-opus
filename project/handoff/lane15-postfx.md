@@ -1,0 +1,94 @@
+# Lane 15 — idle CPU, RT budget, grain (`src/engine/postfx/`, `src/engine/PostFX.ts`)
+
+Status: in progress. Plan `docs/plans/2026-08-30-fable-to-nine.md`, tasks 44, 45, 27.
+
+## Headline, and it corrects the plan
+
+**The plan's RT number was 40% low and 44 MB of it does not exist.** Both
+directions matter and they are separate errors:
+
+- `bootprof.mts`'s `sizeOfRt` (bootprof.mts:76-89) ignores `samples`, assumes
+  four channels at the colour type, and prices a depth attachment at `1.25x`
+  the colour. Priced honestly the post chain **declares 221.72 MB over 28
+  targets** at `q=high`, dpr 1, 1600x900 — not the plan's 130.
+- **three allocates a render target lazily, on the first `setRenderTarget`.**
+  Two of the biggest entries have never been bound and cost zero VRAM:
+  `SMAAPass._edgesRT` + `_weightsRT` (21.98 MB — the pass is constructed and
+  left `enabled = false`) and `GTAOPass.normalRenderTarget` (21.97 MB — three's
+  constructor calls `setGBuffer()` with no arguments, then `PostFX` calls it
+  again with our depth texture and orphans the first).
+
+Instrument: `node src/tools/probe.mts src/tools/probes/rtwalk.mts --q high`.
+It reports `declaredMB` and `residentMB` side by side and labels each row.
+
+**`q=ultra` doubles the largest line in the game.** `_wantSamples`
+(PostFX.ts:664) and `sceneSamples()` (postfx/Msaa.ts) both return **8** at
+ultra and 4 at high. `rtScene`'s multisample renderbuffers are
+`(colour + depth) x samples`: **65.93 MB at high, 131.86 MB at ultra**, and
+x2.25 again at dpr 1.5. The harness default is `q=ultra`, so every bootprof
+memory number this project has quoted carries the 8x line. **Not verified as a
+lever yet** — 8 -> 4 is a quality change and has not been diffed.
+
+## Measured
+
+### Idle CPU baseline — `idlecpu --q high --dpr 1.5`, sha 6ea61aef, CONTENDED
+Tree was **not** quiet: `VERDICT: CONTENDED (check, drawcheck, integration,
+probe, reachcheck, reliefstat, shoot, uxcheck)`, load 4.06/18, and it printed
+`!! CONTENDED by the end` too. Numbers are an upper bound, not a baseline.
+
+| arm | GPU | browser | renderer | TOTAL | fps | CPU ms/frame | at 60 Hz |
+|---|---|---|---|---|---|---|---|
+| running  | 45.5% | 9.7% | 48.8% | 105.5% | 62.3 | 16.93 | 101.6% |
+| stopped  | 0.1%  | 0.4% | 1.8%  | 2.3%   | 0    | —     | —      |
+| running2 | 52.5% | 9.6% | 51.6% | 115.2% | 61.5 | 18.73 | 112.4% |
+| dpr1.5   | 55.7% | 9.4% | 53.0% | 119.6% | 60.0 | 19.94 | **119.6%** |
+
+Main-thread split at dpr1.5: `Game.frame()` is **5.86 ms/frame = 35.1% of a
+core**, of which **post.render 4.42 ms (75.5%)**. Everything else in the game
+sums to 1.4 ms. So the exit's `<30% of a core` cannot be read off the main
+thread alone: whole-browser CPU is 119.6% while `ThreadTime` is 38.8%, i.e.
+**two thirds of the idle cost is in the GPU process and the renderer's non-main
+threads**, which no pass gate can reach and `perf.mts` cannot see at all.
+
+### RT walk — `q=high`, dpr 1, 1600x900, sha e6f44b12 (declared bytes)
+post **221.72 MB / 28**, world 118.88 MB / 13, total 340.59 MB.
+Largest: `rtScene` 82.40 (colour 10.99 + depth 5.49 + **MSAA4 65.92**),
+3x CSM shadow map 32.00 each (world), `gtao.normalRenderTarget` 21.97
+(**not resident**), `gtao.gtaoRenderTarget` 16.48, `gtao.pdRenderTarget` 16.48,
+then eight full-res 10.99 MB buffers: `rtVel`, composer x2, SMAA x2 (**not
+resident**), TAA history x2.
+
+Residency numbers pending a re-run of the updated walk.
+
+## Landed
+
+- `67a57cd` — `src/tools/probes/rtwalk.mts`, a walk that prices samples,
+  format, type, layers and the depth attachment instead of guessing.
+- `eac7e08` — the same walk reports resident vs declared.
+- `ff8f459` — **task 27, grain on sky.** `4*l*(1-l)` is 0.96–1.00 across the
+  luminance band a daylight sky occupies, so mid-weighting and full amplitude
+  are the same thing there. `Atmosphere.createDome` is
+  `depthWrite:false, depthTest:false`, so a sky pixel is the depth buffer's
+  *clear* value; the mask reconstructs view depth and compares against the far
+  plane, because at near 0.15/far 6000 a ridge at 4 km reads raw 0.99996 and no
+  raw-depth threshold separates the two. Grain reduced to **30%** on sky, not
+  removed. `?post=noskygrain` is the control. **Not yet verified by eye** —
+  capture in flight.
+
+## Next steps
+
+1. Look at `tmp/shots/l15-a` vs `l15-b` (`vista_noon`, `vista_dawn`) and
+   confirm the sky reads as film rather than as video, and that no silhouette
+   picked up a seam.
+2. Re-run `rtwalk` for resident numbers; then the free cut: `gtaoRenderTarget`
+   and `pdRenderTarget` are built by three with the default `depthBuffer: true`
+   and are fullscreen quad targets that never test depth — **-10.98 MB, no
+   pixels change**.
+3. Per-pass profile (`probes/perfpasses.mts`) to place the 4.42 ms.
+4. Decide, with numbers, whether MSAA 8 at ultra and 4 at high can come down.
+
+## Open questions / cross-lane
+
+- `sceneSamples()` lives in `postfx/Msaa.ts` (mine) but its other half is
+  `VegMaterial.patchVeg` (**not mine**). Any sample-count change is a
+  cross-lane one-liner and must be reported, not made quietly.
