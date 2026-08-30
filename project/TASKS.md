@@ -276,3 +276,38 @@ binding is closed by `5be914f`. Both lines above are deleted rather than ticked.
   flags it as off-roster. `tmp/shots/` is the default `--out`; something wrote
   a full corpus to the root instead. Delete it once no lane is live. `lane10`
 
+
+## Spine, dungeons and wayfinding: what lane 17 left behind (2026-08-31)
+
+*Lane 17 closed all eight of its Part D items (49–56). Chapter 3's soft-lock is
+gone (`ff695f8`) and the `mainchain` shim that false-passed it is deleted in the
+same commit; dungeons spawn their authored fights (`427e68b`); the POI `gate`
+field is gone (`1e2a1e4`); the spawn haven is real (`fe273b4`); the map can send
+Ignis somewhere (`7e355e3`); the chart survives a reload (`1c3754b`). Item 51 is
+a measured negative and is the first line below.*
+
+- **Chapters 2 and 4 are the short half of the spine.** `probes/spinetime.mts`
+  prices the main line at **46.3 guided minutes** against Part D's 50–65 target:
+  ch1 14.0 · ch2 **4.9** · ch3 17.2 · ch4 **3.8** · ch5 6.6 (17.7 min of it real
+  road-graph travel, 28.6 min of stated act allowances). Chapters 1 and 3 are on
+  brief; 2 and 4 are three objectives of drive–talk–do with nothing between them.
+  The fix is content in `Quests.ts`, which lane 17 released to lanes 18/19/22 at
+  `ff695f8` rather than grabbing back — two or three acts each, ideally routed
+  through the new Galdin and Lestallum hubs. `lane17`
+- **The dungeon map screen is still unwired.** `DungeonMap` now draws enemy pips
+  for fights that genuinely exist, and nothing opens the screen. Named in Part D
+  item 52 as deferred. `lane17`
+- **`integration` is 26 pass · 1 not integrated on `gald_ferrybell->npc_navyth`**
+  — "walking up to a thing selects that thing", 1/65 unreachable. A Galdin Quay
+  interactable collision; not lane 17's files. `lane17`
+- **Three Keycatrich POIs share one road node**, so `roadGraph.route` between
+  `keycatrich_trench`, `keycatrich_ruins` and `tomb_wise` returns **length 0** —
+  a 147 m leg priced as free. `spinetime` floors road distance at the straight
+  line to work around it, but the graph still reports it, and anything else that
+  prices a journey (the map card's BY ROAD row included) will believe it.
+  `lane17`
+- **The haven rock's position is duplicated, not derived.**
+  `Ecology._layoutSites` calls `_findFlat(-62,-46,40,9)`, which resolves to
+  (-31.4, -20.3), and the new `spawn_haven` POI hard-codes (-31,-20). If that
+  search ever moves, the pin does not and the haven becomes uncampable. Same
+  coupling the Hammerhead pin already carries a comment about. `lane17`
