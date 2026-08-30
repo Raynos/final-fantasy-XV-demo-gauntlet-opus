@@ -225,3 +225,30 @@ said it was: the tab is **1 382 MB**, not 1 246, and everything plan tasks
   plan's >=30 on THAT box needs one of the other two contributors as well — GTAO
   (5/255, see above) or a broader exposure decision. The plan's own named gate box
   (`0.33 0.62 0.46 0.78`) passes at **61** against its bar of 30. `lane5`
+
+## Clouds: what lane 4 left behind (2026-08-30)
+
+*All three of lane 4's tasks landed. `cStops` 1.49 -> 1.95 with clip 19.2% ->
+6.6%; the top-edge crossing 8 -> 6 px; coverage cells 10 -> 51. It also found
+two instruments lying, which is the more useful half.*
+
+- **Cloud comb teeth on the mid-distance deck** (pre-existing, worse at dusk;
+  present at `7da60d5`, so lane 4 did not cause it). `Clouds.ts:186-215`: the
+  empty-space probe advances `coarse = 2*fine` with
+  `fine = clamp(t*0.017, 30, 440)`, so the skip window is 880 m at range against
+  shape features of 100-260 m. The 440 cap is what binds; lowering it costs fill
+  and needs a quiet tree for an honest perf number. `lane4`
+- **`cloudstat.mts` cannot grade storm, overcast or fog at all** — it needs a
+  chroma-independent mask first. It reads cov 5.4% vs 94.5% on equivalent
+  frames once the sky desaturates. `lane4`
+- **`cloudstat.mts`'s `aVar` is dominated by component merging and `cStops` by
+  component population**; both need a watershed split before either is a target.
+  `lane4`
+- **`uCloudTap` 0.00 is measured better than the shipped 0.50** on rampT (5 px)
+  and edgestat hard (1.4%), at the cost of a faint half-res texel step at 4x.
+  The next stop if a judged round still says the cloud mass reads defocused.
+  `lane4`
+- **The plan's `node src/tools/probes/nanscan.mts` command line is wrong**
+  repo-wide: nanscan is a probe *body* and needs
+  `node src/tools/probe.mts probes/nanscan.mts`. `lane4`
+

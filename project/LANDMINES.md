@@ -1989,3 +1989,25 @@ numeric gate did. That is the argument for `heightcheck` asserting exactly
 0.000 — and the same shape as "a consistently-but-inversely wound shell is
 invisible to every bench in this repo". Found 2026-08-30, reverted in `50b66b1`.
 
+## Two cloud instruments were lying, in the two ways instruments in this repo lie
+
+Both found 2026-08-30 by lane 4, and both are the house pattern: **when a metric
+agrees and the frame disagrees, suspect a property no metric in the tree reads.**
+
+**An ablation token that is overwritten after it is applied.** `?post=nocloudsun`
+and `?post=nocloudamb` were silently dead: `_ablateWeather` runs only from
+`_pushWeatherUniforms`, and `_applyTimeOfDay` rewrites both uniforms *after* it.
+The token parsed, the flag set, the frame did not change. **Every measurement
+ever taken through those two tokens is suspect** — including the one that
+justified `uAmbientBoost` 1.15 -> 4.00. An ablation that matches nothing is an
+error; an ablation that is *undone* one call later looks exactly like a
+measured negative.
+
+**A classifier whose class boundary moves with the thing under test.**
+`cloudstat.mts` split cloud from sky by *luminance*. Every task-17 lever darkens
+the shadow side of a cloud — which pushes the pixels under test out of the
+cloud class, so the tool reported `uCloudMS` 0.62 -> 0.34 as a **regression**
+when it was two thirds of the win. Split on saturation instead. Any classifier
+keyed on the same channel the change moves will report the change as its own
+absence.
+
