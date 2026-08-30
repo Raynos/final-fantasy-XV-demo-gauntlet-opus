@@ -688,8 +688,18 @@ export class Water {
           // a ~60 m one for cats-paws. Remapped so the tails clamp -- the
           // useful states are "slick" and "set", not a Gaussian around the
           // mean.
+          // Fetch scales the SWELL and the sets, and deliberately not the
+          // chop. The first cut scaled all three octaves by 1/waveScale, and
+          // the two frames that had never been taken before said what that
+          // does: the Maidenwater came back as a regular green crosshatch and
+          // the Vesperpool as evenly spaced diagonal corduroy, because a
+          // 0.35 body triples every frequency and the finest map then tiles
+          // every 6.7 m across three hundred metres of water -- forty-five
+          // visible repeats. It is also wrong physically. Fetch sets the
+          // swell; the short wind chop on a pond and on the open sea are the
+          // same size, because the same wind makes them.
           float fk = 1.0 / uWaveScale;
-          vec2 gp = vWorld.xz * fk;
+          vec2 gp = vWorld.xz * sqrt(fk);
           float groups = wf_noise(gp * (1.0 / 190.0) + vec2(uTime * 0.0135, uTime * 0.006)) * 0.62
                        + wf_noise(gp * (1.0 /  61.0) + vec2(3.1, -uTime * 0.031)) * 0.38;
           groups = clamp((groups - 0.30) / 0.40, 0.0, 1.0);
@@ -724,13 +734,18 @@ export class Water {
            * Named calmFar, not flat: flat is a GLSL interpolation qualifier.
            */
           //
-          // Measured by eye rather than derived: at smoothstep(90, 1100) the
-          // Vesperpool still read as fine white sandpaper right out to three
-          // hundred metres, because almost none of the ramp had been spent by
-          // then. The onset is where a wave stops being a shape and starts
-          // being a texel, which on a 1600 px 46 deg frame is nearer forty
-          // metres than ninety.
-          float calmFar = 1.0 - 0.80 * smoothstep(45.0, 620.0, dist);
+          // And the variable it ramps against is a **pixel footprint in metres
+          // of water**, not a distance. Distance alone was wrong in the way
+          // that matters: the same 200 m of water is a third of a metre per
+          // pixel seen from a clifftop and nearly two metres per pixel seen
+          // from a boat, because the footprint grows as 1/sin(depression) as
+          // well as with range, and the surface at a grazing angle is exactly
+          // where a reflection has to survive. 0.0009 rad is one pixel of a
+          // 46 deg 900-line frame; the ramp runs from a third of a metre --
+          // the finest thing the ripple maps carry -- to six.
+          vec3 Vp = normalize(uCameraPos - vWorld);
+          float foot = dist * 0.0009 / max(0.035, abs(Vp.y));
+          float calmFar = 1.0 - 0.86 * smoothstep(0.35, 6.0, foot);
           // The swell reads the *other* map, on a rotated axis. Scaling one
           // texture three times looks exactly like what it is: the octaves
           // correlate with themselves and the surface comes out as regular
@@ -740,8 +755,8 @@ export class Water {
           // arrives as "VALIDATE_STATUS false" and nothing else.
           mat2 swellRot = mat2(0.857, -0.515, 0.515, 0.857);
           vec3 nS = sampleNormal(uNormalB, (swellRot * vWorld.xz) * (0.0047 * fk) + w * 0.0031);
-          vec3 nA = sampleNormal(uNormalA, vWorld.xz * (0.021 * fk) + w * 0.012);
-          vec3 nB = sampleNormal(uNormalB, vWorld.xz * (0.052 * fk) - w * 0.021);
+          vec3 nA = sampleNormal(uNormalA, vWorld.xz * 0.021 + w * 0.012);
+          vec3 nB = sampleNormal(uNormalB, vWorld.xz * 0.052 - w * 0.021);
           // The weights, and they are now three different functions of place
           // rather than three constants. Swell is a deep-water animal and dies
           // as it feels the bottom; chop is the opposite and is what a shelving
@@ -787,8 +802,15 @@ export class Water {
           fres = mix(0.02, 1.0, fres);
 
           // planar reflection, distorted by the wave normal
+          // And the distortion is scaled by the same flatness, and is much
+          // smaller than it was. 0.045 of screen UV is seventy-two pixels on a
+          // 1600 px frame: applied to a normal with 45 degrees of per-pixel
+          // slope it does not distort the planar reflection, it shreds it,
+          // which is why nine hundred metres of Vesperpool cliff -- on
+          // REFLECT_LAYER, rendered, fetched -- never appeared in the lake
+          // under it.
           vec2 sUv = (vClip.xy / vClip.w) * 0.5 + 0.5;
-          sUv += N.xz * 0.045;
+          sUv += N.xz * (0.004 + 0.030 * calmFar);
           vec3 refl = texture2D(uReflect, clamp(sUv, 0.001, 0.999)).rgb;
 
           // --- metric depth ------------------------------------------------
