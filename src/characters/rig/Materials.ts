@@ -234,6 +234,18 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
     // a broad fresnel lift over the whole face is waxy fill light, not
     // subsurface: keep it for thin parts (ears, nose wings) and little else
     + fres * 0.16 * ( 0.10 + 0.90 * thick ) * wrapT
+    // 4. transmission rim — the cue a backlit ear was missing, and the reason
+    //    a head with a whole subsurface model on it still read as plastic.
+    //    The back-scatter term above is a whole-surface one: it lifts the ear
+    //    and the cheek beside it by the same amount, so nothing about the ear
+    //    says light is coming THROUGH it. What makes a real backlit ear glow
+    //    is that the glow lives at the SILHOUETTE, where the path through the
+    //    tissue is shortest and the light leaves sideways: grazing, times
+    //    thickness, times backlit, times the shadow side — identically zero
+    //    on an opaque part, on a front-lit part, and face-on.
+    + pow( 1.0 - ndv, 2.2 ) * thick * uTrans * 1.9
+      * pow( clamp( dot( sV, -sL ), 0.0, 1.0 ), 1.6 )
+      * smoothstep( 0.25, -0.35, ndl )
   );
   gl_FragColor.rgb += sss * diffuseColor.rgb;
 }`);
@@ -652,10 +664,31 @@ function cache(): MaterialTextures {
     + 0.36 * n.simplex2(u * PF * 0.86, v * PF * 0.86)
     + 0.34 * n.simplex2(u * PF, v * PF)
   ), 1.9);
-  pore.repeat.set(15, 23);
+  // **The tiling is anisotropic in MILLIMETRES, which is the whole of the
+  // "pores read as scratches scribbled across the cheek".** Both charts these
+  // maps ride on are cylindrical and neither is square: `faceUV` puts u round
+  // a ~550 mm head circumference and v over a 238 mm crown-to-chin span, and
+  // the torso sweep puts u round a ~1070 mm girth and v over ~270 mm per unit
+  // of `uvScale`. At 9 x 13 the face therefore tiled a 61 mm cell across and
+  // an 18 mm cell down — 3.3:1 — and the body at 15 x 23 tiled 71 x 12 mm,
+  // which is **6:1**. The map's finest octave is 102 cycles a tile, so a pore
+  // came out 0.6 mm wide and 0.18 mm tall: not a pore, a horizontal scratch,
+  // and tiled over the whole face a field of them.
+  //
+  // Re-derived for a SQUARE cell. **The first attempt at this squared it at
+  // 36 mm — a 0.35 mm pore — and that is a measured negative: it doubled the
+  // feature size on the axis that was already right, and at 0.55 m the face
+  // came back as coarse orange peel. `facecheck`'s cheek control went
+  // 101.7 -> 130.8 on Noctis and put Prompto over the ceiling as well.** The
+  // axis that was wrong was always `u`, and it was wrong by being too COARSE.
+  // So: square the cell at ~22 mm instead, which holds the vertical feature at
+  // the 0.2 mm it already had and brings the horizontal one down to meet it
+  // from 0.6 mm. Both are then under a pixel at 0.55 m, which is what a pore
+  // should be — it is a field, not a mark.
+  pore.repeat.set(48, 12);
 
   const poreFine = pore.clone();
-  poreFine.repeat.set(9, 13);
+  poreFine.repeat.set(25, 11);
   poreFine.needsUpdate = true;
 
   // The cloth weave is a *deliberate* regular grid, so it is the one pattern

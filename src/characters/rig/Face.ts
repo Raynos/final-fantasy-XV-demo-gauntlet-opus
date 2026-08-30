@@ -1011,7 +1011,11 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // uniform back-lit pink smear with the helix and antihelix invisible on it.
     // Half the thickness, and the plate carries its own darker tone so the rims
     // have something to stand out from.
-    B.mat(0.46, 0, 0.5);
+    // Thickness 0.5 on the one part of the head that IS a 3 mm sheet of
+    // cartilage with a sun behind it. The auricle is the reference thin part —
+    // `thicknessAt` scores it 1.0 — and the plate is what the new transmission
+    // rim in `Materials.ts` has to have something to work on.
+    B.mat(0.46, 0, 0.92);
     B.color(0xcdb4a6);
     // the auricular plate — the sheet the ridges sit on
     // **The plate was a slab.** 8.0 mm of *half*-thickness on an ear whose whole

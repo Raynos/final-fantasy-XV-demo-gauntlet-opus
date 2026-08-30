@@ -30,7 +30,13 @@ export function buildBody(rig: Rig, look: Look): THREE.BufferGeometry {
   // the *same* base tone the face texture is painted from — the body used to
   // sit 12% lighter, which put a hard tonal seam along the jaw
   const base = look.skin.clone().multiplyScalar(SKIN_BASE);
-  B.color(base).mat(0.57, 0);
+  // Third argument is TRANSLUCENT THICKNESS, and the body wrote nothing here,
+  // so `vMat.z` was 0 over every square centimetre of skin outside the face and
+  // the subsurface block's back-scatter term collapsed to its 0.12 floor for
+  // the whole body. A torso is not an ear, but it is not opaque stone either:
+  // a neck against a low sun and the web of a hand both carry light. 0.08 is
+  // bulk flesh; the hand raises its own.
+  B.color(base).mat(0.57, 0, 0.08);
 
   const y = (v: number) => v * s;
 
@@ -104,7 +110,7 @@ export function buildBody(rig: Rig, look: Look): THREE.BufferGeometry {
     });
 
     buildHand(B, rig, side, look);
-    B.color(base).mat(0.57, 0);
+    B.color(base).mat(0.57, 0, 0.08);
   }
 
   // ---- legs --------------------------------------------------------------
@@ -484,5 +490,5 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   const hollow = pt(0.040, -0.001, -0.016);
   B.occlude(hollow.x, hollow.y, hollow.z, R(0.024), 0.18);
 
-  B.color(skin).mat(0.57, 0, 0);
+  B.color(skin).mat(0.57, 0, 0.30);
 }
