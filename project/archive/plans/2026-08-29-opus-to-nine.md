@@ -1,6 +1,12 @@
 # To nine — the build list
 
-Status: PROPOSED (2026-08-29, opus) — **62 named tasks in 14 lanes, all
+Status: SUPERSEDED (2026-08-30, fable) — replaced by
+`docs/plans/2026-08-30-fable-to-nine.md` after a full audit: ~10 mechanisms
+corrected, 2 items refuted (hair `mips: 0`, `assertAttributeContract`), the
+9/10 definition restored, and the task set re-anchored to round 16's ranked
+tells.
+
+Originally: PROPOSED (2026-08-29, opus) — **62 named tasks in 14 lanes, all
 buildable in parallel, one day of wall-clock.** Every task names the file, the
 mechanism and what makes it done. Nothing here says "iterate until it looks
 better".

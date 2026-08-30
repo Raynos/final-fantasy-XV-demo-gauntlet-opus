@@ -36,7 +36,7 @@ plan's negatives table is the list of things already decided against.
 - **Caching `Vegetation.prime`'s *result* (610 ms) is untried** — a different idea from deleting `prime`, which is a recorded negative. The streamer's tile bookkeeping must be restored with the matrices or the world desyncs on first `update()`. `geometry-bake`
 - Character LOD: `town_forecourt` 465 calls / 5.33 M tris, one `SkinnedMesh` bucket at 60 calls / 1.74 M tris / 28 940 per draw. Headroom, not cost. `materials`
 - `Wear.ts:873` keys its program cache on `tex.uuid` for GLSL that is byte-identical every time. 1–2 programs, free. `materials`
-- 22 dedupable programs in `characters/rig/` (`char2-eye<N>`, eye `gloss` is a GLSL literal). `materials`
+- ~17 dedupable programs in `characters/rig/` (`char2-eye<N>` — the splitter is the iris hex baked as a GLSL literal at `Materials.ts:369`; `gloss` is always 1.0). `materials`
 - Water's reflection pass spends ~40 draws on shots with no visible water (`Water._visible` is a bbox test). `perf-r4`
 - NPC eye globes + contact-shadow blobs, ~28 draws. The globes cannot merge — independent gaze pivots. `perf-r4`
 - Wave 3's frame-cost split, pixel-scaled vs fixed. Recipe written, never run. `perf-r4`
@@ -49,7 +49,7 @@ plan's negatives table is the list of things already decided against.
 
 ## Vegetation, alpha and occlusion
 
-- **The impostor ring at 210–280 m is the 1:1 texel band** (0.74–1.13 texels/px) and holds the treeline's residual speckle. `leaftexel.mts` prints it per shot. `alpha-edges-r2`
+- **The tree impostor ring is 250–330 m** (`Trees.ts:507-509`; 210–280 was stale — 280 was the bush ring's former value, now 440) and holds the treeline's residual speckle. `leaftexel.mts` prints the texel band per shot. `alpha-edges-r2`
 - **`coverageAA` is called only from `VegMaterial`** — fences, foliage decals, town alpha-cut props, `hh_town_chainlink` and every character hair card are still binary. One line each. `alpha-edges-r2`
 - **Character hair is `mips: 0` on all four heads** — 128 px, anisotropy 16, no mip chain, 9.01 texels/px at 5.2 m. *(Unverified at HEAD by the audit — check before acting.)* `alpha-edges-r2`
 - **Nothing with a silhouette occupies 15–97 m on `hero_full`.** The occupant exists, is instanced and in-frame: pull `scrub_*_card`'s seating range inward. No new asset, no new material; price the draws with `vegcensus.mts`. `alpha-edges-r2`
@@ -104,5 +104,5 @@ plan's negatives table is the list of things already decided against.
 - **`assertAttributeContract` is not wired into a generator** — only gated in `geocheck` over the bestiary. The last unwired row; `assertUpward`, `assertCardOrientation` and `assertConsistentWinding` are all wired. `harness`
 - **Grep for unguarded `normalize(` and `pow(` with a varying base in the remaining shaders.** `canopy` cleared only what `nanscan` pointed at, and both NaN bugs were an operation undefined on its input reaching the frame through a path that looked safe. `canopy`
 - Two menu nits the scrim blur revealed: the Armiger gauge caption is dark-on-dark and wraps to *"on a / pad."*, and the two-column screens leave the bottom ~35% empty. `harness`
-- `project/noise-floors.json` covers 18 shots of 142; the rest diff against a placeholder `DEFAULT_LIMIT = 2.0`, and the recorded floors are *cold* while the daemon reuses pages, so a warm diff runs 4–6× them. plan A
+- `project/noise-floors.json` covers 20 shots of 142 (4 of them above the default); the rest diff against a placeholder `DEFAULT_LIMIT = 2.0`, and the recorded floors are *cold* while the daemon reuses pages, so a warm diff runs 4–6× them. plan A
 - `project/archive/handoff/` is at 90 files and nothing prunes it.
