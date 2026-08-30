@@ -132,6 +132,35 @@ if (sk && sk.geometry.attributes.aEmissive) {
 }
 for (const e of elems) e.inside = inRock(e.x, e.y, e.z);
 
+/**
+ * **How proud of the drawn ground is each part of this landmark, really?**
+ *
+ * `_meteorParts` seats everything on a local helper called `ground()`, and the
+ * group it lives in is deliberately sunk 90 m so the masses' feet bury. Whether
+ * those two facts compose or cancel is not something to reason about in a
+ * comment — an apron shard 30 m tall and a rim block 155 m tall are either
+ * standing on the crater or they are inside it, and one of those two worlds has
+ * a rim in it. Every capture this project has ever taken of the Disc has had no
+ * rim in it, so this measures rather than assumes: sample each meteor mesh's
+ * vertices, subtract `Terrain.heightAt` under each one, and report the spread.
+ *
+ * Positive is proud of the ground. A mesh whose 95th percentile is negative is
+ * a mesh nobody has ever seen.
+ */
+const proud = {};
+for (const [name, o] of Object.entries(meshes)) {
+  const p = o.geometry.attributes.position, m = o.matrixWorld, v = new V3();
+  const step = Math.max(1, Math.floor(p.count / 3000));
+  const d = [];
+  for (let i = 0; i < p.count; i += step) {
+    v.set(p.getX(i), p.getY(i), p.getZ(i)).applyMatrix4(m);
+    d.push(v.y - terr.heightAt(v.x, v.z));
+  }
+  d.sort((a, b) => a - b);
+  const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(f * d.length))]);
+  proud[name] = { n: d.length, min: q(0), p05: q(0.05), median: q(0.5), p95: q(0.95), max: q(0.999) };
+}
+
 // --- per stand -------------------------------------------------------------
 const report = {};
 for (const [name, spec] of Object.entries(STANDS)) {
@@ -205,7 +234,7 @@ for (const [name, spec] of Object.entries(STANDS)) {
 }
 
 return {
-  gain: GAIN, meshes: Object.keys(meshes),
+  gain: GAIN, meshes: Object.keys(meshes), proudOfGround: proud,
   slabs: elems.filter((e) => e.kind === 'slab').length,
   veinVerts, veinSampled, veinLit,
   containedTotal: elems.filter((e) => e.inside).length,

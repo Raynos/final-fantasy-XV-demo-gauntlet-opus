@@ -5,7 +5,7 @@ import { bakedParts, matResolver, PartBuilder, loft, ring, texelBox, type Vec3 }
 import { magitekMaterial, concreteMaterial, curtainMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import { rockGeometry } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
-import { seatY } from './Seat.ts';
+import { seatY, coverY } from './Seat.ts';
 
 /**
  * How far a megastructure is drawn: all of them, always. They sit 1-4.5 km out
@@ -320,8 +320,10 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * to be ten pixels to survive TAA and the distance haze, so **nothing narrower
  * than about 22 m is worth authoring**. The ridge band's half-width in unit
  * radius is roughly `1 / (k * |grad fbm|)`, and on a 585 m bounding radius that
- * puts `k` in single digits -- hence 8.5, and not the 7.0 the gully incision
- * uses for a crease that is *meant* to be sub-pixel.
+ * puts `k` around ten -- hence 11, which measures out at roughly a 30 m
+ * band, and not the 7.0 the gully incision uses for a crease that is *meant*
+ * to be sub-pixel. At 11 about an eighth of the surface is lit; the first
+ * pass ran two octaves at 8.5 and lit a quarter of it, which is a lava ball.
  *
  * The colour is the human's direction: **molten blue**. A near-white-blue core
  * with a warm halo at the band's edge, which is what a crack full of something
@@ -337,7 +339,7 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * @param k band tightness -- LOWER is wider. See the width note above.
  * @param amp peak core radiance before `uGlow`
  */
-function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 8.5, amp = 1) {
+function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 11, amp = 1) {
   const n = new Noise(seed * 13 + 7);
   const p = geo.attributes.position;
   const count = p.count;
@@ -350,8 +352,10 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 8.5, amp = 1) 
     rMax = Math.max(rMax, Math.hypot(p.getX(i), y, p.getZ(i)));
   }
   const h = Math.max(1e-4, yMax - yMin);
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+  const nrm = geo.attributes.normal;
   // Cycles per unit radius. 1.9 puts roughly three crack cells across a face,
-  // which on a 585 m mass is a trunk every ~200 m: a network, not a mesh.
+  // which on a 585 m mass is a trunk every ~300 m: a network, not a mesh.
   const F = 1.9;
   let lit = 0;
   for (let i = 0; i < count; i++) {
@@ -361,23 +365,40 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 8.5, amp = 1) 
     const wx = n.fbm3(x * 1.3 + 4, y * 1.3, z * 1.3 - 2, 2) * 0.6;
     const wy = n.fbm3(x * 1.3 - 9, y * 1.3 + 6, z * 1.3, 2) * 0.6;
     const f = n.fbm3(x * F + wx, y * F * 0.85 + wy, z * F - 3, 4);
-    const trunk = Math.max(0, 1 - Math.abs(f) * k);
-    const f2 = n.fbm3(x * F * 3.1 + 21, y * F * 3.1, z * F * 3.1 + 8, 3);
-    const hair = Math.max(0, 1 - Math.abs(f2) * k * 2.4);
+    // **One octave, not two.** The first pass added a hairline set at 3.1x the
+    // frequency for "detail", and its band came out about three metres wide on
+    // a mesh whose triangle edge is seven -- so it could not be drawn as a
+    // line and was drawn as speckle instead. Captured, and it read as snow
+    // lying on the crown. A feature the mesh cannot express does not become
+    // subtle when you shrink it; it becomes noise.
+    const t0 = Math.max(0, 1 - Math.abs(f) * k);
+    // **Not on the up-facing surfaces.** Half of why the first pass read as
+    // snow is that emissive on a horizontal face is exactly where snow goes,
+    // and the eye has a very strong prior about that. A crack full of
+    // something molten is a thing you see in a *wall*: on the steep faces and
+    // in the clefts, which is also where it has any value contrast to work
+    // with. This one term is the difference between a wound and a snowfield.
+    const face = 1 - 0.72 * Math.max(0, nrm.getY(i));
     // The crown took the shock and is the most shattered; it is also the only
     // part of the cluster a 1.4 km camera can see over the foreground ridge,
     // which is the same conclusion arrived at from the other direction.
     const up = 0.55 + 0.45 * ((p.getY(i) - yMin) / h);
-    const t = Math.min(1, (trunk + hair * 0.34) * up);
+    const t = Math.min(1, t0 * up * face);
     if (t <= 0.001) continue;
     lit++;
     // `t*t` because a linear falloff off a ridge is a soft airbrushed smear;
     // the square keeps the core hot and the halo thin.
     const w = t * t * amp;
     const core = THREE.MathUtils.smoothstep(t, 0.42, 0.95);
-    out[i * 3] = (1.00 * (1 - core) + 0.62 * core) * w;
-    out[i * 3 + 1] = (0.44 * (1 - core) + 0.87 * core) * w;
-    out[i * 3 + 2] = (0.14 * (1 - core) + 1.00 * core) * w;
+    // Blue stays blue. The first pass put the core at (0.62, 0.87, 1.00),
+    // which is a *white* with a blue bias, and against a bright dusk sky the
+    // exposure took it to flat white -- a landmark with white patches on its
+    // crown, which is a snowline. The red channel is what has to give: a core
+    // at (0.26, 0.66, 1.00) still reads as hot because the blue channel is
+    // saturated, and it reads as CRYSTAL because the other two are not.
+    out[i * 3] = (1.00 * (1 - core) + 0.26 * core) * w;
+    out[i * 3 + 1] = (0.40 * (1 - core) + 0.66 * core) * w;
+    out[i * 3 + 2] = (0.10 * (1 - core) + 1.00 * core) * w;
   }
   geo.setAttribute('aEmissive', new THREE.BufferAttribute(out, 3));
   geo.userData.veinLit = lit;
@@ -1092,6 +1113,39 @@ export class Megastructures {
     const ground = (lx: number, lz: number, size: number) =>
       seatY(this.eco, x + lx * cy + lz * sy, z - lx * sy + lz * cy, size, CULL) - gy - 90;
 
+    /**
+     * The DRAWN ground under a local (x, z), in the group's own frame -- the
+     * local y at which a part's centre sits exactly ON the terrain.
+     *
+     * **`ground()` above is not this, and the difference is ninety metres.**
+     * It returns `seatY(here) - seatY(centre)`, a *relative* term: zero at the
+     * centre, negative where the Disc falls away. The masses want that, because
+     * their `at[1]` is already a height and the ground term only carries them a
+     * third of the way toward their own terrain. But the group origin is sunk
+     * 90 m to bury the masses' feet, and everything else in this method was
+     * placed at `ground() + a small lift` -- which composes to
+     * `seatY(here) - 90 + lift`.
+     *
+     * Measured with `probes/discglow.mts`: that put the whole apron and the
+     * whole rim ring **under the terrain**, and it is why the docstring three
+     * blocks down can say "no capture in this project has ever shown a crater
+     * rim here" while the code above it explains at length what the rim is for.
+     * A 30-96 m apron shard lifted by `s * 0.3` is still 60-81 m down. A crater
+     * with no rim is a hill, and a hill is what a blind judge said this was.
+     *
+     * `seatLocal` is the lower envelope of every clipmap ring that could draw
+     * the point -- right for a block that stands on the ground, because the
+     * alternative is a block hovering over a chord. `coverLocal` is the upper
+     * one, which is what `Seat.ts` says to use for a flat thing whose whole job
+     * is to be *seen* against the ground: seat a fissure on the lower bound and
+     * you get pixels in the frustum that never pass the depth test.
+     */
+    const seatLocal = (lx: number, lz: number, size: number) =>
+      seatY(this.eco, x + lx * cy + lz * sy, z - lx * sy + lz * cy, size, CULL) - gy;
+    /** @see seatLocal */
+    const coverLocal = (lx: number, lz: number, size: number) =>
+      coverY(this.eco, x + lx * cy + lz * sy, z - lx * sy + lz * cy, size, CULL) - gy;
+
     // Five masses, not one with two attendants.
     //
     // The thing that made this a dome was that mass A was 330 m and B and C
@@ -1222,7 +1276,12 @@ export class Megastructures {
         // axis is Z, so the yaw takes +Z onto it.
         const out = Math.atan2(pz, px);
         B.add(M.meteorGlow, new THREE.BoxGeometry(wid, 34, len),
-          mat4([px, ground(px, pz, len) + 5, pz],
+          // `coverLocal`, the UPPER drawn envelope: a fissure is a flat thing
+          // whose entire job is to be seen against the ground, and the lower
+          // envelope is how you get pixels in the frustum that fail the depth
+          // test. Centre 5 m proud of a 34 m box, so the terrain cuts it and
+          // what renders is a band following the slope.
+          mat4([px, coverLocal(px, pz, len) + 5, pz],
             [rng.gauss(0, 0.05), -out + Math.PI / 2, rng.gauss(0, 0.05)]));
       }
     }
@@ -1254,7 +1313,7 @@ export class Megastructures {
       const s = rng.range(30, 96) * (1.25 - 0.5 * t);
       const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
       B.add(M.stone, shard(2300 + i, s, [1.3, 1.6, 1.0], 0.5),
-        mat4([px, ground(px, pz, s) + s * 0.3, pz],
+        mat4([px, seatLocal(px, pz, s) + s * 0.3, pz],
           [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
     }
 
@@ -1290,7 +1349,7 @@ export class Megastructures {
       // instead of as forty separate stones.
       const out = Math.atan2(pz, px);
       B.add(M.stone, shard(2500 + i, s, [1.55, 0.86, 1.05], 0.42),
-        mat4([px, ground(px, pz, s) + s * 0.16, pz],
+        mat4([px, seatLocal(px, pz, s) + s * 0.16, pz],
           [rng.gauss(0.18, 0.16), out + Math.PI / 2 + rng.gauss(0, 0.35), rng.gauss(0, 0.22)]));
     }
 
@@ -1340,7 +1399,7 @@ export class Megastructures {
       // the night value clears bloom's 1.45 post-exposure threshold with room,
       // and the day value sits under it so the Disc is a rock at noon with a
       // seam of colour in it rather than a lamp.
-      this.mats.meteorSkin.userData.uGlow.value = 1.15 + 2.2 * night;
+      this.mats.meteorSkin.userData.uGlow.value = 0.85 + 2.35 * night;
       this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
     }
   }
