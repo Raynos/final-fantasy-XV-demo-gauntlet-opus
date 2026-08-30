@@ -111,6 +111,30 @@ const WATCH = `(() => {
   watchLabel();
 })()`;
 
+/**
+ * Let whatever the page deferred actually land, before READ looks.
+ *
+ * `waitForFunction` returns the instant `GAME.ready` flips, and a tier deferred
+ * past the first frame has by construction not started yet at that moment. So
+ * reading immediately makes a deferred artifact **indistinguishable from one
+ * that is never fetched at all** — the report would say "0 MB deferred" whether
+ * the tiering worked or the file was missing, which is the one distinction this
+ * tool exists to make. Waiting costs nothing that matters: `transferFF` is cut
+ * at the first frame, so nothing that lands in here can be charged to it.
+ */
+const SETTLE = `(async () => {
+  const n = () => performance.getEntriesByType('resource').length;
+  const t0 = performance.now();
+  let last = n(), quiet = performance.now();
+  while (performance.now() - t0 < 8000) {
+    await new Promise((r) => setTimeout(r, 100));
+    const c = n();
+    if (c !== last) { last = c; quiet = performance.now(); }
+    else if (performance.now() - quiet > 750) break;
+  }
+  return n();
+})()`;
+
 const READ = `(() => {
   const w = window.__cold;
   cancelAnimationFrame(w.rafId);
@@ -193,7 +217,7 @@ function report(name: string, r: ColdRead, wallMs: number, readyMs: number) {
     + `   (first frame at ${r.firstFrame == null ? 'never — no rAF observed ready' : `${(r.firstFrame / 1000).toFixed(2)} s`})`);
   const after = r.transfer - r.transferFF;
   console.log(`  deferred past first frame  ${MB(after)} in ${r.requests - r.requestsFF} requests`
-    + (after > 500000 ? '' : '   (nothing meaningful is deferred yet)'));
+    + (after > 500000 ? '   <-- off the first frame\'s bill' : '   (nothing is deferred)'));
   for (const b of r.big) {
     console.log(`      ${MB(b.t).padStart(9)} on the wire, ${MB(b.d).padStart(9)} decoded`
       + `  ${((b.end - b.start) / 1000).toFixed(2)} s  ${b.n}`
@@ -382,6 +406,7 @@ async function main() {
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 600000 });
       const wall = Date.now() - t0;
       const readyMs = await page.evaluate('performance.now() - window.__cold.t0') as number;
+      await page.evaluate(SETTLE);
       const r = await page.evaluate(READ) as ColdRead;
       report(i === 0 ? 'FIRST VISIT — empty HTTP cache' : `reload ${i} — warm HTTP cache`, r, wall, readyMs);
       if (GATE && i === 0) failed = !gate(r, readyMs);
