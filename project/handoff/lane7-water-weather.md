@@ -325,3 +325,41 @@ Read with the Read tool. No page errors, so every program linked.
   the framing that would answer it and its ground is tarmac too. **A framing
   over bare terrain under a storm still does not exist**; that is the one thing
   left to prove for task 24.
+
+## Correction, and the last thing found (2026-08-31, end of session)
+
+**The Vesperpool is one of the four flood-filled SEA basins, not a tarn.** Its
+level is the global −6.5 and its `waveScale` is therefore ~1, so `fk` was 1 on
+it all along and the corduroy on `vesper_low.jpg` was **never** a fetch-scaling
+artefact — `e082127`'s message implies otherwise and is wrong on that one point.
+The crosshatch finding is correct for the Maidenwater, which is a real tarn.
+What actually improved the Vesperpool was `calmFar` and the reflection-distortion
+cut. This is exactly the LANDMINES pattern — a correct negative, an inference
+from it that was never itself tested — caught only because
+`probes/l7frames.mts` printed the bodies.
+
+`Water.bodies` on this seed: **four `sea` basins** (`_findBasins` slices to
+four) plus one per authored fishing pin. A plain sort by area returns four
+frames of the same ocean and no pond at all, which is what the probe's first run
+did; it picks two seas and three tarns now.
+
+**`Water.riverJoins` came back EMPTY** while `riverStats` reported 1837 stations
+over 9 reaches. Either this seed's routing finds no confluence, or `riverJoins`
+is not being populated — and `Water.ts:150`'s docstring says it is published
+*specifically* because a confluence is the one thing no corpus shot can show.
+Worth ten minutes from whoever takes the river half of task 25.
+
+**The last defect found, and it was mine.** `tmp/shots/l7/f3/l7-body1-sea.jpg`
+— the first bank-height frame ever taken of a sea body — has a row of hard
+rectangular blocks along the far waterline and a blocky quantised mottle through
+the shallows. `wf_bed` interpolates the height field's cells, so it returns a
+piecewise-bilinear surface, and **any fixed contour of one follows the cell
+edges**. `9f5dd37` put a 6 cm contour of exactly that field into the alpha.
+`cf41e2f` breaks the threshold up with `churn`, the 11.8 m wave noise the foam
+band already uses, over 0.04–0.46 m.
+
+**Not verified — this is the next frame to read**, `tmp/shots/l7/f4/`. And be
+careful with the far-waterline blocks specifically: they are at the ~4 m pitch
+of the grid, but `water/Shore.ts`'s ribbon rows and the clipmap's own stitching
+are both candidates and **neither has been ablated**. `--hide` the shore ribbon
+first. Do not read `cf41e2f`'s message as having settled it.
