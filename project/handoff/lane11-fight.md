@@ -138,10 +138,77 @@ with it — ×1.28 HP, ×1.18 damage — and `denLevel`'s clamp, already written
 imperial round at all: that is an authored `SpawnTables` territory and does not
 go through `denLevel`.
 
+## At `7041897` — **verified**, five rounds, one no-den
+
+```
+duration      21.4 24.9 14.3 10.5  ->  MEDIAN 17.8 s
+hp paid %     14.3 45.5  2.5  7.7  ->  MEDIAN 11.0 %
+```
+
+but **round 5 was not a fight**: `ended: nobody-within-45m, pack dead 0/5`. Its
+four kills belonged to some other group while the pack under measurement walked
+away, and `kills > 0` let it into the median as "a fight that ended in 10.5 s"
+when it was a fight that did not end. `b24d958` makes a round count only when
+the pack it measured *died*, prints the dropped rounds with their reason, and
+prints the unfiltered median underneath — dropping rounds moves the headline, so
+the filter has to be arguable.
+
+Over the three rounds that finished: **median 21.4 s (PASS)** and **14.3 % (0.7
+points short)**.
+
+The spread is not noise, it is two different spawn paths:
+
+| | level | pack | den HP | duration | HP paid |
+|---|---|---|---|---|---|
+| wild sabertusk (`WildTerritories`) | 32 | 5 | 16 935 | 21.4 s | 14.3 % |
+| wild voretooth (`WildTerritories`) | 31 | 6 | 19 632 | 24.9 s | **45.5 %** |
+| authored den (`SpawnTables`) | 23 | 4 | 6 500 | 14.3 s | 2.5 % |
+
+The wild dens clear the bar comfortably. The authored one does not, and it is
+short and safe for two reasons this lane could only fix one of: its **level**
+(fixed — `PARTY_LIFT` 0.8 → 1.0 in `b24d958`, because `LEVEL_LIFT` had meanwhile
+put wild dens 3–5 *over* the party while authored ones sat 4 *under* it, a
+nine-level disagreement falling the wrong way round) and its **count**, which
+lives in `SpawnTables.ts` and belongs to lane 18.
+
+## I looked at the frames — and they were not good
+
+Nine frames of round 1 (`tmp/shots/lane11/`, sabertusk den, Longwythe), read one
+at a time. The environment art holds up — ochre badlands, haze, windmill and
+mountain silhouettes. The encounter did not:
+
+- **enemies interpenetrated.** Midfight had one sabertusk's body passing through
+  another's torso and a third's head lying inside a fourth; the stagger frame had
+  two or three stacked on top of each other at the frame edge. They clumped into
+  **one screen quadrant** and never encircled — a queue, not a hunt.
+- **`f-engage` was unusable**: the camera was fully inside a boulder, the whole
+  frame dark rock with five floating nameplates in it.
+- HUD stacked: nameplates landing on the tech list and the Armiger bar, three
+  reward toasts overlapping each other and the damage numbers (169 drawn on 431).
+- two character-inside-character clips (Noctis sharing volume with a companion in
+  `f-victory` and `f-after`), Noctis' feet inside a rock slab at 28 m.
+- a blown-out white radial ground splat in `f-midfight` and `f-kill` that smears
+  across the terrain.
+- **the danger change is visible and correct**: `f-victory` shows Ignis at
+  1 702/3 591 and Gladio at 2 838/4 825. The party is chewed.
+
+The interpenetration was **mine**, and `b24d958` fixes it: `Pack._reslot` spread
+every live member around *one* ring by its index in `members`, so the four
+engaged animals of a six-animal den got whatever four bearings their array
+positions gave them — 60° apart on a circle a metre and a half across, and a
+sabertusk is a metre wide. `EnemyBase._chase`'s own comment calls the slot ring
+"the whole difference between a pack and a queue"; the slots simply were not
+being handed out that way. Attackers now get the inner ring evenly to
+themselves, flankers the outer ring, half a slot out of phase — and `_reslot`
+runs on every path that mutates `engaged`, not only on add/remove/death.
+
+**Not re-looked yet** after that fix. A run with `--shot tmp/shots/lane11b/` is
+in flight; whoever picks this up must read those frames before calling it done.
+
 ## Not verified yet
 
-- the `7041897` median (run in flight, with `--shot tmp/shots/lane11/`)
-- the frames — captured but **not looked at yet**
+- the `b24d958` median and frames (run in flight, `tmp/shots/lane11b/`)
+- `combatloop` at `b24d958` (verified 35/35 at `4a588f4`; re-run in flight)
 - both perf gates — **not taken**; must be behind `daemon.mts --wait
   exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
