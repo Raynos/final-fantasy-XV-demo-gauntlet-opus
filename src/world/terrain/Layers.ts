@@ -54,9 +54,9 @@ export const DETAIL_LAYERS = 4;
 export const LAYER_AVG = [
   [0.538, 0.328, 0.172],   // sand   – red ochre
   [0.202, 0.122, 0.068],   // dirt   – dry cracked earth
-  [0.148, 0.124, 0.101],   // gravel – grey-brown scree
+  [0.140, 0.125, 0.111],   // gravel – grey scree, warm and cool stones mixed
   [0.128, 0.083, 0.059],   // rock   – rust / ash strata
-  [0.166, 0.114, 0.057],   // grass  – bleached khaki scrub
+  [0.162, 0.115, 0.056],   // grass  – bleached khaki scrub
   [0.251, 0.213, 0.155],   // road   – pale compacted dirt
 ];
 export const LAYER_ROUGH = [0.95, 0.92, 0.88, 0.82, 0.94, 0.86];
@@ -191,10 +191,31 @@ const RECIPES = [
     const tint = w.id;
     const grain = fbm(u, v, 84, 84, 63, 2);
     const shade = mix(0.80, 1.14, tint) * mix(0.94, 1.06, grain);
+    // **The one place in this file where a second hue lives, and it used to be
+    // wasted.** Measured with `huestat.mts`, every one of the six recipes' mean
+    // linear albedos sat between hue 21 and 36 degrees -- sand 26, dirt 24,
+    // gravel 29, rock 21, grass 31, road 36 -- so the splat could switch
+    // material all day and the frame's hue never moved. That is "one hue per
+    // frame" at its source, upstream of every zone tint.
+    //
+    // Scree is the honest place to fix it: a badland's talus is broken country
+    // rock and ash, and it reads grey-blue against rust soil in every FFXV
+    // Leide plate. The `warm` hash already picked per-cell between a cool and a
+    // warm pebble, but the cool end carried a chroma of 0.023 against the warm
+    // end's 0.167, so the *mean* -- which is all a pixel past ~40 m ever sees
+    // -- came out warm at 32 degrees and the cool pebbles were invisible. The
+    // cool end now carries a real 0.078 of chroma at hue 220 and the warm end
+    // is left exactly as it was, so the mean moves from 32 degrees at 0.072 of
+    // chroma to 32 degrees at 0.044: up close the scree is a genuine mix of
+    // grey-blue and rust stones, and far away it is the grey-brown a mix of
+    // those two actually is. A first cut ALSO cooled the warm end, and on
+    // zone_vannath's prairie -- which is mostly this layer -- the sunlit dry
+    // grass went from warm tan to a cold olive-grey that read as an overcast
+    // day at 17.2 h. The warm half of the mix is doing real work.
     const warm = hash2(Math.floor(u * 12), Math.floor(v * 12), 77);
-    const r = mix(0.375, 0.485, warm) * shade;
-    const g = mix(0.375, 0.418, warm) * shade;
-    const b = mix(0.398, 0.318, warm) * shade;
+    const r = mix(0.352, 0.485, warm) * shade;
+    const g = mix(0.378, 0.418, warm) * shade;
+    const b = mix(0.430, 0.318, warm) * shade;
     return { height, color: [r, g, b], rough: mix(0.94, 0.68, tint), ao: mix(0.40, 1.0, Math.pow(dome, 0.55)) };
   },
   // 3 — sedimentary rock: irregular beds + vertical jointing (triplanar; v = world Y)
@@ -266,7 +287,16 @@ const RECIPES = [
     const height = clamp01(cover * (0.42 + 0.58 * strand) * 0.85 + fbm(u, v, 32, 32, 149, 3) * 0.2);
     const dirtR = 0.415, dirtG = 0.340, dirtB = 0.258;
     const t = clamp01(strand * 0.8 + clump * 0.5);
-    const gr = mix(0.455, 0.665, t), gg = mix(0.410, 0.590, t), gb = mix(0.250, 0.340, t);
+    // Khaki, as this recipe's own name has always claimed. It was authored at
+    // hue 46-47 degrees, which is amber -- the same family as the sand and the
+    // dirt it is meant to read against -- and `FFXV-field`'s ground slices put
+    // their dominant hue at 60 degrees, olive. Rotated to 52-55 -- khaki, half
+    // way, not olive -- at **matched Rec.709 luma** (0.409 and 0.594 either
+    // end, within 0.006 of the values it replaces), so this is a hue change and
+    // not a brightness change, which is the distinction `?post=gwarm` exists to
+    // police. Going the whole way to 62 turned Leide's scrub the colour of
+    // Duscae's, which is a region confusion and not a fix.
+    const gr = mix(0.432, 0.645, t), gg = mix(0.418, 0.605, t), gb = mix(0.248, 0.330, t);
     const c = cover * clamp01(0.35 + strand);
     return {
       height,
