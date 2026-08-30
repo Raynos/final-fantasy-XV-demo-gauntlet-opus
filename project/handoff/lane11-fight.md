@@ -221,6 +221,66 @@ Scratch: `tmp/lane11-dmgmath.mts`.
 
 ## Residue / cross-lane
 
+Everything below was found by this lane, is outside its files, and is written to
+be pasted into `project/TASKS.md` as-is.
+
+### FOR LANE 18 — `src/game/encounters/SpawnTables.ts`
+
+- **Authored territory counts are the last thing between this lane and its
+  exit.** A wild den now draws 5–8 hostiles and runs 21–25 s; an authored one
+  drew 4 and ran 14.3 s. `WildTerritories`' hostile roster lines were taken two
+  deeper on both ends (`[3,5] → [5,7]`, `[4,7] → [6,9]`); the same treatment on
+  `SpawnTables`' hostile `count` fields would close it. **Leave the passive
+  lines alone** — anaks, garulas and dualhorns are the largest meshes in the
+  roster and buy skinned rigs, not a fight.
+- The six explicit `maxEngaged: 3` overrides (lines 161, 194, 213, 221, 227, 237
+  as of `66b354ad`) are now *equal to* `Pack`'s default, which this lane raised
+  2 → 3. They can be dropped, or taken to 4 for the larger patrols — the wild
+  dens use 4.
+
+### For whoever owns the encounter camera
+
+`f-engage` of `tmp/shots/lane11/` is **the camera fully inside a boulder** — the
+whole frame is dark rock with five enemy nameplates floating in it. This is the
+frame where the fight starts, and it is unusable. `CameraRig` has no collision
+push-out against world props at combat framing distance.
+
+### For whoever owns the HUD
+
+The density increase this lane landed (5–8 animals instead of 3–5) breaks HUD
+layout, visibly: enemy nameplates land on top of the technique list and the
+Armiger bar, a nameplate collides with the minimap's zone label, three reward
+toasts (`+136 GIL`, three `+2 · stagger` ability-point lines) overlap each
+other, and floating damage numbers are drawn on top of one another (169 on 431).
+Nameplates and toasts need collision/stacking rules before this reads as AAA.
+
+### For whoever owns `Party` / `PartyAI`
+
+- **Two characters standing inside each other**, twice: `f-victory` and
+  `f-after` both show Noctis sharing volume with a companion, two torsos in one
+  space. There is no separation force between party members at rest.
+- The retinue does **60–70 % of a fight's damage** (`damage by: ignis 32 %
+  gladio 31 % warp 22 % noctis 8 %` in one round). `probes/dpsshare.mts` says
+  Noctis should be 64 % at full uptime. Party throughput is the other half of
+  the duration lever named in `WildTerritories`' own comment, and it lives in
+  `src/characters/ai/PartyAI.ts`, which this lane does not own.
+
+### For `src/combat/GroundFX.ts` — this lane's file, not done
+
+A large white radial ground splat blows out the centre of `f-midfight` and
+`f-kill` and smears across the terrain to the right. With more kills per fight
+it fires more often. Not chased — no turns left — and no ablation was run, so it
+is **not diagnosed**, only observed.
+
+### Not taken, deliberately
+
+`BossFight.ts` 3 → 4 engage tokens was on the plan's lever list. Lane 17's
+Keycatrich Magitek Commander round is new and is a Definition-of-Done content
+bar, and this lane had no instrument pointed at a boss fight — `fightshape`
+walks into wild dens. Changing boss pacing blind was not worth the risk.
+
+### Old residue
+
 - **FOR LANE 18 (`SpawnTables.ts`)** — pack sizes there were not touched. The
   authored territories now inherit `Pack`'s default of 3 engage tokens instead
   of 2; the six explicit `maxEngaged: 3` overrides (lines 161, 194, 213, 221,
