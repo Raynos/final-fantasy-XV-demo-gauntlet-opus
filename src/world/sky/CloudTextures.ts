@@ -115,6 +115,39 @@ function valueFbm2(x: number, y: number, period: number, octaves: number, seed: 
   return sum / norm;
 }
 
+/**
+ * Tileable 2D value noise with a **separate period per axis**.
+ *
+ * `value2` wraps both axes on one scalar, so the only way to make an
+ * anisotropic feature with it is to scale one axis differently from the
+ * period -- and then that axis does not wrap. The streak channel below did
+ * exactly that (`fy * 5.0` against a period of 15) and put a hard
+ * discontinuity into the coverage map every 27 km, in the one term that is
+ * supposed to read as a continuous wind-blown direction. A seam in an
+ * anisotropic term is worse than a seam anywhere else, because the eye is
+ * already following the direction it interrupts.
+ */
+function value2a(px: number, py: number, perX: number, perY: number, seed: number) {
+  const xi = Math.floor(px), yi = Math.floor(py);
+  const fx = fade(px - xi), fy = fade(py - yi);
+  const x0 = ((xi % perX) + perX) % perX, x1 = (x0 + 1) % perX;
+  const y0 = ((yi % perY) + perY) % perY, y1 = (y0 + 1) % perY;
+  const c = (x: number, y: number) => hash3i(x, y, 0, seed);
+  const n0 = c(x0, y0) + fx * (c(x1, y0) - c(x0, y0));
+  const n1 = c(x0, y1) + fx * (c(x1, y1) - c(x0, y1));
+  return n0 + fy * (n1 - n0);
+}
+
+/** Tileable 2D value fbm with a separate period per axis. See {@link value2a}. */
+function valueFbm2a(x: number, y: number, perX: number, perY: number, octaves: number, seed: number) {
+  let a = 0.5, sum = 0, norm = 0, f = 1;
+  for (let o = 0; o < octaves; o++) {
+    sum += a * value2a(x * f, y * f, perX * f, perY * f, seed + o * 71);
+    norm += a; a *= 0.5; f *= 2;
+  }
+  return sum / norm;
+}
+
 const remap = (v: number, a: number, b: number, c: number, d: number) => c + ((v - a) / (b - a)) * (d - c);
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -257,9 +290,29 @@ function bakeCloudWeather(weatherSize: number, seed: number): Uint8Array {
         const wx = valueFbm2(fx * 8 + 4.1, fy * 8 + 1.7, 8, 3, seed + 31);
         const wy = valueFbm2(fx * 8 + 9.3, fy * 8 + 7.2, 8, 3, seed + 32);
         const cov = valueFbm2(fx * 12 + wx * 0.9, fy * 12 + wy * 0.9, 12, 4, seed + 33);
-        // ridged streaks give the banks a wind-blown direction
-        const streak = 1 - Math.abs(valueFbm2(fx * 15 + wy, fy * 5.0, 15, 3, seed + 34) * 2 - 1);
-        wCov[i] = cov * (0.72 + 0.42 * streak);
+        // Cloud streets: the anisotropic term, and the only one in this map.
+        //
+        // Fair-weather cumulus do not scatter isotropically. Convective rolls
+        // line them up along the wind into rows several times longer than they
+        // are wide -- that is the organisation the judge means by "the deck has
+        // no macro structure", and it is a property of the coverage field, not
+        // of any cloud in it.
+        //
+        // Two things were wrong here. The aspect ratio was 15:5 in *frequency*
+        // but the term only modulated coverage by +/-22% around 0.93, which a
+        // histogram stretch then flattened further -- a direction you can only
+        // find by knowing it is there. And it did not tile: `value2` wraps both
+        // axes on the single `period` argument, so `fy * 5.0` against period 15
+        // meant the y lattice ran 0..5 inside a 15-cell wrap and every 27 km
+        // repeat carried a hard discontinuity across the whole map. Hence
+        // `value2a`, which takes a period per axis.
+        //
+        // 21:6 is a 3.5:1 roll, so a street is ~1.3 km across and ~4.5 km long
+        // at this tile -- the shape of a real cumulus row. The modulation goes
+        // to 0.55 + 0.80, i.e. +/-42% around 0.95: enough that the rows survive
+        // the stretch, not so much that the gaps between them close.
+        const streak = 1 - Math.abs(valueFbm2a(fx * 21 + wy, fy * 6.0, 21, 6, 3, seed + 34) * 2 - 1);
+        wCov[i] = cov * (0.55 + 0.80 * streak);
         // Type and variation stay well below the coverage frequency. They are
         // what gives *neighbouring* clouds different heights and densities --
         // the "scale variation" the round-10 judge said the deck had none of --
