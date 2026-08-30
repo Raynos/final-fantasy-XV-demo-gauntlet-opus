@@ -46,6 +46,15 @@
  * Absolute values only mean something against the same ROI on the same shot,
  * which is why the ROI table below is fixed per shot and checked in. Change a
  * box and every recorded number in `project/handoff/lane4-clouds.md` is void.
+ *
+ * **It does not work on a desaturated sky, and it does not say so.** The split
+ * needs the ROI to be bimodal in saturation, which a blue sky with white cloud
+ * in it is and an overcast slab, a storm or a fog bank is not: there the Otsu
+ * threshold lands on noise and `cov%` flips between ~5 % and ~95 % between two
+ * captures of the same shot that look identical. Measured, `storm` at
+ * `7da60d5` against `storm` at HEAD: cov 5.4 % against 94.5 %, which is the
+ * classifier and not the deck. Use it on clear-weather shots; judge the heavy
+ * presets by eye, or give this tool a chroma-independent mask first.
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { statSync } from 'node:fs';
