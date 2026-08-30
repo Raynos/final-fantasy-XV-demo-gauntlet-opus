@@ -611,8 +611,16 @@ const QUEST_TABLE: Quest[] = [
   },
   {
     id: 'side_chocobo', type: 'side', name: 'The Ever Elusive Chocobo',
-    region: 'duscae', level: 15, giver: 'Wiz', requires: ['main_ch3_deadeye'],
-    summary: 'With Deadeye dead the chocobos will come back — if somebody goes and finds one.',
+    // **No gate.** This used to require `main_ch3_deadeye`, which made the one
+    // quest that hands over the chocobo whistle unreachable for the first
+    // three chapters -- and the whistle is now in `STARTING_ITEMS`, because the
+    // mount is the fun/fast-movement layer and the plan is explicit that it has
+    // no unlock. A prerequisite on a quest whose reward you already hold is a
+    // gate on nothing. It is re-keyed to quest state and nothing else: Wiz's
+    // rows read `questStatus(game, 'side_chocobo')`, the POI `gate:` field lane
+    // 17 deleted repo-wide is not resurrected, and no chapter is consulted.
+    region: 'duscae', level: 15, giver: 'Wiz', requires: [], autoAvailable: true,
+    summary: 'Half of Wiz\'s stock will not come in off the pasture, and one of them will not be moved by anybody it does not know.',
     // **The escort verb is cut, not wired.** An escort is a follower with
     // pathing, a leash, a fail state and a death check, and none of that
     // exists; half of it is a chocobo that walks into a rock and fails the
@@ -625,7 +633,10 @@ const QUEST_TABLE: Quest[] = [
       reach('find', 'wiz_paddocks', 'Find the stray out at the paddocks', at('wiz_paddocks'), 20),
       talk('back', 'wiz', 'Tell Wiz she is on her way in', at('wiz_chocobo')),
     ],
-    rewards: { gil: 1800, exp: 3400, ap: 20, items: [{ id: 'chocobo_whistle', count: 1 }, { id: 'sylkis_greens', count: 3 }] },
+    // The whistle is no longer a reward -- you started with it. What Wiz pays
+    // instead is the sylkis that buys the first feed tier at her own stable,
+    // and (in `ChocoboHub`) a dye on the house.
+    rewards: { gil: 1800, exp: 3400, ap: 20, items: [{ id: 'sylkis_greens', count: 4 }] },
   },
   {
     id: 'side_power_play', type: 'side', name: 'Power Play',
