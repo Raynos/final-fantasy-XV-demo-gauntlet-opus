@@ -75,6 +75,30 @@ plateau) — either way, published. Same for the playtest bar: a session
 reporting ≥3 broken feels queues its ranked list into lane 12, the fixes
 land, and another session runs.
 
+## §5 — For the coordinator who staffs this tonight
+
+The human starts the build manually with a fresh agent at ~02:20 CEST.
+Coordinator: read `CLAUDE.md`, `project/LANDMINES.md`, then this file — it
+is the whole brief. Staff waves of 6–8; suggested composition, honoring
+rule 4:
+
+- **Wave 1:** lanes 1 (rig/), 3 (veg + `Shots.ts`), 4 (sky), 5 (terrain),
+  17 (game/rpg + dungeons + map screen), 19 (town/CityHub + Shops + Npcs),
+  10 (ui + vehicle), 13 (engine).
+- **Wave 2:** lanes 2, 6, 7, 18, 11, 14, 15, 16.
+- **Wave 3:** lanes 22 (chocobo), 23 (swim), 21 (content shots — only
+  after lane 3 releases `Shots.ts`), 20 (Meteor — staff LAST), 12 (idle
+  until R2).
+
+**Serialization the lane split can't express:** `Quests.ts` is touched by
+17, 18 and 19 — 17 owns it first; 18 and 19 land their quest rows after
+17's spine commits (or hand rows to 17 as explicit-pathspec patches).
+`PoiKits.ts`: lane 19's H2 anchor export is a small first commit; lane 18's
+sector kits go after it. **Overrun cut order (human decision): lane 20
+(Meteor) is cut first; everything else ships.** Each lane keeps
+`project/handoff/<lane>.md` current and respawns from it at the ~3 h/150-
+turn stop.
+
 ---
 
 # Part A — Presentation, in the judge's own order
@@ -192,10 +216,13 @@ rendered — all 22 slabs are entombed). This is authored-art work on the
 Disc: silhouette, crater material, exposed impact glow, whatever makes the
 strike legible.
 
-28. **Re-art the Disc until the frame reads as an impact.** Done: a blind
-    A/B of `landmark_meteor` against its plate hesitates in the next judged
-    round — or the lane closes with a measured negative and the decision
-    returns to the human with the evidence. Size M/L.
+28. **Re-art the Disc as a glowing wound** (direction chosen by the human):
+    exposed molten-blue crystal fissures in the crater, visible from the
+    highway at night — pairing with the `lest_overlook_disc` judged shot.
+    Done: a blind A/B of `landmark_meteor` against its plate hesitates in
+    the next judged round — or the lane closes with a measured negative and
+    the decision returns to the human. Size M/L. **First cut on overrun
+    (§5).**
 
 # Part B — Playable
 
@@ -259,6 +286,9 @@ has no danger.
 boots `?q=ultra`), from 1 246 MB.
 
 ## Lane 14 · First load — `src/engine/TexBake.ts`, `GeoBake.ts`, `src/tools/bake.mts`, `coldload.mts`
+
+**Human decision at lock: the demo launches on a public URL** — this lane
+is mandatory, and the DoD gains a deploy step.
 
 42. **Instrument first:** `coldload` measures bytes to `GAME.ready`, not
     first frame — add the marker or re-spec the exit honestly.
@@ -547,5 +577,7 @@ respawns. First staffing: 2026-08-31 ~02:20 CEST.
       ≥2 fooled (judged set includes the five city PAIRING rows) or a
       measured plateau; playtests until <3 broken-feel reports or the same
       plateau — with the numbers, whichever way they fall.**
+- [ ] **Deployed to a public URL, and `coldload` run against the deployed
+      origin.**
 - [ ] This file archives when §4 is satisfied and the lanes report. No
       section may be added to it.
