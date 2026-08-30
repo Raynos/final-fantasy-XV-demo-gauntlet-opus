@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
+import { Noise } from '../../util/Noise.ts';
 import { bakedParts, matResolver, PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, curtainMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import { rockGeometry } from './Rocks.ts';
@@ -258,6 +259,133 @@ function meteorMass(seed: number, r: number, stretch: number[]) {
 }
 
 /**
+ * Patch a `MeshStandardMaterial` so it adds a per-vertex `aEmissive` attribute
+ * into its emitted radiance, scaled by one shared `uGlow` uniform.
+ *
+ * This is the mechanism the Meteor's whole failure history turns on, so it is
+ * worth being precise about why it is not `meteorGlow`. A *separate emissive
+ * solid* placed where the rock also is can be entombed, and was: all 22 fissure
+ * slabs sat at the midpoint of two mass centres, and with masses r 165-300 m at
+ * centres 300-360 m apart every midpoint is inside both bodies. Cranking the
+ * emissive x40 lit exactly nothing, twice, from two different shots, because
+ * forty times an invisible thing is still invisible.
+ *
+ * A vertex attribute cannot fail that way. **The lit vertices ARE the visible
+ * surface** -- if you can see the rock you can see the vein, and occlusion is
+ * not a thing that can happen to it. It costs one extra draw call (the masses
+ * leave the shared `stone` batch for their own material) and one Float32x3 per
+ * vertex, which against 125 000 triangles of landmark is nothing at all.
+ *
+ * `enableVertexEmissive` in `combat/GeoKit.ts` does the same patch for
+ * creatures and weapons, and this is deliberately not a call to it: that one
+ * has no uniform, and `material.emissiveIntensity` does **not** scale
+ * `totalEmissiveRadiance` once a term has been added to it directly -- so a
+ * night ramp written the obvious way would silently do nothing to the veins.
+ * `uGlow` is that ramp, and `update()` drives it.
+ *
+ * @param material patched in place
+ * @returns the same material, with `userData.uGlow` exposed for the ramp
+ */
+function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
+  const uGlow = { value: 1 };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uGlow = uGlow;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 aEmissive;\nvarying vec3 vEmissive;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmissive = aEmissive;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uGlow;\nvarying vec3 vEmissive;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmissive * uGlow;');
+  };
+  // Its own key, NOT GeoKit's `vertexEmissive`: two programs that differ by a
+  // uniform declaration must not share a cache entry.
+  material.customProgramCacheKey = () => 'megaVertexEmissiveGlow';
+  material.userData.uGlow = uGlow;
+  return material;
+}
+
+/**
+ * The wound: molten fissures stamped onto a Meteor mass's own surface.
+ *
+ * Writes `aEmissive` per vertex on a geometry that is about to go into the
+ * `meteorSkin` batch. The field is a **domain-warped ridge** -- `1 - |fbm|`,
+ * which is bright only where the field crosses zero, so what it draws is a
+ * network of meandering *lines* rather than a field of blotches. Two octaves
+ * of it: wide trunks a two-kilometre camera can resolve, and a hairline set at
+ * three times the frequency and a third of the weight, which is what keeps the
+ * trunks from reading as painted stripes.
+ *
+ * **Width is the whole engineering constraint and it comes from the range.**
+ * Lestallum stands 2.33 km out at fov 30, which is 2.18 m per pixel; a vein has
+ * to be ten pixels to survive TAA and the distance haze, so **nothing narrower
+ * than about 22 m is worth authoring**. The ridge band's half-width in unit
+ * radius is roughly `1 / (k * |grad fbm|)`, and on a 585 m bounding radius that
+ * puts `k` in single digits -- hence 8.5, and not the 7.0 the gully incision
+ * uses for a crease that is *meant* to be sub-pixel.
+ *
+ * The colour is the human's direction: **molten blue**. A near-white-blue core
+ * with a warm halo at the band's edge, which is what a crack full of something
+ * hotter than the rock looks like -- the centre is white with heat and the
+ * shoulders are where it has cooled to orange. It is also the only chroma in a
+ * cold-hazed frame, which is what the Disc has never had.
+ *
+ * Values are authored so the core peaks at 1.0 and `uGlow` carries it past
+ * bloom's 1.45 post-exposure threshold at night without blowing out by day.
+ *
+ * @param geo consumed and returned, with `aEmissive` set
+ * @param seed the mass's own seed, so no two masses share a crack network
+ * @param k band tightness -- LOWER is wider. See the width note above.
+ * @param amp peak core radiance before `uGlow`
+ */
+function meteorVeins(geo: THREE.BufferGeometry, seed: number, k = 8.5, amp = 1) {
+  const n = new Noise(seed * 13 + 7);
+  const p = geo.attributes.position;
+  const count = p.count;
+  const out = new Float32Array(count * 3);
+  let yMin = Infinity, yMax = -Infinity, rMax = 1e-4;
+  for (let i = 0; i < count; i++) {
+    const y = p.getY(i);
+    if (y < yMin) yMin = y;
+    if (y > yMax) yMax = y;
+    rMax = Math.max(rMax, Math.hypot(p.getX(i), y, p.getZ(i)));
+  }
+  const h = Math.max(1e-4, yMax - yMin);
+  // Cycles per unit radius. 1.9 puts roughly three crack cells across a face,
+  // which on a 585 m mass is a trunk every ~200 m: a network, not a mesh.
+  const F = 1.9;
+  let lit = 0;
+  for (let i = 0; i < count; i++) {
+    const x = p.getX(i) / rMax, y = p.getY(i) / rMax, z = p.getZ(i) / rMax;
+    // Domain warp. Without it the zero set of an fbm reads as contour lines on
+    // a topographic map: smooth, parallel, and unmistakably a texture.
+    const wx = n.fbm3(x * 1.3 + 4, y * 1.3, z * 1.3 - 2, 2) * 0.6;
+    const wy = n.fbm3(x * 1.3 - 9, y * 1.3 + 6, z * 1.3, 2) * 0.6;
+    const f = n.fbm3(x * F + wx, y * F * 0.85 + wy, z * F - 3, 4);
+    const trunk = Math.max(0, 1 - Math.abs(f) * k);
+    const f2 = n.fbm3(x * F * 3.1 + 21, y * F * 3.1, z * F * 3.1 + 8, 3);
+    const hair = Math.max(0, 1 - Math.abs(f2) * k * 2.4);
+    // The crown took the shock and is the most shattered; it is also the only
+    // part of the cluster a 1.4 km camera can see over the foreground ridge,
+    // which is the same conclusion arrived at from the other direction.
+    const up = 0.55 + 0.45 * ((p.getY(i) - yMin) / h);
+    const t = Math.min(1, (trunk + hair * 0.34) * up);
+    if (t <= 0.001) continue;
+    lit++;
+    // `t*t` because a linear falloff off a ridge is a soft airbrushed smear;
+    // the square keeps the core hot and the halo thin.
+    const w = t * t * amp;
+    const core = THREE.MathUtils.smoothstep(t, 0.42, 0.95);
+    out[i * 3] = (1.00 * (1 - core) + 0.62 * core) * w;
+    out[i * 3 + 1] = (0.44 * (1 - core) + 0.87 * core) * w;
+    out[i * 3 + 2] = (0.14 * (1 - core) + 1.00 * core) * w;
+  }
+  geo.setAttribute('aEmissive', new THREE.BufferAttribute(out, 3));
+  geo.userData.veinLit = lit;
+  geo.userData.veinCount = count;
+  return geo;
+}
+
+/**
  * The shared material set, built once by {@link Megastructures.build}. A
  * function rather than a literal inside the class so {@link MegaMats} is the
  * set itself.
@@ -292,6 +420,26 @@ export function megaMaterials() {
      * and `PartBuilder.assertAttributeContract` is watching it either way.
      */
     stone: Object.assign(rockMaterial(0x8b7f6d, 0.95, false).clone(), { vertexColors: true }),
+    /**
+     * The Meteor's masses, and the only material in the world that reads a
+     * per-vertex `aEmissive`.
+     *
+     * Same rock as `stone` -- same map, same roughness, same vertex tint -- so
+     * the six masses look identical to the apron and the rim blocks they stand
+     * among. The single difference is {@link vertexEmissiveGlow}, which adds
+     * the vein attribute {@link meteorVeins} stamps into the emitted radiance.
+     *
+     * **It has to be its own material and that is not a preference.**
+     * `PartBuilder.merge` synthesises a missing `color` for a batch that has a
+     * coloured member and nothing else (`assertAttributeContract` watches the
+     * rest), so a mass carrying `aEmissive` dropped into the shared `stone`
+     * batch alongside the apron and rim shards makes `mergeGeometries` return
+     * **null on the attribute mismatch, silently**, and the whole Meteor
+     * vanishes. One extra draw call at four kilometres is not a cost worth
+     * discussing next to that.
+     */
+    meteorSkin: vertexEmissiveGlow(
+      Object.assign(rockMaterial(0x8b7f6d, 0.95, false).clone(), { vertexColors: true })),
     pale: concreteMaterial(0x8e8779, 0.94),
     /**
      * Insomnia's stock, and it reads vertex colours.
@@ -314,7 +462,19 @@ export function megaMaterials() {
     lamp: glowMaterial(0xffb066, 2.0, 0x100a06),
     beacon: glowMaterial(0xff3b21, 3.0, 0x140503),
     thruster: glowMaterial(0x63c8ff, 3.4, 0x040a12),
-    meteorGlow: glowMaterial(0xff8a2e, 2.2, 0x1a0d05),
+    /**
+     * The crust fissures torn through the crater floor, and they are BLUE now.
+     *
+     * Warm orange was the old reading of "still burning": a lava crack. The
+     * direction this landmark is authored to is a **crystal** wound -- the
+     * strike exposed something Solheim-adjacent under the crust -- so the core
+     * is a cold white-blue and the warm note survives only as the halo the
+     * vein colour ramp puts on the band's shoulders. That also buys the frame
+     * something orange never could: the Disc's basin is hazed cool, and a warm
+     * accent inside a cool haze reads as *distance*, while a cold accent reads
+     * as *light*.
+     */
+    meteorGlow: glowMaterial(0x9ad8ff, 2.6, 0x0a1420),
     windows: glowMaterial(0xffd9a0, 0.0, 0x555c67),
     /**
      * Lit stock on the Insomnia skyline.
@@ -944,9 +1104,13 @@ export class Megastructures {
     // between them — which is what the region is named for and what the old
     // silhouette never had.
     //
-    // The gaps are as authored as the masses. `CLEFT` records where each one
-    // is so the fissure glow can sit *in* the clefts instead of being sprayed
-    // around a circle and half-buried inside solid rock.
+    // The gaps are as authored as the masses -- but nothing emissive lives in
+    // them any more. `CLEFT` recorded seven cleft mouths so the fissure slabs
+    // could sit *in* the clefts; with masses this size at these centres the
+    // midpoint of two of them is inside both, and all 22 slabs were entombed
+    // from every camera at forty times their radiance. The masses' fissures
+    // are a per-vertex attribute now (`meteorVeins`), which is the same
+    // surface as the rock and therefore cannot be buried in it.
     const MASS: Array<[number, number, number[], Vec3, Vec3]> = [
       // seed   r    stretch (pre-cut)      position           tilt
       [2201, 300, [0.98, 1.34, 0.90], [0, 150, 0], [0.30, 0.2, -0.26]],
@@ -999,28 +1163,68 @@ export class Megastructures {
       // to keep the cluster from sitting on a plane and not enough to post them
       // into the hole: at 0.35, mass B's foot is still 251 m under the moat
       // floor (it was 308 m) and its crown clears the rim by 80 m.
-      B.add(M.stone, meteorMass(seed, r, stretch),
+      // `meteorSkin`, not `stone`: the masses carry the fissure network as a
+      // per-vertex attribute, and an `aEmissive` geometry in the shared stone
+      // batch makes `mergeGeometries` return null and takes the whole Meteor
+      // with it. See `megaMaterials().meteorSkin`.
+      B.add(M.meteorSkin, meteorVeins(meteorMass(seed, r, stretch), seed),
         mat4([at[0], at[1] + ground(at[0], at[2], r) * MASS_FOLLOW, at[2]], tilt));
     }
-    // Midpoints between neighbouring masses: the mouths of the clefts.
-    const CLEFT: Vec3[] = [
-      [-165, 130, 60], [155, 140, -75], [40, 105, 160], [-75, 175, -145],
-      [-90, 150, 20], [110, 100, 90], [-30, 190, -70],
-    ];
-    // Glowing fissures. A meteor that struck within living memory is still hot
-    // in its cracks, and this is the one warm accent in a cold-hazed distance —
-    // so it has to read as light coming *out of* the mass, which means the
-    // slabs belong in the clefts, tall and thin, not scattered on a circle.
-    for (let i = 0; i < 22; i++) {
-      const c = CLEFT[i % CLEFT.length];
-      const a = rng.next() * Math.PI * 2;
-      const gx = c[0] + rng.gauss(0, 22), gz = c[2] + rng.gauss(0, 22);
-      B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(5, 13), rng.range(22, 64), 5),
-        // The same partial follow the masses take. A cleft is a gap between two
-        // masses, so a glow slab that drapes onto the terrain while the masses
-        // it lights do not is a slab hanging in the daylight under them.
-        mat4([gx, c[1] + 15 + rng.gauss(0, 55) + ground(gx, gz, 40) * MASS_FOLLOW, gz],
-          [rng.gauss(0, 0.20), a, rng.gauss(0, 0.24)]));
+    // --- the wound: radial fissures torn through the crater crust ----------
+    //
+    // **The 22 slabs that used to live here never lit one pixel, from any
+    // camera, at forty times their authored radiance.** They were placed at the
+    // midpoints between neighbouring mass centres on the theory that a midpoint
+    // is a cleft; the masses run r 165-300 m at centres 300-360 m apart, so
+    // every midpoint is *inside both bodies*. `probes/meteorglow.mts` proved it
+    // and a vertex-seated re-placement failed the same test again, so the whole
+    // idea of a separate emissive solid living among the masses is closed. The
+    // masses' own fissures are a vertex attribute now (`meteorSkin`), which
+    // cannot be occluded by the thing it is painted on.
+    //
+    // What the boxes are worth instead is the half of the story the masses
+    // cannot tell: **the ground broke too.** An impact this size opens radial
+    // fissures running out from the point of strike, and unlike a cleft those
+    // are on open crater floor with nothing standing over them. Six spokes,
+    // four segments each, from the foot of the cluster out past the rim. Two of
+    // the spokes are laid on **1.9 and 4.6 radians**, which are exactly where
+    // the rim ring below deliberately breaks -- so from a stand outside the
+    // crater the fissure runs *through* the breach instead of dying behind a
+    // rampart, and the breach stops being an absence and becomes the thing the
+    // eye follows in.
+    //
+    // Each segment is a box that straddles the ground rather than sitting on
+    // it: 34 m tall with its centre 5 m proud, so the terrain cuts it and what
+    // renders is a bright band following the slope, which is a crack. A box
+    // *resting* on the ground is a glowing kerbstone.
+    const SPOKE = [0.35, 1.90, 2.55, 3.40, 4.60, 5.25];
+    for (let si = 0; si < SPOKE.length; si++) {
+      const a0 = SPOKE[si];
+      for (let j = 0; j < 4; j++) {
+        // 200 m to 1010 m: the inner two segments are on the moat floor at the
+        // masses' feet, the third climbs the inner rim wall and the fourth is
+        // out on the rim crest itself.
+        const t = j / 3;
+        const r = 200 + t * 810 + rng.gauss(0, 26);
+        // The spoke wanders as it runs out, the way a real crack does; the
+        // wander is proportional to distance so the near end stays aimed at
+        // the impact point.
+        const a = a0 + rng.gauss(0, 0.055) * (0.4 + t);
+        const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
+        // Long along the radial, and tapering: 30 m wide at the foot of the
+        // cluster down to 11 m out on the rim. At the 824 m highway spur a
+        // pixel is 0.66 m and at Lestallum's 2.33 km it is 2.18 m, so even the
+        // narrow end is five pixels from the far stand and forty from the near
+        // one. This is the width floor the whole lane turns on.
+        const len = 210 - t * 70 + rng.range(-20, 20);
+        const wid = 30 - t * 19;
+        // `atan2` in the group frame gives the outward radial; the box's long
+        // axis is Z, so the yaw takes +Z onto it.
+        const out = Math.atan2(pz, px);
+        B.add(M.meteorGlow, new THREE.BoxGeometry(wid, 34, len),
+          mat4([px, ground(px, pz, len) + 5, pz],
+            [rng.gauss(0, 0.05), -out + Math.PI / 2, rng.gauss(0, 0.05)]));
+      }
     }
     // --- the apron: broken rock heaped against the masses' feet ------------
     //
@@ -1129,6 +1333,14 @@ export class Megastructures {
     if (this.mats) {
       this.mats.beacon.emissiveIntensity = 2.2 + 2.6 * (0.5 + 0.5 * Math.sin(t * 2.4));
       this.mats.meteorGlow.emissiveIntensity = 1.6 + 1.4 * night;
+      // **`emissiveIntensity` does not reach the veins.** `vertexEmissiveGlow`
+      // adds `vEmissive` straight into `totalEmissiveRadiance`, downstream of
+      // everything the standard material scales, so the masses' fissures ramp
+      // through their own uniform or not at all. 1.15 by day, 3.35 after dark:
+      // the night value clears bloom's 1.45 post-exposure threshold with room,
+      // and the day value sits under it so the Disc is a rock at noon with a
+      // seam of colour in it rather than a lamp.
+      this.mats.meteorSkin.userData.uGlow.value = 1.15 + 2.2 * night;
       this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
     }
   }
