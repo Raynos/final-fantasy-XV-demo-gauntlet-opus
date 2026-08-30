@@ -257,19 +257,34 @@ is filed rather than attempted.
 ## Gates
 
 `pre-commit` (vite build + both typechecks + 4 cheap gates, concurrent) passed
-on **all six** of this lane's commits — that is the standing evidence.
+on **all six** of this lane's code commits.
 
-`pnpm run check` was started and **did not return inside the lane's window**:
-the shared daemon sat at queue depth 7–9 for the whole run and there were 14
-concurrent `check.mts` processes from other lanes at the stop. It needs
-re-running on a quiet tree.
+`pnpm run check` returned after ~50 minutes of queueing and is **RED, on two
+gates that are not this lane's and are not reachable from anything it
+touched**:
 
-`node src/tools/probes/nanscan.mts` does not run that way either — it is a
-probe *body* and needs `node src/tools/probe.mts probes/nanscan.mts`. The
-plan's command line for it is wrong.
+- `driftcheck` FAIL — 0.45 m against `heightAt`, tolerance 0.05 m. Terrain.
+  `harnessstats --since 3h` shows `tool:driftcheck` **red 13 times out of 15**
+  over the same window, so another lane is live in it; `7c2d0b9 Terrain:
+  tier-B macro relief` landed during this lane's run.
+- `creaturecheck` FAIL — `deadeye/*` foot −3.768 m off the ground, every clip.
+  Enemies.
+- one `daemon.mts:1714 preparePage` lease throw, which is the harness under a
+  queue depth of 40 rather than a code fault.
+
+Neither `src/tools/driftcheck.mts` nor `src/tools/creaturecheck.mts` mentions
+`Sky` or `cloud`, and lane 4 changed three march uniforms, one upsample filter
+radius and one boot-time bake — none of which can move a terrain height or a
+foot placement. **The suite still needs one green run on a quiet tree before
+the wave is called done**, and that run has to be after the terrain and enemy
+lanes land, not after this one.
 
 **No perf number, deliberately** — see "not done" above for why, and why the
 four landed changes cannot move one.
+
+`node src/tools/probes/nanscan.mts` does not run standalone: it is a probe
+*body* and needs `node src/tools/probe.mts probes/nanscan.mts`. The plan's
+command line for it is wrong.
 
 ## Cross-lane
 
