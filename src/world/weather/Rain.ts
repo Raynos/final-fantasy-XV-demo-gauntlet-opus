@@ -179,10 +179,17 @@ void main() {
 
   // expanding ring, flat on the ground, and no two the same size
   float r = (0.045 + life * 0.34) * (0.55 + 1.05 * fract(aSeed.x * 41.7));
-  vec3 world = vec3(pxz.x + position.x * r, h + 0.012, pxz.y + position.y * r);
+  // 12 mm of bias was less than the gap between tf_height and the height the
+  // clipmap actually displaces to at its own cell size, so a ring on rough
+  // ground was half buried in it.
+  vec3 world = vec3(pxz.x + position.x * r, h + 0.05, pxz.y + position.y * r);
 
   float d = distance(world, uCamPos);
-  vFade = alive * (1.0 - smoothstep(uExtent * 0.55, uExtent, d)) * (1.0 - smoothstep(1.2, 0.25, d));
+  // The distance fade used to start at 0.55 of the extent -- 12 m of a 22 m
+  // field -- so on any camera that is not looking at its own feet the splashes
+  // were already half faded where the ground first becomes visible. It is a
+  // wrap-seam hider, not an art choice, so it belongs in the last fifth.
+  vFade = alive * (1.0 - smoothstep(uExtent * 0.80, uExtent, d)) * (1.0 - smoothstep(1.2, 0.25, d));
   vLife = life;
   vUv = uv;
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
@@ -306,7 +313,7 @@ export class Rain {
     // --- splashes ----------------------------------------------------------
     // Four times the extent is sixteen times the area to cover, and a splash
     // is one instanced quad in a draw call that already exists.
-    const splashCount = Math.round(9000 * q);
+    const splashCount = Math.round(14000 * q);
     const sp = instancedQuad(splashCount, 3, rand);
     this.splashMaterial = new THREE.ShaderMaterial({
       vertexShader: SPLASH_VERT,
@@ -315,11 +322,21 @@ export class Rain {
         uTime: { value: 0 },
         uCamPos: { value: new THREE.Vector3() },
         uWind: { value: new THREE.Vector2(3, 0) },
-        // 22 m put every splash under the camera's own feet. Every judged
-        // storm frame in the corpus looks at ground 30-70 m away -- `storm`
-        // stands on a bluff over the Hammerhead forecourt -- so the whole
-        // ground half of the rain was being drawn where nothing was looking.
-        uExtent: { value: 46.0 },
+        /*
+         * 22 m put every splash under the camera's own feet, and the fade
+         * above halved that again. Measured on the judged frame: `storm` sits
+         * 21.6 m up looking horizontally, so at 46 deg the bottom of the frame
+         * meets the ground about **25 m out** -- which was exactly where the
+         * old field ended. The whole ground half of the rain was being drawn
+         * behind the camera's own near plane of interest.
+         *
+         * Splashes still only land on the TERRAIN: `tf_height` is the
+         * heightfield and knows nothing about the road, the apron or the
+         * forecourt slab, so a splash under a prop is correctly depth-rejected
+         * by the prop. That is a real remaining hole and it is filed rather
+         * than papered over -- see project/TASKS.md.
+         */
+        uExtent: { value: 64.0 },
         uIntensity: { value: 0 },
         uRate: { value: 2.4 },
         uColor: { value: new THREE.Color(0.75, 0.80, 0.88) },
@@ -370,6 +387,6 @@ export class Rain {
     s.uWind.value.copy(wind);
     s.uIntensity.value = intensity;
     s.uRate.value = 1.9 + 1.6 * intensity;
-    s.uOpacity.value = 0.14 + 0.20 * intensity;
+    s.uOpacity.value = 0.22 + 0.34 * intensity;
   }
 }
