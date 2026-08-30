@@ -340,3 +340,39 @@ with the respawned lane, not backlog, and are deliberately not listed here.*
   often on an inner face whose normal points back at the body, which reports
   "outside" for a body that is properly covered. `lane1`
 
+
+## Lane 3 residue (2026-08-31, near-field and composition)
+
+- **The near 0-12 m band has no vegetation LOD that reads from above.** The clump
+  card is three crossed *vertical* quads each painting a whole tuft, so a camera
+  two metres up sees a six-armed asterisk — the star tufts at the party's feet.
+  `cd1c1fb` moves the card ring out to ~7 m, which fixes `hero_full` and costs
+  `party_walk` most of the tussocks around the party's boots (isolated on an
+  ablation tree: **9.517/255 over 22.2% of pixels, floor 1.51**). The blade ring
+  cannot take over: on `hero_full` at HEAD `--hide grass_blade` moves 1.075/255
+  over 2.68% against `--hide grass_clump`'s 16.734 over 35.3%, and its ring cap
+  is 240 000 instances. The fix is either real tuft geometry inside 12 m or a
+  near card whose planes are tilted/topped so its silhouette from above is not
+  radial. Both touch geometry the silhouette and geo baselines key on. `veg`
+- **`grass_sward` casts nothing you can see in Leide** — `--hide grass_sward` on
+  `hero_full` is **0.188/255 over 0.80% of pixels**, under the 2.25 floor. The
+  caster gate `hTuft > 0.16 * lod.hMul` is an absolute metre threshold despite a
+  comment claiming it scales with the zone, and Leide's mean tuft is 0.138 m — so
+  only the top ~35% cast. **Raising it is a recorded negative**: there is nothing
+  there to raise. `veg`
+- **Foreground occluders on the judged vistas (plan item 13) are one third done.**
+  `vista_dawn` has one now (a branch across the bottom-left corner); `vista_night`
+  and `zone_vesperpool` already had one; the rest do not. The recipe is
+  `vista_dawn`'s own — place the camera against an existing world tree, do not
+  author a prop — and it needs `Shots.ts`, which lane 3 released at `e5db679`.
+  `shots`
+- **Camera clearance does not put grass in a vista's bottom third — closed
+  negative.** Twenty candidates over five shots at 5-20 m of clearance against
+  baselines of 22.9-50 m, read by two independent look-loops: individual grass
+  blades appear in the bottom third of none of them. Do not re-open it as a
+  framing question; it is a near-field density question. `shots`, `veg`
+- **`zone_longwythe`'s framing is contested, not settled.** One look-loop scored
+  7 m of clearance 4/5 against the 35 m baseline's 3/5 for the foreground rock
+  stack it promotes; the other kept the baseline for the layered ridges, the
+  meteor, the skyline and the rest stop. Left at baseline. A judged round should
+  settle it rather than another agent's eye. `shots`
