@@ -2061,3 +2061,29 @@ when it was two thirds of the win. Split on saturation instead. Any classifier
 keyed on the same channel the change moves will report the change as its own
 absence.
 
+## Eight lanes each running the full suite spend more time queueing than working
+
+Measured 2026-08-30 during the first eight-lane wave, from `harnessstats`:
+
+    543 jobs  ·  waited 291.4m  ·  ran 507.0m  ·  36% of it was queue
+    lease    116 jobs  p90 queue 2.9m   worst 13.9m
+    prewarm   40 jobs  p90 queue 8.4m   worst 14.2m
+
+with **25 concurrent `check.mts` processes** against a daemon worker budget of
+**4**. Three separate lanes reported a `pnpm run check` that never returned
+inside a three-hour window; none of them had failed, all were queued. `reachcheck`
+alone burned 33.8 minutes across seven runs.
+
+The suite is not the problem — the *fan-in* is. Nineteen gates want the same four
+browser workers, and every extra copy also evicts the warm pages the others are
+using, so the marginal run makes every run slower than serial. **On a wave of
+more than about three lanes, the full suite belongs to the coordinator alone.**
+A lane runs the individual gates it owns; `pre-commit` (build + both typechecks
++ four cheap gates, ~0.7 s) is what keeps each commit honest in between.
+
+The corollary is the one that actually costs money: **no perf or memory number
+taken during a wave is a baseline.** The same build read 1 211 and 1 280 MB five
+minutes apart — a 69 MB spread larger than most of what a lane can cut — and
+every arm printed `CONTENDED throughout`. Certify behind
+`daemon.mts --wait exclusive-free`, or do not certify.
+
