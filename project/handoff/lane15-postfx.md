@@ -36,7 +36,12 @@ to `GradePass`'s uniform object and to the shader body but not to the GLSL
 `uniform float` declaration, so the whole grade program failed to compile
 (`ERROR: 0:272: 'uFar' : undeclared identifier`) and the composer's last colour
 stage wrote nothing. A shot came out as a 6 KB PNG against a normal 2.3 MB.
-Fixed in `6b572ab`. `pre-commit` cannot see this -- a shader is a string until a
+Fixed in `6b572ab`, and lane 7 had landed the same one-line fix as a
+cross-lane unblock in `9adfded` a moment earlier -- so `6b572ab` carried
+**both** declarations and the next error was `'uNear' : redefinition`. An
+explicit pathspec commits the FILE, not your hunks (LANDMINES), which is
+exactly how the second copy got in. `f7b87a1` dropped the duplicate. Both
+windows are closed; HEAD compiles. `pre-commit` cannot see this -- a shader is a string until a
 GPU sees it -- and neither could a probe that compiled the shader standalone
 with its own preamble, which returned `standaloneCompiles: true` about a
 shader three does not build. **The capture caught it.** Verified: yes, by the
