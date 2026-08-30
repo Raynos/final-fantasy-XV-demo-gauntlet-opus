@@ -639,3 +639,37 @@ feeding `warpMotion(dist)`. No throughput measurement ever existed.*
   would show it. Needs a `Shots.ts` entry (lane 21) or another
   `framecam --probe` derivation (lane 23's `nanunder.mts` already resolves the
   deep points; only the target vector needs changing).
+
+## First load: what lane 14 left behind (2026-08-31)
+
+*86.63 -> 72.15 MB to first frame across two of three tiers, with the instrument
+built first because `coldload` had been measuring bytes to `GAME.ready` rather
+than to a frame. It found a defect in itself on the way: READ ran before a
+deferred tier started fetching, so a working deferral read identically to a
+missing file — the pre-fix instrument would have scored the tiering **zero**.*
+
+- **`texc` mip 0 -> a deferred tier is the last −14.4 MB**, and it needs
+  `Face.ts`, which is lane 1's. A four-step patch is written out under
+  `FOR LANE 1` in `project/handoff/lane14-firstload.md`, including the
+  `dropCanvasAfterUpload` trap, the dispose-and-re-upload requirement, and why
+  the one-line "bake at 512²" alternative breaks the hit-equals-miss promise.
+  `lane14`
+- **Row-delta before the plane split in `encodePlanes8`: −3.4 MB on
+  `tex.bin.gz` alone** (31.86 -> 28.47 at gzip -9), lossless. Changes
+  `FieldCodec`'s shared format. `lane14`
+- **Byte-plane-split the `q16d` u16 stream: a further −1.13 MB** (`h` 5.59 ->
+  4.80, `far` 1.64 -> 1.30). `lane14`
+- **Re-run `coldload --prod --gate` on a quiet tree with all five artifacts
+  present**, to replace the 72.15 MB *arithmetic* with a *reading*.
+  `texc.bin.gz` was pruned **five times** tonight between a bake finishing and a
+  measurement starting, because `CANVAS_SOURCES` contains `Face.ts`, lane 1
+  committed into it all night, and every commit by anyone runs `vite build`.
+  `lane14`
+- **`docs/BOOT_PERF.md` still carries the pre-tier table** and no
+  `q=high`/`q=ultra` geo caveat — `q=high`, the default and what a real visitor
+  gets, does not fetch `geo.bin.gz` at all. `lane14`
+- **`pnpm run build:full` is unreliable under contention**: the canvas bake died
+  with `socket hang up` (ECONNRESET on the page's POST back to the bake socket)
+  and the `&&` then skipped the geo bake, leaving one artifact silently absent.
+  `lane14`
+
