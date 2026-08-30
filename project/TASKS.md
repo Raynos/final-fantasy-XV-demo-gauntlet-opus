@@ -673,3 +673,37 @@ missing file — the pre-fix instrument would have scored the tiering **zero**.*
   and the `&&` then skipped the geo bake, leaving one artifact silently absent.
   `lane14`
 
+## Chocobo POI kit: what lane 22 found and could not fix (2026-08-31)
+
+*Task 71 landed — two hubs, dye tiers (yellow free to black 12 000), sylkis feed
+tiers that finally wire `Ascension.value('chocoboStamina')` which nothing had
+ever read, and two of three races won end-to-end by a probe. The third race is a
+measured negative with two instruments agreeing. All of the below is
+`PoiKits._chocobo`, which was lane 18's and is now unowned.*
+
+- **`_chocobo` has no terrain follow, and it shows at every chocobo POI.** The
+  red gable steps punch through the barn roof as a saw-tooth of red tabs on both
+  rakes, **visible at 80 m** (`NG=5` boxes uncovered by the roof slabs); the
+  paddock fence runs through the barn (far corner at radius 21.9 m against
+  `R = 20`); three of six hay bales get `y = 2.5` with nothing beneath them and
+  intersect the tarp. `lane22`
+- **`_chocobo` ignores the POI's own `r`** — 48 at the layby against 200 at Wiz —
+  and places every part at kit-local `y`. **Terrain-following placement plus a
+  road-clearance offset is the precondition for an Alpine hub existing at all.**
+  Measured there: 20-30 m of relief across the kit's 40 m ring, barn wall
+  overhanging the carriageway by ~1.7 m, half the silo on the road, the barn's
+  east third inside the mountain and its west gable over a cliff. `lane22`
+- **`ChocoboHub`'s prompts are world-axis while the kit is yawed**, and no
+  yaw-blind radius inside the ring is empty, so they sit outside the fence. The
+  real fix is a runtime yaw lookup from `Props`. `lane22`
+- **Bird sculpt, two seams:** the thigh/hip masses are two bald spheres butted
+  onto the shingled flank, and the cream chest bib is a separate egg with a hard
+  seam. The rump shingles are fixed; the shoulder still spikes. `lane22`
+- **The rider's arms read splayed, and `POSE_RIDE` is NOT the bug** —
+  `Skeleton.ts:154` mirrors bone translation only, so the pose table is provably
+  mirror-symmetric. Re-shoot before re-tuning. `lane22`
+- **Still owed on lane 22:** `npcdraws` / `drawcheck` / `--perf` with the bird in
+  frame, and a mount-legality refusal probe (55 deg slope, lake edge). The
+  draw-cost instrument does not settle its own control, so **quote no draw number
+  for the mount**. `lane22`
+
