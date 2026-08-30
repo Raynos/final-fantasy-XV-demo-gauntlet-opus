@@ -579,6 +579,15 @@ export class GrassField {
     let sward: THREE.InstancedMesh | null = null;
     if (t.sn > 0 && ring.swardGeo && ring.swardMat) {
       sward = new THREE.InstancedMesh(ring.swardGeo, ring.swardMat, 0);
+      // Named so it can be ablated on its own. It could not be, and that is a
+      // gap in an instrument the BRIEF makes mandatory: `shoot.mts --hide`
+      // matches object names, the proxy had none, and the only handle on it was
+      // `grass_blade`, which takes the blades WITH it. So every measurement of
+      // "what does grass contribute here" has silently been measuring the
+      // blades and their cast shadow together, and the question the proxy
+      // exists to answer -- does the ground darken between tufts -- could not
+      // be asked at all.
+      sward.name = 'grass_sward';
       sward.instanceMatrix = new THREE.InstancedBufferAttribute(t.s, 16);
       sward.count = t.sn;
       sward.castShadow = true;
