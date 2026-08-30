@@ -122,10 +122,148 @@ export const TOWN_SHOPS = {
     // The van carries the whole catalogue that is actually for sale: royal arms
     // are never stock, and neither is anything with no price.
     filter: {
-      Weapons: (def: ItemDef) => def.category === 'weapon' && def.price > 0 && !def.tags.includes('royal'),
-      Accessories: (def: ItemDef) => def.category === 'accessory' && def.price > 0,
+      // Capped at 2,500 gil. A mobile armoury in a Leide car park carrying the
+      // Balmung (56,000) is why the 42,180-gil wallet had nowhere to go that
+      // was not Hammerhead: everything in the game was already on this rack.
+      // The top of the catalogue now lives at Forge & Filigree in Lestallum,
+      // which is a two-minute drive and a thirty-level region away.
+      Weapons: (def: ItemDef) => def.category === 'weapon' && def.price > 0 && def.price <= 2500 && !def.tags.includes('royal'),
+      Accessories: (def: ItemDef) => def.category === 'accessory' && def.price > 0 && def.price <= 2500,
     },
     sellCategories: ['weapon', 'accessory', 'treasure', 'catalyst'],
+  },
+
+  /* -------------------------------------------------------- Lestallum -- */
+  /*
+   * Three counters on the market square, and they are deliberately not three
+   * versions of the same shelf. Lestallum is where a party that has been
+   * living out of a Regalia boot for twenty hours finally has somewhere to
+   * spend: `RpgSystem` starts the player on **42,180 gil** and until now the
+   * most expensive thing for sale in Lucis was a 2,400-gil Hardedge in a van.
+   */
+  partellum: {
+    id: 'partellum',
+    name: 'Partellum Market',
+    sub: 'Lestallum · Market square',
+    owner: 'Verdough',
+    ownerRole: 'Grocer',
+    hue: 96,
+    greeting: 'Everything on this table came up the shelf road this morning.',
+    buyLine: 'Eat it before Thursday.',
+    brokeLine: 'I can do you a shallot. On credit. One shallot.',
+    emptyLine: 'I sell food. You are carrying rocks and knives.',
+    tabs: ['Produce', 'Curios & Stones', 'Sell'],
+    stock: {
+      // The good end of the pantry: what Duscae and Cleigne grow and Leide
+      // cannot, which is the whole reason a party drives up here.
+      Produce: [
+        'ulwaat_berries', 'sylkis_greens', 'curiel_greens', 'fine_cleigne_wheat',
+        'allural_shallot', 'duscaen_olives', 'kettier_ginger', 'schier_turmeric',
+        'aegir_root', 'cleigne_darkshell', 'basilisk_ribs', 'garula_tenderloin',
+        'vesproom', 'malmashroom',
+      ],
+      // Lestallum is where collectors are, which is why an Old Book is worth
+      // carrying up here, and the gemstone trade runs through the market.
+      'Curios & Stones': [
+        'old_book', 'beautiful_bottle', 'rare_coin', 'sky_gemstone',
+        'earth_gemstone', 'coeurl_whiskers', 'moogle_charm_frag',
+      ],
+    },
+    sellCategories: ['ingredient', 'treasure', 'catalyst'],
+  },
+
+  forge: {
+    id: 'forge',
+    name: 'Forge & Filigree',
+    sub: 'Lestallum · Smithy',
+    owner: 'Randolph',
+    ownerRole: 'Weaponsmith',
+    hue: 12,
+    greeting: 'Steel worth the name. Nothing on this rack is a van special.',
+    buyLine: 'Carry it like you mean it.',
+    brokeLine: 'Come back when the hunts have paid.',
+    emptyLine: 'I take steel and stones. That bag has neither.',
+    tabs: ['Weapons', 'Accessories', 'Sell'],
+    // The complement of Culless' cap, exactly: everything for sale that the
+    // van will no longer carry. Between the two shops the whole catalogue is
+    // still buyable and there is now a reason to drive.
+    filter: {
+      Weapons: (def: ItemDef) => def.category === 'weapon' && def.price > 2500 && !def.tags.includes('royal'),
+      Accessories: (def: ItemDef) => def.category === 'accessory' && def.price > 1500,
+    },
+    sellCategories: ['weapon', 'accessory', 'treasure', 'catalyst'],
+  },
+
+  beanmine: {
+    id: 'beanmine',
+    name: "Surgate's Beanmine",
+    sub: 'Lestallum · Coffee house',
+    owner: 'Surgate',
+    ownerRole: 'Proprietor',
+    hue: 30,
+    greeting: 'Coffee, and whatever Tony has left on the board. In that order.',
+    buyLine: 'Mind, it is hot.',
+    brokeLine: 'The water is free. The coffee is not.',
+    emptyLine: 'This is a coffee house, not a pawnbroker.',
+    tabs: ['Counter', 'Larder', 'Sell'],
+    stock: {
+      Counter: ['potion', 'hi_potion', 'mega_potion', 'ether', 'mega_ether', 'remedy', 'elixir', 'phoenix_down'],
+      Larder: ['saxham_rice', 'cleigne_wheat', 'birdbeast_egg', 'luncheon_meat', 'cup_noodles', 'sweet_pepper', 'wild_onion', 'lucian_tomato'],
+    },
+    sellCategories: ['ingredient', 'curative', 'treasure'],
+  },
+
+  /* ------------------------------------------------------ Galdin Quay -- */
+  pearl: {
+    id: 'pearl',
+    name: 'Mother of Pearl',
+    sub: 'Galdin Quay · Restaurant',
+    owner: 'Coctura',
+    ownerRole: 'Chef',
+    hue: 194,
+    greeting: 'Sit anywhere. If it came out of that water this morning I will cook it.',
+    buyLine: 'Enjoy. Truly.',
+    brokeLine: 'The view is free. Everything else is not.',
+    emptyLine: 'Bring me a fish and we will talk.',
+    tabs: ['Kitchen', 'Fishmonger', 'Sell'],
+    stock: {
+      // A restaurant priced like one: this is the most expensive shelf on Eos
+      // and it is meant to be, because the wallet has to have somewhere to go.
+      Kitchen: ['ulwaat_berries', 'basilisk_ribs', 'fine_cleigne_wheat', 'sylkis_greens', 'elixir', 'mega_ether', 'remedy'],
+      // Sea fish, over the counter, for anyone who cannot be bothered to fish.
+      Fishmonger: ['sea_bass', 'sea_bream', 'murk_grouper', 'barramundi', 'allural_sea_bass', 'aegir_root', 'cleigne_darkshell'],
+    },
+    // She buys the catch, and at a premium -- but the premium is NOT here.
+    // `Inventory.sellPrice` is global and `ShopScreen` has no per-shop hook, so
+    // a `sellMult` on this row would be a field nothing reads. Coctura's 1.4x
+    // lives in her own dialogue instead ("Sell you today's catch"), which is
+    // in this lane's files and works today. See `NpcDialogue.coctura`.
+    sellCategories: ['ingredient', 'treasure'],
+  },
+
+  dinos_bench: {
+    id: 'dinos_bench',
+    name: "Dino's Bench",
+    sub: 'Galdin Quay · Jeweller',
+    owner: 'Dino Ghiranze',
+    ownerRole: 'Jeweller · Reporter',
+    hue: 310,
+    greeting: 'You bring me stones, I make you something nobody else has. Deal?',
+    buyLine: 'Wear it where people can see it.',
+    brokeLine: 'Ah — cash flow. I have been there. I am there.',
+    emptyLine: 'No stones, no bench. Go find me a rock.',
+    tabs: ['Commissions', 'Sell'],
+    // Three pieces you cannot buy anywhere else, hand-listed rather than
+    // filtered, because "exclusive" and "a predicate over the whole table" are
+    // opposite things.
+    stock: {
+      // Three pieces and nothing else. `moogle_charm` and `ribbon` are the
+      // obvious "exclusive" picks and are deliberately NOT here: both are
+      // priced 0 in the item table, and a 0-gil row on a shop shelf is a free
+      // Ribbon, which is the best accessory in the game.
+      Commissions: ['sages_stone', 'obsidian_torque', 'hypno_crown'],
+    },
+    sellCategories: ['treasure', 'catalyst'],
   },
 };
 
