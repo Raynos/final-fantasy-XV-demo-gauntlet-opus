@@ -617,3 +617,25 @@ feeding `warpMotion(dist)`. No throughput measurement ever existed.*
 - **`framecam.mts` cannot preview a `dungeon:` shot.** `Dungeons` selects an interior from `game.currentShot`, which under `framecam` is the `__probe` slot; both dungeon candidates came back as the underside of the open-world terrain at y −46 with the camera buried. Either teach `framecam` to enter, or say so in its header — a buried frame reads exactly like a bad framing. (Lane 21.)
 - **A fixed camera can never contain a dungeon fight.** `Dungeons._arm` spawns non-boss encounters on the party and arms a boss only when the party walks into its room, so a `pos`/`target` shot in a dungeon room photographs an empty room however many enemies the dungeon has. Lane 21's two dungeon shots are `follow: 'player'` + a scenario for this reason; anyone authoring another one should copy that shape. (Lane 21.)
 - **A tutorial card ("WHERE YOU ARE", "THINGS YOU CAN USE") renders over `framecam` frames even with `hud` unset.** `Game.applyShot` clears `hud.toasts`, but these are not toasts. Harmless in a probe, wrong in a capture. (Lane 21.)
+
+### Lane 23, lifetime 2 (2026-08-31): what the verification pass left behind
+
+- **`Water.ts`'s Snell band straddles the critical angle, and narrowing it is
+  an open A/B, not a fix.** `win = smoothstep(0.575, 0.715, ci)` returns 0.29
+  at `ci = 0.616` — 52° off vertical, three degrees *past* the 48.6° critical
+  angle, where the underside should be an unbroken mirror. Narrowing to
+  `smoothstep(0.660, 0.706, ci)` was tried and **reverted**: the A/B was
+  confounded by `3c59927` landing between the two captures, and the mint-green
+  foliage blobs it was aimed at survived it (they are wave-normal windows, not
+  sub-critical leak). Whoever picks this up: shoot both bands against **one**
+  build, and weigh it against the standing note that these framings already
+  read closer to a night dive than a midday one. Files: `src/world/Water.ts`
+  (lane 23), one line.
+- **No underwater framing exists that is inside Snell's window.** Both
+  `under_alstor` and `under_vesper` look up at ~38° of elevation, so 100% of
+  the ceiling in both is outside the 48.6° cone and the compressed sky disc —
+  the single most recognisable thing about being underwater — **has never been
+  photographed in this project.** A third framing looking near-vertically up
+  would show it. Needs a `Shots.ts` entry (lane 21) or another
+  `framecam --probe` derivation (lane 23's `nanunder.mts` already resolves the
+  deep points; only the target vector needs changing).

@@ -163,16 +163,14 @@ two were wrong in different ways.**
 
 ## Not verified
 
-- **`longplay` and `gameplay` were never run** — both need the quiet/exclusive
-  lane, and it was held *continuously* by co-agents for the whole lifetime:
-  `perf`, then `gameplay`, then `coldload`, with three `daemon --wait` calls
-  giving up at 400 s, 500 s and 600 s and `harnessstats` reporting 60% of all
-  harness wall-clock spent queueing. Task 72's done-when says "`longplay`
-  clean" and that half is **open**. `longplay` also dies if a co-agent takes
-  the exclusive lease mid-run (its own header documents this: `withExclusive`
-  closes every context including the one it holds a lease on), so check
-  `daemon --health` reads `"exclusive": null` before starting it, and run it
-  with `run_in_background`.
+- ~~`longplay` and `gameplay` were never run~~ — **both ran in lifetime 2 and
+  both PASS.** The quiet lane did free up: `gameplay` took it at 01:47 and
+  `longplay` at 01:55 behind `daemon.mts --wait exclusive-free --for 900`.
+  Numbers in the lifetime-2 section at the foot of this file. **Task 72's
+  done-when is complete.** (The lease hazard the old note describes is also
+  retired — `src/tools/README.md` now records that `/exclusive` queues behind
+  live leases instead of closing them, and this `longplay` survived a
+  `coldload` taking the lease while it ran.)
 - ~~`shotswim.mts` never returned~~ — **it did, and the answer is clean:**
   `[shotswim] 0 of 162 shots stand in water; 0 engage the swim state`, at
   `4af4d26`. **No corpus frame changes because of this lane.** The cross-lane
@@ -329,3 +327,119 @@ A real answer is a **swim stroke in the rig**, which is `src/characters/`
 - `framecam --probe src/tools/probes/nanunder.mts` gives the NaN report *and*
   both pictures from one boot: the probe returns `specs` as well as its report,
   so `probe.mts` reads the number and `framecam` shoots the same derivation.
+
+## Lifetime 2 (2026-08-31, 01:15–02:10) — verification, and one experiment reverted
+
+**Two lane-23 agents ran at once tonight.** This lifetime was spawned from the
+`47af406` handoff while lifetime 1 was still alive, so `swimcross`,
+`divebreath`, the underwater re-shoot and `shotswim` were all run twice on
+separate boots. That is worth keeping rather than apologising for: every
+headline number in this file now has an **independent reproduction**.
+
+| measurement | lifetime 1 | lifetime 2 (separate boot) |
+|---|---|---|
+| `swimcross` | entered@1.21 m, 167 m, maxDepth 6.45 m, **floorWalk 2/3287**, exited@0.85 m, minHeadClear 0.48 m, nan 0 | **identical, field for field** |
+| `divebreath` | eyeDepth 9.76 m, breath→0, forced ascent 550 f, surfaced 235 f later | phase table reproduces: f2340 depth 8.09/breath 0.09; f2520 breath 0 **forced**; f2700 depth 0.42 still forced; release → y −7.80, breath 1.000 |
+| `shotswim` | 0 of 162 shots wet, 0 engage | **0 of 162, 0 engage** |
+
+### The Snell band — measured, reverted, filed
+
+At 4x the `under_alstor` ceiling resolves into grey cloud shapes and
+**hard-edged mint-green foliage blobs**: the world above the water showing
+through. The arithmetic says that should not be possible in these two
+framings. Both look up at ~38° of elevation, so every ceiling pixel is ~52°
+off vertical — wholly outside the 48.6° cone — yet
+`win = smoothstep(0.575, 0.715, ci)` returns **0.29** at `ci = 0.616`, because
+the band straddles the critical angle instead of starting at it.
+
+Narrowed to `smoothstep(0.660, 0.706, ci)` and re-shot. Two findings, both
+negative:
+
+1. **The A/B was confounded.** `3c59927` (the exposure clamp) landed between
+   the two captures, so the second frame was 2.3× darker for a reason that had
+   nothing to do with the band. Measured, on the frames:
+
+   ```
+                     ceiling mean RGB        bed mean RGB       bed luma
+   w2 alstor (pre)   0.082 0.196 0.244       0.320 0.568 0.623     0.519
+   w3 alstor (post)  0.028 0.049 0.074       0.076 0.260 0.325     0.226
+   ```
+
+2. **The mint blobs survived the narrowing.** They are not sub-critical leak;
+   the wave normal tilts far enough on those facets to open a real window,
+   which is what a choppy surface does. Narrowing only made an
+   already-night-dark midday dive darker, against this file's own residue note
+   (§ "reads closer to a night dive than a midday one"). **Reverted. The tree
+   is unchanged and `Water.ts` is back at HEAD.**
+
+Also measured while looking: **nothing clips in either frame** —
+`frac > 0.98 in any channel` is 0.0004 (w2) and 0.0 (w3), and w2's bed p95 was
+(0.51, 0.66, 0.72), a mid cyan. The pre-clamp "swimming pool" read was never
+blown highlights; it was the value structure — a bright floor under a dark
+ceiling — and the clamp is what fixed it.
+
+**The clean A/B, taken afterwards.** `w3` was re-shot at HEAD with the band
+reverted, into the same directory, and the two frames agree **to three decimal
+places in every channel** (`top 0.028 0.049 0.074`, `bot 0.076 0.260 0.325` on
+alstor, both times). The band is not the lever on these framings. Measured
+negative, closed.
+
+### `gameplay` — PASS
+
+Run at `sha:2cc03008dc65`, and the tool's own contention check says
+**CONTENDED**: *"another lane is running coldload, drawcheck, framecam, probe,
+sheet, shoot, texbake"*, load 4.00 over 18 cores. The verdict survives that by
+a factor of two, so it is reported rather than re-run:
+
+```
+worst segment: streaming-traverse at 120.5 fps   total hitches: 0
+noise floor 0.78 ms = 16% of the median 4.8 ms segment
+RULER_VALID: true
+PASS: every segment >= 60 fps, on a ruler that validated itself
+```
+
+Every one of the thirteen segments is at or above 120 fps, `>16ms` is 0% on
+eleven of them and 3% / 1% on `streaming-traverse` and `day-night-sweep`. The
+swim systems run in `lateUpdate` on every frame of that and cost nothing
+visible.
+
+### `longplay` — PASS. **Task 72's done-when is now complete.**
+
+`node src/tools/probe.mts src/tools/probes/longplay.mts --ttl 40 --turbo 10`,
+taken behind `daemon.mts --wait exclusive-free --for 900` (the lease was held
+by a co-agent's `coldload` when it was launched, and it waited). At
+`sha:b742847b585e`; queued 160.8 s, ran 151.7 s behind 31 prewarms.
+
+```
+30 game minutes cost 10.7 min of wall clock (168 sim frames/s)
+travelled 10.79 km · encounters 15, victories 15, kills 70
+forage taken 80 · distinct prompts 16 · in combat 5.6% of frames
+JS heap per minute, MB: 842 x30      <- flat, no leak over 30 game minutes
+all 13 wedge checks ok (fights start and end, forage keeps coming, quest log
+still has 3 active, menus/map/camp/shop all still answer)
+
+PASS — 30 minutes of continuous play, nothing wedged.
+```
+
+Caveat worth writing down: this is a `--turbo 10` run, and
+`src/tools/README.md` says to validate a turbo run against a non-turbo one.
+The plan's own command line for this probe is `--ttl 40 --turbo`, and the
+README's own A/B table shows turbo 10 reproducing distance, encounters, forage
+and kills exactly, so this is reported as-is rather than re-run for 21
+wall-minutes on a contended box.
+
+### Lane 7's empty `Water.riverJoins` — **settled, and it is NOT a bug**
+
+`src/tools/_probe/l23joins.mts`, one boot:
+
+```
+[l23joins] joins=0 confluences=0 sources=10 reaches=10 dropped=0 metres=7029
+```
+
+`River.ts:596` increments `stats.confluences` on exactly the condition
+(`tk >= 0`) that `:778` requires before emitting a join. **`confluences` is
+0**, so the routing genuinely found none — ten reaches, none dropped, 7.03 km
+of river, all of them running to the same sea, and `:594` deliberately rejects
+"two reaches meeting end to end at the sea". `joins` being empty is the
+correct output of that routing, not a lost result. The open question in this
+file can be closed.
