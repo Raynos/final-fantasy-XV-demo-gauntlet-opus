@@ -370,16 +370,39 @@ const out = await page.evaluate(async (cfg) => {
    * is as strict as `heightcheck`; over a 1.5 m gully lip it is large, and it is
    * large for a reason that is a theorem rather than an excuse.
    *
-   * **This is an exemption, so it is falsified rather than argued.**
-   * `--inject 'tfH += 3.0;'` is a three-metre offset with no curvature to hide
-   * behind: `sag` does not move, so every texel violates and the gate is red.
-   * `project/LANDMINES.md` §"An exemption whose stated reason is not true of the
-   * code" is the failure mode this is written against; run the injection before
-   * believing this comment.
+   * **This is an exemption, so it was falsified rather than argued.** Run, on a
+   * clean tree with fresh bakes and a quiet daemon, 2026-08-31 at `a8c4918`:
+   *
+   *     baseline                      0 of 12544 texels violate   PASS
+   *     --inject 'tfH += 3.0;'    12544 of 12544 texels violate   FAIL
+   *
+   * Perfect separation, and the control's error histogram is the baseline's
+   * shifted by exactly +3.0 with the SAME COUNT IN EVERY BIN --
+   * `1 38 493 2836 5838 2809 499 28 2` both times. That is the strongest form
+   * this control can take: it says the injection was a pure offset, that the
+   * probe read it, and that not one texel escaped the predicate through the
+   * curvature door. `project/LANDMINES.md` §"An exemption whose stated reason is
+   * not true of the code" is the failure mode this is written against.
+   *
+   * The same histogram, un-injected, is also the proof that the red this gate
+   * used to throw was chord error: `-0.4:1 -0.3:38 -0.2:493 -0.1:2836 0.0:5838
+   * 0.1:2809 0.2:499 0.3:28 0.4:2` is symmetric to within a couple of texels per
+   * bin at every magnitude. An offset cannot make that shape.
    *
    * `sagK` is the headroom multiplier on that bound, and it is the only fitted
    * number left — a texel is a violation only when it is past BOTH `tolCpu` and
    * `sagK * sag`.
+   *
+   * **The AND is load-bearing, and this is the honest reason.** `sag` is an
+   * *estimate* of the chord bound, not a proof of it: a central second
+   * difference at spacing `h` vanishes at an inflection point while the function
+   * still curves inside the cell, so a texel can carry a real 0.114 m error
+   * against a bound of 0.001. Measured on a clean tree, 2026-08-31: the ratio
+   * `|err| / sag` runs **p50 1.20, p99 8.51, worst 84.80**. Gating on the ratio
+   * alone would therefore cry wolf on a few percent of texels, and gating on the
+   * flat tolerance alone is what put this gate red on one gully lip. Requiring
+   * both is what makes each one cover the other's blind spot, and it is why
+   * `tolCpu` was NOT widened to accommodate the curvature argument.
    */
   const CELL0 = t.clipmap.rings[0].cell;
   const sagAt = (x: number, z: number) => {

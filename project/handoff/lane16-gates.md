@@ -122,74 +122,87 @@ it** — grepped: the only two occurrences are `docs/plans/…-fable-to-nine.md:
 and `project/handoff/lane5-terrain-light.md:137`, both proposed next steps under
 an explicit "Not verified". Both lines now need the flag dropped; filed.
 
-## In flight — `driftcheck`, the red gate
+### `driftcheck` — the red gate — `a8c4918`, `<this commit>`
 
-**Diagnosis verified, repair NOT yet verified.**
+**Verified, including the falsification arm.**
 
-Reproduced the FAIL exactly at `sha:6f5a9e37d02d`:
+Reproduced the FAIL first at `sha:6f5a9e37d02d`: `worst -0.520 m` against a
+`--tol-cpu` of 0.45 fitted to a single measured ~0.37 m observation, with
+`SURFACE DRIFT mean 0.000 worst 0.000` over 36864 texels.
 
-    SURFACE DRIFT    mean 0.000 m  worst 0.000 m  over 36864 texels
-    gpu vs heightAt  boot: mean -0.001 worst -0.520
-                     after travel: mean -0.001 worst -0.520 at (-39.8, -68.2)
-                     p99 |err| 0.229 m; 2937/12544 texels over 0.1 m
-    FAIL
+Three things say that is the tessellation floor, and the third is the one that
+closes it:
 
-Two things the coordinator's brief did not have, both **verified** from that run:
+1. **The boot arm and the after-travel arm were bit-identical** — `mean -0.001
+   worst -0.520` both. Static; nothing to do with travel, the tour or the morph
+   band.
+2. **`mean -0.001` against `worst -0.520` over 12544 texels can only be a
+   symmetric population.** The error is two-sided.
+3. **The histogram, added by this work, shows it rather than infers it.** On a
+   clean tree with fresh bakes:
 
-1. **The boot arm and the after-travel arm are bit-identical** — `mean -0.001
-   worst -0.520` on both. So it is not travel, not the tour, not the morph band;
-   it is a static property of the tessellation.
-2. **The error is two-sided, not "always negative".** `mean -0.001` against
-   `worst -0.520` over 12544 texels can only be a roughly symmetric population.
-   That is exactly right for chord error — a triangle lies *below* the field on
-   convex ground and *above* it in a hollow — and it is the opposite of an offset
-   bug, which moves the mean with the tail. This strengthens the diagnosis well
-   past the "sign is always negative" argument, which is not what the data says.
+        gpu-vs-cpu hist  -0.4:1  -0.3:38  -0.2:493  -0.1:2836  0.0:5838
+                          0.1:2809  0.2:499  0.3:28  0.4:2
 
-### The repair, and why not the p99
+   Symmetric to within a couple of texels per bin at every magnitude. A triangle
+   lies below the field on convex ground and above it in a hollow; **an offset
+   cannot make that shape.** (This corrects the dispatch brief's "the sign is
+   always negative", which was read off a single worst-texel value.)
 
-Gating the p99 instead of the worst would work, but it swaps one unmeasured
-constant for another. There is an **exact** floor available and it does not have
-to be fitted: linear interpolation across a cell of width `h` is in error by at
-most `(h²/8)·max|f''|`, and the central second difference of `heightAt` at
-spacing `h` *is* `h²f''`. So `driftcheck` now computes, per texel:
+#### The repair
 
-    sag(x,z) = max(|D2x|, |D2z|) / 8      D2x = f(x-h,z) + f(x+h,z) - 2f(x,z)
+Not a wider `--tol-cpu` (LANDMINES' `drawcheck` rule: that trades regression
+sensitivity for false-red immunity 1:1) and not the p99 either, which swaps one
+unmeasured constant for another. Instead, the floor the field computes for
+itself: linear interpolation across a cell of width `h` errs by at most
+`(h²/8)·max|f''|`, and the central second difference of `heightAt` at spacing `h`
+**is** `h²f''`, so
 
-with `h` read from `t.clipmap.rings[0].cell`, and a texel is a violation only
-when it is past **both** the flat `--tol-cpu` and `--sag-k` (default 3) times its
-own bound. Where the ground is smooth the bound is ~0 and the arm is as strict as
-`heightcheck`; over a gully lip it is large, for a reason that is a theorem
-rather than an excuse. `--tol-cpu` is unchanged at 0.45 and nothing was widened.
+    sag(x,z) = max(|D2x|, |D2z|) / 8
 
-An exemption has to be falsified, so `--inject '<glsl>'` is now a first-class
-flag: it appends GLSL after `TERRAIN_VERT_BEGIN` in the probe's vertex shader
-(and folds into `customProgramCacheKey`, or three serves the un-injected program
-back). The falsification arm is the tool's own historical control,
-`--inject 'tfH += 3.0;'`: a three-metre offset has no curvature to hide behind,
-so every texel must violate and the gate must be red.
+is that texel's own permitted deviation, from the very function the arm compares
+against, with nothing fitted. `h` comes from `t.clipmap.rings[0].cell`. A texel
+violates only when past **both** the unchanged flat `--tol-cpu` **and** `--sag-k`
+(default 3) times its own bound.
 
-### THE NEXT STEP, EXACTLY
+**The AND is load-bearing and the bound is NOT strict.** A central second
+difference vanishes at an inflection while the function still curves inside the
+cell: measured, `|err| / sag` runs **p50 1.20, p99 8.51, worst 84.80** (a 0.114 m
+error against a 0.001 bound). Gating on the ratio alone would cry wolf; gating on
+the flat tolerance alone is what put this gate red on one gully lip. Each covers
+the other's blind spot. **`--sag-k 0` restores the old flat predicate exactly**,
+in one flag.
 
-**The predicate change is committed-pending and the falsification has not run.**
-Four attempts died on the 300 s `preparePage` timeout caused by the prewarm
-queue above. Do this, in this order:
+#### The falsification — the part that makes it a gate
 
-1. `node src/tools/daemon.mts --stop` (coordinator's call — see the top of this
-   file). This is what unblocks it.
-2. `node src/tools/driftcheck.mts` — read `vs its own sag` and the
-   `gpu-vs-cpu hist` rows. Expect the worst texel's ratio to be O(1); if the
-   worst |err| is many times its own sag bound, **the diagnosis is wrong and
-   there is a real offset** — do not land the predicate, go and find it.
-3. `node src/tools/driftcheck.mts --inject 'tfH += 3.0;'` — this **must** print
-   ~12544 violations and FAIL. If it does not, the exemption is unfalsifiable
-   and must be reverted, not tuned.
-4. Only then commit `src/tools/driftcheck.mts`.
+`--inject '<glsl>'` is now a first-class flag: it appends GLSL after
+`TERRAIN_VERT_BEGIN` in the probe's vertex shader and folds into
+`customProgramCacheKey` (without that, three serves the un-injected program back
+from cache and the control silently measures what it was meant to break). It
+re-derives `transformed`/`vTW` only when there IS an injection, so an un-injected
+probe compiles the shipped chunk unaltered.
 
-If step 3 fails to fail, the fallback that needs no measurement is to gate the
-`cpuP99` at 0.45 and *report* the worst with its coordinate — weaker, but it is
-the repair `imgdiff` already made for the same disease and the control arm
-(`mean 3.000 worst 3.369`) is on record as moving the p99 too.
+Run at `a8c4918`, fresh caches, quiet daemon:
+
+        baseline                      0 of 12544 texels violate   PASS
+        --inject 'tfH += 3.0;'    12544 of 12544 texels violate   FAIL
+
+Perfect separation — and the control's histogram is the baseline's shifted by
+exactly +3.0 **with the same count in every bin**, `1 38 493 2836 5838 2809 499
+28 2` both times. That says the injection was a pure offset, that the probe read
+it, and that not one texel escaped through the curvature door.
+
+#### The 0.520 → 0.397 move, which matters more than it looks
+
+Same tool, same shot, same predicate arms, one difference: the second run had a
+**fresh** terrain bake where the first had `c898bb4e`'s. The worst went
+`-0.520 → -0.397` and the player's own y moved `3.57 → 3.77`. **The gate that
+first reported the problem was itself reading a stale shared terrain bake** — so
+`--build` pinning code and not content bit the very instrument that exposed it.
+
+What that does **not** imply: it is not "revert, it was only the cache". At 0.397
+the old flat predicate passes by 12%, i.e. the gate was one gully lip from red
+either way. It is the argument *for* the repair, not against it.
 
 ## Files owned and touched
 
