@@ -30,9 +30,9 @@ plan's negatives table is the list of things already decided against.
 - **`post.render` is 74–77% of the frame — the only idle-CPU lever left on a 60 Hz panel.** The 60 cap helps 120 Hz only. `runtime-facts`
 - **85.5 MB on the wire on a first visit** — 0.3 s local, ~14 s on 50 Mbit. `runtime-facts`
 - Boot blocks are still seconds: `Vegetation` 1.3 s, `Dungeons` 1.2 s, `Props` 1.2 s. Chunk inside the loops; `yieldToBrowser()` is exported for it. `runtime-facts`
-- **`Props.landmarks` ~46 ms — `PartBuilder`-shaped, "a five-line addition, skipped for want of time".** Cheapest open boot item in the repo. `geometry-bake`
+- **`Props.landmarks` -> `bakedParts` is NOT a five-line addition** — refuted 2026-08-30, `lane13`. `bakedParts` skips `fill` on a hit, and `Landmarks.build`'s loop also assigns `runeMesh`, `flames`, `havenTop` and pushes every haven fire and lantern into `this.lights`: a hit ships havens with no fire and no light after dark. Making it cacheable means splitting placement from lofting across `Landmarks.ts`.
 - `Vegetation.bushes.build` ~120 ms — untried; nobody has split geometry from instanced plumbing. `geometry-bake`
-- `Props.rocks` ~78 ms — untried; `Rocks` has no `root` and no `PartBuilder`. `geometry-bake`
+- **A `TileStream` primed-at-origin cache is one mechanism serving two items** — `Rocks` (~78 ms, two rootless streams) and `Vegetation.prime` (610 ms). Not geometry, so `bakedGeo`/`bakedParts` do not fit: it wants the per-tile instance matrices plus the streamer's tile bookkeeping. The restore side lands in `src/world/veg/`. `lane13`
 - **Caching `Vegetation.prime`'s *result* (610 ms) is untried** — a different idea from deleting `prime`, which is a recorded negative. The streamer's tile bookkeeping must be restored with the matrices or the world desyncs on first `update()`. `geometry-bake`
 - Character LOD: `town_forecourt` 465 calls / 5.33 M tris, one `SkinnedMesh` bucket at 60 calls / 1.74 M tris / 28 940 per draw. Headroom, not cost. `materials`
 - `Wear.ts:873` keys its program cache on `tex.uuid` for GLSL that is byte-identical every time. 1–2 programs, free. `materials`
@@ -106,3 +106,46 @@ plan's negatives table is the list of things already decided against.
 - Two menu nits the scrim blur revealed: the Armiger gauge caption is dark-on-dark and wraps to *"on a / pad."*, and the two-column screens leave the bottom ~35% empty. `harness`
 - `project/noise-floors.json` covers 20 shots of 142 (4 of them above the default); the rest diff against a placeholder `DEFAULT_LIMIT = 2.0`, and the recorded floors are *cold* while the daemon reuses pages, so a warm diff runs 4–6× them. plan A
 - `project/archive/handoff/` is at 90 files and nothing prunes it.
+
+## Memory: what lane 13 measured and could not reach (2026-08-30)
+
+*Lane 13 landed `AttrPack` rules for `skinWeight`/`aMat`/`aTan`/`aGroom`/`aClip`
+and half precision for over-bright vertex colour — Float32 attribute bytes
+204.6 -> 139.6 MB, a deterministic -42.1 MB CPU and the same again GPU-side.
+The exit (tab under 800 MB) did not close, and the gap is not where the plan
+said it was: the tab is **1 382 MB**, not 1 246, and everything plan tasks
+38-41 name is worth ~15 MB against a 582 MB gap.*
+
+- **213.5 MB of CPU geometry is disposable and `bootprof` says it is not.**
+  `BufferAttribute.onUpload` nulls the array after upload. The safe subset is
+  the shadow proxies — the census proved they are `[position:Float32]`,
+  depth-only, never raycast — ~32 MB. `lane13`
+- **The bake path costs ~270 MB of tab RSS and the containers are not the
+  reason** — `GeoBake` releases its body, `TexBake` compacts to 7.1 MB
+  (`_probe/bakeresident.mts`). What is left is peak transient: every loader
+  does `new Uint8Array(await new Response(body).arrayBuffer())` over a
+  `DecompressionStream`, ~2x the inflated size, for 165 + 67.3 + 67.1 MB plus
+  the heightfield. Put the inflated length in each `.json` sidecar and fill one
+  pre-sized buffer. `GeoBake.ts`/`TexBake.ts`, lane 14. `lane13`
+- **Half of each town is its shadow proxy, and it carries position only.**
+  `lestallum/town_shadow` 666 839 verts / 11.1 MB and `galdin_quay/town_shadow`
+  637 163 / 10.6 are 1.30 M of the towns' 2.61 M vertices. Nothing to strip;
+  decimating a proxy a shadow cascade cannot resolve is worth ~16 MB.
+  `PoiKits.ts`, lanes 18/19. `src/tools/_probe/towncensus.mts`. `lane13`
+- **~190 k of 1.63 M town triangles are sealed under 2 m and face down** — 6-7%
+  in the two towns, ~20% in the six imperial camps: the bottom faces of the
+  kit's closed box lofts. NOT the same as the blunt 26.6% downward-facing
+  figure, which includes canopy soffits. `lane13`
+- **`position` is 78.6 MB, 71.1 of it inside Int16**, but a normalised integer
+  position needs a per-geometry scale and offset pushed onto the mesh, and these
+  geometries are merged, shared and read back by collision. Its own change, its
+  own risk. `AttrPack.ts`. `lane13`
+- **`uv` is 30.2 MB and has no safe cheaper format** — span [-17.84, 35.04]
+  rules out both normalised integers and half precision. Would need a
+  per-geometry uv scale. `lane13`
+- **No boot, memory or cold-load number taken on 2026-08-30 is a baseline.**
+  Every arm printed `CONTENDED throughout` with eight lanes live, and the same
+  build read 1 211 and 1 280 MB five minutes apart — a 69 MB spread larger than
+  most of what a lane can cut. `geo.bin.gz` and `texc.bin.gz` were absent for
+  hours, pruned repeatedly by co-agents' `pre-commit` `vite build`. Re-measure
+  on a quiet tree with the caches rebuilt. `lane13`
