@@ -15,6 +15,8 @@ Owns `src/combat/`, `src/game/encounters/`, `src/game/rpg/` **minus**
 | 34 | `enemyScaling` implements its own doc | **landed** — `91cb6a5` |
 | 35 | pack size / engage tokens | **landed** — `4a588f4` |
 | 36 | warp throughput | **measured negative** — the plan's premise dissolved; `fc05b7f` |
+| — | `Pack._reslot` two rings | **landed** — `b24d958` |
+| — | `PARTY_LIFT` 0.8 → 1.0 | **landed** — `b24d958` |
 | — | danger (incoming damage) | **landed** — `4a588f4` |
 | — | `LEVEL_LIFT` 1.0 → 1.25 | **landed** — `7041897`, measuring |
 
@@ -205,10 +207,44 @@ runs on every path that mutates `engaged`, not only on add/remove/death.
 **Not re-looked yet** after that fix. A run with `--shot tmp/shots/lane11b/` is
 in flight; whoever picks this up must read those frames before calling it done.
 
+## FINAL — **verified**, at `b24d958`, six rounds, five finished fights
+
+Every round below ended `wiped` (the whole pack dead). Round 4 found no den.
+
+| round | den | source | level | den HP | duration | HP paid | %/hit |
+|---|---|---|---|---|---|---|---|
+| 1 | Sabertusk x5 | wild | 32 | 16 935 | 17.3 s | 10.0 % | 5.00 |
+| 2 | Voretooth x6 | wild | 31 | 19 632 | 26.5 s | 25.0 % | 4.16 |
+| 3 | Sabertusk x4 | authored | 27 |  9 012 | 16.3 s |  7.1 % | 3.55 |
+| 5 | Sabertusk x5 | wild | 29 | 13 260 | 55.9 s | 20.9 % | 2.33 |
+| 6 | Sabertusk x4 | authored | 27 |  9 012 | 16.6 s | 15.2 % | 3.05 |
+
+**median duration 17.3 s** (16.3 / 16.6 / **17.3** / 26.5 / 55.9) — 0.7 s under
+the 18 s floor.
+**median HP paid 15.2 %** (7.1 / 10.0 / **15.2** / 20.9 / 25.0) — **PASSES**.
+
+Against the baseline at `20405ce`: **11.4 s → 17.3 s** and **3.2 % → 15.2 %**.
+Round 5's 55.9 s is an outlier that swept a neighbouring den in (`kills 11` over
+a pack of 5); it is included because it still ended `wiped`.
+
+**The residual 0.7 s has a name.** The two rounds that pull the median under 18
+are both the *same authored territory*: Sabertusk **x4**, 9 012 hp, 16.3 s and
+16.6 s. `PARTY_LIFT` 1.0 already took it from lv 23 / 6 500 hp to lv 27 /
+9 012 hp; what is left is its **count**, which lives in `SpawnTables.ts` and
+belongs to lane 18. Every *wild* den — the ones whose counts this lane could
+raise — came in at 17.3, 26.5 and 55.9 s. See `FOR LANE 18` below; it is a
+two-line change.
+
+**Caveat, stated plainly.** The aggregate block in that run printed
+`0 finished fights` because the filter added in `b24d958` tested `m.denN` and
+the field is `m.n` — fixed in `77fffdd`, but *after* this run. The medians above
+are computed by hand from the five per-round lines, which were correct
+(`pack dead 5/5 ended: wiped`). The next run will print them itself.
+
 ## Not verified yet
 
-- the `b24d958` median and frames (run in flight, `tmp/shots/lane11b/`)
-- `combatloop` at `b24d958` (verified 35/35 at `4a588f4`; re-run in flight)
+- the `b24d958` frames (`tmp/shots/lane11b/`) — second look-loop in flight
+- `combatloop` re-run on the now-quiet tree — see below
 - both perf gates — **not taken**; must be behind `daemon.mts --wait
   exclusive-free`, and the box has had sweep queue depth ~58 all session.
 
