@@ -1,91 +1,102 @@
-# Status — 2026-08-30
+# Status — 2026-08-31, mid-build
 
 > **A snapshot, REPLACED in place, never appended to.** Dated bullets belong in
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`. One plan, LOCKED: `docs/plans/2026-08-30-fable-to-nine.md`** — the
-audited to-nine plan merged with the content arc, two city hubs, chocobos,
-swimming and the funded Meteor art round. **Lanes staff 2026-08-31 ~02:20
-CEST; live lanes: none until then.** `project/handoff/` holds only its README.
+**`main`. One plan, LOCKED and being built: `docs/plans/2026-08-30-fable-to-nine.md`.**
+The overnight autonomous build is running now, coordinated from
+`project/handoff/2026-08-30-coordinator.md` — read that first for the six human
+decisions taken at dispatch. MEGA BUILD MODE: no judging until every lane lands.
 
-`pnpm run check` **19/19**, `nanscan` **0 of 142**, draw calls **786/800**, and
-**`BRIEF.md`'s 33 ms rule is met** — `perf` and `gameplay` both certify with
-`RULER_VALID: true` and **0 hitches**.
+## What is live
 
-## Both plans are built and archived
+Eight lanes at a time on the shared trunk. **Closed so far:** 4 (clouds),
+10 (input truth), 13 (memory and boot), 5+6 (light in shadow, hue), 1 (rig —
+respawned to finish). **Live:** 1-respawn, 3, 7, 15, 16, 17, 18, 19, 22.
+**Not yet staffed:** 2, 11, 12, 14, 20, 21, 23.
 
-`2026-08-25-opus-after-phase3` closed 4 of 4. `2026-08-26-opus-the-standing-backlog`
-closed all thirteen. Both are in `project/archive/plans/`.
+Per-lane state is in `project/handoff/<lane>.md`; the directory length is the
+live headcount.
 
-**The backlog nearly did not end, and that is the part to remember.** Its §WS-13
-was created so open work would stop dying inside handoffs — a real problem, since
-52 of them had each held a private backlog no plan knew about. But it made the
-plan self-regenerating: every finishing lane handed leftovers into WS-13, which
-kept the plan alive to staff another wave. **The rule that ended it is in that
-section: no new rows, ever.** After a plan closes, a reusable trap goes to
-`LANDMINES.md`, what happened goes to `journal/`, and something worth funding
-gets *said to the human*. **Nothing gets a new queue by default.**
+## The gate that is red, and why it is interesting
 
-## The headline is that the plans were wrong more often than they were right
+**`driftcheck` FAILS and it is not drift.** `SURFACE DRIFT mean 0.000 m, worst
+0.000 m over 36 864 texels` — the before and after probes are identical. What
+fails is a *static* disagreement between the rendered ground and
+`Terrain.heightAt()`: **mean −0.001 m, p99 0.229 m, and one texel in 36 864 at
+−0.520 m** at (−39.8, −68.2), 16% past a `tolCpu` of 0.45 that was fitted to a
+measured ~0.37 m chord sag. The sign is always negative, which is the only sign
+a tessellation chord can have.
 
-Roughly 60% of what closed came back as a **measured negative or a corrected
-premise** rather than a landed feature. Eight premises were false:
+It was PASS at the dispatch baseline and `check` invokes it with no extra
+arguments, so this is not the invocation-path landmine. **`--build` cannot
+bisect it**: `--build` *is* honoured (verified — it announces the right tree
+sha), but `src/public/baked/` is a shared cache symlinked into every
+materialised tree, so an old sha runs against tonight's bake, and `--build
+7da60d5` and `--build HEAD` return bit-identical numbers in every digit. Lane 16
+owns the repair; the proposal on the table is to gate p99 and *report* the worst
+texel, falsified against the tool's own `tfH += 3.0` control arm.
 
-- **The head was not a sculpting problem.** `buildHead`'s skull grid was **wound
-  inside out**, so the near surface was backface-culled in *every frame this repo
-  has ever captured*.
-- **The program count was not material sprawl** — 271 → 126 without touching one
-  of the 132 construction sites. `renderer.compile()` was building programs no
-  frame ever binds.
-- **The canopy blob was not GTAO** — NaN, from the terrain shader reading
-  roughness as a tangent normal's Z.
-- **Shadow warmth is not ground albedo** — it is aerial perspective in shadows
-  that are otherwise black.
-- **Seven dry fishing pins were one predicate.**
-- **`--hide` was never broken** the way WS-9 said — one frame of cascade phase.
-- **The overlapping river panels were one river crossing itself**, not two rivers
-  crossing; the merge branch had been unreachable code since it was written.
-- **The terracing was `_peak`'s two cliff bands** — blast radius *one landform*,
-  not the every-hill fear that had stopped two lanes.
+Everything else was green at dispatch (19/19) and `nanscan` reads 0 of 142.
+Draw calls 436–616 against a budget of 800.
 
-## Instruments lied eleven times
+## No number taken tonight is a baseline
 
-The single most valuable habit this run bought: **when a metric agrees and the
-frame disagrees, suspect a property no metric in the tree reads.** Every bench
-here reads the *position* buffer, so five head passes measured a correct face and
-photographed a wrong one. Also: `anycheck` scanned **0 files** while "zero `any`"
-rested on it; `perfsprint` compared `cacheKey.length` **strings**; `stackjoint`
-computed course heights the same way the plan it graded did; `fishdeck`
-re-derived the code's own arithmetic, so it could not notice the code changing;
-`outcropjoint` read support off an unpinned clipmap ring, making **33 of 34
-"floats" the harness**; `facemark` never drew anything; `corpus.mts` rejected
-`--build`; `performance.memory` is **frozen**; and the 16/16 texture-unit warning
-is three counting the wrong limit.
+Eight lanes each running the 19-gate suite put **36% of all harness time into a
+queue rather than into work** — 25 concurrent `check.mts` against a daemon
+worker budget of 4. The full suite now belongs to the coordinator alone and the
+lanes run only the gates they own. Every perf and memory arm printed `CONTENDED
+throughout`; the same build read 1 211 and 1 280 MB five minutes apart.
+`geo.bin.gz` and `texc.bin.gz` were absent for hours, pruned repeatedly by
+co-agents' `pre-commit` `vite build`. **Re-measure everything on a quiet tree
+with the caches rebuilt before believing it.**
 
-## What moved
+## What has actually moved
 
-**Boot 7.13 → 5.78 s**, then −850 ms more. **RAM 1 608 → 1 246 MB off the tab**
-(*releasing an index entry frees nothing* — every entry carries the whole
-container, and one surviving key pinned 134 MB for the session). **Idle CPU
-189% → 103%** with the loop capped at 60. **The corpus went 7 NaN shots → 0.** The
-river water surface, undrawn for a day behind a `'body' : redefinition`, draws.
+- **The winding was wrong at the root, and it is fixed and proved.** Not
+  per-mesh: `Geo.ts`'s ring frame is right-handed while the ring runs clockwise
+  in it, so every `sweepTube`, both dome caps, `sweepShell`, `blob`,
+  `roundedBox`, both eye globes and the hair scalp were inward. Skin is
+  `FrontSide`, so what drew was the *far* side with mirrored normals. All four
+  heroes now read positive signed volume on every primitive.
+- **Clouds gained a stop of internal range** — cStops 1.49 → 1.95, clip 19.2% →
+  6.6%, the top-edge crossing 8 → 6 px, coverage cells 10 → 51.
+- **Sky fill in shadow landed**: `zone_vannath`'s shadowed foreground p50 luma
+  7 → 22, the plan's gate box 35 → 61 against a bar of 30.
+- **The controls card no longer lies** — 5 wrong combat rows, 3 bad pairs in
+  `Prompts.ts`, and a pad column where 17 of 44 rows had no binding at all.
+- **A gate now asserts which way the car turns**, and falsifies itself against
+  the shipped bug.
 
-Frames: the exposure meter was overriding the Sky's physics by a median 1.361.
-Galdin's strand **14 → 78 m**. The 4–30 m relief hole is filled. Fishing pins with
-water **4 → 8**. Swainsmere went from a lawn over the water to **443 instances**.
-Anak reads as an animal. A fight has an ending. Three shots were reframed after
-`framedepth` showed their cameras made their own content unreachable.
+## The premises that were wrong again
+
+Five more this session, which is the running theme of this project:
+
+- **Lane 13's exit was priced against the wrong number.** The tab is 1 382 MB,
+  not the plan's 1 246, and everything tasks 38–41 name is worth ~15 MB against
+  a 582 MB gap. The lane landed ~33 MB across CPU and GPU and closed with a
+  measured negative. The real levers are in `TASKS.md`.
+- **`aClip` is a position attribute wearing a shading attribute's name** — it is
+  the clipmap's LOD morph alpha, spent directly on vertex height.
+- **A post-hoc attribute re-pack deleted an NPC's shadow**, silently, because
+  `MIN_VERTS` guards the wrong axis for a character.
+- **`uxcheck` exempted the Regalia under a claim that was not true of the code**,
+  and `Math.abs` in `regaliadrive` was an exemption wearing a tolerance's
+  clothes. Between them a mirrored car shipped.
+- **Task 6 was never a `brushes()` job**, and `Props.landmarks` → `bakedParts`
+  was never "a five-line addition" — a cache hit ships havens with no fire.
 
 ## Knowingly unfinished
 
-- **The head is short of `BRIEF.md`'s bar and was closed anyway**, by the human,
-  after six passes. Its own "done when" is met and `facecheck` asserts it.
-- **The Disc does not read as a meteorite.** Both levers are measured negatives,
-  and the fissure glow **has never rendered from any camera** — all 22 slabs are
-  entombed. The honest fix is an art round; it was put to the human and declined.
-- **`zone_mencemoor`'s corduroy** is the ensemble of five `ridged2` generators in
-  one `strikeFrame`. Closing it needs per-octave anisotropy across all five, with
-  **no instrument that measures directional statistics.**
-- `docs/BOOT_PERF.md` carries the vitals. Note **capping did not reduce
-  `CPU ms/frame`** — a 120 Hz panel halves, a **60 Hz panel is unchanged**.
+- **`facecheck` still prints 2 VOID and PASSes.** Plan task 47 makes that a
+  failure and is deliberately held until both heads clear, so the shared trunk
+  never goes red for seven lanes. Noctis's VOID is a hair-shadow edge, i.e.
+  task 4.
+- **The eyes read googly on all four heroes** — a defect the winding fix
+  *exposed*, because no lane has ever seen the real sclera before tonight. It is
+  the loudest thing on a closeup, and the head is the judge's #1 tell.
+- **`SKIN_CLEARANCE = 0.030` inflates every garment by 30 mm**, absorbing a
+  `drape()` bug rather than fixing it. In `HUMAN_REVIEW.md`.
+- **The public-URL deploy is descoped** by human decision; it is the human's,
+  not a lane's.
