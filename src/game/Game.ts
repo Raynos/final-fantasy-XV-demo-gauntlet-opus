@@ -23,6 +23,7 @@ import { RpgSystem } from './rpg/RpgSystem.ts';
 import { RegaliaSystem } from '../world/vehicle/RegaliaSystem.ts';
 import { InteractionSystem } from './interaction/Interactables.ts';
 import { Hammerhead } from '../world/town/Hammerhead.ts';
+import { CityHub } from '../world/town/CityHub.ts';
 import { Npcs } from '../characters/npc/Npcs.ts';
 import { Minimap } from '../ui/Minimap.ts';
 import { Cinematics } from './cinematics/Cinematics.ts';
@@ -66,6 +67,7 @@ export interface SystemRegistry {
   Story: StorySystem;
   Interaction: InteractionSystem;
   Town: Hammerhead;
+  Cities: CityHub;
   Npcs: Npcs;
   Director: Director;
   Dungeons: Dungeons;
@@ -307,6 +309,10 @@ export class Game {
       step('Story', () => new StorySystem()),
       step('Interaction', () => new InteractionSystem()),
       step('Town', () => new Hammerhead()),
+      // After Interaction (it registers verbs) and before Npcs (which places
+      // city bodies against the same POI anchors). It binds nothing at init:
+      // the two cities are streamed, so `CityHub.update` late-binds them.
+      step('Cities', () => new CityHub()),
       step('Npcs', () => new Npcs()),
       step('Director', () => new Director()),
       // Last: entering a dungeon overrides exposure, grade and the whole
