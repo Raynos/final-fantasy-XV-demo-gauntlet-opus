@@ -1,6 +1,6 @@
 # Lane 19 — City hubs (Lestallum, Galdin Quay)
 
-Status: IN PROGRESS, 2026-08-30. Plan items 66–68 of
+Status: **items 66, 67 and 68 landed and measured.** 2026-08-31. Plan items 66–68 of
 `docs/plans/2026-08-30-fable-to-nine.md`.
 
 ## Landed
@@ -100,7 +100,7 @@ them (9% sag, a bulb per segment) on its **own** emissive material — not
 `PoiMats.lamp`, which six kits share — plus one warm point light per square
 on the night ramp. Two draws per city.
 
-### NPCs — commit pending (blocked on another lane's `src/characters/rig/Materials.ts`, which is mid-edit and does not parse)
+### NPCs — `fd94f1c`, and the frame fixes in `26c0c1f` / `0c84ecb` / `bb1f622`
 
 29 bodies, 5 new archetypes (`sania`, `navyth`, `coctura`, `verdough`,
 `surgate`); the 18 ambient re-use `trucker`/`traveller`/`mechanic`/`kid`
@@ -113,27 +113,94 @@ off) and 85 m → **60 m** (hidden).
 Randolph moved from the `lestallum_lookout` car park onto his forge on the
 square — which is where `side_gemstone_run` always said he was.
 
+## Measured — all verified, each gate run individually, no `pnpm run check`
+
+`citydraws.mts`, this lane's own instrument, at `bb1f622`:
+
+```
+                     calls   npc colour   bodies     budget: 800 / 60 / 12
+lest_market_day        720       59         11
+lest_market_dusk       715       59         11
+lest_festoon_night     730       59         11
+lest_crowd             693       59         11
+galdin_pier_sunset     480       59         11
+galdin_square_day      485       59         11
+galdin_festoon_night   482       59         11
+```
+
+Draw counts, not timings, so the eight-lane load on the box does not make them
+suspect the way a frame time would. **The tree was not quiet.**
+
+Before the crowd budget the same probe read **18 bodies, 159 npc colour draws
+and 949–973 calls**. A tighter distance LOD is why they were already that low
+and is why they could not go lower: a market square is 22 m across, so every
+body in it is inside any threshold you would set for the people you are
+actually looking at. So the crowd is ranked and the budget spent nearest-first
+— `CROWD_DETAIL` 3, `CROWD_MAX` 11, `CROWD_FAR` 60 m in `Npcs.ts`. **Both
+constants are measured, not derived:** the arithmetic said 4 and 12 came to
+sixty and it measured 68, because a LOD-0 body also shows its shadow proxy and
+an outfit can split across material groups. Re-measure rather than re-derive if
+the rig changes.
+
+`questaudit` — **0 unsatisfiable objectives**, every new row `ok`.
+`integration` — **27 pass · 0 wired-but-unproven · 0 not integrated**,
+including "all 83 objectives across 37 quests are satisfiable". The one red
+lane 17 handed over, `gald_ferrybell->npc_navyth`, is fixed at `bb1f622`:
+Navyth stood on the ferry bell's own anchor and a `Talk` at priority 3 beats a
+`Read` at 0, so the bell could never be selected by walking up to it.
+`cityanchors` — unchanged: Lestallum 4 blocked, Galdin 1, nothing placed on
+those five.
+
+## Quests — landed at `26c0c1f`
+
+`city_lest_arrival`, `city_lest_market`, `city_lest_lights`,
+`city_gald_postcards`, `city_gald_catch`, plus a hand-in objective on
+`side_scraps` now that Sania is a body.
+
+**`side_power_play`, `side_gemstone_run` and `side_legendary_fish` needed no
+re-key at all.** Their `giver` and their `talk` targets were already `holly` /
+`randolph` / `navyth`, already waypointed at `at('exineris')` /
+`at('lestallum')`. The rows were right and the people were missing, which is
+the shape of this entire lane. Nothing is keyed to `gate:`.
+
 ## Left to do
 
-1. **The eight city quests.** `Quests.ts` is lane 17's. The rows are written
-   out below under **FOR LANE 17** — paste them after the spine.
-2. **`npcdraws` / `drawcheck` measurement.** Not yet taken. Budgets: ≤60
-   colour draws per city, ≤800 draws on city shots.
-3. **Look at the frames with the crowd in.** Only the empty square has been
-   looked at so far (see below).
-4. **EXINERIS steam and awning variance** — plan item 67, not started, lowest
-   value of the three.
+1. **EXINERIS steam and awning variance** — the last third of item 67, not
+   started, and the lowest-value third. Awning variance lives in
+   `PoiKits._town`, which this lane has spent its one commit on. Steam can be
+   built in `CityHub`'s own group without touching anyone else's file: derive
+   the town yaw from the anchors (`u = normalize(light0 - plaza)`,
+   `v = (-u.z, u.x)`), and the kit's chimney stack is at `plaza + 22u - 18v`,
+   34 m tall.
+2. **The ground under both cities is a flat, untextured plane in every frame**
+   and is now the weakest thing about them — see below. `PoiKits` `M.concrete`
+   and `M.gravel`; not this lane's file.
+3. Lane 21's fourteen framings, listed below.
 
-## What the frames showed — 2026-08-30, `tmp/shots/l19-a`
+## What the frames showed — 2026-08-31, `tmp/shots/l19-d` (and `-a`/`-b`/`-c`)
 
-- `lest_square_day`: the festoon cable and bulbs render and sag correctly;
-  the framing is poor (half the frame is the grey block that leans into the
-  square) and the plaza reads as a flat untextured plane at midday. **Not a
-  frame to ship.**
-- `lest_square_night`: the bulbs read as small dim dots and the pavement is
-  moonlit blue, not warm. The festoon brightness and the plaza point light
-  were raised afterwards (bulb 0.075→0.105 m, `0.25 + night*4.2`, point light
-  70 at 44 m) — **not yet re-shot, not verified.**
+Each of these was captured and read.
+
+- `lest_market_day` — the square is inhabited: three bodies at three depths, a
+  festoon strung across the frame, market stalls reading as stalls. **The
+  pavement is a flat cream plane with no texture at all**, which is the one
+  thing dragging the frame down and is the kit's material, not this lane's.
+- `lest_festoon_night` — the intended signature: a run of warm bulbs over the
+  square with a warm wash on the building faces under them, three people
+  separated in silhouette. At the first attempt the bulbs clipped to hard white
+  (`0.25 + night*4.2`) and the square was blue with white dots; **1.9 keeps the
+  amber** and the plaza lamp at 4.2 m / 120 puts a pool under the string.
+- `galdin_pier_sunset` — the best frame of the lane: eight people at golden
+  hour, warm rim light, long shadows, lights over the boards. Two pairs read as
+  one four-armed person at 1.55 m separation and are clear at 2.2 m.
+- `galdin_square_day` — the bulbs read as well-formed warm globes at close
+  range and the crowd is evenly distributed; the plaza is again a flat plane.
+- `lest_market_dusk`, `lest_crowd`, `galdin_festoon_night` — same read, no new
+  defect.
+
+**Not verified by eye:** the `Eat` conversation, the two lodging conversations,
+the ferry bell and the three `View` verbs have been proven to *register* and to
+be selectable (`integration`, 65/65 reachable) but nobody has read the cards.
 
 ## Framings lane 21 should shoot (deliverable)
 
@@ -167,85 +234,6 @@ in is on the +x side, so keep it behind camera)
 13. `galdin_festoon_night` — 21.5 h, festoon over water.
 14. `galdin_causeway` — from `edge1` along the boards, 16 h.
 
-## FOR LANE 17 — `Quests.ts` rows (paste after the spine)
-
-Every objective target below is a **verified** key: `mt` is the bestiary key
-for a trooper (`magitek_trooper` matches nothing), `sea_bass` and `old_book`
-are real item ids, `sky_gemstone` is a real catalyst id, and the photo
-subjects `PhotoScreen.subjects` can emit are exactly `meteor`, `beast`,
-`party`, `vista`. `at()` throws at boot on an unknown POI id; `lestallum`,
-`lestallum_lookout`, `exineris`, `galdin_quay`, `galdin_pier` and
-`alstor_slough` all exist.
-
-```ts
-  {
-    id: 'city_lest_arrival', type: 'side', name: 'The Grand Tour',
-    region: 'cleigne', level: 30, giver: 'Iris', requires: ['main_ch4_lestallum'],
-    summary: 'Iris has waited a year to show somebody her city. Let her.',
-    objectives: [
-      talk('iris', 'iris', 'Meet Iris at the Lestallum parking', at('lestallum_lookout')),
-      buy('market', 'any', 'Buy something at Partellum Market', at('lestallum')),
-      photo('shot', 'meteor', 1, 'Photograph the Meteor from the lookout', at('lestallum')),
-      talk('coffee', 'surgate', 'Finish at Surgate\'s Beanmine', at('lestallum')),
-    ],
-    rewards: { gil: 1200, exp: 4200, ap: 8, items: [{ id: 'ulwaat_berries', count: 2 }] },
-  },
-  {
-    id: 'city_lest_market', type: 'side', name: 'Sania\'s Shopping',
-    region: 'cleigne', level: 30, giver: 'Sania', requires: ['main_ch4_lestallum'],
-    summary: 'A field biologist with no time and a list of three things.',
-    objectives: [
-      fetch_('berries', 'ulwaat_berries', 1, 'Buy Ulwaat Berries at Partellum Market'),
-      fetch_('stone', 'sky_gemstone', 1, 'Buy a Sky Gemstone at Partellum Market'),
-      talk('back', 'sania', 'Take them back to Sania', at('lestallum')),
-    ],
-    rewards: { gil: 2400, exp: 5200, ap: 10, items: [{ id: 'rainbow_frog', count: 1 }] },
-  },
-  {
-    id: 'city_lest_lights', type: 'side', name: 'The Lights Go Out',
-    region: 'cleigne', level: 34, giver: 'Holly', requires: ['main_ch4_lestallum'],
-    summary: 'A relay station on the shelf has stopped answering, and so have the two people sent to it.',
-    objectives: [
-      talk('holly', 'holly', 'Hear Holly out at the plant', at('exineris')),
-      kill('clear', 'mt', 8, 'Clear the substation', at('exineris', -180, -240)),
-      fetch_('relay', 'imperial_relay', 1, 'Recover the relay unit'),
-      talk('back', 'holly', 'Report back to Holly', at('exineris')),
-    ],
-    rewards: { gil: 7500, exp: 11000, ap: 22, items: [{ id: 'topaz_bracelet', count: 1 }] },
-  },
-  {
-    id: 'city_gald_postcards', type: 'side', name: 'Four Column Inches',
-    region: 'leide', level: 10, giver: 'Dino', requires: ['main_ch2_galdin'],
-    summary: 'Dino\'s column runs Thursday and he has nothing to run in it.',
-    objectives: [
-      photo('vista', 'vista', 3, 'Photograph Galdin Quay for Dino', at('galdin_quay')),
-      talk('dino', 'dino', 'Show Dino the pictures', at('galdin_quay')),
-    ],
-    rewards: { gil: 2000, exp: 2400, ap: 8, items: [{ id: 'beautiful_bottle', count: 2 }] },
-  },
-  {
-    id: 'city_gald_catch', type: 'side', name: 'A Table of Eleven',
-    region: 'leide', level: 12, giver: 'Coctura', requires: ['main_ch2_galdin'],
-    summary: 'The boat that brings Coctura her sea bass has decided it is a ferry now.',
-    objectives: [
-      fish('catch', 'sea_bass', 3, 'Land three Sea Bass at the Galdin Shoals', at('galdin_pier')),
-      talk('deliver', 'coctura', 'Take them to Coctura', at('galdin_quay')),
-    ],
-    rewards: { gil: 3200, exp: 3400, ap: 10, items: [{ id: 'mega_potion', count: 3 }] },
-  },
-```
-
-Three existing rows are **re-keyed rather than rewritten** — the givers now
-exist as bodies in the right places, so only the waypoints need to agree:
-
-- `side_power_play` — `giver: 'Holly'` already; leave it.
-- `side_gemstone_run` — `talk('smith', 'randolph', ..., at('lestallum'))` is
-  already right, and Randolph now stands there. No change needed.
-- `side_scraps` — `giver: 'Sania'` already; Sania is now a body at
-  `at('lestallum')`. Add a hand-in objective if you want it to close in
-  conversation: `talk('sania', 'sania', 'Take the scraps to Sania',
-  at('lestallum'))`.
-
 ## Cross-boundary / residue
 
 - **`project/TASKS.md` (lane 10):** `ShopScreen` has no per-shop sell
@@ -256,12 +244,20 @@ exist as bodies in the right places, so only the waypoints need to agree:
   `beast`, `party`, `vista`. A city photo objective can therefore never name
   a *place*. Two of the fourteen framings above are "photo spots" that no
   objective can distinguish.
-- **`HUMAN_REVIEW.md`:** nothing yet.
+- **`project/TASKS.md`:** the third entry filed is the measured finding that a
+  block of Lestallum's street grid stands inside its own market square and
+  costs four of the nineteen anchors `_town` publishes. Fixing it in the block
+  loop would give both cities four more usable anchors.
+- **`HUMAN_REVIEW.md`:** nothing.
 
 ## Files owned / touched
 
 Owned: `src/world/town/CityHub.ts` (new), `src/world/town/Shops.ts`,
 `src/characters/npc/Npcs.ts`, `NpcCast.ts`, `NpcDialogue.ts`,
-`src/tools/probes/cityanchors.mts` (new).
-One commit each, by agreement: `src/world/props/PoiKits.ts` (H2 anchors),
-`src/game/Game.ts` (two-line boot registration).
+`src/tools/probes/cityanchors.mts` (new), `src/tools/probes/citydraws.mts`
+(new), `src/game/rpg/Quests.ts` rows (after lane 17's release at `ff695f8`).
+One commit each, by agreement: `src/world/props/PoiKits.ts` (H2 anchors,
+`ca8929e`) and `src/game/Game.ts` (six-line boot registration, `ef1055e`).
+
+Commits: `ca8929e` `615cdf8` `4de578e` `ef1055e` `fd94f1c` `8b986e3` `26c0c1f`
+`0c84ecb` `bb1f622`.
