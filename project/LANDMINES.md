@@ -1351,6 +1351,56 @@ The experiment that settles it is embarrassingly simpler: run the two paths on
 **When an optimisation is validated by a statistic rather than by a diff, ask
 what the statistic forgives.** Reverted; the settle is drawn again.
 
+### The same shape, in a gate: `uxcheck` exempted the Regalia
+
+**2026-08-30.** `uxcheck.mts` section 8 asks "is any key claimed by two systems
+in the same mode". It carried
+
+    // Driving and on-foot combat are mutually exclusive states, so a key may
+    // be in both.
+    if (owners.has('regalia') && owners.size === 2 && !owners.has('menus')) continue;
+
+and passed green for as long as it has existed over **four live collisions**:
+V was lock-on and the drive camera, T drew elemental energy and fitted the
+Type-D package, B cast the third Elemancy slot and changed radio station, F
+swung the heavy attack and got you out of the car.
+
+**Driving is not a mode.** `CombatSystem.update` gates `_readInput` on
+`input.enabled` and its own `scenarioLock`; nothing in the tree sets either
+when the player gets into the car, and `isDriving` has three readers, all UI.
+The comment asserted a modality the code never implemented, and the exemption
+built on it removed from the search exactly the pair of systems the defect
+lived between.
+
+Two further details generalise.
+
+- **`Space` was not even in the pattern** (`Key[A-Z]|Digit\d|Backquote`), so
+  the one collision here a player can *see* — handbrake and dodge roll on the
+  same key, `state: idle -> dodge` while driving — could not be represented at
+  all. A gate's alphabet is part of its coverage.
+- **Outcomes are conditional; count the calls.** The probe that settled it
+  (`src/tools/_probe/inputcollide.mts`) wraps the combat verbs and counts
+  invocations, because `setLockOn(autoTarget())` with no enemy nearby changes
+  nothing observable and the first version of the probe read that as "no
+  collision". Five presses, five verbs, one call each.
+
+The fix is not a bigger exemption. It is `SHARED_ON_PURPOSE`, a per-key
+allowlist where each entry carries the reason it is allowed — **a category can
+absorb a new defect silently; a named key cannot.** Replayed against the tree
+before the rebind: old gate green, new gate flags KeyV, KeyB, KeyT.
+
+### And the same shape in `regaliadrive`: `Math.abs` is an exemption too
+
+The mirrored-steering bug (a human found it in a minute; 19 gates, 142 shots
+and both perf gates did not) survived because `regaliadrive`'s steering
+assertion was `Math.abs(h1 - h0) > 0.3`. That predicate is **symmetric under
+negation of `steer` by construction**: there is no car it can tell apart from
+its own mirror image. Section 2b now drives `KeyA` *and* `KeyD`, requires
+opposite signs, and measures the **path** — travel direction from world
+positions, accumulated so it cannot wrap — rather than `body.heading`, which is
+the quantity the bug lived in. `src/tools/_probe/steerfalsify.mts` negates
+`c.steer` and shows the gate goes red, which is the check a new gate owes.
+
 ## A shared constant across unrelated subjects is a thing, not noise
 
 `drawcheck` disagreed with itself on 25 of 142 shots and I spent five hypotheses
