@@ -159,3 +159,40 @@ command:** `node src/tools/reliefstat.mts <capture> --roi 0.1,0.6,0.8,0.35
 
 Draw calls on the last capture: three_valleys 436, longwythe 502, vannath 616 —
 all inside the 800 budget.
+
+## `driftcheck` RED — the diagnosis (coordinator ask)
+
+Measured, from the coordinator's run: `SURFACE DRIFT mean 0.000 worst 0.000`
+over 36 864 texels, and `gpu vs heightAt` **worst −0.520 m at (−39.8, −68.2),
+identical at boot and after 56 km**. So the drift half of the gate is perfectly
+clean and the failure is a *static* 0.520 m against a 0.45 m tolerance — 0.07 m
+over, on a **worst-of-36 864** statistic.
+
+**It cannot be a terrain commit from tonight, and that is provable from the
+diff rather than argued.** Since the dispatch baseline `7da60d5` the ONLY files
+changed under `src/world/terrain/` are `Layers.ts` and `TerrainMaterial.ts`,
+both lane 5's, and `git diff 7da60d5..HEAD` on them, comments stripped, is:
+
+- `Layers.ts` — two texture recipes and the `LAYER_AVG` table. Texel colour.
+- `TerrainMaterial.ts` — `uniform vec2 uSkyFill` in **FRAG_PARS**, a `tf_bump`
+  block in the **fragment** body, a `#if defined(USE_LIGHT_PROBES)` addition in
+  **FRAG_AO**, and one uniform default.
+
+**Not one line of `VERT_PARS`, `VERT_BEGIN`, `tf_height` or `tf_heightLod`
+changed.** `driftcheck` re-renders the clipmap through exactly those vertex
+chunks, so nothing lane 5 landed can move the surface it reads. `Field.ts`,
+`Terrain.ts`, `Wear.ts` and `Clipmap.ts` were not touched by anyone tonight.
+`heightcheck` reading 0.000 says the same thing from the field's side.
+
+What is left is the **tessellation chord**: the tool's own tolerance comment
+says the 1.5 m mesh "sags a measured ~0.37 m below `heightAt()`" in the
+roughest ground inside 100 m and that 0.45 was chosen as headroom over that.
+0.520 is that same quantity, at the single worst texel, 16 % past a threshold
+set from one past measurement. `hero_full` is a `follow: 'player'` shot, so the
+probe rect is centred on the player — anything that moves the spawn moves the
+rect onto different ground and moves a worst-case statistic with it.
+
+**The decisive experiment is running:** `driftcheck --build 7da60d5`, the
+dispatch baseline. If it also reads ~0.520 the gate was red before any lane
+committed and the tolerance, not tonight's work, is what needs the argument.
+Queue depth was 8 in the fix lane and 43 in sweep when it was submitted.
