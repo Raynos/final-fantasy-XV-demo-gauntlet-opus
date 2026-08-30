@@ -908,10 +908,24 @@
   font-size: 9.5px; font-weight: 300; line-height: 1.7; letter-spacing: .1em; color: var(--ink-3); text-shadow: var(--sh-text); }
 
 /* ---- armiger --------------------------------------------------------- */
-.arm-gauge { position: absolute; right: 68px; top: 54px; width: 250px; text-align: right; }
+/* `.d` is the only line on this screen that tells the player how to USE the
+ * Armiger -- "Full gauge calls the royal arms. R, or L1 on a pad." -- and it
+ * was the least legible thing in the menu: 8.5px of `--ink-4`, which is
+ * rgba(198,214,240,0.34), with no text-shadow at all, over a live game frame
+ * that is free to be any brightness it likes. Its own siblings two lines up
+ * both carry `--sh-text` for exactly that reason; this one was skipped. In a
+ * capture over daylight terrain it reads as a smudge, and the 250px box wrapped
+ * it so that the second line was the single word "pad."
+ *
+ * It is a sentence, not a unit label, so it gets sentence treatment: the ink
+ * its siblings use, the shadow they use, looser leading, and a box wide enough
+ * to break it somewhere a reader would. The letter-spacing comes down too --
+ * .2em is a display tracking and it was being applied to running text. */
+.arm-gauge { position: absolute; right: 68px; top: 54px; width: 300px; text-align: right; }
 .arm-gauge .k { font-size: 8.5px; letter-spacing: .38em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
 .arm-gauge .v { font-size: 34px; font-weight: 100; letter-spacing: .04em; color: #fff; line-height: 1; margin: 7px 0 11px; text-shadow: var(--sh-text-lg); }
-.arm-gauge .d { font-size: 8.5px; letter-spacing: .2em; color: var(--ink-4); margin-top: 10px; }
+.arm-gauge .d { font-size: 9.5px; font-weight: 300; letter-spacing: .09em; line-height: 1.75;
+  color: var(--ink-2); text-shadow: var(--sh-text); margin-top: 11px; }
 
 /* ---- gear: the equip picker ------------------------------------------ */
 .equip-pick { position: absolute; left: 50%; top: 168px; width: 470px; margin-left: -235px; padding: 18px 20px 16px; }
