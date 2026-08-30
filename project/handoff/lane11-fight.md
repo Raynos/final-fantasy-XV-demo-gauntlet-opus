@@ -281,7 +281,19 @@ life's poise. `src/characters/enemies/EnemyBase.ts` is not this lane's file, so
 it lands as its own one-line commit.
 
 **Landed as `c86e167`** (`EnemyBase.reset()` restores `maxPoise` from
-`type.stats.poise`). `combatloop` re-run against it is in flight.
+`type.stats.poise`). **VERIFIED**: `combatloop --build c86e167` prints
+
+```
+PASS   poise breaks into a stagger with a damage window   stagger fired, staggerMult 2, window 2.4 s
+35/35 mechanics verified
+```
+
+against `34/35 ... poise 5/71 never broke` on the run immediately before it.
+A synthetic before/after probe of the pool was written and then **dropped
+deliberately**, not run: the box was at fix-queue depth 7 / sweep 26 and
+`combatloop` red-to-green on a one-line change to exactly the line the static
+reading implicates, plus the arithmetic above, is stronger evidence than a
+second instrument would have been. Flagged so nobody reads it as verified twice.
 
 ## Priority 2 — the last 0.7 s, landed as `ca90950`
 
@@ -293,7 +305,61 @@ already inside the band and the longest in the set, so widening it would push it
 out the top. All ten explicit `maxEngaged: 3` (equal to `Pack`'s default since
 4a588f4) are now 4, which is the lever aimed at the imperial round's *danger*
 (1.10 %/hit against the animals' 3.05-5.00). `fightshape --set rounds=6` against
-`ca90950` is in flight. **Not verified yet.**
+`ca90950` — **VERIFIED, and both exits now PASS.**
+
+```
+=== AGGREGATE over 3 finished fights (3 rounds played, 0 found no den, 0 left the pack alive)
+  duration      24.4 17.9 23.0  ->  MEDIAN 23.0 s        [target 18-30]
+  hp paid %     23.6 21.2 12.5  ->  MEDIAN 21.2 %        [target >=15]
+  pack size     5 6 6  ->  median 6   (killed 5/5 6/6 6/6)
+  % max hp/hit  4.73 4.25 3.12  ->  median 4.25 %
+  enemy atk/s   1.02 1.12 1.48  ->  median 1.12
+  VERDICT: duration PASS; danger PASS
+```
+
+Every round ended `wiped`, none dropped. **The authored territory that was the
+whole residual is round 3**: it was Sabertusk **x4**, 9 012 hp, 16.3 / 16.6 s at
+`b24d958` and is Sabertusk **x6**, 13 518 hp, **23.0 s**, 12.5 % here — same
+level (27), same 2 253 hp per animal, two more animals. That is the count lever
+and nothing else.
+
+Caveat, stated plainly: the run asked for **6 rounds and played 3** — the page
+lost its vite connection after round 3 (`[vite] server connection lost`, seven
+other lanes editing the trunk). Three finished fights is a thinner median than
+the six-round run it replaces, and it should be re-run on a quiet tree before
+anyone calls the number final. It is not thin in the way that matters, though:
+all three rounds were complete wipes, the spread is 17.9-24.4 (against
+16.3-55.9 before), and the round that decides it is the one that was failing.
+
+Against the baseline at `20405ce`: **11.4 s -> 23.0 s** and **3.2 % -> 21.2 %**.
+
+## Priority 3 — the white ground splat: ablated, diagnosed, fixed (`e1b5523`)
+
+`probes/groundbloom.mts` (new, committed) fires the four `GroundFX.ring` calls
+a fight makes, one at a time, on a still posed frame against a clean plate off
+the same page. `imgdiff` against that plate at the old defaults:
+
+```
+warp-strike landing ring   mean 8.76/255   max 255 over 17.7% of frame
+parry / phase ring         mean 9.91/255   max 255 over 21.8% of frame
+stagger ring               mean 5.96/255   max 250 over 12.5% of frame
+```
+
+**Looked at** (`tmp/shots/bloom/g-c-warpland.png`): not a wave at all — a thick
+opaque lump of paint-white with a lumpy outline and a filled-in centre lying on
+the badlands, no terrain legible through it.
+
+Cause: `PATCH_FRAG` draws a ring crest as `mix(uColor, vec3(1.0), hot*0.75) *
+uIntensity` over **additive** blending, and the four `CombatSystem` call sites
+pass neither `intensity` nor `opacity`, so they took `ring()`'s defaults of
+**3.2 / 1.0** — the hottest numbers in the file on the most frequent events in a
+fight. Every call that *was* tuned by hand passes its own (`VFX.impact` 2.4/0.7,
+`VFX.shockwave` 3.4/1, the warp pool 0.55/0.4) and is untouched.
+
+Fix: the **defaults** move to 1.35 / 0.6. **Verified by eye** on the ablation's
+fifth arm (`g-e-warpland-tuned.png`), which is that exact call at those exact
+values: a pale blue-white ring with the badlands texture readable through it.
+A confirming re-run of all four arms at `e1b5523` is in flight.
 
 ## (superseded) the original 34/35 note
 
