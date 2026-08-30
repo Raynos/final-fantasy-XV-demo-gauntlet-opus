@@ -157,6 +157,13 @@ export const GEO_SOURCES = [
   'src/world/terrain/Clipmap.ts',
   'src/world/terrain/Field.ts',
   'src/world/terrain/FieldCodec.ts',
+  // `FieldCodec` is the container; `FieldBake` decides which *encoding* each
+  // section is written in, so a change there moves every decoded height. The
+  // geometry bake grades POI compounds, aprons and the shoreline against those
+  // heights, and a compound graded against a heightfield that has since moved is
+  // well-formed geometry standing in the air — the stale-geometry failure this
+  // file's own docstring describes, with nothing gating it. It was missing.
+  'src/world/terrain/FieldBake.ts',
   'src/world/terrain/Road.ts',
   'src/world/terrain/Layers.ts',
   'src/world/map/WorldMap.ts',
