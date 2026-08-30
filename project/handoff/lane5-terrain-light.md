@@ -136,3 +136,26 @@ d16 12.1, d32 13.3 against 18.4 / 21.2 / 21.8). **Next step is exactly one
 command:** `node src/tools/reliefstat.mts <capture> --roi 0.1,0.6,0.8,0.35
 --against FFXV-field-ground`, on a `nomacroh` / shipped pair, plus a look at
 `zone_longwythe` for the same 2.5× control tier-C used.
+
+## Looked at, at the end of the session
+
+- `zone_vannath` with the fill: the midground now reads as sunlit tan dirt with
+  legible relief and the cloud-shadow bands read as *shadows* rather than as a
+  wall of black; the bottom fifth is still the darkest thing in the frame.
+- `vista_overcast`, ground half, before/after: the badlands go from an
+  unreadable black mass to legible ridge and gully form. This is the frame that
+  most justifies `uSkyFill`, and it is also the one whose whole-frame `sat%`
+  falls — the number and the picture disagree and the picture is right.
+- `zone_three_valleys` before/after tier-B: the left ridge gains a broad lit
+  shoulder and the middle gains dark sweeps through its gully system; the
+  hillside stops being one even carpet at 200-400 m.
+- `zone_longwythe` with tier-B, whole frame: badland floor with broad hummocky
+  form and drainage lines, mesas with shape, real depth. No greasy wash, no
+  artefacts, no banding. `?post=nomacroh` against it is a subtle but real loss
+  of the large-scale light and shade on the plain.
+- `daycycle_night`, `vista_dusk`, `zone_nebulawood`, `zone_malmalam` at fill
+  3.5: night still dark and blue, dusk still golden, the two green zones
+  unchanged in character. Nothing clips.
+
+Draw calls on the last capture: three_valleys 436, longwythe 502, vannath 616 —
+all inside the 800 budget.
