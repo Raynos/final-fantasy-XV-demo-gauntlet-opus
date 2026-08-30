@@ -204,6 +204,46 @@ What that does **not** imply: it is not "revert, it was only the cache". At 0.39
 the old flat predicate passes by 12%, i.e. the gate was one gully lip from red
 either way. It is the argument *for* the repair, not against it.
 
+### `SsrPass.ts:75` — the one NaN site this lane fixed — `e2722c7`
+
+**Named cross-lane commit.** `src/engine/postfx/` was lane 15's; lane 15 finished
+and the coordinator handed it over. Every other `nansweep` finding was filed, not
+fixed (rule 1).
+
+`dx`/`dy` are world deltas reconstructed from the depth texture, so on a depth
+plateau or at any range where two adjacent texels resolve to one world point they
+are parallel or zero and `normalize(cross(dy, dx))` is `0/0`. What made this the
+worst-shaped of the seven: the two tests immediately below it,
+`if (N.y < 0.0)` and `if (N.y < 0.86) return;`, are **both FALSE for a NaN**, so
+the pass did not bail — it marched a 28-step reflection ray from a NaN normal, in
+a post pass, where the NaN survives the composer and lands as a hole of pure
+black.
+
+The guard tests `sin²` of the angle between the deltas rather than `|cross|`,
+because the deltas scale with distance: one texel is a millimetre of world at
+arm's length and metres of it at the far plane, so an absolute floor would either
+miss the degenerate case up close or delete the pass in the distance.
+`dot(n,n) / (|dx|²|dy|²)` is exactly `sin²` and is scale-free. Bailing writes
+`src` unchanged, which the pass already does for every non-qualifying pixel, so
+the guard's own failure mode is *no* reflection, never a *wrong* one.
+
+**`nansweep` then caught itself on this fix**, and the lesson is in the tool now:
+the block comment explaining the defect sits above the code closing it, and the
+sweep re-reported `normalize(cross(dy, dx))` out of that prose as a HIGH call
+site one line below the fix. A tool that cannot tell a fix's rationale from the
+defect keeps every fix it inspires permanently red, which trains people to write
+the fix without the reason. It strips comments now. `SsrPass.ts` 0 HIGH; corpus
+9 → 8.
+
+**Frame verification: PENDING at the time of writing.** A guard like this can
+silently delete the pass it protects, so `zone_vesperpool` and `zone_galdin` are
+capturing at `4bbd5f6` (before) and `e2722c7` (after) with an `imgdiff` between
+them. Neither shot has a measured noise floor in `project/noise-floors.json`
+(23 of 142 are measured), so the comparison is against `imgdiff`'s unmeasured
+`DEFAULT_LIMIT` of 2/255. **Expected ~0** — the guard only fires where
+`sin θ < 1e-4`. A large delta means the threshold is wrong, and the response is
+to revert rather than tune it.
+
 ## Standing procedure: the bake caches during a multi-lane wave
 
 Written here because it is a harness fact, not a coordinator preference, and it
