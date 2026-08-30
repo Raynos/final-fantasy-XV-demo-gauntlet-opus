@@ -445,3 +445,38 @@ Checked and **safe**, recorded so nobody re-triages them: `VolumePass.ts:132`'s
 0.62`; `CrystalShards.ts:280-284` and `sky.glsl.ts:116-117` both guard their
 cross with the anti-parallel ternary; every `pow(1.0 - clamp(...), k)` Fresnel
 term is in `[0,1]` by construction.
+
+## Water and weather: what lane 7 left behind (2026-08-31)
+
+- **A rain splash cannot land on a prop.** `weather/Rain.ts`'s splash vertex
+  shader finds the ground with `tf_height`, which is the terrain heightfield and
+  knows nothing about the road, the apron or the Hammerhead forecourt slab. A
+  splash under a prop sits at terrain height and is correctly depth-rejected by
+  the prop above it — and the judged `storm` frame is mostly tarmac, so the one
+  place the tell is judged is the one place the splash cannot appear. The fix is
+  a depth-buffer read in the splash pass (project the instance to screen, sample
+  the scene depth, place the ring at *that* height), not a bigger extent. Lane 7
+  raised extent 22→64 m and the fade to the last fifth, which fixes the terrain
+  case and leaves this one open.
+- **A probe that poses with `rig.setShot` and screenshots returns a black
+  frame.** Four of them, `tmp/shots/l7/p1/*.jpg`, on a build whose `shoot.mts`
+  frames at the same sha were correct. `framecam.mts` works, because it injects
+  the spec into `SHOTS`, calls `applyShot` twice around a `settle` and
+  screenshots after that. Either `probe.mts --shot` should be documented as
+  unusable for framing or it should adopt framecam's path; as it stands
+  `probes/vegwaterlook.mts`'s whole look-loop is presumably producing black
+  frames too and nobody has said so.
+- **The corpus has no shot of a tarn, a river, a shoreline at eye height, or
+  rain on the ground.** Lane 7 derived and shot five candidates —
+  `tmp/l7/frames.json` and `src/tools/probes/l7frames.mts` (which derives its
+  own from `Water.bodies` and `Water.riverJoins` and hands them back to
+  framecam). `surf`, `maidenwater`, `vesper_low` and `storm_ground` are all
+  frames that show a defect no judged shot can reach. **For lane 21.**
+- **The near field of a lake reads as bright speckle under overcast.** At 10–60 m
+  the wave normal is rough enough that Fresnel picks up the bright overcast sky
+  on scattered facets and the surface fizzes. `calmFar` correctly leaves the near
+  field alone, so this is an amplitude question at close range and wants a
+  measured answer, not a tweak. `tmp/shots/l7/f2/vesper_low.jpg`.
+- **`Water._visible` is a bbox test and the reflection pass spends ~40 draws on
+  shots with no visible water** — already demoted in this file, not touched, and
+  lane 7's work did not make it free.
