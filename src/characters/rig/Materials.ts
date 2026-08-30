@@ -332,13 +332,51 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // is the *transmission* term and it is strongest on fine pale hair, but not
   // by a factor of forty.
   kk += uSunColor * rim * 0.20 * strand * hueC * ( 0.20 + 0.55 * luminance );
-  // Sky sheen. Near-black hair under a directional key has nothing at all in
-  // shadow, which is why the whole cast read as wearing black helmets: the
-  // silhouette went to a single flat value the moment it turned away from the
-  // sun. A broad, weak dome term restores the value range a real head of hair
-  // has on its shadow side without lifting it toward navy.
-  float dome = clamp( dot( hN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * hueC * ( 0.14 + 0.42 * luminance );
+  // ---- sky fill ----------------------------------------------------------
+  //
+  // This term exists because near-black hair under a directional key has
+  // nothing at all on its shadow side, so the whole cast read as wearing black
+  // helmets. It did not work, and a 0.55 m read of Noctis says so plainly: his
+  // groom is a flat black silhouette with a few chalk-white streaks laid on the
+  // crown and no form anywhere else. regionstat over the hair puts our dark
+  // end at Y 0-1 on both a black head and a blond one.
+  //
+  // ART-DIRECTION 12.3's plates are unambiguous about that end. Noctis' black
+  // hair p10 is #101922 (Y 25), Prompto's *blond* p10 is #0f1d25 (Y 15):
+  // both cool, both around Y 20, and **within 10 Y of each other despite an
+  // albedo an order of magnitude apart**. Three things had to change to get
+  // there, and they are one idea, so they land together.
+  //
+  // **It read hN, the card's own normal.** A card is a flat ribbon and half
+  // of any groom's ribbons point away from the sky at any instant, so
+  // pow(dome, 1.6) collapsed to nothing over half the visible hair — the term
+  // was absent exactly where it was needed. Sky light through hair is a volume
+  // effect: what decides how much of it reaches a strand is where that strand
+  // sits on the *head*, not which way its own ribbon happens to face. That is
+  // the same argument that already places the anisotropic band on gN, and
+  // this is the same field. The exponent softens with it — 1.6 on a macro
+  // normal is a hard terminator drawn across the groom.
+  //
+  // **hueC is floored at luminance 0.10, so it is not a hue on dark hair.**
+  // vColor.rgb / max(0.10, luminance) returns unit luminance for anything
+  // above 0.10 and a *fifth* of that for Noctis' 0.022 — a silent 5x penalty on
+  // precisely the hair that has nothing else. The band and the rim are tuned
+  // around that floor and are left alone; the fill normalises properly.
+  //
+  // **It scaled hard with albedo** (0.14 -> 0.56 across our cast) which is
+  // backwards against plates whose dark ends land 10 Y apart. Inter-strand
+  // scattering saturates rather than tracking albedo linearly, so the weight is
+  // nearly flat now.
+  //
+  // The tint is 12.3's third finding: hair shadows are BLUE-black (B > G > R
+  // at p10 and p50 on every plate) where skin in the same frame is warm, and
+  // ours measured R-B +26 at p50. Fill light carries the *sky's* hue, not the
+  // hair's, so it is mixed toward cool instead of taking the strand colour
+  // straight.
+  vec3 fillN = clamp( vColor.rgb / max( 1e-4, luminance ), 0.0, 3.0 );
+  vec3 fillC = mix( fillN, vec3( 0.76, 0.90, 1.20 ), 0.45 );
+  float dome = clamp( dot( gN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
+  kk += uSunColor * pow( dome, 1.2 ) * 0.11 * strand * fillC * ( 0.30 + 0.30 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
