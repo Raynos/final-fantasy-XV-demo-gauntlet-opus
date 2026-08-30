@@ -146,6 +146,18 @@ const STARTING_ITEMS: [string, number][] = [
   ['bronze_bangle', 2], ['debased_coin', 8], ['magitek_booster', 3],
   ['lucian_tomato', 2], ['leiden_pepper', 2], ['anak_meat', 1], ['cup_noodles', 1],
   ['regalia_key', 1], ['hunter_licence', 1], ['cookbook', 1], ['camera', 1], ['fishing_rod', 1],
+  /**
+   * The chocobo whistle, from minute one.
+   *
+   * It used to be granted only by `side_chocobo`'s reward, and `side_chocobo`
+   * was gated behind a chapter-three hunt that could not be reached — so the
+   * item existed in `Inventory.ts`, had a name and an icon and a description,
+   * and no player could ever hold one. The mount is the fun/fast-movement
+   * layer and the plan is explicit that it has **no unlock gate**, so the
+   * whistle goes in the starting bag beside the Regalia key: both of them are
+   * "you may travel now", and neither is a reward for anything.
+   */
+  ['chocobo_whistle', 1],
 ];
 
 /** Default equipment for each member at the start of the game. */
