@@ -111,7 +111,31 @@ into the plaza deck** — every one of them is cut off mid-shin. `PLAZA_Y` is
 0.675 and published for exactly this; someone is placing on the terrain height
 instead. Five of lane 21's judged frames are city frames.
 
-## The graveyard: second pass landed, NOT yet re-photographed
+## The graveyard: third pass VERIFIED BY EYE — ready to photograph
+
+`tmp/shots/l18d/gv_axis.jpg` and `gv_shell.jpg`, read at `5a2bac6`:
+
+- **The arches read.** Four rib arches marching away across an open pan, each
+  smaller than the last, the pair on each one crossing at the apex so it is a
+  pointed arch and not two tusks. The 1.42:1 ellipse was the fix.
+- **The carapace reads** — a domed shell with its radial scute ridges, tipped on
+  its edge and sunk to its rim, with an arch standing beside it for scale.
+- **Bone is bone now**, not polystyrene: warm off-white in the sun, dirty at the
+  earth line.
+- The vertebrae went slightly too far the other way — they read as scattered
+  bone fins in the grass rather than as a spine. Acceptable; a successor
+  wanting a beat here should raise `sc` back toward 1.8 and tighten the spacing
+  from 6.2 m to about 4.5.
+
+**Open, and it needs a call rather than an edit.** Both the old site and the new
+one look out on the Insomnia megastructure skyline — the tall slabs in the
+background of `gv_axis.jpg` are `Megastructures.ts`, not this kit, and they were
+equally present at (2600, −2800) in `l18c/gv_axis.jpg`. So the move did **not**
+introduce them. But "the empty quarter, farthest from everything" now has a
+dead city on its horizon, and whether that is the right meaning for the bone
+country is a composition decision above this lane.
+
+## How the third pass got there
 
 `5a2bac6` moved the POI and rebuilt three things after reading
 `tmp/shots/l18c/gv_axis.jpg`, where the first pass showed (a) half the cage
@@ -135,13 +159,13 @@ white pipe.
   At the old value the bleach put the top of an arch within a few per cent of
   white and the whole thing read as painted polystyrene.
 
-**The re-shoot never came back.** `framecam --probe tmp/lane18/probe2.mts
---out tmp/shots/l18d`, `drawcheck --worst 30`, `probe perfpoi` and `probe
-questaudit` were all queued and all still queued at hand-off:
-`daemon.mts --health` shows **`"exclusive": "perf"` with a lease held at
-`cpu: 0`** and 22 jobs behind it (fix 17, sweep 5) with `workers.busy: 0`.
-That is somebody else's stalled perf gate, not a fault in these jobs. **Re-run
-all four first thing.**
+**The re-shoot came back and is read above.** `drawcheck --worst 30`, `probe
+src/tools/probes/perfpoi.mts` and `probe src/tools/probes/questaudit.mts` did
+**not** — they were still queued at hand-off behind an exclusive lease that
+freed after 288 s and was immediately retaken, with 25 jobs in the queue across
+`fix` and `sweep`. `harnessstats`: **60% of all harness time tonight was
+queue.** Not a fault in these jobs. **Re-run those three first thing.** Note the
+probe path must be `src/tools/probes/<x>.mts`, not `probes/<x>.mts`.
 
 ## Not done yet
 
