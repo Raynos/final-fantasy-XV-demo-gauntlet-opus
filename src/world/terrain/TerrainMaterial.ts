@@ -2138,7 +2138,18 @@ export function makeTerrainUniforms(tex: TerrainTextures, field: FieldConstants,
     // `tfAmb` occludes that gain). The primary indirect term is occluded at
     // 0.85; this one at 0.45, because the probe is the whole of the sky and a
     // shadow-side slope that keeps half a hemisphere should keep half the fill.
-    uSkyFill: { value: new THREE.Vector2(1.6, 0.45) },
+    //
+    // 3.5 is a measured seat, not a taste. On `zone_vannath`'s shadowed
+    // foreground box the gain buys Y p50 7 (shipped) -> 11 at 1.6 -> 22 at 3.5,
+    // and on the gate box of plan item 21, 35 -> 46 -> 61 against a bar of 30.
+    // The ceiling is set from the other side: at 3.5 `daycycle_night` is still
+    // dark and blue, `vista_dusk` still reads as golden hour, and whole-frame
+    // shadow warmth against `FFXV-field` moves from OFF (-3.2 vs +5.8) to ok
+    // (+0.9) — that is, TOWARD the reference, not past it. Do not read the
+    // whole-frame `sat%` fall on `vista_overcast` (27.4 -> 17.3) as a wash
+    // before looking at the ground: the statistic is dominated by a white sky,
+    // and the badlands under it go from a black mass to legible ridge form.
+    uSkyFill: { value: new THREE.Vector2(3.5, 0.45) },
     uField: { value: new THREE.Vector4(field.HALF, field.CELL, field.N, field.BLEND_OUT) },
     uFarP: { value: new THREE.Vector4(field.FAR_HALF, field.FAR_CELL, field.FAR_N, 0) },
     uLayerAvg: { value: LAYER_AVG.map((c) => new THREE.Vector3(c[0], c[1], c[2])) },
