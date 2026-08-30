@@ -14,8 +14,10 @@ import type { InventorySave } from './Inventory.ts';
 import type { ElemancySave } from './Elemancy.ts';
 import type { QuestSave } from './Quests.ts';
 import type { DayCycleSave } from './DayCycle.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
+import { fog } from '../../world/map/FogOfWar.ts';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_PREFIX = 'ffxv-eos:save:';
 export const AUTOSAVE_SLOT = 'auto';
 
@@ -38,6 +40,22 @@ export interface SaveMeta {
  * did not have yet; `migrate` is what fills the gaps, and each subsystem's
  * `fromJSON` already takes `undefined` and answers with a fresh instance.
  */
+/**
+ * What the player has charted.
+ *
+ * `WorldMap.discovered` is reseeded to Hammerhead and its layby in the
+ * constructor and the constructor runs at import, so before v4 every load --
+ * including "Continue" on a 27-hour save -- opened the map with two pins on
+ * it and the surveyed read-out back at its boot value. Twelve hours of driving
+ * charted nothing that outlived the tab.
+ */
+export interface MapSave {
+  /** POI ids the player has found. */
+  discovered?: string[];
+  /** The surveyed mask, base64 bitset. @see FogOfWar.toJSON */
+  fog?: string;
+}
+
 export interface SaveData {
   version?: number;
   savedAt?: string;
@@ -49,6 +67,8 @@ export interface SaveData {
   elemancy?: ElemancySave;
   quests?: QuestSave;
   day?: DayCycleSave;
+  /** What the player has charted. @see MapSave */
+  map?: MapSave;
   chapter?: number;
   playTime?: number;
   /** v1 only: a flat EXP total, folded into `expBank` by the v1 migration. */
@@ -125,6 +145,14 @@ export const MIGRATIONS: Record<number, (data: SaveData) => SaveData> = {
     }
     return out;
   },
+  3: (data) => {
+    // v3 had no map block at all -- nothing the player charted was ever
+    // written. An old save keeps what a new game starts with rather than
+    // claiming an empty map, and the fog is left absent so `revealRoads` at
+    // boot is the whole of it.
+    if (data.map) return { ...data, version: 4 };
+    return { ...data, version: 4, map: { discovered: ['hammerhead', 'hammerhead_layby'] } };
+  },
 };
 
 /**
@@ -170,6 +198,9 @@ export function serialize(rpg: import('./RpgSystem.ts').RpgSystem) {
     elemancy: rpg.elemancy.toJSON(),
     quests: rpg.quests.toJSON(),
     day: rpg.day.toJSON(),
+    // Not a subsystem of `rpg`: the map is a module singleton, so this is the
+    // only place that can see it at save time.
+    map: { discovered: [...worldMap.discovered], fog: fog.toJSON() },
     chapter: rpg.chapter,
     playTime: rpg.playTime,
   };

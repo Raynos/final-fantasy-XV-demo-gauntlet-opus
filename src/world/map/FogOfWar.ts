@@ -77,6 +77,42 @@ export class FogOfWar {
   revealAll() { this.mask.fill(255); this._dirty = true; }
 
   /**
+   * The surveyed mask, as a base64 bitset.
+   *
+   * Every cell is 0 or 255 -- `reveal` writes nothing else -- so the 16 384
+   * bytes pack to 2 048 bits and about 2.7 kB of base64, which is small enough
+   * to sit in a save slot beside the quest log. Storing the bytes would be
+   * eight times that for no more information.
+   */
+  toJSON(): string {
+    const bytes = new Uint8Array((this.mask.length + 7) >> 3);
+    for (let i = 0; i < this.mask.length; i++) if (this.mask[i]) bytes[i >> 3] |= 1 << (i & 7);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  /**
+   * Restore a mask written by {@link toJSON}.
+   *
+   * ORs into the current mask rather than replacing it: boot has already run
+   * `revealRoads`, and a save from before the road corridor widened should not
+   * be able to un-survey country this build gives away for free.
+   * @returns false if the string is not a mask of this resolution
+   */
+  fromJSON(b64: unknown): boolean {
+    if (typeof b64 !== 'string' || !b64) return false;
+    let bin: string;
+    try { bin = atob(b64); } catch { return false; }
+    if (bin.length !== (this.mask.length + 7) >> 3) return false;
+    for (let i = 0; i < this.mask.length; i++) {
+      if (bin.charCodeAt(i >> 3) & (1 << (i & 7))) this.mask[i] = 255;
+    }
+    this._dirty = true;
+    return true;
+  }
+
+  /**
    * Survey the road network.
    *
    * Lucis has roads and Lucis has road signs: the country a highway crosses is

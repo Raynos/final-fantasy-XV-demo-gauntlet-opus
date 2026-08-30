@@ -32,6 +32,8 @@ import { QuestLog, QUESTS, HUNTS, HUNTER_RANKS, TIPSTERS } from './Quests.ts';
 import { PartyState, MEMBERS, RECIPE_TABLE } from './PartyState.ts';
 import { DayCycle, HAVENS } from './DayCycle.ts';
 import * as SaveGame from './SaveGame.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
+import { fog } from '../../world/map/FogOfWar.ts';
 import type { Game } from '../Game.ts';
 import type { DamageOpts, DamageResult } from './Stats.ts';
 import type { QuestUpdate } from './Quests.ts';
@@ -753,6 +755,14 @@ export class RpgSystem {
     this.elemancy = Elemancy.fromJSON(d.elemancy, this.emitter, this.inventory);
     this.quests = QuestLog.fromJSON(d.quests, this.emitter);
     this.day = DayCycle.fromJSON(d.day, this.emitter);
+    // The map is a module singleton, not one of ours, so it restores here
+    // rather than in a `fromJSON` of its own. Hammerhead and its layby stay in
+    // regardless: they are what a new game starts with and no save should be
+    // able to take them away.
+    if (d.map) {
+      if (d.map.discovered) for (const id of d.map.discovered) worldMap.discover(id);
+      fog.fromJSON(d.map.fog);
+    }
     this.chapter = d.chapter || 1;
     this.playTime = d.playTime || 0;
     this._attachHoldings();

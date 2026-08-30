@@ -180,7 +180,7 @@ const GATES: Gate[] = [
   { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '26 pass, 1 wired, 0 fail', kind: 'browser', cost: 45 },
   { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
-  { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '31/31', kind: 'browser', cost: 45 },
+  { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '35/35', kind: 'browser', cost: 45 },
   { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures', kind: 'cpu', cost: 7.6 },
   // The only gate in this suite that scores a **rendered face**. Every other
   // head instrument here -- `headprop`, `headprofile`, `brushsurvive`,
