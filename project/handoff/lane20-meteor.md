@@ -10,33 +10,46 @@ fissures in the crater, visible from the highway at night**, pairing with the
 
 ## FOR LANE 21 — the framing I want for `lest_overlook_disc`
 
-Read this before you pose the camera. **not verified** yet — it is the framing
-this lane is authoring *toward*; I will update it with a captured example.
+**CORRECTION, verified by capture — read this before you pose the camera.**
+My first guess at this framing was wrong and I photographed it to find out.
 
-- **Stand:** the Lestallum lookout parking, `lestallum_lookout` in
-  `WorldMap.ts:644`, world **(-2880, -760)**, eye ~12 m over the apron so the
-  shelf edge is in the bottom of the frame rather than the whole foreground.
-  It is 2.33 km from the impact centre **(-1020, -2160)**.
-- **Target:** `(-1020, 340, -2160)` — the waist of the mass cluster, not its
-  crown. The crater has to be in the frame or the shot is a picture of a rock.
-- **fov 30.** At 2.33 km a 42–50° lens makes the Disc a thumbnail; 30 puts the
-  585 m cluster across a third of the frame and still keeps the crater rim.
-- **Time: night — 21.0–21.6.** This is the whole point. `landmark_meteor` runs
-  t 17.6, which is dusk (`Props._night` is driven off sun elevation), and the
-  human's direction is explicitly the night read. If only one of the two
-  pairing shots can be night, make it this one.
-- **What it should read against:** the Disc's **west face is exactly local −X**
-  in the meteor group's frame (group yaw 0.6), so that is the face this lane
-  authors its strongest vein trunks onto. The silhouette wanted is the cluster
-  of angular peaks *dark* against the last of the sky, with the fissure network
-  the only chroma in the frame — cool white-blue cores, a warmer halo — and the
-  crater floor's radial gashes visible through the rim breach.
-- **Do not** put the camera on the meteor's own radial 1.9 or 4.6 rad breach
-  lines by accident: those are where the rim ring is deliberately broken, and a
-  stand that looks straight down a breach sees the moat floor instead of a rim.
+- **The Lestallum lookout parking (-2880, -760) cannot see the Disc at all.**
+  I stood a camera there at ground + 12 m, fov 30, aimed at (-1020, 340, -2160),
+  and captured it: `tmp/l20/base-lest_night-on.jpg`. The frame is a foreground
+  boulder filling the middle third, the Nifl dreadnought hanging in the sky
+  behind it, and **no Meteor whatsoever**. The shelf and its own outcrops are in
+  the way. Do not pose there.
+- **The highway spur at `n_disc` (-1220, -1360) is inside the rock.** It is
+  824 m from the impact centre, which puts it *on* the 790–1060 m rim ring, so
+  the camera stands among 52–155 m rim blocks. `tmp/l20/base-spur_night-on.jpg`
+  is a close-up of a rock face with a road sign in it.
+- I have built `src/tools/probes/discview.mts` to answer this properly: it
+  marches `Terrain.heightAt` from a candidate eye to the impact centre, turns
+  the highest occluding sample into an elevation angle, and reports how much of
+  the mass cluster clears it — crown only, down to the waist, or far enough to
+  include the crater rim. **Run it (or ask me for its output) before you pose
+  this shot.** A stand that sees only the crown gets a rock on a horizon; a
+  stand that sees the rim gets a crater, and the crater is the subject.
 
-Message the coordinator if you need this re-aimed; I would rather re-author a
-face than have the shot fight the art.
+What I want the shot to be, once the stand is a measured one:
+
+- **Night, 21.0–21.6.** This is the whole point of the human's direction, and
+  `landmark_meteor` cannot carry it: that shot runs t 17.6 and `Props._night`
+  reports **night = 0** there, measured. `zone_mencemoor` is also night = 0. If
+  only one shot in the corpus is a night read of the Disc, it has to be this one.
+- **Target the waist, ~`(-1020, 300, -2160)`, not the crown.** The crater has to
+  be in the frame or the shot is a picture of a rock.
+- **fov 30–36 at 2.0–2.5 km**, which puts the 585 m cluster across a third of
+  the frame with the rim still in.
+- **The face:** the Disc's west face is exactly local −X in the meteor group's
+  frame (group yaw 0.6). The vein network this lane authors runs all the way
+  around the masses, so any bearing is served — but a west or south-west stand
+  gets the strongest read against the last of the sky.
+- **Aim to look down a rim breach.** The rim ring is deliberately broken at
+  **1.9 and 4.6 radians** in the group's own frame, and this lane lays two of
+  its six radial ground fissures on exactly those bearings, so a stand that
+  looks in through a breach sees a glowing crack running out of the crater
+  instead of a continuous rampart.
 
 ---
 
