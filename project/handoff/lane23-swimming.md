@@ -155,7 +155,9 @@ At the end of this lifetime **four probe runs and one capture are queued and
 have not returned**: `swimcross` (`--dirty`), `nanunder` re-shoot, `divebreath`,
 `shotswim`. `daemon --health` says `"exclusive": "perf"` with a co-agent holding
 the lease and 0 of 4 workers busy against a queue depth of 16 in the `fix` lane
-alone. Nothing is wrong with the probes; they are waiting. Re-run them first
+alone. Nothing is wrong with the probes; they are waiting. The lease changed hands from
+`perf` to `gameplay` while this lane waited, queue depth 21, so the runs were
+killed rather than left holding slots other lanes need. Re-run them first
 thing:
 
 ```
