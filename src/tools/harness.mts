@@ -40,7 +40,8 @@ import {
 import type {
   EvalResponse, LeaseRequest, LeaseResponse, Lane, PageOpts, ShotsRequest, ShotsResponse,
 } from './daemon.mts';
-import { ROOT, resolveBuild, shortBuild, workingTreeDirty, isDirty } from './identity.mts';
+import { ROOT, resolveBuild, shortBuild, workingTreeDirty, isDirty, shaOf } from './identity.mts';
+import { bakeBelongsTo } from './bakesources.mts';
 import { appendJob, recentToolRuns } from './ledger.mts';
 import type { BuildId } from './identity.mts';
 
@@ -63,6 +64,14 @@ export interface HarnessArgs {
   prod: boolean;
   play: boolean;
   extra: string;
+  /**
+   * The `--build` value as it was typed, when it was not `HEAD` or `dirty`.
+   *
+   * Kept only so `announceBuild` can tell "point me at an old sha" apart from
+   * "the default", because those two need different warnings and the resolved
+   * `BuildId` is a tree sha either way. See {@link announceBuild}.
+   */
+  ref: string | null;
 }
 
 /**
@@ -145,6 +154,7 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
     prod: has('prod'),
     play: defaults.play ?? false,
     extra: val('extra', defaults.extra ?? ''),
+    ref: ref === 'HEAD' || ref === 'dirty' ? null : ref,
   };
 }
 
@@ -246,6 +256,42 @@ export function announceBuild(a: HarnessArgs): void {
   } else {
     console.log(`[harness] ${label}`);
   }
+  warnBakeNotOfThisTree(a);
+}
+
+/**
+ * **`--build <old sha>` does not take the bake back with it. Say so.**
+ *
+ * `src/public/baked/` is a *symlink* into the main checkout from every
+ * materialised tree — deliberately, because a 33 MB heightfield should not be
+ * re-baked per branch — so a tool pointed at an old sha renders that code
+ * against **today's** heightfield, texels, painted faces and POI geometry.
+ *
+ * Nothing said so, and the symptom is the worst one an instrument can have. An
+ * A/B of `driftcheck --build 7da60d5` against `--build HEAD` came back
+ * *bit-identical in every digit*, which reads as "nothing changed" and means
+ * "you measured the same thing twice"; `project/TASKS.md` carries it as "the
+ * shared bake cache defeating an A/B". A bisect run against that is not a slow
+ * bisect, it is a bisect whose every step returns the same answer.
+ *
+ * The check is exact rather than heuristic: re-hash each artifact's source list
+ * *as it stood in the requested tree* and compare it against the hash the
+ * artifact's own stamp recorded. Only fires when a sha was actually asked for,
+ * so the default `HEAD` path spawns no git at all.
+ */
+function warnBakeNotOfThisTree(a: HarnessArgs): void {
+  if (!a.ref) return;
+  const sha = shaOf(a.build);
+  if (!sha) return;
+  let wrong: ReturnType<typeof bakeBelongsTo>;
+  try { wrong = bakeBelongsTo(sha); } catch { return; }
+  if (!wrong.length) return;
+  console.log(`[harness] the bake cache is NOT ${shortBuild(a.build)}'s: `
+    + `${wrong.map((w) => w.artifact.file).join(', ')} ${wrong.length > 1 ? 'were' : 'was'} baked from other sources.`);
+  console.log('          `src/public/baked/` is a symlink into the main checkout from every materialised');
+  console.log('          tree, so this run uses TODAY\'s bake. An A/B whose arms differ only in something');
+  console.log('          baked comes back bit-identical and reads as "nothing changed". `node');
+  console.log('          src/tools/bakecheck.mts --build <ref>` says which artifact, and how far off.');
 }
 
 // ------------------------------------------------------------ capture tier
