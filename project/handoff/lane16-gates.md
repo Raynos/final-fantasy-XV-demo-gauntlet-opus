@@ -280,17 +280,39 @@ Step 3 is not optional and costs nothing. `bakecheck` is registered
 `uncacheable`, so it cannot replay a green recorded before a prune — that is the
 one thing that makes step 3 trustworthy at the end of a long night.
 
+## Commits, in order
+
+    3734e4c  bakecheck + bakesources + the `uncacheable` Gate flag + _probe/bakeorigin
+    23c3d52  announceBuild warns when --build <ref> is not taking the bake with it
+    3958370  the prewarm supersede  (the one the daemon was restarted for)
+    2718d53  nansweep + the task-48 rows in TASKS.md
+    97c5d43  reliefstat rejects --against
+    a8c4918  driftcheck instrument: --inject, --sag-k, per-texel sag, histogram
+    2845b81  driftcheck: the falsification result
+    e2722c7  SsrPass degenerate-normal guard; nansweep strips comments
+    0bc3863  bakecheck: a bad --build prints a verdict, not a stack trace
+    7c9d49f  bakecheck: drop an accepted-and-ignored --json; clean usage errors
+    e312fc3, 1137bdd, 1bce4c9, ff690f9  this handoff
+
 ## Files owned and touched
 
 `src/tools/bakesources.mts` (new), `src/tools/bakecheck.mts` (new),
 `src/tools/nansweep.mts` (new), `src/tools/_probe/bakeorigin.mts` (new),
-`src/tools/driftcheck.mts` (**uncommitted**), `src/tools/check.mts`,
-`src/tools/harness.mts`, `src/tools/daemon.mts`, `src/tools/bake.mts`,
-`src/tools/texbake.mts`, `src/tools/reliefstat.mts`, `project/TASKS.md`.
+`src/tools/driftcheck.mts`, `src/tools/check.mts`, `src/tools/harness.mts`,
+`src/tools/daemon.mts`, `src/tools/bake.mts`, `src/tools/texbake.mts`,
+`src/tools/reliefstat.mts`, `project/TASKS.md`.
 
-Not touched, deliberately: `facecheck.mts` (lane 1),
-`probes/regaliadrive.mts`, `_probe/steerfalsify.mts`, `_probe/inputcollide.mts`,
-`_probe/menufill.mts` (lane 10), `probes/mainchain.mts` (lane 17).
+One named cross-lane commit: `src/engine/postfx/SsrPass.ts` (lane 15's, and lane
+15 had finished; handed over by the coordinator).
+
+Not touched, deliberately: `facecheck.mts` (lane 1), `probes/regaliadrive.mts`,
+`_probe/steerfalsify.mts`, `_probe/inputcollide.mts`, `_probe/menufill.mts`
+(lane 10), `probes/mainchain.mts` (lane 17).
+
+`bakesources.mts` has since been extended by other lanes — `texd.bin.gz` added to
+`ARTIFACTS`, and `FieldBake.ts` added to `GEO_SOURCES`, which was a real gap: a
+change to how the heightfield is serialised did not invalidate the geometry bake.
+That is the registry working as intended; it is the one place those lists live.
 
 ## Open questions
 
