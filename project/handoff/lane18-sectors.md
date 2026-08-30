@@ -2,7 +2,8 @@
 
 Plan: `docs/plans/2026-08-30-fable-to-nine.md`, Part D, tasks 57–65.
 Owns `src/world/map/`, `src/game/encounters/SpawnTables.ts`, sector kits in
-`src/world/props/PoiKits.ts`, new `src/game/rpg/Tombs.ts`.
+`src/world/props/PoiKits.ts`, new `src/game/rpg/Tombs.ts`, new
+`src/game/rpg/Plaques.ts`. **The rest of `src/game/encounters/` is lane 11's.**
 
 ## Landed and verified
 
@@ -17,65 +18,105 @@ unreachable, worst grade 36.0% on the trail (limit 36%), tightest sustained
 corner 70 m (limit 24), 19 dead ends 1 walk-in only, lowest road surface 6.9 m
 (water −6.5), 0 sites under water, network 30.26 → **34.91 km**.
 
-**Two `roadcheck` rules made class-aware — same commit, and both make the gate
-STRICTER.** Reported to the coordinator as a gate change.
-- Rule 1 now measures to the nearest **drivable** road. `RoadGraph.nearest()` is
-  class-agnostic, so a `parking` POI 20 m off a zero-speed footpath passed while
-  being unreachable by any car. Harmless only while `trail` was unused.
-- Rule 4 no longer demands a turning circle at a dead end whose every edge is
-  zero-speed. The rule means *a car that drives here must be able to turn
-  around*; the class-agnostic version would have forced tarmac at the end of a
-  footpath and let the map screen repeat the lie.
+**Two `roadcheck` rules made class-aware** — same commit, both make the gate
+STRICTER; reported to the coordinator as a gate change. Rule 1 measures to the
+nearest *drivable* road; rule 4 no longer demands a turning circle at a dead end
+whose every edge is zero-speed.
 
-**Task 63 — Tombs → royal arms — `06fc387`. LANDED AND VERIFIED.** New
-`src/game/rpg/Tombs.ts` on the `Deposits.ts` register pattern, installed lazily
-from `RpgSystem.update`'s first tick; new `royal-arm` AP rule (25 AP);
-`PoiKits._tomb` now publishes a `sarcophagus` anchor and the prompt late-binds
-onto it (late because `_make` runs at BUILD_R and the kit yaw is random, so at
-install time there is no answer to where the coffin is). The table pairs on the
-**NAME** — the ids are crossed on purpose and `install` throws if the map
-disagrees.
-**Verified**, `probes/tombclaim.mts`: 10 tombs registered, prompts offered
-**10/10**, sarcophagus-anchored **10/10**, royal arms held **8/8**, missing
-none, 8 × +25 AP and 2 × +5 AP, `pass: true`.
+**Task 63 — Tombs → royal arms — `06fc387`. LANDED AND VERIFIED**
+(`probes/tombclaim.mts`: 10 tombs registered, prompts 10/10, sarcophagus-anchored
+10/10, royal arms held 8/8, 8 × +25 AP and 2 × +5 AP, `pass: true`).
 
-**Plaza paving — `f947649`** (coordinator hand-off from lane 19: *"the one thing
-dragging every city frame down is the plaza — a flat, untextured plane in all of
-them"*). New `pavingMaterial` in `PropMaterials.ts` (1.2 m flags, half-slab
-course offset, per-slab jitter, joints in the normal and rougher than the slab)
-plus a `worldUv` helper, applied to the `_town` plaza disc and the `_imperial`
-landing pad. `M.concrete` itself is unchanged — it is correct as a wall/trim
-role at building scale.
-**NOT yet verified by eye** — see "Next step".
+**Tasks 59 / 60 / 61 / 62-E and the eleven territories — `0a61ed3`.** Route 9
+extended 1.5 km to `n_northwatch`; `mencemoor_parking`, `mencemoor_obelisks`,
+`moor_haven`, `northwatch_ruin`, `washes_lookout`, `saulhend_overlook`; eleven
+`TERRITORIES` rows and the `king_of_the_flats` SET_PIECE; `night_giant`
+widened 0.55 → 0.4. **Verified** by `roadcheck` in the same commit.
+
+**Plaza paving — `f947649`** (coordinator hand-off from lane 19). New
+`pavingMaterial` + `worldUv` on the `_town` plaza disc and the `_imperial`
+landing pad. **NOT yet verified by eye** — see "Next step".
+
+## Landed this session, NOT yet verified by eye
+
+**`dcbd9d0` — the two authored `_landmark` branches.**
+- `/graveyard/`: four rib arches walking away down a half-buried spine, a
+  broken carapace (a **lathe**, not a sphere cap, so the fracture is a real
+  section), 10 vertebrae, 16 shards, 9 boulders. New `bone` material.
+- `/threshold/`: two gate stones leaning into each other, then five receding
+  pairs, shorter/more tilted/likelier to be down as they go; kerb of set
+  stones; rune faces on the gate cheeks.
+- **First look (`tmp/shots/l18a`, HEAD `dcbd9d0`), read by eye:**
+  - `th_s` / `th_w`: **the composition works** — a line of leaning obelisks
+    marching over the ridge, a fallen one, the kerb reading as a vanished road.
+    Backlit they are near-black; sunlit they are a good pale cream. **Defect:
+    the stones are smooth featureless posts** — the taper and the pyramid cap
+    barely read at 40 m, there is no carving, and every stone is the same value.
+    They look like bollards, not Solheim.
+  - `gy_n`: the ribs read as **two tall tapering spikes, not an arch**. `B/A` is
+    19/8.4, so the ellipse is far too vertical and the crossing at the apex
+    never reads. Needs A up and B down (nearer 1.4:1) before it is an arch.
+  - `gy_e` / `gy_wide`: framings were bad (camera against the cliff the site
+    sits under); re-derive from the built group's own yaw, which is what
+    `tmp/lane18/probe2.mts` now does.
+
+**`447a9ad` — the quests.** `hunt_king_of_the_flats` (rank 3, `longwythe`,
+`setPiece: 'king_of_the_flats'`, reach-then-kill on the same waypoint, the
+`hunt_bloodhorn` pattern); `side_old_road` (Dave, off `side_dog_tags`);
+`side_the_graveyard` (Takka, off `side_meat_magnificent`). **Gated on the act,
+never the conversation** per lane 17's warning: no `fetch_` anywhere in either
+side quest (the one objective type a seeded inventory can pre-satisfy), and the
+`talk` is last behind two reaches and a kill. **Not yet run through
+`probes/questaudit.mts`.**
+
+**`9d6b85e` — task 64, `nightDanger()` wired.** New
+`RegaliaSystem._nightRoadDanger`: driving only, speed > 8 m/s, pressure > 0.5,
+never during a capture, never within 90 m of a live fight; rolls
+`daemon_pack` / `ronin_duel` through `EncounterDirector.spawnRoamer`
+unmodified (lane 11's file is untouched) and fires `talk.react('nightfall')`.
+**Not yet run through `probes/longplay.mts --night`.**
+
+**`a44e0be` — task 65.** `Place` gained an optional `poi` and nine POI-anchored
+PLACES rows, so a new landmark can finally fire its own area card (`site` rows
+resolve to the FIRST Ecology site of a type and are generic by construction);
+`Triggers.places()` resolves them and now memoises only once `Props` exists.
+New `Plaques.ts` — three `Read` interactables (Saxham, the graveyard, the
+threshold stones) on the `Tombs.ts` pattern, installed off the same lazy tick.
+Two micro-deposits (`dep_washes` lightning 20/4, `dep_saltgrass` fire 22/4).
+`old_book` listed twice in the `rock` forage pool. **None of it verified live.**
 
 ## Not done yet
 
-- 57 south territories + `king_of_the_flats` set piece + `night_giant` widen.
-- 58 NE territories (`graveyard_watch`, `peak_coeurls`).
-- 59 N / 60 SE / 61 SW / 62 E+W+NW rows.
-- Authored kit branches for `adamantoise_graveyard` (ribcage arches) and
-  `threshold_stones` (leaning Solheim milestones) in `_landmark`.
-- 64 `RegaliaSystem.nightDanger()` wiring.
-- 65 micro-deposits, `old_book` weight, PLACES rows, Read plaques.
-- Side quests `side_old_road` (Dave) and `side_the_graveyard` (Takka) —
-  `Quests.ts` released by lane 17 at `ff695f8`.
-- `drawcheck`, `perfpoi`, `reachcheck` after the content lands.
+- **Fix the two landmark kits from the frames** (see the defects above) — this
+  is the top of the queue; lane 21 is waiting to photograph both.
+- Verify the plaza paving by eye.
+- `probes/questaudit.mts`, `probes/longplay.mts --night`.
+- `drawcheck`, `perfpoi`, `reachcheck` (`must-run.json` may want the two new
+  landmarks and the plaques).
+- POI count is ~137 now; the prose "124" in `PoiKits.ts` and elsewhere is stale
+  and wants one sweep.
 
 ## Exact next step
 
-`node src/tools/framecam.mts` with a candidates file (this tool applies
-arbitrary shot objects to a live page, so a framing costs one frame rather than
-a boot — it is how this lane looks at anything, since `Shots.ts` belongs to
-lane 3/21). Frame the Lestallum plaza to check the paving, then the two new
-landmark kits once they are authored.
+`node src/tools/framecam.mts --out tmp/shots/l18c --jpeg --probe
+tmp/lane18/probe2.mts` — the probe flies to each site, reads the built group's
+own position and yaw, and derives four framings per landmark plus three plaza
+framings **in the site's own local frame**, which is the only way to frame a
+kit whose yaw is seeded. Read the frames, then widen the rib ellipse and carve
+the milestones.
 
-## Framings requested from lane 21 (deliverable of this lane)
+## FOR LANE 11
 
-See "Shot framings for lane 21" at the bottom of this file.
+Nothing needed. `_nightRoadDanger` calls `EncounterDirector.spawnRoamer(def)`
+and reads `suppressRoamers` / `boss` / `enemies.countNear` — all existing
+public surface, no edit to your file. If you change `spawnRoamer`'s signature
+or make roamers refuse to spawn while the player is in a vehicle, tell me.
 
 ## Open questions / cross-boundary
 
-- `roadcheck.mts` is a shared tool. Both edits are documented in the file and in
-  `67cf5d4`'s message.
+- `roadcheck.mts` is a shared tool; both edits documented in `67cf5d4`.
 - `Ascension.ts` gained one `AP_RULES` row (`royal-arm`). Additive.
-- `RpgSystem.ts` gained the `tombs` field and two lines in `update`.
+- `RpgSystem.ts` gained `plaques` (three lines) beside `tombs`.
+- `Triggers.ts` / `Chapters.ts`: `Place.poi` is additive; the memo guard is a
+  strict improvement to a latent bug.
+- `Foraging.ts`, `Elemancy.ts`: one row each, additive.
