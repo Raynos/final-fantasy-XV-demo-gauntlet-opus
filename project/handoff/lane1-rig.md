@@ -742,3 +742,30 @@ instead of stretching it. The mechanism is written up in the residue below.
   slashes running from each nose wing out and down across the cheek, plainly
   visible at 0.55 m on `tmp/shots/l1-fc9/noc_full.png`. `Face.ts brushes()`
   `:127`, constants `:203-268`, judged with `probes/facefront_flat.mts`.
+
+### `16378e7` at 0.18 — VERIFIED, and this is where the fill stands
+
+```
+              prompto p5/p50/p99.5     noctis p5/p50/p99.5
+      0.18          9 /  76 / 206            0 /  26 / 135
+      plate        22 /  81 / 176           20 /  37 / 140
+```
+
+Both medians land just *under* the plate, which is the side to be on. Noctis'
+top end is now 135 against 140 — the number `b31cb87`'s energy cut had lost, and
+it came back from the fill rather than from the specular.
+
+**Read `tmp/shots/l1-fc10/noc_full.png` whole.** Noctis' hair is black again and
+it has form: the fringe and the side locks carry a value gradient, individual
+locks read across the crown, and the mass is dark. Against `l1-fc9` (0.30) it is
+plainly darker and no longer grey; against `l1-fc6` (no fill) it is a groom
+rather than a silhouette. **This is the state to hand over.**
+
+Still crushed: Noctis' p5 is 0 against a plate 20. Those are the gaps deep in
+the pile, and they are what the self-occlusion residue below is for — the fill
+has to be *stronger near the surface and weaker deep* to translate the cluster
+rather than stretch it.
+
+The two loudest things left on that frame are **not** hair: the eyes still read
+wide (socket residue, sculpt) and the mid-face diagonal is loud (task 6,
+untouched).
