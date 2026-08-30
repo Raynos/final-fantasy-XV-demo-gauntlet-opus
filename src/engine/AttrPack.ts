@@ -85,6 +85,17 @@ interface Rule {
   /** `u8` is normalised `Uint8` (0..1); `i8` is normalised `Int8` (-1..1). */
   fmt: 'u8' | 'i8';
   /**
+   * What to do when the values do NOT fit {@link fmt}, instead of giving up.
+   *
+   * `f16` is half precision: it keeps the full range and still halves the
+   * bytes, at a *relative* precision of about 5e-4. That is the right fallback
+   * for a quantity whose error budget scales with its own magnitude (a colour)
+   * and the wrong one for a quantity whose error budget is absolute (a `uv`
+   * that tiles to 35 would land 16 texels off on a 1024 map, so `uv` has no
+   * fallback and is left in floats).
+   */
+  wide?: 'f16';
+  /**
    * Skin weights must still sum to 1 after rounding, or the vertex shrinks
    * towards the origin. Only `skinWeight` sets this.
    */
@@ -99,8 +110,10 @@ interface Rule {
  */
 const RULES: Record<Packable, Rule> = {
   // A tint the shader multiplies by. Anything over 1 is a deliberate
-  // over-bright and `Uint8` would flatten it to white.
-  color: { fmt: 'u8' },
+  // over-bright and `Uint8` would flatten it to white -- so those go to half
+  // precision instead. Measured live: colour spans [0.02, 1.68] across the
+  // world, and 29.3 MB of the 34.8 is outside 0..1 and was being refused.
+  color: { fmt: 'u8', wide: 'f16' },
   // A unit vector. `Int8` normalised is `max(v / 127, -1)`, so a normal that is
   // not unit length is clipped rather than quantised — check before, not after.
   normal: { fmt: 'i8' },
@@ -148,7 +161,15 @@ export function packGeometry(geo: THREE.BufferGeometry, st: PackStats) {
     if (morphs && morphs[name]) continue;
     const arr = attr.array;
     if (!(arr instanceof Float32Array)) continue;
-    if (!within(arr, rule.fmt === 'u8' ? 0 : -1, 1)) { st.refused++; continue; }
+    if (!within(arr, rule.fmt === 'u8' ? 0 : -1, 1)) {
+      // Out of range for the byte format. Half precision keeps the range.
+      if (rule.wide !== 'f16' || !halfSafe(arr)) { st.refused++; continue; }
+      const half = new Uint16Array(arr.length);
+      for (let i = 0; i < arr.length; i++) half[i] = THREE.DataUtils.toHalfFloat(arr[i]);
+      geo.setAttribute(name, new THREE.Float16BufferAttribute(half, attr.itemSize));
+      st.packed++; st.saved += arr.byteLength - half.byteLength;
+      continue;
+    }
     if (rule.renorm && !partitionsOne(arr, attr.itemSize)) { st.refused++; continue; }
     const out = rule.fmt === 'u8' ? new Uint8Array(arr.length) : new Int8Array(arr.length);
     if (rule.fmt === 'u8') {
@@ -160,6 +181,21 @@ export function packGeometry(geo: THREE.BufferGeometry, st: PackStats) {
     geo.setAttribute(name, new THREE.BufferAttribute(out, attr.itemSize, true));
     st.packed++; st.saved += arr.byteLength - out.byteLength;
   }
+}
+
+/**
+ * True when half precision can hold every value without becoming an infinity.
+ *
+ * `toHalfFloat` clamps rather than throws, so a value past 65 504 would arrive
+ * in the buffer as `Infinity` and paint one vertex white for ever. A `NaN`
+ * would do the same. Both are checked here rather than found in a frame.
+ */
+function halfSafe(a: Float32Array): boolean {
+  for (let i = 0; i < a.length; i++) {
+    const v = a[i];
+    if (!Number.isFinite(v) || v > 65504 || v < -65504) return false;
+  }
+  return true;
 }
 
 /**

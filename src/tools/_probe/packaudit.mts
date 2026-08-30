@@ -45,6 +45,8 @@ for (const [geo, n] of uses) {
     if (n > 1) { r.why.shared = (r.why.shared || 0) + b; sharedBytes += b; continue; }
     if (vc < 8000) { r.why.small = (r.why.small || 0) + b; smallBytes += b; continue; }
     const [lo, hi] = range(a.array);
+    if (lo < (r.lo ?? Infinity)) r.lo = lo;
+    if (hi > (r.hi ?? -Infinity)) r.hi = hi;
     if (lo >= 0 && hi <= 1) { r.why.u8 = (r.why.u8 || 0) + b; r.packable += b * 0.75; }
     else if (lo >= -1 && hi <= 1) { r.why.i8 = (r.why.i8 || 0) + b; r.packable += b * 0.75; }
     else if (lo >= -32768 && hi <= 32767) { r.why.i16 = (r.why.i16 || 0) + b; r.packable += b * 0.5; }
@@ -59,7 +61,7 @@ out.push('');
 out.push('  attribute        bytes    would-save   breakdown (bytes by verdict)');
 const sorted = [...rows].sort((a, b) => b[1].bytes - a[1].bytes);
 for (const [k, r] of sorted) {
-  const why = Object.entries(r.why).map(([w, b]) => `${w} ${MB(b)}`).join('  ');
+  const why = `range [${(r.lo ?? 0).toFixed(2)}, ${(r.hi ?? 0).toFixed(2)}]  ` + Object.entries(r.why).map(([w, b]) => `${w} ${MB(b)}`).join('  ');
   out.push(`  ${k.padEnd(14)} ${MB(r.bytes).padStart(9)}  ${MB(r.packable).padStart(9)}   ${why}`);
 }
 
