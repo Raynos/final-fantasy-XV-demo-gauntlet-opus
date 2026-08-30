@@ -408,7 +408,18 @@ the silhouette ramps. The mechanism landed and it is visible.
 ### Still pending when I stopped — DO THIS FIRST
 
 `b31cb87` (the aniso retune: exp1 110 -> 45, exp2 20 -> 9, spec 0.55 -> 0.46,
-shift 0.30 -> 0.25, rim 0.30 -> 0.20) **has not been looked at or measured.**
+shift 0.30 -> 0.25, rim 0.30 -> 0.20) **has been looked at once and NOT
+measured.** The `--cold` link proof came back clean — `hero_portrait`,
+zero page errors, 460 draws, so the `<alphatest_fragment>` replacement and the
+retuned block both compile and link on a cold page — and on that frame the
+crown and fringe carry a **visible lighter band** where they were uniformly
+black before. That is the first time the Kajiya-Kay model has drawn anything.
+It reads slightly dusty rather than glossy at 1 m, which is what the `mask`
+floor and the sky dome do when the band finally has company; if the regionstat
+below says the top end is still hot, take `mask`'s 0.34 floor down before
+touching `spec` again.
+
+The number that decides it is still un-taken:
 The harness was at 61% queue time and the run never came back. Do exactly this:
 
 ```
