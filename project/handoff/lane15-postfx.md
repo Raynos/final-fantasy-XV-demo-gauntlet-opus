@@ -149,6 +149,62 @@ Residency numbers pending a re-run of the updated walk.
   nothing. Worth doing for the honesty of the declared budget; filed as residue,
   not done here.
 
+## Task 27 is landed and verified, by eye and by instrument
+
+The `--post` flag does **not** reach the page through `shoot.mts` -- a capture
+taken with it comes back with `"variant": ""` in the manifest and is
+byte-comparable to the unablated one, which is how two "before and after"
+captures both came back as the *after*. Use `--extra post=<tokens>`, or better,
+do the A/B **inside one page**: `src/tools/_probe/l15grain.mts` writes three
+frames from one boot with one shot, differing only in `uGrainSky`. Same TAA
+history, same exposure, no cold-boot term at all.
+
+High-frequency energy in a 400x260 box of clear blue at `vista_noon`
+(mean |pixel - 3x3 mean|, the octave grain and dither live in; script in this
+lane's scratch):
+
+| arm | hf /255 |
+|---|---|
+| `uGrainSky = 1` (the frame before this change) | **2.53** |
+| `uGrainSky = 0.3` (shipped) | **1.14** |
+
+**The mask removes 55% of the noise energy in flat sky** and leaves the 1.5 LSB
+dither floor, which is what should remain. Looked at both at 4x
+(`crop.mts ... 1050 60 320 180 4`): the unmasked crop carries a dense, even
+sandy speckle across the whole blue field and reads as video noise; the masked
+crop reads as a clean gradient with a faint weave still in it, not as a matte.
+No seam appeared along the ridge silhouette. **Verified.**
+
+(One arm of that probe is invalid and is not quoted: pinning `uGrain = 0` does
+not stick, because `_applyGrade` re-reads the preset every frame and overwrites
+it. `?post=nograin` is the way to ablate the term, not a uniform write.)
+
+## Task 45: the walk, and why <120 MB does not fall out of it
+
+After `92d234e`, at q=high / dpr 1 / 1600x900:
+
+    post   declared 210.73 MB / 28 targets   resident 188.76 MB / 27
+    world  declared 118.88 MB / 13 targets   resident 114.60 MB / 10
+    total  declared 329.61 MB                resident 303.36 MB
+
+**The exit is not met: 188.76 resident against a 120 target.** The gap is
+69 MB and exactly one line in the chain is that big --
+`rtScene`'s multisample renderbuffers, **65.92 MB at q=high (samples 4)** and
+**131.86 MB at q=ultra (samples 8)**, x2.25 again at dpr 1.5. Everything else
+is eight full-res half-float buffers at 10.99 MB each (rtVel, composer x2,
+SMAA x2, TAA history x2, GTAO x2) and none of them is removable without a
+visible change:
+
+- SMAA x2 read **resident** on this run, so they are not the free deletion the
+  declared/resident split first suggested; only `gtao.normalRenderTarget`
+  (21.97 MB) is genuinely never uploaded.
+- TAA needs two histories, the composer needs two ping-pong buffers.
+- `rtVel` cannot go to `RGFormat` -- see the rejected list above.
+
+So the remaining levers are **MSAA sample count** and **GTAO resolution**, both
+of which change pixels and one of which is coupled to `VegMaterial` in another
+lane's file. Neither was taken. **Measured negative, with the number.**
+
 ## Next steps
 
 1. Look at `tmp/shots/l15-a` vs `l15-b` (`vista_noon`, `vista_dawn`) and
