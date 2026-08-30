@@ -1002,7 +1002,12 @@ export class Water {
            * changing the winding of a PlaneGeometry.
            */
           if (uCameraPos.y < uLevel) {
-            vec3 I = normalize(vWorld - uCameraPos);      // eye -> surface, up
+            // Guarded normalize. dist is |uCameraPos - vWorld| and it is zero
+            // for the fragment a camera sitting exactly on the surface is
+            // looking at; normalize() of the zero vector is a NaN, and a NaN
+            // here survives the whole composer as pure black -- the one defect
+            // class nanunder exists to catch, so do not create it.
+            vec3 I = dist > 1e-4 ? (vWorld - uCameraPos) / dist : vec3(0.0, 1.0, 0.0);
             float ci = clamp(dot(I, N), 0.0, 1.0);
             // cos(48.6 deg) = 0.6614. The edge is a few degrees wide because
             // the surface is not flat -- that width IS the shimmer on the rim
