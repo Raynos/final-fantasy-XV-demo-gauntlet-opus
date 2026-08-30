@@ -1,8 +1,8 @@
 # Lane 22 — Chocobos (plan items 70, 71)
 
-Status: **task 70 landed and verified by eye (lifetime 1). Task 71 landed; one
-race is verified end to end by a probe. No frame of either hub has been looked
-at yet.**
+Status: **task 70 landed and verified by eye (lifetime 1). Task 71 landed: two
+of three races verified end to end by a probe, the third cut as a measured
+negative, and both hubs looked at in frames.**
 Lifetime 2 of an expected 3–4.
 
 ## The done-when that mattered: a race, run
@@ -34,17 +34,57 @@ No gate needed the legality search on flat Duscae.
 the beat-par bonus was not a bonus. All three pars re-set against the measured
 decomposition in `56238a1`; the paddock is now par 25.
 
+`race_weaverwilds` also won: **76.34 s** against a par of 118, six gates,
+ground 22.7–27.2 m, none legalised. Its par is now 88.
+
+## The measured negative: the Alpine Stable
+
+**`race_alpine` is cut and `meldacio_layby` is back to `type: 'parking'`
+(`af2ba26`).** Two instruments agreed, so the item closes.
+
+```
+Alpine Stable — poi meldacio_layby at (-1560, -2860), ground 248.1 m
+  gate 1: (-1498, -2802) h=263.0     gate 4: (-1402, -3024) h=205.2
+  gate 2: (-1406, -2834) h=245.2  [legalised 18 m off the authored spot]
+  gate 3: (-1308, -2926) h=230.3     gate 5: (-1538, -2922) h=264.3
+RESULT DNF  240.01 s  (par 80)  +0 gil  +0 AP
+```
+
+59 m of relief across five gates and an autopilot on a perfect line at full
+sprint never finished inside four minutes. And with the POI re-typed `chocobo`,
+four `dresscam` bearings showed **`PoiKits._chocobo` has no terrain follow**:
+the barn's long wall overhung the Route 5 carriageway by ~1.7 m, half the feed
+silo stood on the road, the barn's east third was inside the mountain with its
+west gable cantilevered over a cliff, and the paddock ring, trough and
+signboard did not render at all.
+
+**The Alpine Stable keeps the half that works** — its prompts terrain-snap and
+the probe transacted a sylkis tier there. `ChocoboHub` now registers a race
+board only at a hub with a course posted, so there is no empty board.
+
+To bring it back: a `PoiKits` job first (terrain-following placement, a
+road-clearance offset, a ring sized off the POI's own `r` — 48 here against 200
+at Wiz, and the kit reads neither), then walk the pass with `dryground.mts` and
+author gates on rideable ground, wider than 11 m.
+
 ## Where to pick this up (the exact next step)
 
-1. **Read the two race probes queued at the end of lifetime 2** — `race_alpine`
-   and `race_weaverwilds`. `race_alpine` is the important one: it runs on the
-   POI that was re-typed this lifetime, on mountain ground, and it is the one
-   course where the gate legality search will actually do something. **If a gate
-   is moved far, re-author that offset in `Races.RACES`** rather than leaning on
-   the search.
-2. **Read the hub frames** (a look-loop subagent was dispatched at the end of
-   lifetime 2; its report may not have landed). See "Not done" for the exact
-   questions.
+1. **The rider's arms.** The frames say they are *still* wrong: the near hand
+   holds the rein correctly (the strap runs from the bit to it) but the far hand
+   is open at chin height with the upper arm ~40° clear of the ribs, and it
+   reads as waving. **`POSE_RIDE`'s numbers are provably mirror-symmetric** —
+   `Skeleton.ts`:154 mirrors bone *translation* only (`mx` negates x and never
+   touches orientation), so both arms share one rest basis and `[x, −y, −z]`
+   *is* the correct mirror. So the asymmetry is not in the table. Two live
+   hypotheses, in order: (a) the whole arm chain simply reaches too high and
+   forward — `lowerArm x −0.72` with `hand z ±0.42` — and a ¾ view exaggerates
+   the far one; (b) what the `head` framing caught was a *companion's* arm, not
+   Noctis'. `e8051ea` widened the ride framings, so re-shoot before re-tuning.
+2. **Re-shoot the bird** — `chocobostage --set __MODE=ride` — and check the
+   shingle fix. The rump is fixed (thin dark-olive seams, not black slots, and
+   not artichoked) but the **shoulder/fore-flank still spikes**: the pitch
+   falloff `0.30 * (1 - phi0 * 0.28)` is keyed on the ring angle, and the
+   forward stations need it too.
 3. Take `npcdraws` / `drawcheck` with the bird in frame — still owed from
    lifetime 1.
 
@@ -76,11 +116,14 @@ verified*.
     again. `ChocoboBody.sprintMul` is the new knob.
   - Feeding also finally reads `Ascension.value('chocoboStamina')`
     (`exp_choco2`), which nothing in the repo had ever read.
-- **`src/game/chocobo/Races.ts`** — three authored courses:
-  `race_paddock` (Wiz, 4 gates, par **25** s, 100 g in / 900 g + 4 AP),
-  `race_weaverwilds` (Wiz, 6 gates, par **100** s, 400 g in / 3 200 g + 9 AP),
-  `race_alpine` (Alpine, 5 gates, par **80** s, 700 g in / 5 200 g + 13 AP).
-  Beating par doubles the purse and pays 1.5× AP.
+- **`src/game/chocobo/Races.ts`** — two authored courses, both **won by the
+  probe**: `race_paddock` (Wiz, 4 gates, par **25** s, 100 g in / 900 g + 4 AP,
+  measured 21.75) and `race_weaverwilds` (Wiz, 6 gates, par **88** s, 400 g in /
+  3 200 g + 9 AP, measured 76.34). Beating par doubles the purse and pays 1.5×
+  AP. **Par is set off the measured perfect lap, not an estimate** — the header
+  carries the decomposition, because the first guess was out by a factor of two.
+  A third, `race_alpine`, is cut; the note at the foot of `RACES` is its
+  obituary.
   - Gates are authored as **offsets from the hub's POI** and legalised at the
     start line through `canStandAt` with a bounded square spiral (6 m steps,
     7 rings). A hand-placed number in generated terrain is a gate that can land
@@ -107,10 +150,9 @@ verified*.
   the whistle — you start with it — and pays sylkis instead, plus a dye on the
   house at Wiz's stall (read live from quest state in `ChocoboHub`, nothing is
   granted or saved).
-- **`WorldMap.ts`** — `meldacio_layby` re-typed `parking` → `chocobo`. Keeps
-  `drive: true` and `travel: true`, so car access and fast travel are unchanged;
-  what changes is the kit (`PoiKits._chocobo`), the atlas filter, and its
-  membership of `WorldMapScreen.SETTLED`.
+- **`WorldMap.ts`** — `meldacio_layby` was re-typed `chocobo` and then **put
+  back to `parking`** after the frames; the row now carries the whole negative
+  as a comment so nobody re-types it without fixing `PoiKits` first.
 - **`NpcDialogue.ts`** — three new Wiz nodes (`dye`, `greens`, `racing`) plus a
   correction to `done`, which still said "Whistle is yours".
   **They are directions, not transactions.** Wiz cannot open the stable script
