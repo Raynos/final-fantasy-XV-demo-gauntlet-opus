@@ -687,14 +687,26 @@ export const POIS: PoiSpec[] = [
     does: "Ezma's hunter headquarters: all-region hunt board, shop, the key to the Menace." },
   { id: 'meldacio_haven', name: 'Pectriche Haven', type: 'haven', zone: 'meldacio', x: -1880, z: -2830, r: 55, travel: true, lv: 42,
     does: 'Camp behind the HQ, under the pass wall.' },
-  // Re-typed `parking` -> `chocobo` for plan task 71: the Alpine Stable is the
-  // north's chocobo hub, and it was called a stable while the map drew it as a
-  // parking spot and the world built a turning circle on it. `chocobo` keeps
-  // `drive: true`, so nothing about reaching it by car or fast-travelling to it
-  // changes; what changes is the kit the world builds (`PoiKits._chocobo`), the
-  // filter it answers on the atlas, and its membership of `SETTLED`.
-  { id: 'meldacio_layby', name: 'Alpine Stable', type: 'chocobo', zone: 'meldacio', at: 'j_meldacio_e', r: 48, travel: true, lv: 42,
-    does: 'A paddock and a barn at the east end of the pass road. Birds bred for altitude, and a race board.' },
+  // **Stays `parking`, and this is a measured negative, not an oversight.**
+  // Plan task 71 asks for the Alpine Stable to be a chocobo hub, so this row
+  // was re-typed `chocobo` and the world was photographed from four bearings.
+  // `PoiKits._chocobo` places every part at kit-local `y` with no terrain
+  // follow, and `j_meldacio_e` is the *terminus* of Route 5 with 20-30 m of
+  // relief across the kit's own 40 m paddock ring. The result: the barn's long
+  // wall overhung the carriageway by ~1.7 m and half the feed silo stood on the
+  // road; the barn's east third was inside the mountain and its west gable
+  // cantilevered over a cliff; and the paddock ring, the trough and the
+  // signboard did not render at all, being either metres underground on the
+  // uphill arc or out over the void on the downhill one.
+  //
+  // The hub's *prompts* still register here and work -- they terrain-snap --
+  // so the Alpine Stable is a stable you can feed a bird at. It is not a place
+  // a 63 m farmyard kit can be dropped, and making it one is a `PoiKits` job:
+  // terrain-following placement plus a road-clearance offset plus a ring sized
+  // off the POI's own `r` (48 here against 200 at Wiz, and the kit reads
+  // neither).
+  { id: 'meldacio_layby', name: 'Alpine Stable', type: 'parking', zone: 'meldacio', at: 'j_meldacio_e', r: 48, travel: true, lv: 42,
+    does: 'The east end of the pass road. A cattle grid, a broken barrier and a few birds in a wire pen.' },
   { id: 'myrlwood_parking', name: 'Risorath Basin Parking', type: 'parking', zone: 'meldacio', at: 'n_myrlwood', r: 48, travel: true, lv: 42,
     does: 'Turning circle in the fungal wood. Spores in the headlights.' },
   { id: 'myrlwood', name: 'Myrlwood', type: 'dungeon', zone: 'meldacio', x: -2470, z: -3240, r: 150, lv: 42,

@@ -146,6 +146,11 @@ export class ChocoboHub {
         radius: 3.2, verb: 'Tend', label: hub.name, priority: 2, yOffset: 1.5,
         handler: () => { interaction.say(this.stableScript(hub)); },
       }));
+      // **No board where no course is posted.** The Alpine Stable had one and
+      // its course was cut as a measured negative (see the note at the foot of
+      // `RACES`); a `Read Race Board` prompt that opens an empty list is worse
+      // than no prompt.
+      if (!RACES.some((r) => r.hub === hub.key)) continue;
       this._handles.push(interaction.register({
         id: `chocobo-races-${hub.key}`,
         pos: new THREE.Vector3(bx, terrain.heightAt(bx, bz) + 0.1, bz),

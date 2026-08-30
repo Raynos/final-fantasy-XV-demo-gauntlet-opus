@@ -62,9 +62,10 @@ export interface RaceCourse {
  * cruising: it opens on the burst and drops to 11.0 only when the tank is
  * empty. `chocoborace.mts`'s autopilot — perfect line, sprint held from the
  * gun, every gate cut at its radius — ran the paddock course in **21.75 s
- * against a par of 44**, so the purse's beat-par bonus was not a bonus, it was
- * the price. Par is now set about 15% over the measured perfect lap, which is
- * a bar a good rider clears and a wandering one does not.
+ * against a par of 44**, and the Weaverwilds Circuit in **76.34 s against a par
+ * of 118**, so the purse's beat-par bonus was not a bonus, it was the price.
+ * Both pars are now set about 15% over their *measured* perfect lap, which is a
+ * bar a good rider clears and a wandering one does not.
  *
  * The measured decomposition, for whoever re-authors a course: the tank is
  * `STAMINA_MAX * tier * ascension` seconds of `CHOCOBO_SPRINT * sprintMul`,
@@ -96,24 +97,42 @@ export const RACES: RaceCourse[] = [
       { dx: 58, dz: -178, r: 11 },
       { dx: -18, dz: -16, r: 12 },
     ],
-    // 1102 m centre-to-centre, ~1035 m ridden. One tank of burst is a much
-    // smaller share of a lap this long, so the average sits nearer cruise.
-    entry: 400, prizeGil: 3200, prizeAp: 9, par: 100, limit: 280,
+    // 1102 m centre-to-centre, ~1035 m ridden; measured perfect lap 76.34 s,
+    // an average of 13.6 m/s. The burst is a smaller share of a lap this long,
+    // and it still comes in well over cruise — the gate cuts are worth more
+    // than the arithmetic gave them credit for.
+    entry: 400, prizeGil: 3200, prizeAp: 9, par: 88, limit: 280,
   },
-  {
-    id: 'race_alpine', hub: 'alpine', name: 'The Alpine Ascent',
-    blurb: 'Five gates up the pass road. Nobody has ever called it fair.',
-    checkpoints: [
-      { dx: 62, dz: 58, r: 11 },
-      { dx: 172, dz: 26, r: 11 },
-      { dx: 252, dz: -66, r: 11 },
-      { dx: 158, dz: -164, r: 11 },
-      { dx: 22, dz: -62, r: 12 },
-    ],
-    // 620 m centre-to-centre, ~565 m ridden, on ground that fights you: the
-    // pass is the one course where the slope refusal costs real seconds.
-    entry: 700, prizeGil: 5200, prizeAp: 13, par: 80, limit: 240,
-  },
+  /*
+   * **There was a third course, up the pass at the Alpine Stable, and it is
+   * cut. This is a measured negative.**
+   *
+   * `chocoborace.mts --set __RACE=race_alpine`, verbatim:
+   *
+   *     Alpine Stable — poi meldacio_layby at (-1560, -2860), ground 248.1 m
+   *       gate 1: (-1498, -2802) h=263.0     gate 4: (-1402, -3024) h=205.2
+   *       gate 2: (-1406, -2834) h=245.2  [legalised 18 m off the authored spot]
+   *       gate 3: (-1308, -2926) h=230.3     gate 5: (-1538, -2922) h=264.3
+   *     RESULT DNF  240.01 s  (par 80)  +0 gil  +0 AP
+   *
+   * Fifty-nine metres of relief across five gates, one of them already moved
+   * 18 m by the legality search, and the autopilot — perfect line, sprint held
+   * — never finished inside four minutes. That is not a hard course, it is an
+   * impossible one: the same 50° refusal that stops the bird climbing a cliff
+   * stops it climbing this, and re-authoring the gates is guessing at a survey
+   * nobody has done.
+   *
+   * It is cut rather than left DNF-ing because a race board that posts a course
+   * you cannot finish is worse than a race board with nothing on it. Racing
+   * lives at Wiz, on ground that has been measured flat (22.7-27.2 m across
+   * eleven gates). The Alpine Stable keeps its stable: you can feed a bird
+   * there, and `ChocoboHub` no longer registers a board at a hub with no course
+   * posted.
+   *
+   * To bring it back, somebody has to walk the pass with `dryground.mts` and
+   * author gates on ground that is actually rideable — and probably widen them,
+   * because a 11 m gate on a mountain is a needle.
+   */
 ];
 
 /** How far the legality search will walk before it gives up on a gate. */
