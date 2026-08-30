@@ -46,7 +46,13 @@ export class Pack implements EnemyPack {
   constructor(o: PackOpts = {}) {
     this.id = o.id || 'pack';
     this.members = [];
-    this.maxEngaged = o.maxEngaged ?? 2;
+    // Three. Two was the default every `SpawnTables` territory that does not
+    // override it inherited, and it is the reason a five-MT imperial patrol
+    // opened 1.13 attacks per second: three of the five were always circling.
+    // Beyond three the player is being mobbed rather than fought, which is why
+    // this is 3 and the wild dens -- which draw twice as many bodies -- set 4
+    // explicitly rather than moving this.
+    this.maxEngaged = o.maxEngaged ?? 3;
     /** Seconds a member holds the engage token before it may rotate. */
     this.rotate = o.rotate ?? 3.0;
     this.engaged = [];

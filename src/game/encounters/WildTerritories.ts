@@ -102,62 +102,75 @@ interface RosterLine {
  * a coeurl in Leide is a level 22 coeurl and the same coeurl in Cleigne is a
  * level 45 coeurl, which is how the danger gradient survives being procedural.
  */
+/*
+ * **Counts are the duration lever, and they were set for a fight nobody
+ * measured.** `fightshape` over five rounds on the tree before this table
+ * changed: a den drew three to five animals, the party put 642 hp/s into it,
+ * and the median field encounter lasted **11.4 seconds** -- against FFXV's own
+ * 30-90 s and this project's 18-30 s bar. Three sabertusks at level 24 is
+ * 5 292 hp of den, which at 642 hp/s is over before the camera has settled.
+ *
+ * The hostile lines are therefore drawn two deeper on both ends. The **passive**
+ * lines are not: anaks, garulas and dualhorns are scenery that raises its head
+ * and keeps eating, they are the largest meshes in the wild roster, and adding
+ * them buys skinned rigs without buying a fight.
+ */
 const ROSTERS: Record<string, Record<'day' | 'night', RosterLine[]>> = {
   leide: {
     day: [
-      { key: 'sabertusk', count: [3, 5], weight: 30 },
-      { key: 'voretooth', count: [3, 4], weight: 14 },
+      { key: 'sabertusk', count: [5, 7], weight: 30 },
+      { key: 'voretooth', count: [5, 7], weight: 14 },
       { key: 'dualhorn', count: [2, 3], weight: 16, passive: true },
       { key: 'anak', count: [3, 5], weight: 22, passive: true },
       { key: 'garula', count: [2, 3], weight: 10, passive: true },
-      { key: 'coeurl', count: [1, 1], weight: 4 },
+      { key: 'coeurl', count: [1, 2], weight: 4 },
     ],
     night: [
-      { key: 'goblin', count: [4, 6], weight: 34 },
-      { key: 'hobgoblin', count: [1, 2], weight: 14 },
-      { key: 'bussemand', count: [1, 1], weight: 8 },
-      { key: 'mesmenir', count: [1, 2], weight: 10 },
+      { key: 'goblin', count: [6, 8], weight: 34 },
+      { key: 'hobgoblin', count: [2, 3], weight: 14 },
+      { key: 'bussemand', count: [1, 2], weight: 8 },
+      { key: 'mesmenir', count: [2, 3], weight: 10 },
       { key: 'anak', count: [3, 4], weight: 12, passive: true },
-      { key: 'sabertusk', count: [3, 4], weight: 14 },
+      { key: 'sabertusk', count: [5, 7], weight: 14 },
     ],
   },
   duscae: {
     day: [
-      { key: 'voretooth', count: [3, 5], weight: 26 },
+      { key: 'voretooth', count: [5, 7], weight: 26 },
       { key: 'garula', count: [2, 4], weight: 20, passive: true },
       { key: 'anak', count: [3, 5], weight: 16, passive: true },
-      { key: 'sabertusk', count: [3, 5], weight: 14 },
-      { key: 'coeurl', count: [1, 2], weight: 14 },
+      { key: 'sabertusk', count: [5, 7], weight: 14 },
+      { key: 'coeurl', count: [2, 3], weight: 14 },
       { key: 'dualhorn', count: [2, 3], weight: 10, passive: true },
     ],
     night: [
-      { key: 'goblin', count: [4, 7], weight: 24 },
-      { key: 'hobgoblin', count: [2, 3], weight: 20 },
-      { key: 'arachne', count: [1, 1], weight: 10 },
-      { key: 'necromancer', count: [1, 1], weight: 8 },
-      { key: 'bussemand', count: [1, 2], weight: 12 },
-      { key: 'mesmenir', count: [1, 3], weight: 14 },
+      { key: 'goblin', count: [6, 9], weight: 24 },
+      { key: 'hobgoblin', count: [3, 5], weight: 20 },
+      { key: 'arachne', count: [1, 2], weight: 10 },
+      { key: 'necromancer', count: [1, 2], weight: 8 },
+      { key: 'bussemand', count: [2, 3], weight: 12 },
+      { key: 'mesmenir', count: [2, 4], weight: 14 },
       { key: 'garula', count: [2, 3], weight: 12, passive: true },
     ],
   },
   cleigne: {
     day: [
-      { key: 'coeurl', count: [1, 2], weight: 24 },
-      { key: 'bandersnatch', count: [1, 1], weight: 14 },
+      { key: 'coeurl', count: [2, 3], weight: 24 },
+      { key: 'bandersnatch', count: [1, 2], weight: 14 },
       { key: 'garula', count: [2, 4], weight: 18, passive: true },
-      { key: 'voretooth', count: [4, 5], weight: 16 },
+      { key: 'voretooth', count: [5, 7], weight: 16 },
       { key: 'dualhorn', count: [2, 3], weight: 14, passive: true },
       { key: 'anak', count: [3, 5], weight: 14, passive: true },
     ],
     night: [
-      { key: 'hobgoblin', count: [2, 4], weight: 20 },
-      { key: 'ronin', count: [1, 2], weight: 12 },
+      { key: 'hobgoblin', count: [3, 5], weight: 20 },
+      { key: 'ronin', count: [2, 3], weight: 12 },
       { key: 'necromancer', count: [1, 2], weight: 14 },
-      { key: 'arachne', count: [1, 2], weight: 14 },
+      { key: 'arachne', count: [2, 3], weight: 14 },
       { key: 'irongiant', count: [1, 1], weight: 8 },
       { key: 'redgiant', count: [1, 1], weight: 5 },
-      { key: 'mesmenir', count: [2, 3], weight: 14 },
-      { key: 'bandersnatch', count: [1, 1], weight: 13 },
+      { key: 'mesmenir', count: [2, 4], weight: 14 },
+      { key: 'bandersnatch', count: [1, 2], weight: 13 },
     ],
   },
 };
@@ -355,7 +368,12 @@ export function wildTerritoriesNear(
         spawn,
         patrolRadius: passive ? 30 : 20,
         respawn: 210 + Math.floor(cellHash(cx, cz, seed ^ 0xb2e6) * 180),
-        maxEngaged: passive ? 2 : 3,
+        // Four, not three, now that a hostile den draws five to eight. With
+        // three tokens against six animals half the den is permanently
+        // circling: `fightshape` measured 0.65 enemy attacks per second across
+        // a whole den, which is what "combat has no danger" sounds like from
+        // the enemy's side. A passive herd keeps two -- it is not hunting you.
+        maxEngaged: passive ? 2 : 4,
         faction,
         passive,
       });

@@ -12,6 +12,7 @@ import type { Enemy, EnemyAttack, Threat } from '../../characters/enemies/EnemyB
 import type { Enemies } from '../../characters/Enemies.ts';
 import type { Player } from '../../characters/Player.ts';
 import type { Party, PartyMember, CompanionKey } from '../../characters/Party.ts';
+import { INCOMING_SCALE } from '../../combat/CombatSystem.ts';
 import type { CombatSystem } from '../../combat/CombatSystem.ts';
 import type { CombatEvents, CombatEventName } from '../../combat/CombatEvents.ts';
 import type { VFX } from '../../combat/VFX.ts';
@@ -359,11 +360,11 @@ export class EncounterDirector {
     const pp = this.player!.position;
     let total = 0;
     for (const s of def.spawn) total += Array.isArray(s.count) ? s.count[1] : s.count;
-    // two or three attackers at a time; the rest circle. Any more than that
+    // Three or four attackers at a time; the rest circle. Any more than that
     // and the player is being mobbed, not fought.
     const pack = new Pack({
       id: `${def.id}-${this.rng.next() | 0}`, encounter: this,
-      maxEngaged: total >= 5 ? 3 : 2,
+      maxEngaged: total >= 5 ? 4 : 3,
     });
     const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon', def.level) : NEUTRAL;
     const level = Math.max(1, Math.round(def.level + (scaling.partyLift || 0)
@@ -752,7 +753,10 @@ export class EncounterDirector {
         target, motion: a.mult || 1, element: a.element || 'physical',
         targetIsDaemon: false,
       });
-      dmg = Math.max(1, Math.round(res.damage * 0.55));
+      // The same constant `CombatSystem._enemyStrike` uses, imported rather
+      // than written again: these two lines are the whole incoming-damage
+      // path, and them drifting apart is exactly the bug you cannot see.
+      dmg = Math.max(1, Math.round(res.damage * INCOMING_SCALE));
       target.applyDamage(dmg);
       if (isPlayer && vitals) vitals.hp = Math.round(target.hp);
     } else if (isPlayer && vitals) {

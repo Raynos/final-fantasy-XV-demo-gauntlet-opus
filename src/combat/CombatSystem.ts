@@ -1206,7 +1206,7 @@ export class CombatSystem {
         attacker: { attack: enemy.damage * 0.9, level: enemy.level, critRate: 0.06, critDamage: 1.5 },
         target: rpg.noctis, motion: 1, element: 'physical',
       });
-      dmg = Math.max(1, Math.round(res.damage * 0.55));
+      dmg = Math.max(1, Math.round(res.damage * INCOMING_SCALE));
       rpg.noctis.applyDamage(dmg);
       p.stats.hp = Math.round(rpg.noctis.hp);
     } else {
@@ -1964,6 +1964,35 @@ const STEP_IN_SPEED = 9.0;
 
 const WARP_NEAR_M = 3;
 const WARP_FAR_M = 20;
+/**
+ * How much of a computed blow the party actually eats.
+ *
+ * This was a bare `* 0.55` written twice -- once here in `_enemyStrike` and
+ * once in `EncounterDirector.damageThreat`, which is the live path for
+ * everything that comes out of an encounter -- with no comment in either
+ * place saying what it was for or what it had been measured against. It is the
+ * single biggest term in "combat has no danger", and it was invisible.
+ *
+ * Measured at party level 27 (`tmp/lane11-dmgmath.mts`, and `fightshape` over
+ * five rounds): Noctis has 4 877 max HP and 105 defence. A level-28 sabertusk
+ * -- a *lifted* one, at the party's own level -- rolls 119 through
+ * `computeDamage`, and 0.55 turned that into 65, which is **1.33% of his max
+ * HP**. A whole wild den, three to five animals over eleven seconds, cost him
+ * a median of **3.2%**. The bar this lane exists to move is 15%.
+ *
+ * So it ships at 1.0: the discount is removed, not re-tuned, because there was
+ * never a recorded reason for it and the formula underneath it already has
+ * four terms that soften a blow -- `240 / (240 + defence)` mitigation, the
+ * level differential, the attacker's own `* 0.9`, and dodge i-frames. At 1.0 a
+ * level-appropriate field animal costs 2.4% of Noctis' HP per landed hit,
+ * which is still gentler than FFXV's own field encounters and is the first
+ * value at which a den can reach the 15% bar inside a 20-second fight.
+ *
+ * It stays a named constant rather than being deleted so that the next person
+ * who needs to make the world hit harder or softer can find it in one grep.
+ */
+export const INCOMING_SCALE = 1.0;
+
 const WARP_MOTION_NEAR = 0.55;
 const WARP_MOTION_FAR = 2.0;
 const WARP_POINT_MP = 8;
