@@ -8,6 +8,23 @@ Owns `src/world/swim/**`, `src/world/collision/CharacterController.ts`,
 `src/tools/probes/nanunder.mts`. Cross-lane: two lines in `src/game/Game.ts`
 (the registration and the registry keys), landed in the same commit.
 
+## Commits, in order
+
+```
+f580459  CharacterController swim branch + Swim.ts + Underwater.ts + Game.ts registration
+2e75613  probes/nanunder.mts -- the from-below NaN instrument, and its baseline
+9b39b41  Water.ts from-below branch (Snell window + TIR mirror + distance murk);
+         Underwater keyed off the CAMERA; probes/swimcross.mts
+09e7a46  probes/divebreath.mts, probes/shotswim.mts, guarded normalize in the branch
+2904a6e  murk tint derived from Water's own uScatter; swimcross sample rate
+e432365  murk ramps across the waterline instead of switching on at it
+cfd516d, ac6112d  this handoff
+139d0af  project/TASKS.md residue rows
+```
+
+Both typechecks, the build and the four `pre-commit` gates are green on every
+one of them. **`pnpm run check` was not run — the coordinator owns the suite.**
+
 ## Status
 
 | task | state |
