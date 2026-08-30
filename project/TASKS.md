@@ -480,3 +480,13 @@ term is in `[0,1]` by construction.
 - **`Water._visible` is a bbox test and the reflection pass spends ~40 draws on
   shots with no visible water** — already demoted in this file, not touched, and
   lane 7's work did not make it free.
+
+- **`reliefstat --against` is now a hard error, so two documented command lines
+  need editing.** The flag was never read (the reference is unconditionally the
+  six `GROUND_PLATES`); after `1f799ae` fixed the crash it was accepted and
+  silently ignored, which is worse. It now rejects. The two call sites are
+  `docs/plans/2026-08-30-fable-to-nine.md:1246` and
+  `project/handoff/lane5-terrain-light.md:137`; both are proposed next steps
+  under an explicit "Not verified", so **no measurement in this repo rested on
+  it** (grepped). Drop the flag from both lines when you next touch them.
+  `harness`, `lane5`

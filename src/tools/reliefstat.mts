@@ -200,13 +200,49 @@ async function main(): Promise<void> {
   // of this line meant the invocation on line 7 of this file's own header --
   // `reliefstat.mts a.png --against FFXV-field-ground` -- handed
   // `FFXV-field-ground` to the file list and died in `open()`, twenty-two
-  // minutes deep in the daemon queue, twice. `--against` was never read at all:
-  // the reference below is unconditional, so the flag is accepted and ignored
-  // rather than rejected, which is the worst of the three options. Documented
-  // usage that crashes is the same defect `imagestats.mts` warns about in its
-  // own prose -- an instrument that contradicts itself is worse than none.
+  // minutes deep in the daemon queue, twice.
   const files = argv.filter((a, i) => !a.startsWith('--') && (i === 0 || !argv[i - 1]!.startsWith('--')))
     .flatMap(expand);
+
+  /**
+   * **Reject a flag this tool does not implement, rather than ignore it.**
+   *
+   * `--against` was never read. The reference is `GROUND_PLATES` and it is
+   * computed unconditionally, so the flag was *accepted and ignored* -- the
+   * worst of the three options, and strictly worse than the crash that used to
+   * precede it. A crash tells you. Fixing only the crash left a documented
+   * invocation that runs, prints a comparison, and compares against something
+   * other than what its own command line says.
+   *
+   * Two places in this repo still carry `reliefstat … --against
+   * FFXV-field-ground` -- `docs/plans/2026-08-30-fable-to-nine.md:1246` and
+   * `project/handoff/lane5-terrain-light.md:137` -- and both are *proposed next
+   * steps* rather than recorded results, so nothing measured in this repo rests
+   * on the flag. That was checked by grep before this landed, and it is the
+   * only reason removing it is safe rather than invalidating.
+   *
+   * Not implemented, because implementing it would mean a labelled corpus store
+   * like `imagestats`' and there is exactly one reference set worth having here:
+   * the six plates whose lower band is ground rather than lake, road or a
+   * character's back. That set is printed on its own row, named, in every run.
+   */
+  const AGAINST = argv.indexOf('--against');
+  if (AGAINST >= 0) {
+    console.error(`reliefstat has no --against: the reference is ALWAYS the ${GROUND_PLATES.length} FFXV ground`);
+    console.error('plates, computed unconditionally and printed as the `FFXV-ground` row. The flag');
+    console.error('used to be accepted and silently ignored, so a run that named a reference set');
+    console.error('compared against a different one. Drop it. (`imagestats.mts` DOES have');
+    console.error('--against, over labelled corpora it saves; that is the tool you want if you');
+    console.error('need to compare against something else.)');
+    process.exit(2);
+  }
+  const unknown = argv.filter((a) => a.startsWith('--') && a !== '--roi');
+  if (unknown.length) {
+    console.error(`unknown flag(s): ${unknown.join(' ')}`);
+    console.error('usage: node src/tools/reliefstat.mts "tmp/shots/x/*.png" [--roi x,y,w,h]');
+    process.exit(2);
+  }
+
   if (!files.length) {
     console.error('usage: node src/tools/reliefstat.mts "tmp/shots/x/*.png" [--roi x,y,w,h]');
     process.exit(2);
