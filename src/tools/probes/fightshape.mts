@@ -204,6 +204,56 @@ const ROUNDS = Math.max(1, Math.min(HEADINGS.length, Number(window.rounds) || 5)
 /** One row per round, for the aggregate. */
 const metrics = [];
 
+/* ---- the aggregate: what the run as a whole says -------------------- */
+// One fight is an anecdote and its spread is 3x, so every claim this lane
+// makes is a median over the fights that actually happened.
+const median = (xs) => {
+  if (!xs.length) return NaN;
+  const a = [...xs].sort((p, q) => p - q);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+};
+const one = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '--');
+/**
+ * The run's verdict, recomputed from `metrics` on demand.
+ *
+ * Called after EVERY round, not only at the end. A five-round run now plays
+ * for long enough that Chromium tears the execution context down under it --
+ * the run at 4a588f4 died between rounds 3 and 4 with "Target page, context or
+ * browser has been closed" -- and an aggregate that exists only at the end
+ * dies with it. Printed each round, the last line to reach the terminal always
+ * carries a median, even if it is a median over three fights.
+ */
+function aggregate() {
+const fights = metrics.filter((m) => m.found && m.kills > 0);
+const agg = [];
+agg.push('', `=== AGGREGATE over ${fights.length} fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${metrics.filter((m) => m.found && !m.kills).length} killed nothing)`);
+if (!fights.length) {
+  agg.push('  no fight completed -- nothing to aggregate');
+} else {
+  const col = (k, d = 1) => fights.map((m) => one(m[k], d)).join(' ');
+  const medSecs = median(fights.map((m) => m.secs));
+  const medHp = median(fights.map((m) => m.hpPaid));
+  agg.push(`  duration      ${col('secs')}  ->  MEDIAN ${one(medSecs)} s        [target 18-30]`);
+  agg.push(`  hp paid %     ${col('hpPaid')}  ->  MEDIAN ${one(medHp)} %        [target >=15]`);
+  agg.push(`  pack size     ${fights.map((m) => m.n).join(' ')}  ->  median ${one(median(fights.map((m) => m.n)), 0)}   (killed ${fights.map((m) => `${m.denKilled}/${m.n}`).join(' ')})`);
+  agg.push(`  den hp pool   ${fights.map((m) => m.denPool).join(' ')}  ->  median ${one(median(fights.map((m) => m.denPool)), 0)}`);
+  agg.push(`  ended         ${fights.map((m) => m.stopped).join('  ')}`);
+  agg.push(`  hits taken    ${fights.map((m) => m.inHits).join(' ')}  ->  median ${one(median(fights.map((m) => m.inHits)), 0)}`);
+  agg.push(`  % max hp/hit  ${col('perHitPct', 2)}  ->  median ${one(median(fights.map((m) => m.perHitPct)), 2)} %`);
+  agg.push(`  den hp dealt  ${fights.map((m) => Math.round(m.denHp)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp)), 0)}`);
+  agg.push(`  party dps     ${fights.map((m) => one(m.denHp / Math.max(0.1, m.secs), 0)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp / Math.max(0.1, m.secs))), 0)} hp/s`);
+  agg.push(`  noctis dmg %  ${col('noctisShare', 0)}  ->  median ${one(median(fights.map((m) => m.noctisShare)), 0)} %`);
+  agg.push(`  warp strikes  ${fights.map((m) => m.warpCasts).join(' ')}  (Q taps ${fights.map((m) => m.warpTaps).join(' ')}, landed ${fights.map((m) => m.warpLands).join(' ')})  ->  median ${one(median(fights.map((m) => m.warpCasts)), 0)} casts, ${one(median(fights.map((m) => m.warpCasts / Math.max(0.1, m.secs))), 2)}/s`);
+  agg.push(`  mp floor      ${fights.map((m) => Math.round(m.mpFloor)).join(' ')}  ->  median ${one(median(fights.map((m) => m.mpFloor)), 0)}`);
+  agg.push(`  enemy atk/s   ${col('enemyAtkRate', 2)}  ->  median ${one(median(fights.map((m) => m.enemyAtkRate)), 2)}`);
+  const okSecs = medSecs >= 18 && medSecs <= 30;
+  const okHp = medHp >= 15;
+  agg.push(`  VERDICT: duration ${okSecs ? 'PASS' : `FAIL (${one(medSecs)} s, want 18-30)`}; danger ${okHp ? 'PASS' : `FAIL (${one(medHp)}%, want >=15%)`}`);
+}
+return agg;
+}
+
 for (let round = 0; round < ROUNDS; round++) {
   const shots = round === 0;
   const found = await findDen(HEADINGS[round] || [round], 28);
@@ -419,44 +469,10 @@ for (let round = 0; round < ROUNDS; round++) {
     ...hits.slice(startHits).filter((h) => h.killed || h.dmg > 400).map((h) =>
       `    ${(h.t - startNow).toFixed(1)}s ${String(h.by).padEnd(9)} ${String(Math.round(h.dmg)).padStart(6)} of ${h.max}hp  ${h.st}${h.stag ? ' STAGGERED' : ''}${h.killed ? '  KILL' : ''}`),
   ].join('\n'));
+  console.log(aggregate().join('\n'));
 }
 
-/* ---- the aggregate: what the run as a whole says -------------------- */
-// One fight is an anecdote and its spread is 3x, so every claim this lane
-// makes is a median over the fights that actually happened.
-const median = (xs) => {
-  if (!xs.length) return NaN;
-  const a = [...xs].sort((p, q) => p - q);
-  const m = a.length >> 1;
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-};
-const fights = metrics.filter((m) => m.found && m.kills > 0);
-const one = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '--');
-const agg = [];
-agg.push('', `=== AGGREGATE over ${fights.length} fights (${metrics.length} rounds played, ${metrics.filter((m) => !m.found).length} found no den, ${metrics.filter((m) => m.found && !m.kills).length} killed nothing)`);
-if (!fights.length) {
-  agg.push('  no fight completed -- nothing to aggregate');
-} else {
-  const col = (k, d = 1) => fights.map((m) => one(m[k], d)).join(' ');
-  const medSecs = median(fights.map((m) => m.secs));
-  const medHp = median(fights.map((m) => m.hpPaid));
-  agg.push(`  duration      ${col('secs')}  ->  MEDIAN ${one(medSecs)} s        [target 18-30]`);
-  agg.push(`  hp paid %     ${col('hpPaid')}  ->  MEDIAN ${one(medHp)} %        [target >=15]`);
-  agg.push(`  pack size     ${fights.map((m) => m.n).join(' ')}  ->  median ${one(median(fights.map((m) => m.n)), 0)}   (killed ${fights.map((m) => `${m.denKilled}/${m.n}`).join(' ')})`);
-  agg.push(`  den hp pool   ${fights.map((m) => m.denPool).join(' ')}  ->  median ${one(median(fights.map((m) => m.denPool)), 0)}`);
-  agg.push(`  ended         ${fights.map((m) => m.stopped).join('  ')}`);
-  agg.push(`  hits taken    ${fights.map((m) => m.inHits).join(' ')}  ->  median ${one(median(fights.map((m) => m.inHits)), 0)}`);
-  agg.push(`  % max hp/hit  ${col('perHitPct', 2)}  ->  median ${one(median(fights.map((m) => m.perHitPct)), 2)} %`);
-  agg.push(`  den hp dealt  ${fights.map((m) => Math.round(m.denHp)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp)), 0)}`);
-  agg.push(`  party dps     ${fights.map((m) => one(m.denHp / Math.max(0.1, m.secs), 0)).join(' ')}  ->  median ${one(median(fights.map((m) => m.denHp / Math.max(0.1, m.secs))), 0)} hp/s`);
-  agg.push(`  noctis dmg %  ${col('noctisShare', 0)}  ->  median ${one(median(fights.map((m) => m.noctisShare)), 0)} %`);
-  agg.push(`  warp strikes  ${fights.map((m) => m.warpCasts).join(' ')}  (Q taps ${fights.map((m) => m.warpTaps).join(' ')}, landed ${fights.map((m) => m.warpLands).join(' ')})  ->  median ${one(median(fights.map((m) => m.warpCasts)), 0)} casts, ${one(median(fights.map((m) => m.warpCasts / Math.max(0.1, m.secs))), 2)}/s`);
-  agg.push(`  mp floor      ${fights.map((m) => Math.round(m.mpFloor)).join(' ')}  ->  median ${one(median(fights.map((m) => m.mpFloor)), 0)}`);
-  agg.push(`  enemy atk/s   ${col('enemyAtkRate', 2)}  ->  median ${one(median(fights.map((m) => m.enemyAtkRate)), 2)}`);
-  const okSecs = medSecs >= 18 && medSecs <= 30;
-  const okHp = medHp >= 15;
-  agg.push(`  VERDICT: duration ${okSecs ? 'PASS' : `FAIL (${one(medSecs)} s, want 18-30)`}; danger ${okHp ? 'PASS' : `FAIL (${one(medHp)}%, want >=15%)`}`);
-}
+const agg = aggregate();
 for (const line of agg) console.log(line);
 
 log.push(...rounds);

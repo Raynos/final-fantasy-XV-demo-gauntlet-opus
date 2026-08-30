@@ -220,18 +220,34 @@ const IMPERIAL: SpawnLine[] = [
  * 1.085^13 = 2.85x, so 1 381 -> 2 223 hp — and the same den runs 10-17 s
  * depending on whether its `count` draws 3 or 5.
  *
- * **1.0 is the ceiling on this lever, and it does not reach 30 s.** Going
- * further means putting the anonymous country *above* the party, which is what
- * the paragraph above says a hunt mark is for. The arithmetic is worth writing
- * down because it keeps being re-derived: at 700 hp/s a 30-second field
- * encounter needs ~21 000 hp of den, which is five sabertusks at level 38, and
- * the bestiary's own top species — Red Giant, level 50 — is 22 000 hp all by
- * itself. A three-animal trash den is not a 30-second fight at any level that
- * is not absurd; what this lever buys is the difference between a fight with
- * no room in it and one with room for a rhythm. The rest of the gap is pack
- * composition and party throughput, neither of which lives in this file.
+ * The paragraph that used to sit here called 1.0 "the ceiling on this lever",
+ * and the arithmetic under it was right about the thing it was actually
+ * computing: **one lever cannot carry a three-animal den to thirty seconds**,
+ * and at 700 hp/s a 30-second encounter wants ~21 000 hp of den. It was wrong
+ * only in calling that a ceiling, because it was reasoning about a den of
+ * three. It said so itself, in its last sentence: "the rest of the gap is pack
+ * composition and party throughput". The pack composition half is now done --
+ * the hostile roster lines above draw five to eight -- and 1.0 with a real den
+ * behind it measures like this (`fightshape --set rounds=5`, five rounds):
+ *
+ *     sabertusk x5  lv 28, 2 444 hp each   12 220 hp of den   16.3 s
+ *     voretooth x6  lv 27, 2 361 hp each   14 166 hp of den   16.7 s
+ *
+ * which is a real fight and still ten to fifteen per cent under the 18 s
+ * floor. **1.25 buys exactly that last stretch and nothing more.** A mid-band
+ * cell lands about three levels over the party rather than level with it --
+ * 1.085^3 = 1.28 on HP, 1.058^3 = 1.18 on damage -- and the `ceiling` in
+ * `denLevel` below, which was already written as `max(levels[1], party + 5)`,
+ * caps the top-of-band cells at five over. Three-over is not "the anonymous
+ * country above the party" in the sense the hunt-mark paragraph means; a hunt
+ * mark is a named elite twenty levels up. It is the difference between a den
+ * you clear and a den you clear *carefully*.
+ *
+ * A ceiling on this lever does exist and it is `denLevel`'s, not this
+ * constant's. Do not raise it by raising this number; raise it there, where
+ * the clamp is, and say why.
  */
-const LEVEL_LIFT = 1.0;
+const LEVEL_LIFT = 1.25;
 
 /**
  * A wild den's level: the zone's band, lifted toward the party.
