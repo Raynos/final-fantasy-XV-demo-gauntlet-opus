@@ -149,3 +149,25 @@ said it was: the tab is **1 382 MB**, not 1 246, and everything plan tasks
   most of what a lane can cut. `geo.bin.gz` and `texc.bin.gz` were absent for
   hours, pruned repeatedly by co-agents' `pre-commit` `vite build`. Re-measure
   on a quiet tree with the caches rebuilt. `lane13`
+- **`ShopScreen` has no per-shop sell multiplier.** `TOWN_SHOPS.pearl` wants
+  `sellMult: 1.4` honoured in `rows()` and `accept()`, so Coctura buying the
+  catch over the odds is a property of the counter rather than of a dialogue
+  branch. Not blocking: the 40% is paid today from `NpcDialogue.coctura`,
+  through `Inventory.sell` at the normal rate plus a separate credit, so the
+  ledger and the `gil-changed` events stay honest. `ShopScreen.ts`, lane 10.
+  `lane19`
+- **`PhotoScreen.subjects()` can only emit `meteor`, `beast`, `party`,
+  `vista`**, so a `photo` objective can never name a *place*. Both cities now
+  have authored photo spots (Galdin's causeway and Angelgard, Lestallum's
+  lookout) and only the Lestallum one is distinguishable, because the Meteor
+  happens to be a subject. A `landmark:<poiId>` subject keyed off the same
+  `facing()` test the Meteor uses is about fifteen lines. `PhotoScreen.ts`.
+  `lane19`
+- **Lestallum's street grid leans into its own market square.** Measured with
+  `src/tools/probes/cityanchors.mts`: a `render4`/`stone` block stands within
+  2 m of `edge0`, `edge1`, `edge5` and `stall5`, so four of the nineteen
+  anchors `_town` publishes are unusable there and every placement in
+  `CityHub.CITIES` and `Npcs.CITY` routes around them. The fix is in
+  `PoiKits._town`'s block loop — skip a block whose jittered centre lands
+  within ~15 m of the origin — and it would give both cities four more
+  usable anchors. Re-run the probe after any change to `_town`. `lane19`
