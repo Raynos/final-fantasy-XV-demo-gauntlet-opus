@@ -18,7 +18,8 @@ enterable but enemy-free; due south is a 59° arc with zero POIs; all 8
 royal arms are unobtainable. Parts D–E answer that. Human decisions folded
 in at lock: the Meteor art round is funded (reversing the earlier decline),
 chocobo riding and swimming are funded as engine work, and the standing
-order after round 18 is **iterate to 9 or plateau**.
+order after the first post-build judge round is **iterate to 9 or plateau**
+(§3–§4: MEGA BUILD MODE — build everything first, judge after).
 
 ---
 
@@ -43,28 +44,36 @@ found the mirrored steering in about a minute.
 4. **Ownership is disjoint by file.** Named cross-lane one-liners land as
    their own explicit-pathspec commits. Anything else touching another
    lane's file goes to `TASKS.md`.
-5. **Presentation lanes re-order on round 17's ranked tells when it lands**;
-   until then, round 16's order stands — it is real data, not vibes.
+5. **MEGA BUILD MODE (human decision at lock): no judging during the
+   build.** Build order follows round 16's ranked tells as written. Each
+   lane verifies only its own scope with its own instruments; judged rounds
+   resume when everything is built.
 6. **`Shots.ts` has exactly one owner at a time**: lane 3 (composition)
    first; lane 19 (content shots) after lane 3's re-baselines land.
 
-## §3 — Round zero (tonight, before the waves)
+## §3 — MEGA BUILD MODE: build first, judge after
 
-- **R1. Run judge round 17** (nothing is in flight — the opus draft asserted
-  a phantom). 20 pairs + shuffled control arm.
-- **R2. Playtest protocol + three human sessions.** 30 min, no instruction,
-  ranked what-felt-broken. Human time, via `HUMAN_REVIEW.md`. The only
-  instrument that has ever found an input bug.
+Human decisions at lock (2026-08-30): **no pre-build judge round, no
+pre-build playtest** ("I already did it and the game is pretty bad lol it
+can't get worse" — that is the baseline, recorded). Everything in Parts A–E
+builds in parallel waves of **6–8 lanes**; during the build the only
+checking is each lane's own scoped instruments plus the standing gates
+(`check`, `nanscan`, perf). When everything is built:
 
-## §4 — The standing order after round 18
+- **R1. Judge round 17** — the first post-build round. 20 pairs + shuffled
+  control arm + the five new city PAIRING rows, round 16's method.
+- **R2. One 30-minute human playtest** — no instruction, ranked
+  what-felt-broken, via `HUMAN_REVIEW.md`.
 
-Locked by the human: **iterate to 9 or plateau.** If round 18 reports
-hesitation < 30%, its ranked tells re-order into the next wave
-automatically; rounds 19+ follow the same loop. Stop only when the bar is
-met, or when a full fix-wave moves the number by nothing (a measured
-plateau) — either way, published. The same applies to the playtest bar: a
-post-fix session reporting ≥3 broken feels queues its ranked list into lane
-12 and the loop continues.
+## §4 — The standing order after the first post-build round
+
+Locked by the human: **iterate to 9 or plateau.** If a round reports
+hesitation < 30%, its ranked tells re-order into the next fix wave
+automatically; further rounds follow the same loop. Stop only when the bar
+is met, or when a full fix-wave moves the number by nothing (a measured
+plateau) — either way, published. Same for the playtest bar: a session
+reporting ≥3 broken feels queues its ranked list into lane 12, the fixes
+land, and another session runs.
 
 ---
 
@@ -485,9 +494,15 @@ rows — sized honestly and staffed after Part D's first wave.
     ~2.2 m/s + sprint stroke, weapons sheathed (no combat in water), exit
     at banks; party waits at shore and rejoins. Applies to the four
     flood-filled bodies and rivers. Camera at the waterline and water-shader
-    intersection are the known risks. Diving is out of scope unless the
-    human asks. Done: swim across Alstor Slough without floor-walking, in
-    `gameplay`; `longplay` clean. Size: **2–3 lane-lifetimes.**
+    intersection are the known risks. Done: swim across Alstor Slough
+    without floor-walking, in `gameplay`; `longplay` clean.
+73. **Diving (funded at lock).** Below the surface: underwater camera,
+    breath meter, subsurface fog/murk pass, surface seen from below;
+    resurface at the breath limit. New rendering risk — the water shader
+    has never been seen from underneath. Done: dive under Alstor and the
+    Vesperpool, breath runs out and forces ascent, no NaN/artefact frames
+    (`nanscan` on two new underwater probe framings).
+    Size for the lane: **3–5 lane-lifetimes.**
 
 ---
 
@@ -504,11 +519,13 @@ archive pruning; the dungeon-map screen. Deleted outright: hair `mips: 0`
 
 ## What this costs
 
-Waves of 4–5 lanes on the shared trunk, one ~3 h/150-turn lifetime each.
-Parts A–C ≈ 2–4 days; Part D ≈ 10–11 lifetimes; Part E ≈ 5–7 lifetimes;
-lane 20 (Meteor) 1–2. **Call it six to nine days of lane time**, plus human
-playtests and as many judge rounds as §4 demands. Lanes 1–3, 57 and 22 are
-the likeliest respawns. First staffing: 2026-08-31 ~02:20 CEST.
+**Waves of 6–8 lanes** on the shared trunk (human decision — expect gitlock
+queuing and capture contention; commit small and often), one ~3 h/150-turn
+lifetime each. Parts A–C ≈ 12–16 lifetimes; Part D ≈ 10–11; Part E ≈ 7–10
+with diving; lane 20 (Meteor) 1–2. **Total ≈ 30–39 lane-lifetimes ≈ 12–18
+hours of wall-clock at this parallelism** — one long night into day — then
+§4's judge/playtest loops. Lanes 1–3, 57, 22 and 23 are the likeliest
+respawns. First staffing: 2026-08-31 ~02:20 CEST.
 
 ## Definition of done
 
@@ -524,7 +541,8 @@ the likeliest respawns. First staffing: 2026-08-31 ~02:20 CEST.
       claimable; dungeons fight back; `longplay` 30 min clean, day and
       night.
 - [ ] Part E bars: chocobo summonable at spawn, one race completable,
-      Alstor swimmable.
+      Alstor swimmable on the surface and divable with a working breath
+      limit.
 - [ ] **§4 satisfied: rounds run and published until hesitation ≥30% with
       ≥2 fooled (judged set includes the five city PAIRING rows) or a
       measured plateau; playtests until <3 broken-feel reports or the same
