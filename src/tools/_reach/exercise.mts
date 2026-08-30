@@ -100,6 +100,46 @@ try {
   }
 } catch (e) { /* keep going */ }
 
+// --- the quest log: accept, complete, advance a chapter ---------------------
+// `QuestLog.accept`, `QuestLog.complete`, `RpgSystem.gainExp` and
+// `StorySystem.completeChapter` used to be reached BY ACCIDENT. The mid-game
+// seed pre-satisfied two of chapter 1's three objectives -- `hunt_killer_wasps`
+// pre-complete, 42,180 gil against a `gil:1500` fetch -- so calling Takka's
+// talk handler in the interactable sweep above closed the quest, closed the
+// chapter and paid out, all on its own. Nothing in this file ever asked for it.
+//
+// Part D task 50 removed that self-completion, which is the correct change and
+// which took the only thing in this exercise that ever finished a quest with
+// it. Reaching a path by accident is precisely the failure this tool exists to
+// catch, so chapter 1 is now walked deliberately, through the real methods a
+// player's inputs reach.
+try {
+  g.get('Story')?._resume?.();
+  const q = rpg.quests;
+  // 1. accept -- something genuinely `available`, through the real method.
+  for (const id of ['hunt_dualhorn', 'hunt_killer_wasps', 'side_engine_blade', 'hunt_sabertusks']) {
+    if (q.status(id) === 'available') { q.accept(id); break; }
+  }
+  // 2. the chapter-1 acts, in the order the log makes you do them.
+  q.notify('talk', { target: 'takka' });
+  const bounty = q.def('main_ch1_pauper')?.objectives.find((o) => o.type === 'quest');
+  const huntId = bounty ? bounty.target : 'hunt_sabertusks';
+  if (q.status(huntId) === 'available') q.accept(huntId);
+  const kill = q.def(huntId)?.objectives.find((o) => o.type === 'kill');
+  if (kill) {
+    // The real kill path: this is what pays EXP, so `RpgSystem.gainExp` runs
+    // here and not because a reward object happened to carry one.
+    for (let i = 0; i < (kill.count || 1); i++) {
+      rpg.enemyKilled({ id: kill.target, level: 8, expClass: 'normal', drops: [] }, {});
+    }
+  }
+  const buy = q.def('main_ch1_pauper')?.objectives.find((o) => o.type === 'buy');
+  if (buy && rpg.inventory && rpg.inventory.buy) rpg.inventory.buy('iron_sword', 1);
+  q.notify('talk', { target: 'cindy' });
+  // 3. the chapter card is queued at +1.4 s; give it time to fire.
+  step(150);
+} catch (e) { /* keep going */ }
+
 // --- set piece: the path that had never executed ---------------------------
 try {
   g.applyShot('setpiece_deadeye'); g.settle(120);
