@@ -3,7 +3,7 @@
 Plan `docs/plans/2026-08-30-fable-to-nine.md` item 69: 32 new corpus shots
 (142 → 174), five joining `compare.mts` PAIRING.
 
-Status: **in progress**, 2026-08-31.
+Status: **in progress**, 2026-08-31 (second agent).
 
 ## Ownership
 
@@ -317,3 +317,58 @@ Owned: `src/game/Shots.ts` (from lane 3 at `e5db679`), `src/tools/compare.mts`
 PAIRING rows, `project/noise-floors.json` (not yet written).
 Touched: `HUMAN_REVIEW.md` (one line).
 Commits: `d622af7`, `c29ed18`.
+
+
+---
+
+# Second agent, 2026-08-31
+
+## What this agent found before shooting anything
+
+**`saxham_ghost` is not missing — the POI id is `saxham`.** `WorldMap.ts:747`:
+`{ id: 'saxham', name: 'Saxham Outpost', type: 'landmark', zone: 'weaverwilds',
+x: -1620, z: 640, r: 200, lv: 22 }`. The predecessor searched for `saxham_ghost`
+(the *shot* name) and correctly reported "no POI"; the subject does exist.
+
+**The "NO BUILT PROPS within 130 m" reading is suspect and is being re-measured
+with a different instrument.** `tmp/l21/arc.mts` traversed the *scene* and
+filtered by world-space distance from the pin. `PoiKits._make` has a branch that
+sets `site.group = new THREE.Group()` and returns when a POI falls inside
+`_exclude`'s radius — an **empty group**, which is a different fact from "never
+built" and from "built but the traverse missed it". `tmp/l21/sites2.mts` asks
+`PoiKits.sites` directly for `site.group`, counts its meshes and takes a
+`Box3.setFromObject`, so it can tell the three apart. `tmp/l21/arcframe.mts`
+derives framings from that same Box3 **plus a twelve-bearing terrain-clearance
+march** (the `discview` trick), so a foreground ridge cannot eat a subject the
+way it eats `landmark_meteor`.
+
+Note the generic `_landmark` tail (`PoiKits.ts` ~2965-3040) builds a waymark
+stele, a cairn, a bench and field boulders at `r: 9` for *every* landmark with no
+named branch — so `peak_overlook`, `saltgrass_flats`, `saxham` and
+`mencemoor_obelisks` should all have something. A haven and a reststop build far
+more. "Nothing man-made" at four of them therefore reads as an instrument
+problem, an exclusion, or a streaming failure — not as absent content.
+
+## `landmark_meteor` re-frame: the stand this agent will test
+
+`tmp/l21/discview.log`'s ring, read in full. The current pose (-1020, 150, -3560)
+clears **0.09**. The ring's best are:
+
+| stand | range | frac | fov | note |
+|---|---|---|---|---|
+| (-3618, 211, -660) | 3.0 km | 0.50 | 39 | **duplicates `lest_overlook_disc`** |
+| (-3420, 126, -2160) | 2.4 km | 0.43 | 47 | due west; front-lit at t 17.6 |
+| **(1980, 51, -2160)** | 3.0 km | **0.42** | 39 | **due east — backlit at t 17.6, which is what the shot's own `doc` promises** |
+| (712, 126, -1160) | 2.0 km | 0.41 | 55 | NE |
+
+Only `n_disc` high (eye 300) reaches 0.82 and that stand is already
+`disc_crater_night`. So the honest ceiling for a *daylight* Meteor shot that is
+not a duplicate is ~0.42-0.43, against 0.09 today — a 4.7x improvement, and
+`MT_e` is the only one of them that is backlit. Candidates are in
+`tmp/l21/roadmeteor.mts`; **not yet read.**
+
+## Queue state at the time of writing
+
+`daemon --health`: sweep depth 29 (21 prewarm, 5 drawcheck), fix depth 5. Three
+of this lane's jobs are in it. Every harness line is being checked against
+`git rev-parse HEAD` per LANDMINES.
