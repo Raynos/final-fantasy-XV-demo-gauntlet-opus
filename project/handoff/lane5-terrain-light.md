@@ -231,3 +231,42 @@ depth of 43 at the stop. **That one command is the next step.**
   lane's. Not re-run.
 - NOT obtained: `reliefstat` for task 20 (queued behind 43 sweep jobs, never
   ran) and `driftcheck --build 7da60d5` (same).
+
+### The HEAD run came back, and its DISTRIBUTION is the argument
+
+```
+player           before (0.00, 3.57, 0.00)  after (0.00, 3.57, 0.00)
+SURFACE DRIFT    mean 0.000 m   worst 0.000 m   over 36864 texels
+gpu vs heightAt  boot: mean -0.001 worst -0.520   after travel: mean -0.001 worst -0.520 at (-39.8, -68.2)
+                 p99 |err| 0.229 m; 2937/12544 texels over 0.1 m (1.5 m tessellation floor)
+FAIL  (tolerance 0.05 m drift, 0.45 m vs heightAt)
+```
+
+Reproduces the coordinator's numbers, and the two columns the summary line does
+not carry settle it:
+
+- **mean −0.001 m.** The rendered surface agrees with `heightAt()` to one
+  millimetre on average. A real offset — a shader adding height, a CPU function
+  fallen behind, a mis-decoded attribute — moves the MEAN. This one does not.
+- **p99 |err| 0.229 m**, half the tolerance. The gate is failing on **one texel
+  in 36 864**, and the sign is negative, which is the only sign a chord can have:
+  a 1.5 m triangle through a convex field always sags *below* it.
+- **The spawn has not moved** (0.00, 3.57, 0.00), so the probe rect is over the
+  same ground as it was.
+
+So this is the tessellation chord at the single roughest spot in one rect,
+16 % past a threshold the tool's own comment derived from one past measurement
+of ~0.37 m. Combined with the byte-identical `FIELD_GLSL` / `VERT_PARS` /
+`VERT_BEGIN` above, there is no candidate commit: the geometry and the field
+function are the same objects they were at `7da60d5`.
+
+**Do not widen `--tol-cpu` to make it green** — the coordinator is right that
+this gate earns its tightness, and a max-statistic that has never had a floor
+measured for it is the thing to fix, not the number it trips. The honest repair
+is the one `imgdiff` already made for exactly this failure mode (LANDMINES,
+"the noise floor is per-shot, not the constant everyone quotes"): gate the
+**p99**, which is 0.229 and has headroom, and *report* the worst texel with its
+coordinate. That keeps every offset bug catchable — an offset moves p99 and the
+mean together — while not failing on one triangle over a gully.
+`driftcheck --build 7da60d5` is still the check on whether 0.520 predates the
+wave, and it is still queued.
