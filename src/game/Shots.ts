@@ -372,6 +372,16 @@ const SHOT_TABLE = {
     time: 18.4, weather: 'clear', follow: 'player', hud: true, menu: 'photo',
     offset: [2.6, 2.6, 5.8], lookOffset: [0, 1.35, 0], fov: 46,
   },
+  armiger_full: {
+    doc: 'The Armiger card: thirteen blades of the Lucii, eight of them claimed off real tombs',
+    time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'armiger',
+    offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
+  },
+  map_drive_there: {
+    doc: 'The chart after dark with the destination picked — "Ignis, drive there"',
+    time: 21.8, weather: 'clear', follow: 'player', hud: true, menu: 'world',
+    offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
+  },
 
   // --- vista ------------------------------------------------------------
   // Moved 150 m forward along its own view axis, to the actual lip of the
@@ -696,6 +706,11 @@ const SHOT_TABLE = {
     time: 21.4, weather: 'clear',
     pos: [430, 109.7, -1400], target: [200, 164.3, -1490], fov: 44,
   },
+  tomb_claim: {
+    doc: 'The Tomb of the Wise: the sarcophagus under its colonnade, the royal arm still in it',
+    time: 17.4, weather: 'clear',
+    pos: [55.1, 135.9, -1506.3], target: [58.9, 134.5, -1512.7], fov: 40,
+  },
 
   // --- the world is inhabited -------------------------------------------
   regalia_road: {
@@ -714,6 +729,11 @@ const SHOT_TABLE = {
   regalia_night: {
     doc: 'Night drive, headlights carving the badlands',
     time: 22.6, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
+  },
+  regalia_night_road: {
+    doc: 'The Regalia stopped on Route 1 after dark, the highway running away under the stars',
+    time: 22.4, weather: 'clear',
+    pos: [-44, 12.6, 34], target: [-14, 9.0, 6], fov: 46,
   },
   regalia_cockpit: {
     doc: 'Over the bonnet at dusk',
@@ -854,6 +874,76 @@ const SHOT_TABLE = {
     doc: 'Hammerhead after dark under the floodlights, the one lit thing in Leide',
     time: 21.6, weather: 'clear',
     pos: [640, 29, 60], target: [578, 19, 31], fov: 46,
+  },
+
+  // --- cities : Lestallum -----------------------------------------------
+  // The market square is SMALL. `PoiKits._town` publishes its anchors inside a
+  // ~10 m radius and the street grid closes in at about 13 m, so every framing
+  // here is an 8-13 m camera; three candidates at 15-18 m came back as the
+  // inside of a wall. Live anchors, measured through `PoiKits.anchorAt` after
+  // the site had streamed in: plaza (-2960, 121.22, -700) on ground 120.5, the
+  // six stalls on a r 8 ring, the six bulbs at y 124.94 on a r 11 ring.
+  // Eye height on the plaza deck is y ~ 122.9.
+  lest_market_day: {
+    doc: 'Partellum Market at mid-morning: stalls, awnings and the city out shopping',
+    time: 10.5, weather: 'clear',
+    pos: [-2970, 122.9, -691], target: [-2957, 121.9, -702], fov: 42,
+  },
+  lest_street_night: {
+    doc: 'The square after dark under its festoon, the block black against the starfield',
+    time: 21.5, weather: 'clear',
+    pos: [-2968, 122.1, -707], target: [-2956, 123.2, -697], fov: 50,
+  },
+  lest_plaza_walk: {
+    doc: 'Walkers crossing the square on a long lens — the city is lived in, not dressed',
+    time: 12.2, weather: 'clear',
+    pos: [-2966.5, 122.6, -706.5], target: [-2955, 121.8, -695], fov: 36,
+  },
+  lest_exineris: {
+    doc: 'The EXINERIS stack over the market roofs, the reason this city has light',
+    time: 15.0, weather: 'clear',
+    pos: [-2955, 122.4, -706], target: [-2938, 142, -718], fov: 46,
+  },
+  lest_leville: {
+    doc: 'The Leville from the square — the hotel front over the pavement tables',
+    time: 16.4, weather: 'clear',
+    pos: [-2959, 122.3, -699], target: [-2969.5, 125.5, -694], fov: 46,
+  },
+  lest_market_vendor: {
+    doc: 'Randolph behind the Forge & Filigree counter, his rack behind him',
+    time: 16.0, weather: 'clear',
+    pos: [-2960.6, 122.2, -708.6], target: [-2965.7, 121.9, -705.3], fov: 38,
+  },
+  lest_night_high: {
+    doc: 'The lit square from above the stalls, bulbs and awnings raking away',
+    time: 21.6, weather: 'clear',
+    pos: [-2953, 130, -712], target: [-2961, 122.2, -700], fov: 46,
+  },
+
+  // --- cities : Galdin Quay ---------------------------------------------
+  // Galdin's square is a raised deck: the paving disc sits at y ~ 0.55 over
+  // ground that reads -0.4, so eye height on it is y ~ 2.3. Same 12 m of open
+  // radius as Lestallum. Anchors: plaza (2330, 2380), stalls on a r 8 ring,
+  // bulbs 4.4 m up.
+  galdin_pier_sunset: {
+    doc: 'Galdin Quay at golden hour: the square full, warm rim light down the boards',
+    time: 18.2, weather: 'clear',
+    pos: [2324, 2.4, 2371], target: [2340, 1.9, 2386], fov: 44,
+  },
+  galdin_restaurant: {
+    doc: "Coctura's counter at the Mother of Pearl, the kitchen open behind her",
+    time: 12.0, weather: 'clear',
+    pos: [2343, 2.2, 2374], target: [2337, 1.7, 2376.2], fov: 40,
+  },
+  galdin_pier_fishing: {
+    doc: 'Navyth folded over the rail by the ferry bell with his rod',
+    time: 17.0, weather: 'clear',
+    pos: [2332, 2.3, 2379], target: [2339.1, 1.7, 2383], fov: 44,
+  },
+  galdin_night_lanterns: {
+    doc: 'The festoon over Galdin after dark, the quay working under warm bulbs',
+    time: 21.5, weather: 'clear',
+    pos: [2320, 2.5, 2372], target: [2333, 2.8, 2383], fov: 48,
   },
 
   // --- combat -----------------------------------------------------------
@@ -1084,6 +1174,11 @@ const SHOT_TABLE = {
     time: 12.0, dungeon: 'keycatrich',
     pos: [-106, -51.4, -315], target: [-122, -54.0, -330], fov: 56,
   },
+  dungeon_keycatrich_fight: {
+    doc: 'Keycatrich barracks with the garrison still in it — the MTs lane 17 put underground',
+    time: 12.0, dungeon: 'keycatrich',
+    pos: [-102, -46.2, -262], target: [-116, -48.0, -272], fov: 52,
+  },
 
   // --- dungeons : Balouve Mines ------------------------------------------
   // Interior origin (294, -34, -232). adit 11x9 @0 · landing 14x13 @-2
@@ -1107,6 +1202,11 @@ const SHOT_TABLE = {
     doc: 'Balouve: The Deep — forty metres of worked-out cavern',
     time: 12.0, dungeon: 'balouve',
     pos: [300, -48.5, -298], target: [288, -52.0, -320], fov: 58,
+  },
+  dungeon_balouve_boss: {
+    doc: 'The Deep with its keeper: the cavern floor from the gallery, the fight in the middle of it',
+    time: 12.0, dungeon: 'balouve',
+    pos: [302, -47.0, -296], target: [288, -52.0, -322], fov: 62,
   },
 
   // --- dungeons : Fociaugh Hollow ----------------------------------------
