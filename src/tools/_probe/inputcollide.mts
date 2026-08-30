@@ -91,4 +91,34 @@ out.push('--- and a Regalia-only key, while driving ---');
 press('KeyI');
 if (reg.auto) { reg.setAutoDrive(false); step(10); }
 
+// ---------------------------------------------------------------------
+// THE SECOND ARM, and the one that matters once a guard exists.
+//
+// A guard that switches combat off while driving is one `&&` away from
+// switching combat off altogether, and nothing in the first arm above would
+// notice -- "no combat verb fired" is exactly what it asserts. So get out of
+// the car and press the same five keys standing in a field. Every one of them
+// must come back.
+out.push('');
+out.push('--- the same five keys, ON FOOT ---');
+reg.exit();
+step(30);
+for (const k of Object.keys(calls)) if (typeof calls[k] === 'number') calls[k] = 0;
+// Read the state BEFORE the loop: `KeyF` is the last key pressed and it puts
+// him straight back in the car, so a reading taken afterwards says
+// `driving = true` and makes the arm look like it tested nothing.
+out.push(`driving = ${reg.isDriving} (state at the start of this arm)`);
+for (const k of ['KeyV', 'KeyT', 'KeyB', 'Space', 'KeyF']) {
+  inp.pressed.add(k);
+  g.frame(1 / 60);
+  step(4);
+}
+for (const k of Object.keys(calls)) out.push(`  ${k.padEnd(12)} ${calls[k]}`);
+
+const shared = ['heavy', 'dodge', 'drawEnergy', 'castSlot', 'setLockOn'];
+out.push('');
+out.push(shared.every((k) => calls[k] > 0)
+  ? 'ON FOOT: every shared verb still fires. The guard is a mode, not a mute.'
+  : `*** ON FOOT: ${shared.filter((k) => !calls[k]).join(', ')} did NOT fire -- the guard is too wide ***`);
+
 return out.join('\n');

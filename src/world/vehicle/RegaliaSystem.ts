@@ -48,50 +48,43 @@ import type { EcoSite } from '../props/EcoSites.ts';
 /**
  * The driving keymap.
  *
- * The comment that used to sit here said these keys "are still chosen not to
- * collide with anything on foot". **That was false for four of them, and the
- * reason it went unnoticed is worth writing down: driving is not a mode.**
- * `CombatSystem.update` gates its input read on `input.enabled !== false` and
- * on its own `scenarioLock`, and nothing anywhere sets either one when the
- * player gets into the car — `isDriving` has exactly three readers in the tree
- * and all three are UI. So combat and the car read the same keyboard on the
- * same frame, and every key shared between them fires both verbs.
+ * Every key here except `enter` only does anything while you are actually in
+ * the car — and, since `da4530c`, that sentence is finally true of the game
+ * rather than only of this file.
  *
- * Measured, not argued (`src/tools/_probe/inputcollide.mts`, driving on the
- * highway, counting calls rather than outcomes because an outcome is
- * conditional — `setLockOn(autoTarget())` with no enemy nearby changes nothing
- * and would have read as "no collision"):
+ * **The history is worth keeping, because the comment that used to sit here
+ * was the bug.** It claimed these keys "are still chosen not to collide with
+ * anything on foot", which reads as if getting into the car switches keymaps.
+ * It did not. `CombatSystem.update` gated its input read on `input.enabled`
+ * and its own `scenarioLock`; nothing set either when the player got in, and
+ * `isDriving` had three readers in the tree, all UI. Combat and the car read
+ * the same keyboard on the same frame, so five keys fired two verbs each:
  *
- *   V -> camera + `setLockOn`      T -> Type-D + `drawEnergy`
- *   B -> radio  + `castSlot(2)`    F -> exit    + `heavy`
- *   Space -> handbrake + `dodge`   (this one is visible: `state: idle -> dodge`)
+ *   V -> camera + `setLockOn`     T -> Type-D + `drawEnergy`
+ *   B -> radio  + `castSlot(2)`   F -> exit   + `heavy`
+ *   Space -> handbrake + `dodge`  (visible: `state: idle -> dodge` at 90 km/h)
  *
- * All five combat verbs were called once per press. Three of them are rebound
- * here, on the Regalia side, because they are in-car conveniences that no
- * other document depends on:
+ * Measured by counting calls rather than outcomes in
+ * `src/tools/_probe/inputcollide.mts`, because an outcome is conditional and
+ * `setLockOn(autoTarget())` with no enemy nearby changes nothing.
  *
- *   camera  V -> Y   (V is lock-on, and the card printed a phantom `Y` for it)
- *   typeD   T -> O   ("off-road"; T draws elemental energy)
- *   radio   B -> U   (B is the third Elemancy quick-slot)
+ * These three keys were briefly rebound to Y / O / U as a lane-local
+ * workaround while the real fix — one line in `CombatSystem.update` — belonged
+ * to another lane. That line landed, so they are back where every document in
+ * the game says they are, and `uxcheck` no longer takes the mode on trust: it
+ * drives the car, presses these keys, and asserts no combat verb answers, then
+ * gets out and asserts every one of them does.
  *
- * **`enter` and `handbrake` are deliberately left shared**, and this is a
- * decision rather than an oversight. `F` is the single most-documented binding
- * in the game — it is on the card, in the first-run hint, in the Hammerhead
- * interaction prompt, in `Prompts.ts` and in the probe that proves the car is
- * a car — and the founding UI complaint about this project was "how do you get
- * in the car"; moving it to buy back a heavy-attack swing nobody can see from
- * the driver's seat is a bad trade. `Space` is the handbrake because a
- * handbrake is `Space`. Both need the fix that actually belongs here, which is
- * one line in `CombatSystem.update` — skip `_readInput` while
- * `game.get('Regalia')?.isDriving` — and that file is not this lane's to edit.
- * Filed for it. If that guard lands, all three rebinds above can revert.
+ * `I` for "let Ignis drive" (it was G, which is Gladiolus' technique) and `L`
+ * for lights (it was H, the global controls card) remain chosen to avoid
+ * on-foot collisions outright, which is still the better way to pick a key.
  */
 const KEY = {
   enter: 'KeyF',
-  camera: 'KeyY',
+  camera: 'KeyV',
   auto: 'KeyI',
-  typeD: 'KeyO',
-  radio: 'KeyU',
+  typeD: 'KeyT',
+  radio: 'KeyB',
   radioPower: 'KeyN',
   lights: 'KeyL',
   handbrake: 'Space',

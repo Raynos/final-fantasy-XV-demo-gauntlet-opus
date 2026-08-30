@@ -67,17 +67,17 @@ const GROUPS = [
   {
     name: 'The Regalia', icon: 'machinery',
     rows: [
-      [['F'], 'A / Cross', 'Get In / Get Out', 'Stand beside the car; also swings the heavy attack'],
+      [['F'], 'A / Cross', 'Get In / Get Out', 'Stand beside the car'],
       [['W'], 'RT', 'Accelerate', ''],
       [['S'], 'LT', 'Brake / Reverse', 'One pedal, like an automatic'],
       [['A', 'D'], 'Left Stick', 'Steer', ''],
-      [['Space'], 'A / Cross', 'Handbrake', 'Shared with the dodge roll'],
+      [['Space'], 'A / Cross', 'Handbrake', ''],
       [['I'], '', 'Let Ignis Drive', 'Auto-drives to the next stop'],
-      [['Y'], '', 'Change Camera', 'Chase, bonnet, cinematic'],
-      [['U'], '', 'Next Radio Station', ''],
+      [['V'], '', 'Change Camera', 'Chase, bonnet, cinematic'],
+      [['B'], '', 'Next Radio Station', ''],
       [['N'], '', 'Radio On / Off', ''],
       [['L'], '', 'Headlights', 'Auto, on, off'],
-      [['O'], '', 'Type-D Off-Road', 'Suspension for the dirt'],
+      [['T'], '', 'Type-D Off-Road', 'Suspension for the dirt'],
     ],
   },
   {

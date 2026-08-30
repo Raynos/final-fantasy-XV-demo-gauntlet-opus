@@ -353,6 +353,73 @@ ok('a hint explains how to leave the first menu', hints.menu === 'menu');
 ok('hints fire once only', hints.repeats === false);
 ok('hints are suppressed during a capture', hints.mutedShows === false);
 
+/* ---------------------------------------------------------------- 7.5 */
+/* driving is a MODE, and this is what makes section 8 allowed to say so */
+
+// Section 8 below permits combat and the Regalia to share a key. That
+// permission used to be a comment -- "driving and on-foot combat are mutually
+// exclusive states" -- asserting a modality the code did not implement, and
+// four live collisions passed underneath it. It is a measurement now: drive
+// the car, press the shared keys, and watch whether any combat verb answers;
+// then get out and watch that every one of them does. The second half is not
+// optional. A mode guard is one `&&` away from switching combat off entirely,
+// and "no combat verb fired" is exactly what the first half asserts.
+const modal = await page.evaluate(async () => {
+  const g = window.GAME;
+  const car = g.get('Regalia')!;
+  // Indexed by verb name below, so it is deliberately loosened here: the
+  // typed `CombatSystem` has no index signature and this check's whole method
+  // is to wrap five methods chosen by name.
+  const cbt = (g.get('Combat') || g.get('CombatSystem')) as unknown as Record<string, Function> & { isDriving?: boolean };
+  const inp = g.input;
+  const out: Record<string, unknown> = {};
+  if (!car || !cbt) { out.missing = true; return out; }
+
+  const VERBS = ['heavy', 'dodge', 'drawEnergy', 'castSlot', 'setLockOn'];
+  const calls: Record<string, number> = {};
+  const orig: Record<string, Function> = {};
+  for (const v of VERBS) {
+    if (typeof cbt[v] !== 'function') continue;
+    orig[v] = cbt[v];
+    calls[v] = 0;
+    cbt[v] = function (...a: unknown[]) { calls[v]++; return orig[v].apply(this, a); };
+  }
+  // Counting CALLS, not outcomes: `setLockOn(autoTarget())` with no enemy
+  // nearby changes nothing observable, and an outcome-based version of this
+  // check would have called that "no collision".
+  const mash = () => {
+    for (const k of ['KeyV', 'KeyT', 'KeyB', 'Space', 'KeyF']) {
+      inp.pressed.add(k);
+      g.frame(1 / 60);
+      window.step(4);
+    }
+  };
+
+  car.enter(false);
+  window.step(20);
+  out.drivingBefore = car.isDriving;
+  mash();
+  out.whileDriving = VERBS.reduce((n, v) => n + (calls[v] || 0), 0);
+
+  if (car.isDriving) car.exit();
+  window.step(20);
+  out.drivingAfter = car.isDriving;
+  for (const v of VERBS) calls[v] = 0;
+  mash();
+  out.onFoot = VERBS.filter((v) => (calls[v] || 0) > 0).length;
+  out.onFootTotal = VERBS.length;
+
+  for (const v of Object.keys(orig)) cbt[v] = orig[v];
+  if (car.isDriving) car.exit();
+  window.step(10);
+  return out;
+});
+
+ok('combat does not read the keyboard while driving',
+  modal.whileDriving === 0, `${modal.whileDriving} combat verb calls from V/T/B/Space/F in the car`);
+ok('and every one of those verbs still fires on foot',
+  modal.onFoot === modal.onFootTotal, `${modal.onFoot}/${modal.onFootTotal} answered outside the car`);
+
 /* ------------------------------------------------------------------ 8 */
 /* the keymap is collision-free across the systems that share a mode     */
 
@@ -381,31 +448,27 @@ for (const [owner, file] of Object.entries(SRC)) {
   }
 }
 /**
- * **This gate used to exempt the Regalia, and the exemption was false.**
+ * **A modal exemption has to be earned by a measurement, not by a comment.**
  *
- * The line was `if (owners.has('regalia') && owners.size === 2 && ...) continue;`
- * under a comment reading "Driving and on-foot combat are mutually exclusive
- * states, so a key may be in both". They are not mutually exclusive.
- * `CombatSystem.update` gates its input read on `input.enabled` and its own
- * `scenarioLock`; nothing in the tree sets either when the player gets into
- * the car. Combat and the car read the same keyboard on the same frame, and
- * `src/tools/_probe/inputcollide.mts` counts the calls: pressing V, T, B,
- * Space and F while driving called `setLockOn`, `drawEnergy`, `castSlot`,
- * `dodge` and `heavy`, once each.
+ * This gate has always let combat and the Regalia share a key, on the strength
+ * of a comment reading "Driving and on-foot combat are mutually exclusive
+ * states, so a key may be in both". They were not mutually exclusive. Nothing
+ * in the tree implemented that modality: `CombatSystem.update` gated its input
+ * read on `input.enabled` and its own `scenarioLock`, and `isDriving` had
+ * three readers, all UI. Four collisions were live underneath the exemption —
+ * V lock-on vs the drive camera, T deposit-draw vs Type-D, B the third
+ * Elemancy slot vs the radio, F the heavy attack vs getting out — plus Space,
+ * which the gate could not even see because `Space` was not in its pattern.
  *
- * So the check was skipping exactly the population the defect lived in — and
- * passing green over four real collisions for as long as it has existed. The
- * exemption is gone. What replaces it is an allowlist of individual keys that
- * are shared **on purpose**, each of which has to carry its reason, so that a
- * new collision cannot be absorbed by a category.
+ * `CombatSystem.update` implements the mode now, and section 7.5 above
+ * measures it in the running game each time this gate runs: no combat verb
+ * answers V/T/B/Space/F from the driver's seat, and every one of them still
+ * answers on foot. **That pair of assertions is what licenses the exemption
+ * below.** If 7.5 goes red, the exemption is void and every shared key here is
+ * a real collision again — which is why they are next to each other in this
+ * file rather than the exemption sitting alone with a comment.
  */
-const SHARED_ON_PURPOSE = new Map([
-  ['KeyF', 'enter/exit the car vs the heavy attack — F is the most documented '
-    + 'binding in the game and moving it costs more than the overlap does; the '
-    + 'real fix is a mode guard in CombatSystem.update'],
-  ['Space', 'handbrake vs dodge roll — a handbrake is Space; same mode guard'],
-]);
-const MODAL_OK = new Set(['regalia|menus']);
+const MODAL_OK = new Set(['regalia|menus', 'combat|regalia', 'combat|menus|regalia']);
 const clashes = [];
 for (const [code, owners] of claimed) {
   if (owners.size < 2 || MOVEMENT.has(code)) continue;
@@ -413,13 +476,12 @@ for (const [code, owners] of claimed) {
   owners.delete('audio');
   if (owners.size < 2) continue;
   const pair = [...owners].sort().join('|');
-  if (SHARED_ON_PURPOSE.has(code)) continue;
   if (MODAL_OK.has(pair)) continue;
   clashes.push(`${code}: ${[...owners].join(' + ')}`);
 }
 ok('no keyboard binding is claimed by two systems in the same mode',
   clashes.length === 0, clashes.length ? clashes.join(', ')
-    : `${SHARED_ON_PURPOSE.size} shared on purpose: ${[...SHARED_ON_PURPOSE.keys()].join(', ')}`);
+    : 'cross-mode pairs allowed only because 7.5 measured the mode');
 
 /* -------------------------------------------------------------------- */
 

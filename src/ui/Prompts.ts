@@ -34,7 +34,7 @@ const SETS = {
   /** Behind the wheel. */
   driving: [
     ['W', 'Accelerate'], ['S', 'Brake'], ['Space', 'Handbrake'], ['I', 'Ignis Drives'],
-    ['Y', 'Camera'], ['F', 'Get Out'],
+    ['V', 'Camera'], ['F', 'Get Out'],
   ],
 };
 

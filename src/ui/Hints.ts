@@ -145,8 +145,8 @@ export class Hints {
       this.show('car',
         'The Regalia',
         'Press F beside the car to get in, and F again to get out. W and S are throttle '
-        + 'and brake, Space is the handbrake, I hands the wheel to Ignis and Y cycles the camera.',
-        ['F', 'I', 'Y'], 'machinery');
+        + 'and brake, Space is the handbrake, I hands the wheel to Ignis and V cycles the camera.',
+        ['F', 'I', 'V'], 'machinery');
     }
 
     // Anything you can walk up to and press a key at.
