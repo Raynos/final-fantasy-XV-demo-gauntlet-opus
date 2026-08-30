@@ -103,13 +103,13 @@ for (let i = 0; i < cb.races._gates.length; i++) {
 
 /* -- the autopilot -------------------------------------------------------- */
 
-const THREE = await import('three');
-const camDir = new THREE.Vector3();
-const fwd = new THREE.Vector3();
-const right = new THREE.Vector3();
-const up = new THREE.Vector3(0, 1, 0);
-const wish = new THREE.Vector3();
-
+/*
+ * No `import('three')` here. A probe body is evaluated **inside the page**,
+ * where a bare specifier does not resolve — `Failed to resolve module
+ * specifier 'three'` is what you get, and it is not worth a URL import for six
+ * lines of arithmetic. The camera's world forward is the negated third column
+ * of its world matrix, which is all `getWorldDirection` does.
+ */
 const inp = g.input;
 const realUpdate = inp.update.bind(inp);
 const realKey = inp.key.bind(inp);
@@ -126,13 +126,16 @@ inp.update = () => {
   realUpdate();
   const gate = cb.races._gates[cb.races.idx];
   if (!gate) { inp.move.set(0, 0); return; }
-  g.camera.getWorldDirection(camDir);
-  fwd.copy(camDir); fwd.y = 0;
-  if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
-  fwd.normalize();
-  right.crossVectors(fwd, up);
-  wish.set(gate.x - player.position.x, 0, gate.z - player.position.z).normalize();
-  inp.move.set(wish.dot(right), wish.dot(fwd));
+  const e = g.camera.matrixWorld.elements;
+  let fx = -e[8], fz = -e[10];
+  const fl = Math.hypot(fx, fz);
+  if (fl < 1e-6) { fx = 0; fz = 1; } else { fx /= fl; fz /= fl; }
+  // right = fwd x up, with up = (0,1,0) -- which is (-fz, 0, fx).
+  const rx = -fz, rz = fx;
+  let dx = gate.x - player.position.x, dz = gate.z - player.position.z;
+  const dl = Math.hypot(dx, dz) || 1;
+  dx /= dl; dz /= dl;
+  inp.move.set(dx * rx + dz * rz, dx * fx + dz * fz);
 };
 // Hold the burst the whole way. Stamina is finite and recovers, so this is the
 // realistic ceiling a good rider gets, not a cheat.
