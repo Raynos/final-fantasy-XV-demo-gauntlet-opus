@@ -428,3 +428,33 @@ by hand (and putting `paused` back):
 packed the frame it was built, and 1.40 MB came back from those 18 alone. Note
 `refused: 0` — with the half-precision fallback in `4d16821` nothing is
 refused any more.
+
+## Status at stop
+
+Landed and verified: **38** (in `AttrPack`, not `Geo.ts`), **39**, **40** (the
+census; the cut is another lane's file), plus one item the plan did not have —
+half precision for over-bright colour, which is larger than task 38.
+**41 is not done**: one item refuted with its reason, two blocked on lane 3's
+live tree, none half-started.
+
+Every commit passed the `pre-commit` gate (build + both typechecks + 4 cheap
+gates). A full `pnpm run check` was queued behind seven lanes' captures and had
+not returned at stop — **whoever picks this up should run it first**.
+
+Commits: `792e998` `0fb3087` `a33ce01` `4d16821` `5315b53` plus the handoff.
+Files touched outside `src/engine/`: `src/world/Props.ts` (the plan's named
+cross-lane one-liner, its own commit) and three new files under
+`src/tools/_probe/`. Nothing in `src/characters/`, nothing in `src/world/veg/`,
+nothing in `PoiKits.ts`.
+
+### Next step, exactly
+
+1. `pnpm run check`, then `node src/tools/texbake.mts --geo --force` and
+   `--canvas --force` once the tree settles — both artifacts have been missing
+   for hours and every boot and memory number tonight was taken without them.
+2. Re-run `bootprof --mem --play --prod` on a genuinely quiet tree. Nothing
+   measured tonight is a baseline; the same build read 1211 and 1280 MB five
+   minutes apart.
+3. The three levers in the residue block above, biggest first: the disposable
+   CPU geometry (~213 MB, ~32 safe), the bake path's peak transient (~270 MB)
+   and the town shadow proxies (~16 MB).
