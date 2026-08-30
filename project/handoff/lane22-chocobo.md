@@ -63,7 +63,19 @@ Touched outside that, one concern per commit, explicit pathspec each time:
 - **All of task 71.** No hub, no colour purchase, no sylkis feed tiers, no
   races, no `side_chocobo` re-key, no `NpcDialogue` rows, no Alpine Stable
   re-type, no `ControlsScreen` group.
-- **No perf number has been taken.** `npcdraws`, `drawcheck` and `--perf` with
+- **The draw-cost measurement is a recorded NEGATIVE, not a number.**
+  `probes/chocobodraws.mts` A/B/A-toggles the four birds' roots on a settled,
+  converged, ridden page. Its two *control* arms — the same scene, birds
+  hidden, four frames apart — read **589 and 489 draw calls**, a drift of 100,
+  against a "present" arm of 397 twice. That yields a cost of **minus 142
+  calls for four birds**, which is not a result: the scene is still resolving
+  streaming/LOD/vegetation on the frames it samples, and four frames after a
+  toggle is a transient (`LANDMINES`, "toggling one post pass and settling
+  four frames is not an ablation"). **Quote no draw cost for the mount.** The
+  probe now refuses to print one when the control drift swamps the delta. Fix
+  it with 30+ settle frames, several repeats with the spread reported, and a
+  null ablation as the noise floor — then measure.
+- **No other perf number has been taken.** `npcdraws`, `drawcheck` and `--perf` with
   the bird in frame are all still owed. **Do not certify on a number taken
   before the daemon restart** — the coordinator says 62% of harness time
   tonight was queue and both bake caches were cold; none of those is a
