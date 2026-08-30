@@ -925,6 +925,24 @@ export class Water {
           float alpha = 1.0 - max(max(T.r, T.g), T.b);
           float bodyRamp = smoothstep(0.04, 0.85, dropDown);
           alpha = clamp(max(max(max(alpha, fres * 0.92), foam * 0.9), 0.30 * bodyRamp), 0.0, 1.0);
+          /*
+           * And then nothing at all where the bed is above the surface.
+           *
+           * The comment above says the waterline silhouette comes from the bed
+           * for free, and it did not, because the Fresnel floor is taken
+           * OUTSIDE the depth model: at a grazing angle fres is ~1, so the slab
+           * stayed 92 per cent opaque right across the dry ground it overhangs.
+           * A basin's plane is its bounding box plus eight metres of padding,
+           * so every body in the world had a hard straight-edged sheet of sheen
+           * lying over its own beach -- read tmp/shots/l7/f1/maidenwater.jpg,
+           * the straight diagonal cut across the sand at the bottom of the
+           * frame, on the first shot ever taken of that tarn.
+           *
+           * Six centimetres of ramp, so the swash still fades rather than
+           * ending on a contour, and the shore ribbon owns everything above the
+           * still waterline as it always did.
+           */
+          alpha *= smoothstep(0.0, 0.06, dropDown);
 
           gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>
