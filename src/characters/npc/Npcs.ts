@@ -326,7 +326,7 @@ export const CITY: RemoteNpc[] = [
   // apron behind the stalls, so no single framing carries all of them.
   { castKey: 'trucker', at: 'lestallum', key: 'lest_a', seed: 21, anchor: 'stall1', off: [1.2, -2.0], posture: 'folded' },
   { castKey: 'traveller', at: 'lestallum', key: 'lest_b', seed: 22, anchor: 'stall3', off: [1.4, 1.9], posture: 'pockets' },
-  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [-0.4, -2.6], posture: 'lean' },
+  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [-0.4, -2.6], posture: 'pockets' },
   { castKey: 'kid', at: 'lestallum', key: 'lest_d', seed: 24, anchor: 'plaza', off: [-3.2, -2.6] },
   { castKey: 'trucker', at: 'lestallum', key: 'lest_e', seed: 25, anchor: 'edge2', off: [-2.0, 3.0], posture: 'folded' },
   // Four walkers. A square with nobody crossing it is a diorama.
@@ -347,7 +347,7 @@ export const CITY: RemoteNpc[] = [
     route: [[2.2, 1.0], [6.0, -3.5], [2.5, -7.0]], pause: [0.8, 0.6, 1.2], speed: 1.8,
   },
   // Two out on the apron, well back, so the town has depth from the road in.
-  { castKey: 'trucker', at: 'lestallum', key: 'lest_f', seed: 30, anchor: 'edge2', off: [-14.0, -6.0], posture: 'lean' },
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_f', seed: 30, anchor: 'edge2', off: [-14.0, -6.0], posture: 'folded' },
   { castKey: 'traveller', at: 'lestallum', key: 'lest_g', seed: 31, anchor: 'edge3', off: [-13.0, 5.0], posture: 'folded' },
 
   /* -------------------------------------------------------- Galdin Quay -- */
@@ -363,7 +363,7 @@ export const CITY: RemoteNpc[] = [
 
   { castKey: 'trucker', at: 'galdin_quay', key: 'gald_a', seed: 42, anchor: 'stall1', off: [1.3, 1.8], posture: 'folded' },
   { castKey: 'kid', at: 'galdin_quay', key: 'gald_b', seed: 43, anchor: 'stall2', off: [1.5, -1.6] },
-  { castKey: 'mechanic', at: 'galdin_quay', key: 'gald_c', seed: 44, anchor: 'edge3', off: [2.0, 2.2], posture: 'lean' },
+  { castKey: 'mechanic', at: 'galdin_quay', key: 'gald_c', seed: 44, anchor: 'edge3', off: [2.0, 2.2], posture: 'pockets' },
   { castKey: 'traveller', at: 'galdin_quay', key: 'gald_d', seed: 45, anchor: 'edge5', off: [2.4, -2.0], posture: 'folded' },
   {
     castKey: 'trucker', at: 'galdin_quay', key: 'gald_w1', seed: 46, anchor: 'edge2',
@@ -589,7 +589,12 @@ export class Npcs {
    * @param pos the intended spot, moved in place
    */
   _separate(pos: THREE.Vector3) {
-    const MIN = 1.55;
+    // 2.2 m, not the 1.55 that first shipped: at 1.55 nobody was overlapping
+    // in world space and two pairs still read as one four-armed person in
+    // `galdin_pier_sunset`, because a camera at eye level compresses depth and
+    // 1.55 m apart along the view axis is 1.55 m of nothing. The number that
+    // matters is separation in the FRAME, and 2.2 is what clears it.
+    const MIN = 2.2;
     const clear = (x: number, z: number) => {
       for (const o of this.list) if (Math.hypot(o.pos.x - x, o.pos.z - z) < MIN) return false;
       return true;
