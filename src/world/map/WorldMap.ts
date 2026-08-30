@@ -687,8 +687,14 @@ export const POIS: PoiSpec[] = [
     does: "Ezma's hunter headquarters: all-region hunt board, shop, the key to the Menace." },
   { id: 'meldacio_haven', name: 'Pectriche Haven', type: 'haven', zone: 'meldacio', x: -1880, z: -2830, r: 55, travel: true, lv: 42,
     does: 'Camp behind the HQ, under the pass wall.' },
-  { id: 'meldacio_layby', name: 'Alpine Stable', type: 'parking', zone: 'meldacio', at: 'j_meldacio_e', r: 48, travel: true, lv: 42,
-    does: 'The east end of the pass road. A cattle grid and a broken barrier.' },
+  // Re-typed `parking` -> `chocobo` for plan task 71: the Alpine Stable is the
+  // north's chocobo hub, and it was called a stable while the map drew it as a
+  // parking spot and the world built a turning circle on it. `chocobo` keeps
+  // `drive: true`, so nothing about reaching it by car or fast-travelling to it
+  // changes; what changes is the kit the world builds (`PoiKits._chocobo`), the
+  // filter it answers on the atlas, and its membership of `SETTLED`.
+  { id: 'meldacio_layby', name: 'Alpine Stable', type: 'chocobo', zone: 'meldacio', at: 'j_meldacio_e', r: 48, travel: true, lv: 42,
+    does: 'A paddock and a barn at the east end of the pass road. Birds bred for altitude, and a race board.' },
   { id: 'myrlwood_parking', name: 'Risorath Basin Parking', type: 'parking', zone: 'meldacio', at: 'n_myrlwood', r: 48, travel: true, lv: 42,
     does: 'Turning circle in the fungal wood. Spores in the headlights.' },
   { id: 'myrlwood', name: 'Myrlwood', type: 'dungeon', zone: 'meldacio', x: -2470, z: -3240, r: 150, lv: 42,
