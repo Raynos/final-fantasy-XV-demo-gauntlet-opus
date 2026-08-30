@@ -942,7 +942,16 @@ export class Water {
            * ending on a contour, and the shore ribbon owns everything above the
            * still waterline as it always did.
            */
-          alpha *= smoothstep(0.0, 0.06, dropDown);
+          // ...and the threshold is broken up by the same churn the foam uses,
+          // because a clean isoline of dropDown is a clean isoline of a
+          // BILINEAR GRID. wf_bed reads the height field's cells and
+          // interpolates, so any fixed contour of it follows the cell edges and
+          // comes out as a staircase of rectangles along the waterline --
+          // visible in the first bank-height frame ever taken of a sea body,
+          // tmp/shots/l7/f3/l7-body1-sea.jpg. Same argument as the foam band
+          // three paragraphs up, arriving at the alpha instead of the colour: a
+          // margin has to be a margin, not a shaped edge.
+          alpha *= smoothstep(0.0, 0.04 + 0.42 * churn, dropDown);
 
           gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>

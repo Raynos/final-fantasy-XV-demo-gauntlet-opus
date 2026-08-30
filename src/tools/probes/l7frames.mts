@@ -34,9 +34,24 @@ function waterline(b, ux, uz) {
   return r;
 }
 
-// Every standing body, from its own bank at wading height, across the water.
-const byArea = [...w.bodies].sort((a, b) => b.w * b.d - a.w * a.d);
-byArea.slice(0, 4).forEach((b, i) => {
+/*
+ * Every standing body, from its own bank at wading height, across the water.
+ *
+ * Split sea from tarn deliberately: `Water.bodies` holds four flood-filled sea
+ * basins (`_findBasins` slices to four) plus one per authored fishing pin, and
+ * the seas are two orders of magnitude larger, so a plain sort by area returns
+ * four frames of the same ocean and no pond at all. That is what the first run
+ * of this probe did. The Vesperpool is one of the FOUR SEAS, not a tarn -- its
+ * level is the global -6.5 -- which matters, because it means its `waveScale`
+ * is ~1 and the corduroy on it was never a fetch-scaling artefact.
+ */
+const isTarn = (b) => b.level > -6.5 + 4;
+const byArea = (list) => [...list].sort((a, b) => b.w * b.d - a.w * a.d);
+const picked = [
+  ...byArea(w.bodies.filter((b) => !isTarn(b))).slice(0, 2),
+  ...byArea(w.bodies.filter(isTarn)).slice(0, 3),
+];
+picked.forEach((b, i) => {
   const r = waterline(b, 1, 0);
   out.specs.push({
     name: `l7-body${i}-${b.name}`,
@@ -53,6 +68,10 @@ byArea.slice(0, 4).forEach((b, i) => {
  * at all. Ranked by discharge below the junction, so these are the widest
  * sheets in the world rather than a headwater trickle.
  */
+// NOTE: this came back EMPTY on 2026-08-31 while `riverStats` reported 1837
+// stations over 9 reaches -- so either the routing found no confluence in this
+// seed or `riverJoins` is not being populated. Whoever runs this next: check
+// `out.joins` before concluding the framings are wrong.
 const joins = [...(w.riverJoins || [])].sort((a, b) => b.qBelow - a.qBelow);
 out.joins = joins.length;
 joins.slice(0, 3).forEach((j, i) => {
