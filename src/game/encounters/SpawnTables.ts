@@ -123,19 +123,50 @@ const near = (poiId: string, dx = 0, dz = 0): [number, number] => {
  * opening walk from the breakdown to Hammerhead and are level 5-9; everything
  * imperial or nocturnal is a drive away.
  */
+/*
+ * **Counts are the last 0.7 s of the duration bar, and they were set against a
+ * fight nobody had measured.** `probes/fightshape.mts` over six rounds at
+ * `b24d958`: every *wild* den — whose roster `WildTerritories` had already
+ * drawn two deeper on both ends — came in at 17.3 / 26.5 / 55.9 s, and the two
+ * rounds that pulled the median under the 18 s floor were **the same authored
+ * territory here**, Sabertusk x4, 9 012 hp, 16.3 s and 16.6 s. Level was
+ * already fixed (`RpgSystem.PARTY_LIFT` 1.0 took that den from lv 23 / 6 500 hp
+ * to lv 27 / 9 012 hp); what was left was the count.
+ *
+ * So the **beast and daemon hostile lines** are drawn two deeper on both ends,
+ * the same treatment and the same reasoning as `WildTerritories`' rosters, with
+ * one-of-a-kind elites (coeurl, arachne, bussemand) taken one deeper instead.
+ *
+ * Two exceptions, both measured rather than aesthetic:
+ *
+ * - **The passive lines are untouched.** Anaks, garulas and dualhorns are
+ *   scenery that raises its head and keeps eating; they are the largest meshes
+ *   in the roster and adding them buys skinned rigs, not a fight.
+ * - **The imperial lines are untouched.** The one authored round `fightshape`
+ *   ever measured whole was the Longwythe patrol, and it ran **25.8 s** —
+ *   already inside the 18-30 band and the *longest* round in the set. Widening
+ *   it would push it out the top. What that round was short of was danger, not
+ *   duration (1.10% of Noctis' max HP per landed hit against the animals'
+ *   3.05-5.00%), and danger is what the engage tokens below buy it.
+ *
+ * `maxEngaged` was `3` in ten places, which stopped meaning anything when
+ * `Pack`'s own default went 2 -> 3: every one of them was writing the default
+ * back. They are `4` now, which is what the wild dens use, and with five to
+ * seven hostiles in a territory it is the difference between a den and a queue.
+ */
 export const TERRITORIES: Territory[] = [
 
   /* ---- the road and the flats around the start ---------------------- */
   T({
     id: 'weaverwilds_tusks', name: 'The Weaverwilds', at: near('the_weaverwilds', 60, 90), radius: 30,
     when: 'day', level: 6, danger: 1,
-    spawn: [{ key: 'sabertusk', count: [3, 5] }],
+    spawn: [{ key: 'sabertusk', count: [5, 7] }],
     patrolRadius: 22, respawn: 140,
   }),
   T({
     id: 'roadside_tusks', name: 'The Hammerhead Verge', at: near('hammerhead_layby', -40, 62), radius: 26,
     when: 'day', level: 5, danger: 1,
-    spawn: [{ key: 'sabertusk', count: [2, 4] }],
+    spawn: [{ key: 'sabertusk', count: [4, 6] }],
     patrolRadius: 18,
   }),
   T({
@@ -157,8 +188,8 @@ export const TERRITORIES: Territory[] = [
     // own marks, but the place should be what the board says it is.
     id: 'vore_pack', name: 'The Three Valleys', at: near('three_valleys', -110, 220), radius: 32,
     when: 'any', level: 11, danger: 2,
-    spawn: [{ key: 'voretooth', count: [3, 5] }, { key: 'sabertusk', count: [2, 3], level: 7 }],
-    patrolRadius: 26, maxEngaged: 3,
+    spawn: [{ key: 'voretooth', count: [5, 7] }, { key: 'sabertusk', count: [4, 5], level: 7 }],
+    patrolRadius: 26, maxEngaged: 4,
   }),
   T({
     // Not the Alstor Slough pin: that is the middle of a lake sixteen metres
@@ -172,7 +203,7 @@ export const TERRITORIES: Territory[] = [
   T({
     id: 'coeurl_pair', name: 'Saulhend Pass', at: near('galdin_junction', 120, 150), radius: 34,
     when: 'any', level: 22, danger: 3,
-    spawn: [{ key: 'coeurl', count: [1, 2] }],
+    spawn: [{ key: 'coeurl', count: [2, 3] }],
     patrolRadius: 30, respawn: 420,
   }),
   T({
@@ -191,7 +222,7 @@ export const TERRITORIES: Territory[] = [
       { key: 'axeman', count: [1, 1] },
       { key: 'sniper', count: [0, 1] },
     ],
-    patrolRadius: 20, respawn: 240, maxEngaged: 3,
+    patrolRadius: 20, respawn: 240, maxEngaged: 4,
   }),
   T({
     id: 'crashsite_mt', name: 'Keycatrich Ruins', at: near('keycatrich_ruins', -80, 120), radius: 34,
@@ -210,36 +241,36 @@ export const TERRITORIES: Territory[] = [
       { key: 'axeman', count: [1, 2] },
       { key: 'sniper', count: [1, 2] },
     ],
-    patrolRadius: 30, respawn: 360, maxEngaged: 3,
+    patrolRadius: 30, respawn: 360, maxEngaged: 4,
   }),
 
   /* ---- what comes out after dark ------------------------------------ */
   T({
     id: 'night_goblins_road', name: 'The Long Night — roadside', at: near('hammerhead_layby', -150, 40), radius: 40,
     when: 'night', level: 12, danger: 2, faction: 'daemon',
-    spawn: [{ key: 'goblin', count: [4, 6] }, { key: 'hobgoblin', count: [0, 1] }],
-    respawn: 90, maxEngaged: 3,
+    spawn: [{ key: 'goblin', count: [6, 8] }, { key: 'hobgoblin', count: [0, 2] }],
+    respawn: 90, maxEngaged: 4,
   }),
   T({
     id: 'night_goblins_flats', name: 'The Long Night — flats', at: near('the_weaverwilds', -140, 160), radius: 44,
     when: 'night', level: 14, danger: 2, faction: 'daemon',
-    spawn: [{ key: 'goblin', count: [3, 6] }, { key: 'bussemand', count: [0, 1] }],
-    respawn: 90, maxEngaged: 3,
+    spawn: [{ key: 'goblin', count: [5, 8] }, { key: 'bussemand', count: [0, 2] }],
+    respawn: 90, maxEngaged: 4,
   }),
   T({
     id: 'night_ruins', name: 'Keycatrich after dark', at: near('keycatrich_ruins', 130, -90), radius: 40,
     when: 'night', level: 26, danger: 3, faction: 'daemon',
     spawn: [
-      { key: 'hobgoblin', count: [2, 3] },
-      { key: 'arachne', count: [0, 1] },
+      { key: 'hobgoblin', count: [4, 5] },
+      { key: 'arachne', count: [0, 2] },
       { key: 'necromancer', count: [0, 1] },
     ],
-    respawn: 140, maxEngaged: 3,
+    respawn: 140, maxEngaged: 4,
   }),
   T({
     id: 'night_moor', name: 'The Taelpar moors', at: near('taelpar_crag', 180, 160), radius: 44,
     when: 'night', level: 28, danger: 3, faction: 'daemon',
-    spawn: [{ key: 'mesmenir', count: [1, 3] }],
+    spawn: [{ key: 'mesmenir', count: [3, 5] }],
     respawn: 200,
   }),
   T({
@@ -276,7 +307,7 @@ export const TERRITORIES: Territory[] = [
   T({
     id: 'southroad_tusks', name: 'The Old South Road', at: near('threshold_stones', 60, 120), radius: 30,
     when: 'day', level: 8, danger: 1,
-    spawn: [{ key: 'sabertusk', count: [3, 5] }],
+    spawn: [{ key: 'sabertusk', count: [5, 7] }],
     patrolRadius: 22, respawn: 160,
   }),
   T({
@@ -291,31 +322,31 @@ export const TERRITORIES: Territory[] = [
   T({
     id: 'peak_coeurls', name: "The Northwatch Overlook", at: near('peak_overlook', 90, -60), radius: 34,
     when: 'any', level: 24, danger: 3,
-    spawn: [{ key: 'coeurl', count: [1, 2] }],
+    spawn: [{ key: 'coeurl', count: [2, 3] }],
     patrolRadius: 28, respawn: 240,
   }),
   T({
     id: 'graveyard_watch', name: 'The Adamantoise Graveyard', at: near('adamantoise_graveyard', 120, -90), radius: 46,
     when: 'night', level: 30, danger: 4, faction: 'daemon',
-    spawn: [{ key: 'bussemand', count: [2, 3] }, { key: 'hobgoblin', count: [0, 3], level: 24 }],
-    respawn: 260, maxEngaged: 3,
+    spawn: [{ key: 'bussemand', count: [4, 5] }, { key: 'hobgoblin', count: [0, 3], level: 24 }],
+    respawn: 260, maxEngaged: 4,
   }),
   T({
     id: 'moor_watch', name: 'The Mencemoor Obelisks', at: near('mencemoor_obelisks', -80, 110), radius: 36,
     when: 'any', level: 20, danger: 2,
-    spawn: [{ key: 'voretooth', count: [3, 4] }],
+    spawn: [{ key: 'voretooth', count: [5, 6] }],
     patrolRadius: 28, respawn: 200,
   }),
   T({
     id: 'northwatch_garrison', name: 'Northwatch Garrison', at: near('northwatch_ruin', 60, 80), radius: 40,
     when: 'any', level: 26, danger: 3, faction: 'imperial',
     spawn: [{ key: 'mt', count: [3, 5] }, { key: 'axeman', count: [1, 2], level: 24 }],
-    patrolRadius: 24, respawn: 320, maxEngaged: 3,
+    patrolRadius: 24, respawn: 320, maxEngaged: 4,
   }),
   T({
     id: 'wash_pack', name: 'The Washes Lookout', at: near('washes_lookout', 70, 90), radius: 30,
     when: 'day', level: 8, danger: 1,
-    spawn: [{ key: 'sabertusk', count: [2, 4] }, { key: 'voretooth', count: [0, 2], level: 10 }],
+    spawn: [{ key: 'sabertusk', count: [4, 6] }, { key: 'voretooth', count: [0, 3], level: 10 }],
     patrolRadius: 22, respawn: 180,
   }),
 
@@ -325,7 +356,7 @@ export const TERRITORIES: Territory[] = [
   T({
     id: 'prairie_verge', name: 'The Prairie Verge', at: near('prairie_outpost', 150, 180), radius: 34,
     when: 'day', level: 12, danger: 2,
-    spawn: [{ key: 'dualhorn', count: [1, 2] }, { key: 'sabertusk', count: [2, 4], level: 9 }],
+    spawn: [{ key: 'dualhorn', count: [1, 2] }, { key: 'sabertusk', count: [4, 6], level: 9 }],
     patrolRadius: 26, respawn: 220,
   }),
   T({
@@ -333,14 +364,14 @@ export const TERRITORIES: Territory[] = [
     // unopposed is scenery with a minigame on it.
     id: 'slough_shallows', name: 'The Alstor Shallows', at: near('alstor_dock', -70, 90), radius: 32,
     when: 'any', level: 18, danger: 3,
-    spawn: [{ key: 'arachne', count: [1, 2] }, { key: 'voretooth', count: [1, 3], level: 15 }],
+    spawn: [{ key: 'arachne', count: [2, 3] }, { key: 'voretooth', count: [3, 5], level: 15 }],
     patrolRadius: 22, respawn: 240,
   }),
   T({
     id: 'fallgrove_dark', name: 'The Fallgrove After Dark', at: near('fallgrove_haven', -180, 210), radius: 38,
     when: 'night', level: 24, danger: 4, faction: 'daemon',
-    spawn: [{ key: 'hobgoblin', count: [2, 4] }, { key: 'goblin', count: [2, 4], level: 18 }],
-    respawn: 240, maxEngaged: 3,
+    spawn: [{ key: 'hobgoblin', count: [4, 6] }, { key: 'goblin', count: [4, 6], level: 18 }],
+    respawn: 240, maxEngaged: 4,
   }),
 
   /* ---- the west: Saxham after dark ----------------------------------- */
@@ -349,8 +380,8 @@ export const TERRITORIES: Territory[] = [
     // nothing at all by night, which is the wrong way round for a ghost town.
     id: 'night_saxham', name: 'Saxham Outpost', at: near('saxham', -110, 60), radius: 36,
     when: 'night', level: 20, danger: 3, faction: 'daemon',
-    spawn: [{ key: 'goblin', count: [3, 5] }, { key: 'hobgoblin', count: [1, 2], level: 22 }],
-    respawn: 220, maxEngaged: 3,
+    spawn: [{ key: 'goblin', count: [5, 7] }, { key: 'hobgoblin', count: [2, 3], level: 22 }],
+    respawn: 220, maxEngaged: 4,
   }),
 ];
 
@@ -378,16 +409,16 @@ export interface Roamer {
 
 export const ROAMERS: Roamer[] = [
   { id: 'tusk_ambush', when: 'day', weight: 3, level: 6, faction: 'beast',
-    spawn: [{ key: 'sabertusk', count: [3, 4] }] },
+    spawn: [{ key: 'sabertusk', count: [5, 6] }] },
   { id: 'vore_ambush', when: 'day', weight: 2, level: 11, faction: 'beast',
-    spawn: [{ key: 'voretooth', count: [3, 5] }] },
+    spawn: [{ key: 'voretooth', count: [5, 7] }] },
   { id: 'imperial_drop', when: 'any', weight: 2, level: 18, faction: 'imperial',
     dropship: true,
     spawn: [{ key: 'mt', count: [4, 5] }, { key: 'axeman', count: [1, 1] }] },
   { id: 'goblin_swarm', when: 'night', weight: 4, level: 14, faction: 'daemon',
-    spawn: [{ key: 'goblin', count: [4, 7] }] },
+    spawn: [{ key: 'goblin', count: [6, 9] }] },
   { id: 'daemon_pack', when: 'night', weight: 2, level: 24, faction: 'daemon',
-    spawn: [{ key: 'hobgoblin', count: [2, 3] }, { key: 'bussemand', count: [1, 1] }] },
+    spawn: [{ key: 'hobgoblin', count: [4, 5] }, { key: 'bussemand', count: [1, 2] }] },
   { id: 'ronin_duel', when: 'night', weight: 1, level: 45, faction: 'daemon',
     nightDepth: 0.6, spawn: [{ key: 'ronin', count: [1, 1] }] },
 ];
