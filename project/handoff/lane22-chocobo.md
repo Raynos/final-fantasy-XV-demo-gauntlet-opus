@@ -168,6 +168,34 @@ sustained** matching `WorldMap.SPEED.chocobo`, the three-bird flock, the whistle
 in `STARTING_ITEMS`, `orphans` green. See the git history: `13b7ff8`, `ce162a3`,
 `5070a7f`, `9c35b9f`.
 
+## What the frames showed (a look-loop subagent, lifetime 2)
+
+Wiz Chocobo Post, `tmp/shots/l22hub/`: **it reads unambiguously as a farm post
+at 80 m** — red board-and-batten barn with a navy gable, a banded feed silo, an
+oval gravel apron inside a two-rail fence, hay bales, a tarp, a trough, a green
+signboard. Four defects, **none of them in this lane's files**, all worth a
+`TASKS.md` row:
+
+1. **The red gable steps punch through the roof planes** — a saw-tooth of bright
+   red tabs along both rakes, visible at 80 m, at every chocobo POI.
+   `PoiKits._chocobo`'s `NG=5` gable boxes are not covered by the roof slabs.
+2. **The paddock fence runs through the barn.** Barn centre is kit-local
+   (−9, −11) with a 13×9 footprint, so its far corner is at radius **21.9 m**
+   against a ring of `R = 20`.
+3. **Hay bales float and intersect the tarp** — three of the six get
+   `y = 0.9 + 1.6 = 2.5` with nothing beneath them.
+4. The barn's sliding-door leaf takes a coarse straw-looking `M.plank` texture
+   and reads as a bale stood on end; the 9 m side walls carry no battens.
+
+The bird, `tmp/shots/l22bird/`: the **rump shingle fix worked** — overlapping
+plates with thin dark-olive seams, no black slots, and not artichoked. The
+**shoulder/fore-flank still spikes** into hard triangular tips. Two defects the
+fix did not touch and which now dominate the read: **the thigh/hip masses are
+two bald smooth spheres** butted onto the shingled flank with no transition, and
+**the cream chest bib is a separate smooth egg** with a hard seam to the yellow
+body, visible even at 3.4 m. The shank scutes read as rectangular tabs bolted on
+with shadow under them.
+
 ## Known defects
 
 1. ~~Dark gaps between the flank shingles on the rump~~ — **fixed in `52fe779`,
