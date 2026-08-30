@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
-import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH } from '../../shaders/post/common.ts';
+import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH, CHUNK_DEPTH } from '../../shaders/post/common.ts';
 import type { PostFX } from '../PostFX.ts';
 
 /**
@@ -20,9 +20,15 @@ export class GradePass extends FilterPass {
     this.material = fsMaterial({
       uniforms: {
         tDiffuse: { value: null },
+        tDepth: { value: null },
         tLutA: { value: null },
         tLutB: { value: null },
         uLutMix: { value: 0 },
+        // What fraction of the grain survives on a pixel the depth buffer says
+        // is sky. See the shader; 1 reproduces the frame before the mask.
+        uGrainSky: { value: 0.3 },
+        uNear: { value: 0.15 },
+        uFar: { value: 6000 },
         uResolution: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
         uVignette: { value: 0.42 },
@@ -40,16 +46,17 @@ export class GradePass extends FilterPass {
       },
       fragmentShader: /* glsl */`
         precision highp float;
-        uniform sampler2D tDiffuse, tLutA, tLutB;
+        uniform sampler2D tDiffuse, tDepth, tLutA, tLutB;
         uniform vec2 uResolution, uBalance;
         uniform float uTime, uVignette, uGrain, uChroma, uSaturation, uContrast;
-        uniform float uExposure, uLutMix, uLutAmount;
+        uniform float uExposure, uLutMix, uLutAmount, uGrainSky;
         uniform vec3 uLift, uGain, uBleach;
         varying vec2 vUv;
         ${CHUNK_COLOR}
         ${CHUNK_TONEMAP}
         ${CHUNK_LUT}
         ${CHUNK_HASH}
+        ${CHUNK_DEPTH}
 
         /**
          * Film bleach: hot pixels lose chroma before the tone map.
@@ -141,9 +148,36 @@ export class GradePass extends FilterPass {
           // the extreme form of the same mistake -- shadow-weighted grain in
           // *linear* space swinging 28/255 near black. Ours is applied after
           // the sRGB encode, which is right and is kept.
+          //
+          // **Mid-weighting is not enough on a sky, and that is the tell.**
+          // 4*l*(1-l) is 0.96-1.00 across the whole luminance band a daylight
+          // sky actually occupies, so "mid-weighted" and "full amplitude" are
+          // the same thing there. On every other surface in the frame the
+          // grain is hidden by the detail it sits on; a sky has none, so it is
+          // the one region where the noise is read as noise rather than as
+          // emulsion -- and it is the largest flat area in most of our shots.
+          //
+          // The sky is exactly identifiable and costs one fetch: the dome is
+          // depthWrite: false, depthTest: false (Atmosphere.createDome),
+          // so a sky pixel is the depth buffer's *clear* value, raw 1.0. It is
+          // not "far away" -- at near 0.15 / far 6000 a ridge at 4 km already
+          // reads 0.99996, which is why this compares reconstructed view depth
+          // against the far plane rather than thresholding raw depth, where
+          // the ridge and the sky are 2e-5 apart.
+          //
+          // The step is hard on purpose. Every pixel it separates is a real
+          // silhouette -- a roofline, a ridge, a leaf -- where the image is
+          // already discontinuous, so an amplitude change rides the edge
+          // instead of drawing one. ?post=noskygrain pins it off and
+          // reproduces the previous frame exactly.
+          //
+          // The grain is *reduced*, not removed: a sky with no grain at all
+          // against a grained foreground reads as a matte, and the temporal
+          // dither below is a 1.5 LSB floor, not a texture.
           float g = hash12(gl_FragCoord.xy + fract(uTime) * 719.7) - 0.5;
           float gl2 = luma(disp);
-          disp += g * uGrain * (4.0 * gl2 * (1.0 - gl2));
+          float sky = step(uFar * 0.999, viewDepth(texture2D(tDepth, uv).x, uNear, uFar));
+          disp += g * uGrain * mix(1.0, uGrainSky, sky) * (4.0 * gl2 * (1.0 - gl2));
 
           // Temporal dither with a hard floor of ~1.5 LSB. The deep blue
           // gradients of a night sky are exactly the case where 8 bits runs
@@ -159,4 +193,17 @@ export class GradePass extends FilterPass {
   }
 
   override setSize(w: number, h: number) { this.material.uniforms.uResolution.value.set(w, h); }
+
+  /**
+   * The sky mask's inputs. `rtScene.depthTexture` is the same handle CAS, DoF,
+   * SSR, motion blur and the contact shadows already bind, and the near/far
+   * pair has to be read per frame rather than captured, because a cutscene
+   * camera is not the gameplay one.
+   */
+  override beforeRender() {
+    const u = this.material.uniforms;
+    u.tDepth.value = this.fx.rtScene.depthTexture;
+    u.uNear.value = this.fx.rnd.camera.near;
+    u.uFar.value = this.fx.rnd.camera.far;
+  }
 }

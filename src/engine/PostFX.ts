@@ -405,6 +405,11 @@ export class PostFX {
       else if (t === 'nocasmask') this.cas.edgeSoft = 0;
       else if (t === 'casmask') this.cas.material.uniforms.uShowMask.value = 1;
       else if (t === 'nograin') this.grade.uniforms.uGrain.value = 0;
+      // The grain is attenuated on sky pixels - see `GradePass`. This pins the
+      // attenuation off and reproduces the frame as it was before the mask, so
+      // the change has a control to be diffed against; `nograin` cannot serve
+      // as one because it removes the term the mask is shaping.
+      else if (t === 'noskygrain') this.grade.uniforms.uGrainSky.value = 1;
       else if (t === 'nolut') this.grade.uniforms.uLutAmount.value = 0;
       // The bleach is a *scene-referred* stage, so `nolut` cannot ablate it and
       // an agent diffing `nolut` would wrongly conclude the grade is innocent
