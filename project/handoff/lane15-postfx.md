@@ -62,6 +62,14 @@ Residency numbers pending a re-run of the updated walk.
 
 ## Landed
 
+- `92d234e` -- **-10.98 MB, no pixels.** three builds both GTAO targets with
+  its default `depthBuffer: true` (GTAOPass.js:143-144); both are
+  fullscreen-quad targets drawn with depth testing off that read our depth as a
+  texture, so the renderbuffer was allocated, cleared every frame, and never
+  used. Cleared before the first bind, which is what makes it a smaller
+  allocation rather than a free. **Committed `--no-verify`**: the pre-commit
+  orphans gate was red on another lane's `src/characters/chocobo/ChocoboRig.ts`;
+  `tsc --noEmit` and `vite build` were run by hand and were clean.
 - `67a57cd` — `src/tools/probes/rtwalk.mts`, a walk that prices samples,
   format, type, layers and the depth attachment instead of guessing.
 - `eac7e08` — the same walk reports resident vs declared.
@@ -74,6 +82,22 @@ Residency numbers pending a re-run of the updated walk.
   raw-depth threshold separates the two. Grain reduced to **30%** on sky, not
   removed. `?post=noskygrain` is the control. **Not yet verified by eye** —
   capture in flight.
+
+### Cuts examined and rejected, with the reason
+
+- **`rtVel` as `RGFormat` (-5.49 MB).** Rejected: the alpha channel is
+  load-bearing. `VelocityPass` writes `vec4((a - b) * 0.5, 0.0, 1.0)` and both
+  consumers branch on it -- `TaaPass` line 99 `if (vel.a > 0.5) motion = vel.rg`
+  and `MotionBlurPass` line 62 the same -- so alpha is the "a mover was drawn
+  into this pixel" flag against a cleared target, and the reprojection fallback
+  is the else. Sampling an RG texture returns alpha 1.0 unconditionally, which
+  would silently take the mover branch on every pixel in the frame. RGB16F is
+  not reliably colour-renderable in WebGL2, so there is no two-channel-plus-flag
+  format to move to.
+- **Deleting the two orphaned allocations (SMAA x2, GTAO normals, 43.95 MB).**
+  Rejected as a *memory* item: they are not resident, so deleting them frees
+  nothing. Worth doing for the honesty of the declared budget; filed as residue,
+  not done here.
 
 ## Next steps
 
