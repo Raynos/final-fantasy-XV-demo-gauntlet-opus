@@ -682,6 +682,32 @@ schedule. That is the same root as `resetClock()` in the pose (period-2 spreads
 of 20 draws) and as `drawcheck` gating "the expensive phase, comparable, not
 average".
 
+## `shoot.mts` does not empty `--out`, so `imgdiff --calibrate` re-derives floors from two different builds
+
+`project/noise-floors.json` is what stops this project reading boot noise as a
+result, and the documented way to regenerate it is two `--cold` captures of one
+build into `tmp/nf/a` and `tmp/nf/b` followed by `imgdiff --calibrate`. Those two
+directory names are a convention, `tmp/` is shared scratch, and **`shoot.mts`
+writes into `--out` without clearing it**.
+
+Measured 2026-08-30 while re-baselining four re-framed shots. Four shots were
+captured; `imgdiff --calibrate` reported **`calibrated 17 shot(s)`** and rewrote
+`poi_haven` 0.66 -> 0.913 and `zone_longwythe` 1.231 -> 0.965 from PNGs left in
+those directories on **2026-08-23 and 2026-08-28** — a week and one week apart,
+across dozens of commits from other lanes. The run exits 0 and prints a tidy
+table with a `floor` column beside every row, so nothing about the output says
+that thirteen of the seventeen rows are cross-build.
+
+It is the failure the file exists to prevent, arriving through the file itself,
+and it is silent in both directions: a floor raised by another lane's landform
+change hides your regression, and a floor lowered by it turns your noise into a
+result.
+
+- **Clear the directories first**, or capture into a fresh pair per run.
+- **Then diff the file** and check that the only rows that moved are the ones you
+  actually re-shot. `--calibrate` rewrites whatever it found; it does not merge.
+- The same applies to any `imgdiff A B` over directories rather than files.
+
 ## Every recorded `imgdiff` noise floor is a COLD floor, and nobody captures cold
 
 `project/noise-floors.json` is what stops this project reading boot noise as a
