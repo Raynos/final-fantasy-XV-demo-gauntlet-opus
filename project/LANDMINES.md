@@ -2248,3 +2248,49 @@ appears only once an NPC streams in; 6% of vertices at the origin is a pose
 statistic; neither is visible in a posed frame diff. Two of the three were found
 by reading a gate's **full output** rather than its verdict line.
 
+## `shoot.mts --post` never reaches the page, so an A/B taken that way compared a build with itself
+
+Found 2026-08-31. The manifest comes back `"variant": ""` and the frame is
+**unablated**. `--extra post=...` works; `--post` does not. Anything measured
+through `shoot.mts --post` — any before/after, any "ablating this pass changed
+nothing" conclusion — **is a comparison of a build against itself** and must be
+re-taken. This is the third ablation-shaped instrument failure recorded here,
+after `?post=nocloudsun` being overwritten a call later and `--hide` matching
+nothing; the family is now large enough to be a habit:
+
+> **Prove your ablation moved the frame before you trust that it did not.**
+> An ablation that silently does nothing is indistinguishable from a measured
+> negative, and this project keeps mistaking one for the other.
+
+## `post.render` is mostly not post
+
+The plan costed idle CPU as *"`post.render` is 74-77% of the frame"* and sent a
+lane at `postfx/`. Measured per pass with `perfpasses` on a 6.7 ms calm frame at
+q=high:
+
+    ScenePass      4.40 ms
+    VelocityPass   0.70
+    Bloom          0.10
+    GTAO / ContactShadow / TAA / DoF / MotionBlur / GodRays / Grade / CAS   0.00
+
+**`ScenePass` is `renderer.render(scene, camera)`** — the scene draw itself. It
+is inside `post.render` only because it is the composer's first pass. The whole
+chain *after* the scene draw is ~0.3 ms. An independent ablation agrees:
+`--post plain` with eight effects off reads 102.4% of a core against a 119.6%
+baseline, i.e. 14%.
+
+So a budget named after a call site can point an entire lane at the wrong
+subsystem. **Attribute to what the call does, not to what it is called.**
+
+## A GLSL compile failure blanked every frame for 40 minutes, exactly as this file predicts
+
+Live instance, 2026-08-31: a grade-pass edit used `uNear`/`uFar` without
+declaring them. The program failed to link, `pre-commit` cannot see a shader, and
+**every capture taken by every lane in that window is blank** — 6 KB PNGs against
+a normal 2.3 MB. Two lanes then landed the same fix concurrently and the second
+carried both, producing `'uNear' : redefinition`, because an explicit pathspec
+commits the *file* and not your hunks.
+
+If a capture comes back tiny, look at the byte size before you look at the
+content. The file-size check is the cheapest shader-link canary available.
+
