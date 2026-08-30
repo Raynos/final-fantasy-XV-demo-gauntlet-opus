@@ -50,6 +50,10 @@ export class GradePass extends FilterPass {
         uniform vec2 uResolution, uBalance;
         uniform float uTime, uVignette, uGrain, uChroma, uSaturation, uContrast;
         uniform float uExposure, uLutMix, uLutAmount, uGrainSky;
+        // uNear/uFar are what CHUNK_DEPTH's viewDepth() reads, and the sky
+        // mask below calls it. shaders/post/common.ts says so at its own head.
+        // (No backticks: this is inside a glsl template literal.)
+        uniform float uNear, uFar;
         uniform vec3 uLift, uGain, uBleach;
         varying vec2 vUv;
         ${CHUNK_COLOR}
