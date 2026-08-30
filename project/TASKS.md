@@ -490,3 +490,28 @@ term is in `[0,1]` by construction.
   under an explicit "Not verified", so **no measurement in this repo rested on
   it** (grepped). Drop the flag from both lines when you next touch them.
   `harness`, `lane5`
+
+## Post-processing and RT budget: what lane 15 left behind (2026-08-31)
+
+*Both of lane 15's plan exits closed as measured negatives and are in
+`HUMAN_REVIEW.md` as quality calls. Grain on flat sky (task 27) landed and is
+verified: high-frequency energy in a box of clear blue at `vista_noon` falls
+2.53 -> 1.14/255, -55%, with `?post=noskygrain` as the control.*
+
+- **MSAA sample count is the only remaining RT lever**, and `sceneSamples()` is
+  coupled to `VegMaterial.patchVeg` in another lane's file. Needs a cross-file
+  owner. `rtScene`'s multisample renderbuffers are **65.92 MB at samples 4 and
+  131.86 at ultra's samples 8**, x2.25 at dpr 1.5 — that one line is the 69 MB
+  gap between the declared and resident RT walk. `lane15`
+- **`gtao.normalRenderTarget` is 21.97 MB declared and 0 resident** — never
+  uploaded. A 1x1 stub deletes it outright. The only free deletion in the walk;
+  SMAA's two buffers read *resident* and are not. `lane15`
+- **`bootprof.mts:76-89` still feeds `docs/BOOT_PERF.md` a wrong formula** — its
+  `sizeOfRt` ignores `samples`, assumes 4 channels at the colour type, and prices
+  depth at 1.25x. The honest walk is in `rtwalk`. `lane15`
+- **`glDrawArrays: Feedback loop formed between Framebuffer and active Texture`
+  floods `perfpasses` until chromium stops reporting.** Undiagnosed, no owner.
+  `lane15`
+- **`rtVel` -> RGFormat is refused, with a reason:** alpha is the "a mover drew
+  here" flag and both consumers branch on it. Not a saving. `lane15`
+
