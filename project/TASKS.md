@@ -320,15 +320,20 @@ probes across all four heroes -- every primitive INWARD -> OK, the hair shell
 at positive signed volume. Tasks 4, 5, 47 and the new googly-eye defect are LIVE
 with the respawned lane, not backlog, and are deliberately not listed here.*
 
-- **Re-derive `Anatomy.drape()` against arc length.** `drape` samples the body
-  curve at uniform `u`; `sweepTube` then re-splines those 9-12 nodes
-  centripetally, so a garment's `t` lands at a different height -- and carries
-  different skin weights -- than the `u` that `Outfit.under()` evaluates the
-  muscle shape at. Symptom: Gladiolus' mid-back stays bare through his jacket at
-  ANY clearance (verified at 60 mm; `--hide _body` shows the panel is there and
-  covers it). Currently absorbed by `SKIN_CLEARANCE = 0.030` in `rig/Outfit.ts`,
-  which costs ~30 mm of radius on every garment. Fix the drape, then take the
-  clearance back to ~10 mm. `lane1`
+- **~~Re-derive `Anatomy.drape()` against arc length~~ -- MEASURED FALSE, and
+  both halves of the original claim were wrong.** three.js maps a Catmull-Rom's
+  `t` **linearly to point index** whatever the curve type; `centripetal` only
+  changes tangent weights *inside* a segment. Garment `t` and body `u` already
+  agree at every node, so there is nothing to re-derive. And **Gladiolus' "bare
+  mid-back" is his bare arm** -- framed at 2.2 m it resolves into
+  deltoid-to-fingers skin (`sleeve u1: 0.40` and no shirt, both authored). At
+  party range a bare arm across a black torso reads exactly like a hole in the
+  torso, which is how it fooled two lanes. `lane2`
+- **What IS real is the skin weights**: the body eases once through `weightsAt`,
+  a garment eases twice, at two knot spacings. `DRAPE_DU = 0.030` makes the
+  error small; only taking the weights from the body's own node knots makes it
+  zero, and that needs `sweepTube` to accept a weight function rather than
+  reading `weightsAt` off its own node list. `Geo.ts`, cross-lane. `lane2`
 - **`enemies/RigBuilder.ts:85,118,170` -- `skinWeight` -> Uint8.** The last third
   of lane 13's task 38; `rig/Geo.ts` and `rig/Sculpt.ts` are done. Safe as it is
   (enemies merge only with enemies) but unoptimised. **Read the landmine first:**
@@ -591,4 +596,10 @@ feeding `warpMotion(dist)`. No throughput measurement ever existed.*
 - **Two `dpsshare` instrument bugs found**: a `warp` event is a phase
   (`start`/`impact`/`point`), not a cast; and MP fully regenerates before a fight
   is scored, so end-of-fight spend read 0 every round. `lane11`
+- **Photograph the party in a combat pose at `SKIN_CLEARANCE = 20 mm`** — the
+  one unverified thing behind `e2cf901`. The clearance measurement was taken in
+  the bind pose and verified by eye on idle/walk only. `lane2`
+- **`drawcheck`/`npcdraws` were not re-run after lane 2's garment work.** The
+  draw count is structurally unchanged (same meshes, same materials) but the
+  garment material is shared with 29 NPC bodies, so it wants confirming. `lane2`
 
