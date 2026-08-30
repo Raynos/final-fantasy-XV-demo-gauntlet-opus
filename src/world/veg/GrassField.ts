@@ -800,11 +800,22 @@ export class GrassField {
             sArr[o + 12] = x; sArr[o + 13] = y; sArr[o + 14] = z;
             sCount++;
           }
-          // Fewer blades per tuft than before, over a tighter tuft grid: same
-          // instance budget spent on more, smaller plants, which is what puts
-          // open dirt back between them.
+          // How many blades make one tuft.
+          //
+          // This ran at 3-6 for a while, on the argument that the same instance
+          // budget spent on more, smaller plants is what puts open dirt back
+          // between them. That is true of the *tuft grid* and false of the
+          // blade count: four blades leaning out of a shared root is an
+          // asterisk, not a plant, and the near field was reading as one
+          // because the clump cards — which are the thing that actually
+          // covered it, and which are now pushed back out to 22 m where they
+          // belong — were hiding it. With the cards gone from the near field
+          // the blade ring has to carry 0-22 m on its own, and it cannot do
+          // that at four blades a tuft. Now 5-19, still under MAX_PER_CLUMP.
+          // The dirt between plants comes from the acceptance roll below, not
+          // from starving each plant.
           const nb = Math.min(MAX_PER_CLUMP,
-            Math.max(3, Math.round((2 + d * 6.5) * (0.55 + rng.next() * 0.95))));
+            Math.max(5, Math.round((3.5 + d * 9.5) * (0.55 + rng.next() * 0.95))));
           // Value jitter symmetric about the base rather than a one-way lift:
           // the old `0.62 + colRnd*0.62`, times another 0.9-1.2 per blade,
           // could only ever make a clump brighter than the palette.
@@ -924,7 +935,23 @@ export class GrassField {
           const ox = (tx + 0.5) * T - camPos.x, oz = (tz + 0.5) * T - camPos.z;
           const dist = Math.hypot(ox, oz);
           if (dist > far + T * 0.75) continue;
-          if (near > 0 && dist < near - T * 0.75) continue;
+          // The near test has to be the OPPOSITE sign of the far one, and it
+          // was not. `dist` is to the tile CENTRE, so `near - T * 0.75` admits
+          // any tile whose centre is 3 m from the lens on the clump ring
+          // (21 - 18) and 42 m on the far one (78 - 36) — and a tile is 24 and
+          // 48 m across, so both rings were drawing their cards from zero
+          // metres. Measured on `hero_full` with `--raw` on both sides: hiding
+          // `grass_clump` moves 16.734/255 over 35.3% of the frame against a
+          // 2.25 floor, while hiding `grass_blade` moves 1.830 over 4.0% and
+          // does not clear it. The star tufts at the party's feet were three
+          // crossed quads each painting a whole tuft, seen from six metres up.
+          //
+          // Requiring the tile's nearest CORNER to be outside `near`
+          // (`T * 0.75` is a hair over the half-diagonal `T * 0.707`) starts
+          // the clump cards at 22 m and the far cards at 80 m, which is where
+          // they were always specified to start. Nothing is uncovered: the
+          // blade ring's own tiles reach 41 m under the far test above.
+          if (near > 0 && dist < near + T * 0.75) continue;
           if (Math.hypot((tx + 0.5) * T, (tz + 0.5) * T) > this.eco.worldRadius + T) continue;
           const e = this._tileFor(ring, li, tx, tz);
           if (!e) { tilePending = true; continue; }
