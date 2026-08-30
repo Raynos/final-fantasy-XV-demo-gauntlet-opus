@@ -408,13 +408,25 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   } else if ( eT < 1.0 ) {
     float q = ( eT - 0.42 ) / 0.58;
     float fib = 0.70 + 0.38 * abs( sin( eAng * 38.0 + sin( eAng * 7.0 ) * 2.2 ) );
-    float radial = 0.18 + 0.82 * pow( q, 1.45 );
+    // The iris floor was 0.18, and 0.18 of a mid blue is within a stop of the
+    // pupil's own 0.013-0.033 — so on a 7x read of Noctis at 0.55 m
+    // (tmp/shots/l1-fc6/noc_eye.png) there is no pupil in the frame at all,
+    // just a flat navy disc. A pupil is the single cue that an eye is looking
+    // at something, so the inner iris lifts to 0.34 and the ramp outward
+    // softens: what has to be dark here is the pupil, not the iris around it.
+    float radial = 0.34 + 0.66 * pow( q, 1.15 );
     float ruff = 1.0 + 0.28 * exp( -pow( ( q - 0.30 ) / 0.10, 2.0 ) );
     // light entering the cornea lights the iris wall opposite the sky
     float cres = 1.0 + 0.65 * clamp( -eUp, 0.0, 1.0 ) * pow( q, 0.7 );
     float k = radial * fib * ruff * cres;
     k *= 0.88 + 0.22 * sin( eAng * 21.0 + q * 9.0 );
-    k *= mix( 1.0, 0.04, smoothstep( 0.78, 0.96, q ) );   // limbal ring
+    // Limbal ring. It ran from q 0.78 down to 4% of value, i.e. the outer FIFTH
+    // of the iris was crushed to near-black — which is the other half of why the
+    // disc reads flat: a bright annulus at q 0.5-0.75 squeezed between a dark
+    // centre and a dark rim averages to one value at any real viewing distance.
+    // A limbal ring is a thin line at the limbus itself, so it is narrower and
+    // it is dark rather than absent.
+    k *= mix( 1.0, 0.16, smoothstep( 0.87, 0.99, q ) );   // limbal ring
     eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.15, k ) * lidShade;
     // the limbus is a graded blue-grey band, not a hard black line
     eyeC = mix( eyeC, vec3( 0.30, 0.30, 0.33 ) * lidShade, smoothstep( 0.955, 1.0, q ) );
@@ -452,7 +464,13 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // a tight sun glint plus a broad sky catchlight: an eye without a specular
   // dot reads as a painted bead no matter how good the iris is
   vec3 h1 = normalize( uSunDirView + eV );
-  vec3 h2 = normalize( uSkyDirView * 0.85 + eV );
+  // The sky lobe is straight up (see updateSun), so at 0.85 the half-vector
+  // sits ~40 degrees above the view axis and its reflection lands on the part
+  // of the globe the upper lid covers. A catchlight the lid eats is not a
+  // catchlight: read Noctis' eye at 7x and there is no white anywhere on it.
+  // 0.48 puts it ~25 degrees up, inside the fissure, which is where every
+  // portrait photographer and every shipped game puts it.
+  vec3 h2 = normalize( uSkyDirView * 0.48 + eV );
   float g1 = pow( clamp( dot( eN, h1 ), 0.0, 1.0 ), 1400.0 );
   float g2 = pow( clamp( dot( eN, h2 ), 0.0, 1.0 ), 190.0 );
   float wet = pow( 1.0 - clamp( dot( eN, eV ), 0.0, 1.0 ), 3.0 );
