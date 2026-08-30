@@ -709,7 +709,7 @@ const SHOT_TABLE = {
   tomb_claim: {
     doc: 'The Tomb of the Wise: the sarcophagus under its colonnade, the royal arm still in it',
     time: 17.4, weather: 'clear',
-    pos: [56.4, 135.4, -1507.6], target: [59.4, 134.6, -1513.2], fov: 34,
+    pos: [55.1, 135.9, -1506.3], target: [58.9, 134.5, -1512.7], fov: 40,
   },
 
   // --- the world is inhabited -------------------------------------------
@@ -949,7 +949,7 @@ const SHOT_TABLE = {
   lest_market_vendor: {
     doc: 'Randolph behind the Forge & Filigree counter, his rack behind him',
     time: 16.0, weather: 'clear',
-    pos: [-2957.2, 123.4, -711.0], target: [-2965.7, 122.0, -705.3], fov: 42,
+    pos: [-2959.5, 122.9, -708.0], target: [-2965.7, 122.0, -705.3], fov: 40,
   },
   lest_night_high: {
     doc: 'The lit square from above the stalls, bulbs and awnings raking away',
@@ -993,7 +993,7 @@ const SHOT_TABLE = {
   galdin_restaurant: {
     doc: "Coctura's counter at the Mother of Pearl, the kitchen open behind her",
     time: 12.0, weather: 'clear',
-    pos: [2343, 15.7, 2374], target: [2337, 15.2, 2376.2], fov: 40,
+    pos: [2331, 15.8, 2372], target: [2336.9, 15.2, 2376.2], fov: 44,
   },
   galdin_pier_fishing: {
     doc: 'Navyth folded over the rail by the ferry bell with his rod',
@@ -1235,14 +1235,18 @@ const SHOT_TABLE = {
     pos: [-106, -51.4, -315], target: [-122, -54.0, -330], fov: 56,
   },
   dungeon_keycatrich_fight: {
-    // A FIXED camera in a dungeon room comes back empty, and that is not a
-    // framing bug: `Dungeons._arm` spawns on the party and arms a boss when the
-    // party walks into its room, and a shot moves the camera, not the party. So
-    // both dungeon fight shots follow the player and let `Director` stage the
-    // encounter where the party actually stands.
-    doc: 'Keycatrich barracks mid-fight: the garrison lane 17 put underground, in the dark',
-    time: 12.0, dungeon: 'keycatrich', scenario: 'combat', follow: 'player',
-    offset: [4.6, 3.2, 6.4], lookOffset: [0, 1.4, -1.4], fov: 52,
+    // **This shot cannot contain a fight, and both ways of trying were shot.**
+    // `Dungeons._arm` spawns non-boss encounters on the party and arms a boss
+    // only when the party walks into its room, so a fixed camera in a dungeon
+    // room photographs an empty room however many enemies the dungeon holds.
+    // `follow: 'player'` + `scenario: 'combat'` was tried and is worse: it puts
+    // the camera outside an interior whose lighting the scenario does not
+    // restore, and the frame came back 99% black with a combat HUD over
+    // nothing. So this is the room, named for the room, until the harness can
+    // walk the party to a trigger. Filed in `project/TASKS.md`.
+    doc: 'The Keycatrich barracks the garrison holds: sodium strips, crates, a fire in the corner',
+    time: 12.0, dungeon: 'keycatrich',
+    pos: [-102, -46.2, -262], target: [-116, -48.0, -272], fov: 52,
   },
 
   // --- dungeons : Balouve Mines ------------------------------------------
@@ -1269,9 +1273,9 @@ const SHOT_TABLE = {
     pos: [300, -48.5, -298], target: [288, -52.0, -320], fov: 58,
   },
   dungeon_balouve_boss: {
-    doc: 'The Deep with its keeper: a fight on the floor of forty metres of worked-out cavern',
-    time: 12.0, dungeon: 'balouve', scenario: 'boss_field', follow: 'player',
-    offset: [5.4, 3.6, 7.2], lookOffset: [0, 1.5, -1.8], fov: 58,
+    doc: 'The floor of The Deep: braziers, fallen timber and forty metres of worked-out cavern',
+    time: 12.0, dungeon: 'balouve',
+    pos: [302, -47.0, -296], target: [288, -52.0, -322], fov: 62,
   },
 
   // --- dungeons : Fociaugh Hollow ----------------------------------------
