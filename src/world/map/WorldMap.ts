@@ -448,7 +448,15 @@ export const POIS: PoiSpec[] = [
     does: 'A shelf on the peak\'s east apron. Half of Leide below you, and the bone country ahead.' },
   { id: 'crag_haven', name: 'Ravenscrag Haven', type: 'haven', zone: 'longwythe', x: 1500, z: -2100, r: 55, travel: true, lv: 18,
     does: 'The last camp before the graveyard. You walk in; there is no road.' },
-  { id: 'adamantoise_graveyard', name: 'The Adamantoise Graveyard', type: 'landmark', zone: 'longwythe', x: 2600, z: -2800, r: 340, lv: 30,
+  // **Moved from (2600, -2800), measured.** The original pin is on a hillside
+  // against a cliff: `tmp/lane18/flat.mts` sampled 24 points on two rings and
+  // found **57.6 m** of worst-case height deviation inside 110 m, mean 12.6.
+  // A skeleton lying in the open cannot read on ground like that -- half the
+  // cage is buried in the slope and the far arches are cut off by the ridge
+  // (`tmp/shots/l18c/gv_axis.jpg`). This pan is the flattest ground within
+  // 700 m that is still deep in the empty quarter: worst 10.1 m, mean 3.5,
+  // and 1.6 km out from Ravenscrag Haven, which keeps it a destination.
+  { id: 'adamantoise_graveyard', name: 'The Adamantoise Graveyard', type: 'landmark', zone: 'longwythe', x: 3100, z: -2350, r: 340, lv: 30,
     does: 'Where the great turtles go. Ribcage arches you can walk under, and one shell you could park in.' },
   { id: 'three_valleys', name: 'The Three Valleys', type: 'landmark', zone: 'three_valleys', x: 1320, z: 1000, r: 460, lv: 6,
     does: 'Three parallel dry washes between hogbacks. The first real ambush ground.' },

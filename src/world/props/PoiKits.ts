@@ -535,8 +535,15 @@ export function poiMaterials() {
      * Adamantoise Graveyard the whole point of the site is that the arches read
      * as bone against ochre ground rather than as more masonry. One material
      * for the entire skeleton, so a hundred-and-fifty-piece kit is one draw.
+     *
+     * It started at `0xd9d2c0` and that was a mistake: at that value, under a
+     * clear Leide sun, `bakeTone`'s bleach put the top of an arch within a few
+     * per cent of white and the whole skeleton read as **painted polystyrene**
+     * rather than as bone. Bone is not white; it is a warm off-grey that goes
+     * pale only where the weather has got at it, which is what the tone bake is
+     * for. Roughness up with it, because the plastic read was half specular.
      */
-    bone: plain(0xd9d2c0, 0.84),
+    bone: plain(0xc6bba0, 0.88),
     red: plain(0x8f3a2c, 0.68, 0.1),
     magitek: plain(0x3a4048, 0.62, 0.45),
     cloth: canvasClothMaterial(0x3d4148),
@@ -2632,7 +2639,7 @@ export class PoiKits {
      */
     if (/graveyard/.test(s.poi.id)) {
       const bn = bag();
-      const tvG = toneVariant(rng, { valueAmp: 0.08, warmAmp: 0.05 });
+      const tvG = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.08 });
       /**
        * One bone: a chain of tapering drums swept along an elliptic arc in a
        * vertical plane, then turned about Y and set down.
@@ -2660,9 +2667,17 @@ export class PoiKits {
             const k = r0 + (r1 - r0) * t;
             return k * (1 + 0.34 * Math.max(0, 1 - t * 6.5));
           };
-          bn.shell.push(xform(xform(
-            new THREE.CylinderGeometry(rad((i + 1) / segs), rad(i / segs), len * 1.07, 7),
-            { rz: Math.atan2(-dx, dy), x: (p[0] + q[0]) * 0.5, y: (p[1] + q[1]) * 0.5 },
+          // **A rib is flat, and a cylinder is not.** Scaling the drum to 0.55
+          // across the arc's own plane costs nothing -- the `rz` that follows
+          // turns it inside that plane, so the squash stays perpendicular to
+          // the sweep -- and it is the difference between a bone and a length
+          // of white pipe, which is what the first pass rendered
+          // (`tmp/shots/l18c/gv_axis.jpg`). The per-segment jitter is the other
+          // half: a bone's shaft is not a lathe.
+          const drum = new THREE.CylinderGeometry(rad((i + 1) / segs), rad(i / segs), len * 1.07, 7);
+          drum.scale(1, 1, 0.55 + rng.range(0, 0.12));
+          bn.shell.push(xform(xform(drum,
+            { rz: Math.atan2(-dx, dy) + rng.gauss(0, 0.012), x: (p[0] + q[0]) * 0.5, y: (p[1] + q[1]) * 0.5 },
           ), { ry, x, y, z }));
         }
       };
@@ -2707,19 +2722,34 @@ export class PoiKits {
           });
         }
       });
-      // The spine itself, half-sunk: a drum, a neural fin and two stubby
-      // transverse processes per vertebra, tapering away from the shoulders.
+      /**
+       * The spine, mostly underground.
+       *
+       * **The first pass built the neural fin as a chamfered box and it read as
+       * a row of white tower blocks** — read `tmp/shots/l18c/gv_axis.jpg`, where
+       * eleven of them line the ridge like a housing estate. A chamfered box is
+       * the kit's *building* primitive; its arris lift and its right angles are
+       * exactly the signals that say "someone poured this". Nothing in a
+       * skeleton has a right angle, so the fin is now a four-sided taper that
+       * comes to a blade, and it is half the height it was.
+       *
+       * They are also sunk to a third rather than stood on the ground. A spine
+       * that has lain here since Solheim is *in* the earth; what you find is the
+       * top of the arch of each vertebra, not the whole bone.
+       */
       for (let i = 0; i < 11; i++) {
-        const vz = -28 + i * 6.2, sc = 2.15 - Math.abs(i - 3) * 0.12;
-        const vx = rng.gauss(0, 0.45), vy = gy(vx, vz, 2.2) + 0.30 * sc;
-        const vr = rng.gauss(0, 0.12);
-        bn.shell.push(xform(new THREE.CylinderGeometry(1.02 * sc, 0.94 * sc, 2.5 * sc, 9),
-          { rx: Math.PI / 2, ry: vr, x: vx, y: vy, z: vz }));
-        bn.shell.push(xform(box(0.42 * sc, 3.4 * sc, 1.35 * sc, { arris: 0.08 }),
-          { rz: rng.gauss(0, 0.11), ry: vr, x: vx, y: vy + 1.6 * sc, z: vz }));
+        const vz = -28 + i * 6.2, sc = 1.35 - Math.abs(i - 3) * 0.07;
+        const vx = rng.gauss(0, 0.7), vy = gy(vx, vz, 2.2) - 0.42 * sc;
+        const vr = rng.gauss(0, 0.22);
+        const drum = new THREE.CylinderGeometry(1.05 * sc, 0.96 * sc, 2.6 * sc, 9);
+        drum.scale(1, 1, 0.86);
+        bn.shell.push(xform(drum, { rx: Math.PI / 2, ry: vr, x: vx, y: vy, z: vz }));
+        const fin = new THREE.CylinderGeometry(0.06 * sc, 0.92 * sc, 2.3 * sc, 4);
+        fin.scale(1, 1, 0.42);
+        bn.shell.push(xform(fin, { rz: rng.gauss(0, 0.16), ry: vr, x: vx, y: vy + 1.15 * sc, z: vz }));
         for (const sx of [-1, 1]) {
-          bn.shell.push(xform(new THREE.CylinderGeometry(0.16 * sc, 0.4 * sc, 1.9 * sc, 6),
-            { rz: sx * (Math.PI / 2 - 0.35), x: vx + sx * 1.15 * sc, y: vy + 0.35 * sc, z: vz }));
+          bn.shell.push(xform(new THREE.CylinderGeometry(0.09 * sc, 0.42 * sc, 2.1 * sc, 5),
+            { rz: sx * (Math.PI / 2 - 0.42), ry: vr, x: vx + sx * 1.2 * sc, y: vy + 0.5 * sc, z: vz }));
         }
       }
       /**
@@ -2775,7 +2805,7 @@ export class PoiKits {
         // Bleached white at the top of an arch, stained brown where the earth
         // has been washing over it for a thousand years. `y0` is the earth
         // line, not the geometry's minimum, so the buried stubs stay dark.
-        bakeTone(g, { y0: -1, y1: 16, grime: 0.56, bleach: 1.18, jitter: tvG.jitter, tint: tvG.tint, streak: 0.28 });
+        bakeTone(g, { y0: -1.5, y1: 15, grime: 0.44, bleach: 1.20, jitter: tvG.jitter, tint: tvG.tint, streak: 0.42 });
         put(M.bone, g, [0, 0, 0]);
         void role;
       }
