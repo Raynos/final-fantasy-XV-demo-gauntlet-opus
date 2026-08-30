@@ -201,3 +201,27 @@ said it was: the tab is **1 382 MB**, not 1 246, and everything plan tasks
   cloud shadow that costs 21. GTAO is `postfx/`, not terrain, and its radius is
   0.62 m — a metre-scale occluder should not be removing a fifth of the light from
   a flat prairie 40 m away. Worth a look from the post lane. `lane15`
+- **Cloud shadows are 3.5x smaller than the clouds that cast them, by
+  construction.** Plan item 21's second half ("patches within 2x of their
+  clouds") has an exact cause, and it is not a tuning drift: `Clouds.ts:414`
+  bakes the shadow map by evaluating the cloud field over
+  `uShadowTile * uShadowFieldScale` metres, while `sky/MaterialPatch.ts:120`
+  samples it as if it spanned `uShadowTile` alone. `uShadowFieldScale` is written
+  per weather from the preset's `shadowScale` (`Sky.ts:1376`) — clear **3.5**,
+  overcast 5.0, storm 7.0 — so a clear-sky ground patch is exactly 1/3.5 of the
+  cloud feature above it, and the bake's own comment says this is deliberate
+  ("magnify it so several shadow patches fit inside the playable world instead of
+  one giant blob"). Getting inside 2x is therefore a *two*-number change, not one:
+  `shadowScale` down to ~2.0 alone leaves only two patches per the 2700 m
+  `RepeatWrapping` tile and the repeat becomes the new defect, so `uShadowTile`
+  has to rise with it (5400 m at 512 texels is 10.5 m/texel). Wants a capture pass
+  of its own across `clear`/`overcast`/`storm`. `Sky.ts:318/330/853`, `lane4`
+- **`zone_vannath`'s shadow floor is now sky-limited, not cloud-limited, and the
+  cloud strength is defensible.** Measured on the same 288x162 foreground box:
+  shipped 7/255, `?post=nocloudshadow` 28, `?post=noambient` 1. The extinction
+  ratio that implies (sky = 21 % of unshadowed) is close to the real clear-sky
+  diffuse fraction, so weakening `cloudShadow` 0.78 would be physically wrong;
+  the fix was the sky term, which `uSkyFill` now lifts the box to 22. Reaching the
+  plan's >=30 on THAT box needs one of the other two contributors as well — GTAO
+  (5/255, see above) or a broader exposure decision. The plan's own named gate box
+  (`0.33 0.62 0.46 0.78`) passes at **61** against its bar of 30. `lane5`
