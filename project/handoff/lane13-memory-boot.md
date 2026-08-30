@@ -513,3 +513,36 @@ completes in the instrumented session (1 986 methods instrumented, 947 ran).
 All four are `src/game/rpg/` and `src/game/` — **lane 17's files**, and its
 tasks 49 and 50 are about exactly this machinery. Lane 13 never touched
 `src/game/`. Handing it over untouched.
+
+### Re-run after the revert: `heightcheck` GREEN, `driftcheck` still red and NOT mine
+
+Both re-run at `50b66b1`:
+
+    heightcheck  PASS, exit 0. Every sample d 0.000:
+      (-0.5, 0.9)  gpu 3.824  cpu 3.824  d 0.000
+      (-2.8, 2.8)  gpu 4.468  cpu 4.468  d 0.000
+      (-6.1, 3.5)  gpu 4.259  cpu 4.259  d 0.000
+      (-9.7, 2.6)  gpu 5.275  cpu 5.275  d 0.000
+      (-1.0, 0.0)  gpu 3.559  cpu 3.559  d 0.000
+      (-3.9, -1.0) gpu 3.723  cpu 3.723  d -0.000
+
+    driftcheck   STILL FAIL, with the revert in place.
+
+So **`heightcheck` was mine and is fixed**, and my earlier claim that
+`driftcheck` was also mine is **withdrawn** — it survives the revert, so it
+belongs to something else that landed tonight.
+
+They are not the same comparison, which is why one moved and one did not.
+`heightcheck` reads the rendered ground against a CPU re-implementation of the
+same clipmap formula — exactly what a quantised morph alpha corrupts.
+`driftcheck` reads it against `Terrain.heightAt()`, the *gameplay* height
+function, and also probes twice to catch drift over time. Its `FAIL (tolerance
+0.05 m drift, 0.45 m vs heightAt)` line states its two configured tolerances,
+not its measurements; `driftcheck.mts:38-42` explains why the second is loose
+(the finest clipmap cell is 1.5 m).
+
+**Whoever picks this up: `driftcheck` was green at dispatch (19/19 on tree
+`e55e01cf`) and is red now with an unrelated cause.** Run
+`node src/tools/driftcheck.mts` for the measured numbers — it was still queued
+behind other lanes when I stopped — and look at tonight's terrain and seating
+commits, not at `AttrPack`.
