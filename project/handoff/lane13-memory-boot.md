@@ -358,3 +358,73 @@ per-attribute, not per-scene.
 
 It is filed, not recommended: the memory is already banked and every one of
 those four files belongs to a different lane.
+
+## The biggest lever nobody has recorded: 213.5 MB of CPU geometry is disposable
+
+`bootprof --mem` prints `geometry attributes 213.5 MB + 43.5 MB index (NOT
+disposable)`. That parenthesis is an assumption, not a measurement. Every one
+of those arrays is resident **twice** — once as a JS typed array in the
+renderer and once as a GL buffer in the gpu process — and three.js has the hook
+to drop the first: `BufferAttribute.onUpload(fn)`, which fires after the buffer
+reaches the GPU and lets the callback null the array.
+
+It is the single largest named item left in the tab, roughly a sixth of it, and
+it is not something to land at 2 a.m. on a contended box, because what breaks
+is *invisible in a posed shot*: anything that reads a geometry back after boot
+— collision, raycast interaction, a later merge, a `needsUpdate` re-upload —
+gets a null array and throws the first time a player walks into it.
+
+**The safe subset is the shadow proxies**, and the census proved the property
+that makes them safe: every `*_shadow` row is `[position:Float32]`, they are
+depth-only, nothing raycasts them and nothing merges them again. That is
+`lestallum/town_shadow` 11.1 MB + `galdin_quay/town_shadow` 10.6 + six imperial
+proxies at ~1.7 each ~= **32 MB** with a one-line safety argument. Filed.
+
+    - **213.5 MB of CPU-side geometry is disposable and `bootprof` says it is
+      not.** Every attribute is resident twice, and `BufferAttribute.onUpload`
+      lets the JS array go once the GL buffer exists. The whole 213 MB is the
+      biggest single item left in the tab; the SAFE subset is the shadow
+      proxies, which the census proved are `[position:Float32]`, depth-only,
+      never raycast and never re-merged — ~32 MB with a one-line safety
+      argument. What breaks otherwise is invisible in a posed shot: a
+      collision, raycast or re-merge readback gets a null array. `lane13`
+
+## The whole lane, on the exit instrument
+
+`bootprof --mem --play --prod`, `--build 792e998~1` (lane start) against
+`--build 4d16821` (everything I landed). `geo.bin.gz`/`texc.bin.gz` absent on
+every arm — other lanes' commits pruned them and kept pruning them, so absent
+throughout is the controlled variable. **Every arm printed `CONTENDED
+throughout`**; seven lanes were capturing all night.
+
+    geometry attributes (CPU)   241.1  ->  199.0 MB    -42.1   deterministic
+    vertex + index (GPU copy)   284.6  ->  242.5 MB    -42.1   deterministic
+                                                     ------
+                                                      -84.2 MB across both
+
+    renderer RSS "the tab"   1225/1213 -> 1211/1280    within the noise band
+    RSS after a forced GC    2149/2150 -> 2139/2136    -12 MB, also noise
+
+**The two attribute rows are the result.** They are computed from the actual
+`BufferAttribute` byte lengths, so they are exact and repeat. The RSS rows on a
+box with seven other lanes on it do not: the same build measured twice in one
+run came back 1211 and 1280 MB, a 69 MB spread between two browser launches
+five minutes apart, which is larger than most of what a lane can cut.
+
+### Task 39 verified end to end (this needed a trick)
+
+A plain probe reported `_poiPacked: 0` and I nearly filed the mechanism as
+untested. **The harness page is paused after settle** — `Game.frame` is
+`if (!this.paused) for (const s of this.systems) ... s.update(...)` — so
+`Props.update` never runs on it and `_camPos` sits at [0,0,0] no matter how
+many `requestAnimationFrame`s you wait for. Stepping `g.frame(1/60)` 240 times
+by hand (and putting `paused` back):
+
+    before  { packed: 0,  built: 8  }
+    after   { packed: 26, built: 26, seen: 68, packed: 14, refused: 0,
+              saved: 1 402 920 }
+
+18 sites streamed in without the camera moving at all, every one of them was
+packed the frame it was built, and 1.40 MB came back from those 18 alone. Note
+`refused: 0` — with the half-precision fallback in `4d16821` nothing is
+refused any more.
