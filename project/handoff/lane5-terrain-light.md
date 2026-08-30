@@ -307,3 +307,42 @@ files; handed to the coordinator with those two shas named.
 The p99-not-max recommendation above still stands on its own merits, but it is
 now a **second** point and not the diagnosis: something real moved tonight and
 should be found before the gate is reshaped.
+
+### SECOND CORRECTION — the same build ref gives two different verdicts
+
+I ran `node src/tools/driftcheck.mts --build 7da60d5` **twice**. Same command,
+same sha, minutes apart:
+
+| run | verdict | numbers |
+|---|---|---|
+| A | **PASS** | lost — I truncated my own capture with `tail -14` |
+| B | **FAIL** | mean −0.001, worst −0.520 at (−39.8, −68.2), p99 0.229, 2937/12544 |
+
+Run B's numbers are **identical in every digit** to the HEAD run — mean, worst,
+worst-coordinate, p99 and the over-0.1 m count all match to three decimals. Two
+genuinely different trees agreeing to that precision would be remarkable; one
+tree measured twice is exactly what it looks like. So at least one of these two
+runs did not photograph the tree it named — the shared bake cache, a reused warm
+page, or the build ref not being honoured.
+
+**Therefore `driftcheck` cannot attribute tonight's red to any sha right now,
+and both of my previous conclusions are withdrawn:**
+
+- The "it predates the wave" hypothesis rested on nothing (run A's numbers are
+  the ones I lost, and run B says 7da60d5 fails).
+- The "`ca8929e` / `0fb3087` POI seating sharpened the ground" attribution
+  rested on run A's PASS alone, which run B contradicts. **Do not chase those
+  two shas on my say-so.** The mechanism I described is still the only one that
+  fits `mean −0.001` + `p99 0.229` + one texel at −0.520 + byte-identical vertex
+  chunks — but "which commit" is now unanswered, not answered.
+
+**The next step is a harness question, not a terrain one:** establish that
+`driftcheck --build <sha>` is reproducible at all. Run it three times on ONE sha
+and keep the whole output including the `[harness]` announce line, which names
+the build actually served and which I grepped away. If the three disagree, the
+gate is measuring the daemon and every attribution made from it tonight —
+including lane 13's exoneration — needs re-checking.
+
+This is the same family as the bake-cache entry already filed in
+`project/TASKS.md`: a shared, content-addressed cache that two build trees fight
+over, producing a result that is stable, plausible, and about the wrong tree.
