@@ -73,9 +73,14 @@ const POOLS: Record<string, Pool> = {
     count: [1, 3],
   },
   // rock, scree and the shedding faces above them
+  // `old_book` is listed TWICE, and that is the whole change: this is a
+  // weighted bag, not a set (`road` weights `rusted_bit` the same way). At one
+  // entry in six, `side_scraps` -- which wants five books -- was a thirty-pick
+  // grind through the only pool that carries them, and a fetch quest that long
+  // is a fetch quest nobody finishes. Two in seven halves it.
   rock: {
     items: ['earth_gemstone', 'rusted_bit', 'sky_gemstone', 'old_book',
-      'debased_silver', 'mythril_shaft'],
+      'old_book', 'debased_silver', 'mythril_shaft'],
     count: [1, 1],
   },
   // damp ground, riverbank, lake margin

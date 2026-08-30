@@ -111,6 +111,24 @@ const DEPOSIT_SITES: DepositSite[] = [
   { id: 'dep_glacial',    name: 'Greyshire Glacial Grotto', at: 'greyshire',        element: 'ice',       capacity: 90, refill: 12 },
   { id: 'dep_fociaugh',   name: 'Fociaugh Hollow',          at: 'fociaugh',         element: 'lightning', capacity: 70, refill: 10 },
   { id: 'dep_taelpar',    name: 'Taelpar Crag Updraught',   at: 'taelpar_crag',     element: 'ice',       capacity: 70, refill: 10 },
+  /**
+   * **The two micro-deposits**, and they are small on purpose.
+   *
+   * Every row above is a destination in its own right: a player drives to
+   * Ravatogh or the Vesperpool *for* the energy, and 80-99 capacity is what
+   * makes that trip worth the fuel. These two are the opposite case — a
+   * lookout in the south-east and a dry lake pan in the south, both of which
+   * are somewhere you already are for another reason. A full-capacity vent at
+   * either would make the eleven authored ones pointless, and an empty
+   * landscape between them is exactly what task 60 and 65 are for. So: a
+   * third of a real vent, and a slow refill.
+   *
+   * Lightning at the washes because the site is the head of a wash and the
+   * storms run down it; fire on the saltgrass because a dry pan under a Leide
+   * sun is the one place in the sector that is genuinely hot.
+   */
+  { id: 'dep_washes',     name: 'Washes Lookout Fissure',   at: 'washes_lookout',   element: 'lightning', capacity: 20, refill: 4 },
+  { id: 'dep_saltgrass',  name: 'Saltgrass Pan',            at: 'saltgrass_flats',  element: 'fire',      capacity: 22, refill: 4 },
 ];
 
 export const DEPOSITS: Deposit[] = DEPOSIT_SITES.map((d) => {

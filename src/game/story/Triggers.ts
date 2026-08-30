@@ -118,11 +118,25 @@ export class Triggers {
     if (this._places) return this._places;
     const props = this.game.get('Props');
     const eco = props && props.ecology;
-    this._places = PLACES.map((p) => {
+    const list = PLACES.map((p) => {
+      // A `poi` row names a particular place and needs no Ecology at all --
+      // `worldMap` is a static table, so these resolve even before `Props`
+      // exists, which is why the lookup is first.
+      if (p.poi) {
+        const poi = worldMap.poiById(p.poi);
+        return poi ? { ...p, x: poi.x, z: poi.z } : null;
+      }
       const site: EcoSite | undefined = eco && eco.sites.find((s: EcoSite) => s.type === p.site);
       return site ? { ...p, x: site.x, z: site.z } : null;
     }).filter((p): p is LivePlace => p != null);
-    return this._places;
+    // **Only cache once the world can answer.** The memo was unconditional and
+    // an empty array is truthy, so one call before `Props` existed used to
+    // freeze this table empty for the life of the session -- every site row
+    // silently gone. It never bit because nothing called `places()` that early;
+    // the POI rows above resolve with no Ecology at all, so now something
+    // could.
+    if (eco) this._places = list;
+    return list;
   }
 
   /** The place containing a world position, or null. */

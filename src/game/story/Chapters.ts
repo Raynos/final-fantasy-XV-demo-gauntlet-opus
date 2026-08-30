@@ -126,8 +126,23 @@ export interface Place {
   id: string;
   name: string;
   sub: string;
-  /** Ecology site type this place sits on. */
+  /**
+   * Ecology site type this place sits on. `Triggers.places()` takes the FIRST
+   * site of the type, so this can only ever name a *kind* of place — "a
+   * haven", "a blockade" — never a particular one.
+   */
   site: string;
+  /**
+   * A `WorldMap` POI id, which names a particular one.
+   *
+   * The seven rows above are all `site` rows and every one of them is generic
+   * for that reason: there was no way to say *this* landmark. That is fine for
+   * "Haven" and useless for the nine places tasks 57-62 added, which are the
+   * whole reason to drive into an empty sector — arriving at the Adamantoise
+   * Graveyard has to announce the Adamantoise Graveyard. When `poi` is set,
+   * `Triggers.places()` resolves it against `worldMap` and `site` is ignored.
+   */
+  poi?: string;
   /** Metres from the site that count as "here". */
   radius: number;
 }
@@ -140,6 +155,25 @@ export const PLACES: Place[] = [
   { id: 'crashsite', name: 'Crash Site', sub: 'Magitek dropship', site: 'crashsite', radius: 44 },
   { id: 'outpost', name: 'Blackrock Outpost', sub: 'Leide', site: 'outpost', radius: 40 },
   { id: 'ruins', name: 'Solheim Ruins', sub: 'Under the Spire Ridge', site: 'ruins', radius: 46 },
+
+  /*
+   * The nine POI-anchored places, one per landmark tasks 57-62 built.
+   *
+   * A landmark with no row here can never fire a `place` trigger and therefore
+   * can never show an area card, however good its geometry is: `places()`
+   * resolves this table and nothing else. The radii are the landmark's own
+   * composition, not its discovery radius (`r` on the POI row is 260-340 m and
+   * a card at 300 m fires while you are still driving past).
+   */
+  { id: 'threshold_stones', name: 'The Threshold Stones', sub: 'The old pilgrim road', site: '', poi: 'threshold_stones', radius: 62 },
+  { id: 'saltgrass_flats', name: 'The Saltgrass Flats', sub: 'Leide', site: '', poi: 'saltgrass_flats', radius: 96 },
+  { id: 'kingsroad_end', name: 'Old Kingsroad End', sub: 'Where the road gives up', site: '', poi: 'old_kingsroad_end', radius: 44 },
+  { id: 'peak_overlook', name: 'The Northwatch Overlook', sub: 'Longwythe Peak', site: '', poi: 'peak_overlook', radius: 62 },
+  { id: 'adamantoise_graveyard', name: 'The Adamantoise Graveyard', sub: 'Beyond Ravenscrag', site: '', poi: 'adamantoise_graveyard', radius: 96 },
+  { id: 'mencemoor_obelisks', name: 'The Mencemoor Obelisks', sub: 'Keycatrich', site: '', poi: 'mencemoor_obelisks', radius: 62 },
+  { id: 'northwatch_ruin', name: 'Northwatch Garrison', sub: 'Niflheim', site: '', poi: 'northwatch_ruin', radius: 78 },
+  { id: 'washes_lookout', name: 'The Washes Lookout', sub: 'The Three Valleys', site: '', poi: 'washes_lookout', radius: 62 },
+  { id: 'saulhend_overlook', name: 'The Saulhend Overlook', sub: 'The Kelbass Grasslands', site: '', poi: 'saulhend_overlook', radius: 62 },
 ];
 
 export default CHAPTERS;

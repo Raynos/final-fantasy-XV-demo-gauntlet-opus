@@ -24,6 +24,7 @@ import { CombatBridge } from './CombatBridge.ts';
 import { HavenCamp } from './HavenCamp.ts';
 import { Deposits } from './Deposits.ts';
 import { Tombs } from './Tombs.ts';
+import { Plaques } from './Plaques.ts';
 import { Fishing } from '../fishing/Fishing.ts';
 import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor, MAX_LEVEL, EXP_TABLE } from './Stats.ts';
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.ts';
@@ -206,6 +207,7 @@ export class RpgSystem {
   havenCamp!: HavenCamp;
   deposits!: Deposits;
   tombs!: Tombs;
+  plaques!: Plaques;
   fishing!: Fishing;
   day!: DayCycle;
   elemancy!: Elemancy;
@@ -267,6 +269,8 @@ export class RpgSystem {
     this.deposits = new Deposits(this);
     /** The ten royal tombs, and the eight arms that were unobtainable. */
     this.tombs = new Tombs(this);
+    /** The three lore plaques; same lazy install, for the same reason. */
+    this.plaques = new Plaques();
   }
 
   /* -- Lifecycle --------------------------------------------------------- */
@@ -465,6 +469,7 @@ export class RpgSystem {
     // temple's sarcophagus once the POI streamer has built that temple.
     this.tombs.install(game);
     this.tombs.update(dt, game);
+    this.plaques.install(game);
     // Installs itself the same way, and owns the input while a cast is live.
     this.fishing.update(dt, game);
     this.combatBridge.update(dt, game);
