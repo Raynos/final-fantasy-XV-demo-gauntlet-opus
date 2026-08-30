@@ -641,6 +641,24 @@ async function main() {
   const shotDir = shotsAt ? (path.isAbsolute(shotsAt) ? shotsAt : path.join(ROOT, shotsAt)) : null;
   if (shotDir) await mkdir(shotDir, { recursive: true });
   const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1].split(',') : HEROES;
+  /**
+   * `--hide <substr>[,<substr>]` — ablate meshes by case-insensitive name
+   * substring before the frame is taken, exactly as `shoot.mts --hide` does.
+   *
+   * This gate's whole job is to say *why* a head is unmeasurable, and the
+   * answer is always "some mesh is putting a mark where a control should be
+   * blank". Without an ablation the only way to name that mesh is to edit
+   * `Character.ts`, capture `--dirty` and revert — and on a shared trunk with
+   * eight lanes saving, `--dirty` does not come back (`preparePage` timed out
+   * at 300 s twice trying exactly that). One flag replaces the whole loop.
+   *
+   * It renders LESS than the control by construction, so a hidden frame is a
+   * diagnosis and never evidence for a number — see LANDMINES on `--hide`.
+   * `--json` therefore records it and the summary line says so.
+   */
+  const hide = argv.includes('--hide')
+    ? argv[argv.indexOf('--hide') + 1].split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)
+    : [];
 
   const leased = await lease({ ...pageOpts(ha), w: 1600, h: 900 });
   const page = leased.page;
@@ -659,6 +677,22 @@ async function main() {
       ) as unknown as PageRow | null;
       if (!c) continue;
 
+      if (hide.length) {
+        // The same traversal `daemon.mts` does for `shoot.mts --hide`, and one
+        // `frame()` after it for the same reason: the pose is already settled,
+        // so this only has to redraw. Hiding BEFORE the settle would let auto
+        // exposure and the grade re-converge on a frame with a mesh missing.
+        await page.evaluate((want: string[]) => {
+          const g = (window as unknown as {
+            GAME: { scene: { traverse: (f: (o: { name?: string, visible: boolean }) => void) => void }, frame: (dt: number) => void }
+          }).GAME;
+          g.scene.traverse((o) => {
+            const nm = (o.name || '').toLowerCase();
+            if (nm && want.some((w) => nm.includes(w))) o.visible = false;
+          });
+          g.frame(1 / 60);
+        }, hide);
+      }
       const buf = await page.screenshot({ type: 'png' });
       const img = decodePng(buf);
       const mmp = c.pxPerMm;
