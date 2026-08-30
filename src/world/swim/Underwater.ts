@@ -69,6 +69,9 @@ const MURK_TINT = new THREE.Vector3(0.085, 0.250, 0.292);
 const MURK_DEEP = new THREE.Vector3(0.031, 0.094, 0.122);
 const MURK_FALLOFF = 22;
 
+/** Reused by the aerial-tint blend; never allocates. */
+const _ONE = new THREE.Vector3(1, 1, 1);
+
 interface SavedAtm {
   autoGrade: boolean;
   skyDim: number; night: number; nightTint: THREE.Vector3;
@@ -135,6 +138,19 @@ export class Underwater implements System {
 
   /**
    * @param depth how far the lens is below the surface, m
+   *
+   * **Blended in over the first 40 cm, not switched on at the waterline.**
+   * `CameraRig._armDistance` sweeps the terrain and its ground floor clamps
+   * against the lake *bed*, so a follow camera on a swimmer sits near the
+   * surface and crosses it constantly as the swimmer bobs — and a boolean
+   * there is a full-screen fog strobing on and off at frame rate. The ramp is
+   * also what a real waterline looks like from a camera half in it.
+   *
+   * The blend reads the uniforms rather than the saved block, because
+   * `Sky.update` rewrites every one of them each frame: whatever is in them
+   * when this runs in `lateUpdate` IS the correct dry-air value for this frame,
+   * time of day and weather included. That also makes `_restore` almost free —
+   * there is nothing to put back that Sky will not write again next frame.
    */
   _apply(game: Game, depth: number) {
     const sky = game.get('Sky');
@@ -153,22 +169,27 @@ export class Underwater implements System {
       };
       if (post) post.autoGrade = false;
     }
+    // How much of the lens is under: 0 at the waterline, 1 by 40 cm down.
+    const w = THREE.MathUtils.clamp(depth / 0.40, 0, 1);
     // Colour goes toward the deep tint with depth — the red is gone in the
     // first two metres, so a diver descending should watch the world lose its
     // warmth rather than have it switch off at a threshold.
     const k = THREE.MathUtils.clamp(depth / MURK_FALLOFF, 0, 1);
-    this._tint.copy(MURK_TINT).lerp(MURK_DEEP, k * k);
-    u.uSkyDim.value = 0.0;
-    u.uNight.value = 1.0;
-    u.uNightTint.value.copy(this._tint).multiplyScalar(1 / 1.6);
-    u.uAerialTint.value.set(1, 1, 1);
-    u.uAerialStrength.value = 1.0;
+    this._tint.copy(MURK_TINT).lerp(MURK_DEEP, k * k).multiplyScalar(1 / 1.6);
+    u.uSkyDim.value *= 1 - w;
+    u.uNight.value = THREE.MathUtils.lerp(u.uNight.value, 1.0, w);
+    u.uNightTint.value.lerp(this._tint, w);
+    u.uAerialTint.value.lerp(_ONE, w);
+    u.uAerialStrength.value = THREE.MathUtils.lerp(u.uAerialStrength.value, 1.0, w);
     // Homogeneous: base at the eye, scale height effectively infinite, so the
-    // integral in MaterialPatch collapses to density * distance.
+    // integral in MaterialPatch collapses to density * distance. Both are
+    // written outright rather than blended -- a half-blended scale height is a
+    // different fog law, not a weaker one, and the density carries the ramp.
     u.uFogBase.value = game.camera.position.y;
     u.uFogHeight.value = 1e5;
-    u.uFogDensity.value = MURK_DENSITY * (1.0 + 0.45 * k);
-    u.uHazeBase.value = 0.0;
+    u.uFogDensity.value = THREE.MathUtils.lerp(
+      u.uFogDensity.value, MURK_DENSITY * (1.0 + 0.45 * k), w);
+    u.uHazeBase.value *= 1 - w;
   }
 
   _restore() {
