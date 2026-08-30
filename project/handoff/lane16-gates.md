@@ -235,14 +235,29 @@ defect keeps every fix it inspires permanently red, which trains people to write
 the fix without the reason. It strips comments now. `SsrPass.ts` 0 HIGH; corpus
 9 → 8.
 
-**Frame verification: PENDING at the time of writing.** A guard like this can
-silently delete the pass it protects, so `zone_vesperpool` and `zone_galdin` are
-capturing at `4bbd5f6` (before) and `e2722c7` (after) with an `imgdiff` between
-them. Neither shot has a measured noise floor in `project/noise-floors.json`
-(23 of 142 are measured), so the comparison is against `imgdiff`'s unmeasured
-`DEFAULT_LIMIT` of 2/255. **Expected ~0** — the guard only fires where
-`sin θ < 1e-4`. A large delta means the threshold is wrong, and the response is
-to revert rather than tune it.
+**Frame verification: done.** `zone_vesperpool` and `zone_galdin`, captured at
+`4bbd5f6` (before) and `e2722c7` (after), `imgdiff`:
+
+    zone_vesperpool   mean 0.137/255   max 18   >8/255  0.002%   floor 2.00
+    zone_galdin       mean 0.650/255   max 57   >8/255  0.166%   floor 2.00
+
+Both under the floor, so the guard did not delete the pass. **Read honestly: the
+two shas differ by more than my change** — other lanes committed in between, and
+the triangle count moved 7 346 309 → 7 310 309, which is somebody's geometry and
+not mine. So 0.650 is an *upper bound* on this change, not an isolate. It still
+answers the question that mattered, because deleting SSR is not a sub-floor
+effect: the pass runs at 0.55 intensity on every near-horizontal surface below
+1.5 m, and losing it would be obvious.
+
+**Looked at both frames.** `zone_vesperpool` (the shot that actually has water):
+the lake sheet across the midground reads as a coherent lit surface carrying the
+overcast sky's value, under a heavy stratus deck, with the canopy silhouetted in
+front of it — the reflection band is intact and there is no black hole anywhere
+in the frame, which is the specific artefact a NaN here would produce.
+`zone_galdin` turned out to be **a poor choice of test**: it is a savannah plain
+at noon with no water in frame at all, so its 0.650 is other lanes' work and says
+nothing about SSR. If anyone re-tests this, use `zone_vesperpool` and a
+beach/rain shot, not `zone_galdin`.
 
 ## Standing procedure: the bake caches during a multi-lane wave
 
