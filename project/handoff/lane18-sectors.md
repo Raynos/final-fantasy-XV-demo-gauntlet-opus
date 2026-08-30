@@ -159,6 +159,20 @@ white pipe.
   At the old value the bleach put the top of an arch within a few per cent of
   white and the whole thing read as painted polystyrene.
 
+**`questaudit` came back GREEN: `--- 0 unsatisfiable objectives ---`** across the
+whole table, and every objective of the three new contracts resolves --
+`side_the_graveyard`'s `kill/coeurl`, `reach/adamantoise_graveyard` and
+`talk/takka` are all `ok`, and `graveyard_watch` reports at (3220, −2440), which
+is the moved pin plus its `near()` offset, so the territory travelled with the
+POI as intended.
+
+**`perfpoi` came back under budget** on the types the retained output covered:
+`menace` max 14.7 ms over 8 sites, `chocobo` 22.9 ms over 2 — the gate's limit
+is 33 ms per site. The `landmark` row (the one this lane changed) scrolled out
+of the captured buffer; a re-run redirected to `tmp/lane18/perfpoi.json` was
+queued at hand-off. **Redirect the probe's stdout to a file** — the task buffer
+only keeps the last ~30 lines and this report is ~200.
+
 **The re-shoot came back and is read above.** `drawcheck --worst 30`, `probe
 src/tools/probes/perfpoi.mts` and `probe src/tools/probes/questaudit.mts` did
 **not** — they were still queued at hand-off behind an exclusive lease that
