@@ -1,6 +1,8 @@
 # Lane 3 — Near-field and composition
 
-**Shots.ts: HELD** (as of 7da60d5 — work in progress)
+**Shots.ts: RELEASED at e5db679** — lane 21 may take it. Format contract
+unchanged: 2-space indent, `{` on the key line, single-line `doc:`, category
+headers as `// --- name ---`, character/UI shots first and cutscenes last.
 
 Plan: `docs/plans/2026-08-30-fable-to-nine.md` items 11–14. Owns `src/game/Shots.ts`
 (exclusive, rule 6) and `src/world/veg/**` seating.
