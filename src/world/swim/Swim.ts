@@ -195,7 +195,18 @@ export class Swim implements System {
     this._holdParty(game, player);
   }
 
-  /** Water surface over a point, rivers included, or -Infinity on dry land. */
+  /**
+   * Water surface over a point, rivers included, or -Infinity on dry land.
+   *
+   * Public because `Underwater` asks it about the **camera**, not the player:
+   * an authored underwater framing has no swimmer in it at all, and the first
+   * two ever taken came back as a dry daylight scene with a dark ceiling over
+   * it because the murk was keyed off the swim state.
+   */
+  levelAt(x: number, z: number): number {
+    return this._levelAt(this.game, x, z);
+  }
+
   _levelAt(game: Game, x: number, z: number): number {
     const water = game.get('Water');
     if (!water) return -Infinity;

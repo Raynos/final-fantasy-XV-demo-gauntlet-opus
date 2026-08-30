@@ -953,6 +953,82 @@ export class Water {
           // margin has to be a margin, not a shaped edge.
           alpha *= smoothstep(0.0, 0.04 + 0.42 * churn, dropDown);
 
+          /*
+           * ---- the surface seen from UNDERNEATH ---------------------------
+           *
+           * Everything above this line is authored for one side of the sheet.
+           * The mesh is DoubleSide with depthWrite off, so the backface has
+           * always drawn -- it was just drawn with the top-side shading, and
+           * nobody had ever looked. The first two frames ever taken from below
+           * (tmp/shots/l23/base/, 5.3 m under Alstor and 7.0 m under the
+           * Vesperpool) say exactly what that costs:
+           *
+           *  - under_vesper is a PURE WHITE FLARE across the whole top of
+           *    the frame, blooming. From below V points down, so
+           *    H = normalize(uSunDir + V) lines up with N over most of the
+           *    ceiling and the spec * 2.4 glint -- a term whose whole job is
+           *    to be a narrow glitter road -- becomes a full-screen light.
+           *  - under_alstor is a dark navy ceiling with grey clouds and green
+           *    tree-blobs pasted on it: fres goes to ~1 because dot(N, V) is
+           *    negative, so the fragment is 100% planar reflection -- and that
+           *    target is not even refreshed down here (_shouldReflect bails
+           *    at cam.y < level), so it is a stale mirror of the sky, on the
+           *    ceiling, at full strength.
+           *  - the metric-depth march is nonsense from this side:
+           *    refract(-V, N, 0.7502) is the air-into-water direction taken
+           *    with the ray pointing the wrong way, and down = max(-R.y, 0.10)
+           *    then clamps to the floor, so path is ten times the depth and
+           *    T collapses to zero.
+           *
+           * What is actually up there is **Snell's window**: the entire sky
+           * compressed into a 48.6 deg cone about the vertical, and outside
+           * that cone a total-internal mirror of the water below. So:
+           *
+           *  - inside the cone the surface is left nearly TRANSPARENT and the
+           *    real sky shows through it. A painted disc would be a second sky
+           *    that disagreed with the first, and there is no above-water
+           *    render available down here to sample instead.
+           *  - outside it the underside is opaque and takes the water column's
+           *    own scattered colour, which is the same uScatter the body term
+           *    converges on, so the ceiling and the depths agree.
+           *  - the whole thing is then veiled by its own distance, because the
+           *    surface material is a raw ShaderMaterial and the shared aerial
+           *    murk in sky/MaterialPatch.ts does not reach it. Without this the
+           *    ceiling stays crisp while everything around it fogs out, which
+           *    reads as a hole in the water.
+           *
+           * The test is the uniform, not gl_FrontFacing: the plane is flat, so
+           * the two agree everywhere, and this one cannot be broken by somebody
+           * changing the winding of a PlaneGeometry.
+           */
+          if (uCameraPos.y < uLevel) {
+            vec3 I = normalize(vWorld - uCameraPos);      // eye -> surface, up
+            float ci = clamp(dot(I, N), 0.0, 1.0);
+            // cos(48.6 deg) = 0.6614. The edge is a few degrees wide because
+            // the surface is not flat -- that width IS the shimmer on the rim
+            // of the window, and it is the one part of this a swimmer names.
+            float win = smoothstep(0.575, 0.715, ci);
+
+            vec3 murkCol = uScatter * downwelling * 1.55;
+            vec3 tir = mix(murkCol, bed * downwelling * 0.30, 0.22);
+            // A rim brightening right at the critical angle: the last few
+            // degrees before TIR carry the whole horizon's worth of sky.
+            float rim = smoothstep(0.50, 0.72, ci) * (1.0 - win);
+            tir += downwelling * rim * 0.35;
+
+            col = tir;
+            col += vec3(0.90, 0.93, 0.95) * downwelling * 0.55 * foam * 0.6;
+
+            // Fresnel from the dense side: ~2% straight up, 100% at the cone.
+            alpha = mix(0.98, 0.06, win)
+                  * smoothstep(0.0, 0.04 + 0.42 * churn, dropDown);
+
+            // Beer-Lambert through the water between the eye and the ceiling.
+            float md = 1.0 - exp(-0.075 * dist);
+            col = mix(col, murkCol, md);
+            alpha = mix(alpha, 1.0, md * 0.88);
+          }
+
           gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>
         }

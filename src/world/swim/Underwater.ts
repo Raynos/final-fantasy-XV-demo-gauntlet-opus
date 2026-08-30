@@ -89,12 +89,27 @@ export class Underwater implements System {
   lateUpdate(_dt: number, game: Game) {
     const swim = game.get('Swim');
     if (!swim) return;
-    // The camera decides, not the character. A swimmer at the surface with the
-    // lens dunked below the waterline is looking at an underwater scene, and a
-    // diver whose camera has swung up out of the water is not.
-    const level = swim.level;
-    const under = swim.swimming && Number.isFinite(level)
-      && game.camera.position.y < level - 0.02;
+    /*
+     * **The camera decides, and only the camera.**
+     *
+     * The first version asked whether the *player* was swimming, and the first
+     * two underwater frames ever taken -- `under_alstor`, `under_vesper`, an
+     * authored framing with no swimmer in it -- came back as a crisp dry
+     * daylight scene: bright green grass, unattenuated rock, no medium between
+     * the lens and the world at all, with a dark ceiling floating over it. A
+     * lens under the waterline is looking at an underwater scene whether or not
+     * anybody is in the water, and a diver whose camera has swung up out of the
+     * water is not.
+     */
+    const cam = game.camera.position;
+    const level = swim.levelAt(cam.x, cam.z);
+    const terr = game.get('Terrain');
+    const under = Number.isFinite(level) && cam.y < level - 0.02
+      // ...and there has to be water UNDER the lens as well as over it. A body
+      // is a rectangle over a basin, so `levelAt` says wet over dry ground
+      // inside that rectangle; without this a camera on a hillside beside a
+      // lake, below the waterline but not in the lake, fills with murk.
+      && !!terr && terr.heightAt(cam.x, cam.z) < cam.y;
     if (under) this._apply(game, level - game.camera.position.y);
     else this._restore();
     this._gauge(game, swim.swimming, swim.breath, swim.forcedAscent);
