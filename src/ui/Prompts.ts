@@ -9,16 +9,23 @@ import type { Game } from '../game/Game.ts';
  * every entry has to be a binding that genuinely exists — the old set promised
  * "Q — Camp", which was bound to nothing at all, and omitted driving entirely,
  * which is how a fully drivable Regalia went unnoticed.
+ *
+ * It went on lying after that, in three pairs that survived because nobody
+ * read the strip against the code: `Y — Lock-On` (the key is `V`), `R —
+ * Point-Warp` (`E`) and `X — Armiger` (`R`). The controls card repeated the
+ * same three, so the two documents agreed with each other and with nothing
+ * else. Every pair here is checked against the `input.keyDown` call that
+ * implements it in `CombatSystem._readInput` / `RegaliaSystem._controlKeys`.
  */
 const SETS = {
   field: [
     ['E', 'Interact'], ['Tab', 'Menu'], ['M', 'Map'], ['C', 'Photo'], ['H', 'Controls'],
   ],
   combat: [
-    ['LMB', 'Attack'], ['Space', 'Dodge'], ['Q', 'Warp-Strike'], ['Y', 'Lock-On'], ['H', 'Controls'],
+    ['LMB', 'Attack'], ['Space', 'Dodge'], ['Q', 'Warp-Strike'], ['V', 'Lock-On'], ['H', 'Controls'],
   ],
   warp: [
-    ['Q', 'Warp-Strike'], ['R', 'Point-Warp'], ['X', 'Armiger'], ['H', 'Controls'],
+    ['Q', 'Warp-Strike'], ['E', 'Point-Warp'], ['R', 'Armiger'], ['H', 'Controls'],
   ],
   /** Standing beside the parked Regalia. */
   car: [
@@ -27,7 +34,7 @@ const SETS = {
   /** Behind the wheel. */
   driving: [
     ['W', 'Accelerate'], ['S', 'Brake'], ['Space', 'Handbrake'], ['I', 'Ignis Drives'],
-    ['V', 'Camera'], ['F', 'Get Out'],
+    ['Y', 'Camera'], ['F', 'Get Out'],
   ],
 };
 

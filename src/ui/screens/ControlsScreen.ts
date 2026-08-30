@@ -8,6 +8,25 @@ import type { Game } from '../../game/Game.ts';
  *
  * `[keys, pad, label, note]` — `keys` is the keyboard/mouse side (an array so a
  * row can print two glyphs), `pad` is the controller equivalent as plain text.
+ *
+ * **This table is a promise, and it was breaking it.** Five of the twelve
+ * combat rows named keys the game does not answer to — R for Point Warp
+ * (it is `KeyE`), X for Armiger (`KeyR`), Y for Lock On (`KeyV`), 6–8 for
+ * magic (`KeyZ`/`KeyX`/`KeyB`) — and the heavy attack, the one verb a player
+ * has to be told about because no other game binds it to `F`, was missing
+ * altogether. A player who read this card could not fight. The authority is
+ * the bound verb list in `CombatSystem._readInput` and its JSDoc table
+ * directly above it; every row below was checked against the `input.keyDown`
+ * call that implements it, not against the previous version of this file.
+ *
+ * The pad column is held to the same standard. A verb with no
+ * `gpButton`/`gpDown` behind it now says **Keyboard only** instead of naming
+ * a button that does nothing: Point Warp, the heavy attack, the firearm, Let
+ * Ignis Drive, the whole in-car secondary cluster and the shop's quantity
+ * keys were all promising a controller that was never wired. Where a pad
+ * button IS bound the index is the standard mapping, so `gpEdge(4)` is L1 and
+ * `gpEdge(5)` is R1 — Lock On used to be printed as R3, which is `10`/`11`,
+ * the stick clicks.
  */
 const GROUPS = [
   {
@@ -28,14 +47,15 @@ const GROUPS = [
     name: 'Combat', icon: 'sword',
     rows: [
       [['LMB'], 'Square', 'Attack', 'Hold to keep the combo going'],
+      [['F'], 'Keyboard only', 'Heavy Attack', 'Opens on the finisher; heavy poise damage'],
       [['RMB'], 'Circle (hold)', 'Phase / Parry', 'Hold to evade; costs MP'],
-      [['Space'], 'Circle', 'Dodge', ''],
-      [['Q'], 'Triangle', 'Warp-Strike', 'Counters when the window is open'],
-      [['R'], 'Triangle (hold)', 'Point Warp', 'Warp out to recover MP'],
-      [['X'], 'L1', 'Armiger', 'When the gauge is full'],
-      [['Y'], 'R3', 'Lock On', 'Toggles the nearest target'],
-      [['1', '-', '5'], 'D-Pad', 'Swap Weapon', 'Sword, greatsword, polearm, daggers, firearm'],
-      [['6', '-', '8'], 'Keyboard only', 'Cast Magic', 'Fire, ice, lightning'],
+      [['Space'], 'Circle', 'Dodge', 'Invulnerable for a third of a second'],
+      [['Q'], 'Triangle', 'Warp-Strike', 'Counters when the parry window is open'],
+      [['E'], 'Keyboard only', 'Point Warp', 'Perch to recover MP; yields to a prompt'],
+      [['R'], 'L1', 'Armiger', 'When the gauge is full'],
+      [['V'], 'R1', 'Lock On', 'Toggles the nearest target'],
+      [['1', '-', '5'], 'D-Pad (1–4)', 'Swap Weapon', 'Sword, greatsword, polearm, daggers; 5 is the firearm'],
+      [['Z', 'X', 'B'], 'Keyboard only', 'Cast Magic', 'Elemancy quick-slots one, two and three'],
       [['G'], 'Keyboard only', 'Gladiolus Technique', 'Spends tech bars'],
       [['J'], 'Keyboard only', 'Ignis Technique', ''],
       [['K'], 'Keyboard only', 'Prompto Technique', ''],
@@ -44,17 +64,17 @@ const GROUPS = [
   {
     name: 'The Regalia', icon: 'machinery',
     rows: [
-      [['F'], 'A / Cross', 'Get In / Get Out', 'Stand beside the car'],
+      [['F'], 'A / Cross', 'Get In / Get Out', 'Stand beside the car; also swings the heavy attack'],
       [['W'], 'RT', 'Accelerate', ''],
       [['S'], 'LT', 'Brake / Reverse', 'One pedal, like an automatic'],
       [['A', 'D'], 'Left Stick', 'Steer', ''],
-      [['Space'], 'A / Cross', 'Handbrake', ''],
-      [['I'], 'Y / Triangle', 'Let Ignis Drive', 'Auto-drives to the next stop'],
-      [['V'], 'R3', 'Change Camera', 'Chase, bonnet, cinematic'],
-      [['B'], 'D-Pad Right', 'Next Radio Station', ''],
-      [['N'], 'D-Pad Left', 'Radio On / Off', ''],
-      [['L'], 'D-Pad Up', 'Headlights', 'Auto, on, off'],
-      [['T'], 'X / Square', 'Type-D Off-Road', ''],
+      [['Space'], 'A / Cross', 'Handbrake', 'Shared with the dodge roll'],
+      [['I'], 'Keyboard only', 'Let Ignis Drive', 'Auto-drives to the next stop'],
+      [['Y'], 'Keyboard only', 'Change Camera', 'Chase, bonnet, cinematic'],
+      [['U'], 'Keyboard only', 'Next Radio Station', ''],
+      [['N'], 'Keyboard only', 'Radio On / Off', ''],
+      [['L'], 'Keyboard only', 'Headlights', 'Auto, on, off'],
+      [['O'], 'Keyboard only', 'Type-D Off-Road', 'Suspension for the dirt'],
     ],
   },
   {
@@ -65,8 +85,8 @@ const GROUPS = [
       [['Enter'], 'A / Cross', 'Confirm', ''],
       [['↑', '↓'], 'D-Pad', 'Select', 'WASD works too'],
       [['←', '→'], 'D-Pad', 'Change Tab', ''],
-      [['Q', 'E'], 'L1 / R1', 'Quantity', 'In a shop; hold Shift for ten'],
-      [['H'], 'Y / Triangle', 'Close This Card', ''],
+      [['Q', 'E'], 'Keyboard only', 'Quantity', 'In a shop; hold Shift for ten'],
+      [['H'], 'Keyboard only', 'Close This Card', 'On a pad: Start ▸ Controls'],
     ],
   },
 ];
