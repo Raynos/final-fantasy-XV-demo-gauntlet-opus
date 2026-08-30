@@ -45,6 +45,9 @@ import { VegUniforms } from '../veg/VegMaterial.ts';
  *   `?post=nodry`  — the tier-D dry-cover term removed.
  *   `?post=nogully` — the three erosion-channel octaves of the relief field
  *     removed, which is what attributes the corduroy on a massif flank.
+ *   `?post=nofill` / `fillonly` — the `uSkyFill` sky-fill term off, and alone
+ *     with every other light zeroed, which is the only way to see what colour
+ *     it actually is. See the block comment on `FRAG_AO`.
  *   `?post=noiao` / `iaomax` — the terrain's IN-MATERIAL occlusion of
  *     indirect diffuse off, and at full occlusion. WS-2d's own ablation pair.
  *   `?post=nomeso` / `mesomax` — the tier-C 4-30 m mesorelief off, and at
@@ -260,6 +263,8 @@ uniform float uLayerScale[6];
 uniform float uLayerRot[6];
 uniform float uDetailScale;
 uniform float uMicro;
+/** Sky fill: (gain on the probe's own irradiance, how much of tfAmb occludes it). */
+uniform vec2 uSkyFill;
 /** World metres per pixel per metre of camera distance: 2*tan(fovY/2)/heightPx. */
 uniform float uPxScale;
 // The vegetation lane's own wind uniforms, shared by object identity rather
@@ -1878,6 +1883,44 @@ vec3 nonPerturbedNormal = normal;
  * The AO term has no such fade: sky visibility is a legitimate statement at any
  * distance, and at 64 m it is describing valley shape, which is the scale a
  * valley is.
+ *
+ * ## `uSkyFill` — the sky in shadow
+ *
+ * Measured on `zone_vannath` (17.2 h, clear), a 288x162 box of shadowed
+ * foreground, PNG, Y p50 out of 255:
+ *
+ * | frame | Y p50 | R−B |
+ * |---|---|---|
+ * | shipped | **7** | +1 |
+ * | `?post=nocloudshadow` | 28 | +14 |
+ * | `?post=noambient` | **1** | +2 |
+ *
+ * Read those three rows together and the defect names itself. A cloud shadow
+ * removes 75 % of the light in that box, because `atmCloudShadow` multiplies
+ * **direct** light only (`sky/MaterialPatch.ts`) — which is correct. What is
+ * left underneath is supposed to be the sky, and the sky is worth **six levels
+ * out of 255**, with no chroma at all. Real ground under a real cloud is lit by
+ * the whole blue hemisphere and reads distinctly *cool*; ours reads as a hole.
+ *
+ * The fill is not absent — it is the L2 `THREE.LightProbe` in `sky/SkyProbe.ts`
+ * — but the terrain then multiplies it by `tfAmb` (material AO × horizon sky
+ * visibility) at 0.85, so the one surface in the game with a second occlusion
+ * term is the surface that most needs the first one's output.
+ *
+ * So rather than raise `PROBE_GAIN`, which is global and would relight every
+ * character and prop to fix the ground, this adds a **terrain-local second
+ * helping of the probe's own irradiance**: same SH, same direction, same
+ * colour, sampled at the terrain's shading normal so it carries the detail
+ * normal that three's `geometryNormal` does not, occluded at 0.45 instead of
+ * 0.85. It is deliberately derived from `lightProbe` rather than from a new
+ * uniform: the probe already carries `PROBE_GAIN`, the golden-hour dial and the
+ * `?post=noambient` zero, so the ablation keeps working and there is no second
+ * copy of the sky's colour to drift out of date. It is not seen by the light
+ * meter — that reads `Sky`'s own irradiance on the CPU — which is what
+ * `Sky.ts`'s comment about the artistic fill asks for: a shadow lift that
+ * stops the frame down again cancels itself out.
+ *
+ * `?post=nofill` removes it; `?post=fillonly` shows it alone.
  */
 const FRAG_AO = /* glsl */`
 float tfSkyAo = tf_horizonAo(vTW.xz, tfNormalW);
@@ -1890,6 +1933,13 @@ ${ABLATE.has('noiao') ? 'tfAmb = 1.0;' : ''}
 ${ABLATE.has('iaomax') ? 'tfAmb = 0.0;' : ''}
 reflectedLight.indirectDiffuse *= mix(1.0, tfAmb, 0.85);
 reflectedLight.indirectSpecular *= mix(1.0, tfAmb, 0.95);
+#if defined( USE_LIGHT_PROBES )
+vec3 tfFill = max(shGetIrradianceAt(tfNormalW, lightProbe), vec3(0.0))
+  * uSkyFill.x * mix(1.0, tfAmb, uSkyFill.y);
+${ABLATE.has('nofill') ? 'tfFill = vec3(0.0);' : ''}
+${ABLATE.has('fillonly') ? 'reflectedLight.directDiffuse = vec3(0.0); reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectDiffuse = vec3(0.0);' : ''}
+reflectedLight.indirectDiffuse += tfFill * BRDF_Lambert(material.diffuseColor);
+#endif
 `;
 
 /**
@@ -2084,6 +2134,11 @@ export function makeTerrainUniforms(tex: TerrainTextures, field: FieldConstants,
     // the cascade far plane (320 m) and is complete a little past it, so the two
     // shadow sources never both claim the same ground at full strength.
     uHorizonMix: { value: new THREE.Vector4(1.0, 1.0, 300, 620) },
+    // Sky fill — see `FRAG_AO`. (gain on the probe's irradiance, how much of
+    // `tfAmb` occludes that gain). The primary indirect term is occluded at
+    // 0.85; this one at 0.45, because the probe is the whole of the sky and a
+    // shadow-side slope that keeps half a hemisphere should keep half the fill.
+    uSkyFill: { value: new THREE.Vector2(1.6, 0.45) },
     uField: { value: new THREE.Vector4(field.HALF, field.CELL, field.N, field.BLEND_OUT) },
     uFarP: { value: new THREE.Vector4(field.FAR_HALF, field.FAR_CELL, field.FAR_N, 0) },
     uLayerAvg: { value: LAYER_AVG.map((c) => new THREE.Vector3(c[0], c[1], c[2])) },
