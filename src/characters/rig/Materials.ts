@@ -377,15 +377,28 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   vec3 fillC = mix( fillN, vec3( 0.76, 0.90, 1.20 ), 0.45 );
   float dome = clamp( dot( gN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
   //
-  // The coefficient is 0.30 and it was 0.11. At 0.11 the rewrite above measured
-  // as a clean positive in the right direction on every number and about a
-  // third of the distance: Prompto p5 1 -> 5 and p50 62 -> 69 against a plate
-  // 22 / 81, Noctis p50 1 -> 15 against 37, with both top ends untouched
-  // (Prompto 203 -> 204). Scaling by the shortfall is legitimate here precisely
-  // because the term is additive and small next to the specular, so it buys the
-  // dark end at almost no cost to the bright one -- the measured 0.11 step cost
-  // Prompto exactly 1 Y at p99.5.
-  kk += uSunColor * pow( dome, 1.2 ) * 0.30 * strand * fillC * ( 0.30 + 0.30 * luminance );
+  // The coefficient was fitted, and 0.30 -- the value the arithmetic asked for
+  // -- is a measured negative ON THE FRAME. Three points, same rect:
+  //
+  //             prompto p5/p50/p99.5     noctis p5/p50/p99.5
+  //     0.11          5 /  69 / 204            0 /  15 / 129
+  //     0.30         15 /  89 / 209            1 /  46 / 149
+  //     plate        22 /  81 / 176           20 /  37 / 140
+  //
+  // By the numbers 0.30 is the better fit -- both medians land within 9 Y of
+  // the plate where 0.11 was 12 and 22 short. By eye it is wrong: at 0.30
+  // Noctis' hair reads GREY. Not dark hair with form in it; a mid-grey mass and
+  // a pale fringe, i.e. a different character.
+  //
+  // The two disagree because the plate's black hair is a narrow dark cluster
+  // (p10 Y 25, p50 37) and a flat fill widens the distribution instead of
+  // translating it -- ours ran p10 5 / p50 46 / p90 92 at 0.30. Chasing the
+  // median with a term that also stretches the spread buys the statistic and
+  // loses the read, and 12.3 is explicit that hair is "rendered far darker than
+  // intuition" and that erring bright is the failure mode. So this sits at
+  // 0.18, between the two measured points and deliberately a little under the
+  // plate rather than a little over.
+  kk += uSunColor * pow( dome, 1.2 ) * 0.18 * strand * fillC * ( 0.30 + 0.30 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
