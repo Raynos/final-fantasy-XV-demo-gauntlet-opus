@@ -311,3 +311,32 @@ a measured negative and is the first line below.*
   (-31.4, -20.3), and the new `spawn_haven` POI hard-codes (-31,-20). If that
   search ever moves, the pin does not and the haven becomes uncampable. Same
   coupling the Hammerhead pin already carries a comment about. `lane17`
+
+## Characters: what lane 1 left behind (2026-08-31)
+
+*Lane 1 fixed the winding at its root and proved it with two orientation-absolute
+probes across all four heroes -- every primitive INWARD -> OK, the hair shell
+0.3% -> 99.7% outward, all four heroes' body/head/hair/outfit/shadow/both eyes
+at positive signed volume. Tasks 4, 5, 47 and the new googly-eye defect are LIVE
+with the respawned lane, not backlog, and are deliberately not listed here.*
+
+- **Re-derive `Anatomy.drape()` against arc length.** `drape` samples the body
+  curve at uniform `u`; `sweepTube` then re-splines those 9-12 nodes
+  centripetally, so a garment's `t` lands at a different height -- and carries
+  different skin weights -- than the `u` that `Outfit.under()` evaluates the
+  muscle shape at. Symptom: Gladiolus' mid-back stays bare through his jacket at
+  ANY clearance (verified at 60 mm; `--hide _body` shows the panel is there and
+  covers it). Currently absorbed by `SKIN_CLEARANCE = 0.030` in `rig/Outfit.ts`,
+  which costs ~30 mm of radius on every garment. Fix the drape, then take the
+  clearance back to ~10 mm. `lane1`
+- **`enemies/RigBuilder.ts:85,118,170` -- `skinWeight` -> Uint8.** The last third
+  of lane 13's task 38; `rig/Geo.ts` and `rig/Sculpt.ts` are done. Safe as it is
+  (enemies merge only with enemies) but unoptimised. **Read the landmine first:**
+  a post-hoc re-pack deleted an NPC's shadow because `mergeGeometries` saw
+  `Uint8` beside `Float32`. Generator-side only. `lane1`/`lane13`
+- **`src/tools/probes/skinclip.mts` -- read its median, not its worst.** Its
+  nearest-vertex signed-distance form is unreliable and says so in the file: a
+  garment is layered shells, and the nearest cloth vertex to a skin vertex is
+  often on an inner face whose normal points back at the body, which reports
+  "outside" for a body that is properly covered. `lane1`
+
