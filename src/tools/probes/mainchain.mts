@@ -69,9 +69,21 @@ const drive = (id) => {
     } else if (o.type === 'talk') {
       rpg.quests.notify('talk', { target: o.target });
     } else if (o.type === 'fetch') {
-      if (String(o.target).startsWith('gil:')) rpg.inventory.addGil(Number(String(o.target).split(':')[1]), 'probe');
-      else rpg.inventory.add(o.target, o.count, 'probe');
-      rpg.quests.settle(id);
+      // DELETED 2026-08-30, and deliberately not replaced. This arm used to
+      // hand the quest the very item it was asking for -- `rpg.inventory.add(
+      // o.target, ...)` -- which is how `main_ch3_openworld`'s fetch of
+      // `sword_wise` passed this probe for months while the game granted that
+      // item from nowhere and chapters 4-5 were unreachable in a real playthrough.
+      // A `fetch` on the MAIN line has to be satisfiable by the world, so if one
+      // appears again it must fail loudly here rather than self-grant.
+      check(`${id}/${o.id} fetch is grantable by the world`, false,
+        `nothing in the probe grants '${o.target}'; the main line must not fetch what no shop, chest, drop or forage yields`);
+    } else if (o.type === 'buy') {
+      // The real shop path: the wallet is the mid-game seed's, the stock is
+      // Takka's, and `Inventory.buy` is what raises the notify.
+      const want = o.target === 'weapon' ? 'iron_sword' : o.target;
+      const res = rpg.inventory.buy(want, 1);
+      check(`${id}/${o.id} can buy ${want}`, !!res.ok, res.ok ? '' : `buy failed: ${res.reason}`);
     } else if (o.type === 'kill') {
       // through the real kill path, not `forceObjective`
       for (let k = 0; k < o.count; k++) {
@@ -83,8 +95,15 @@ const drive = (id) => {
     } else if (o.type === 'photo') {
       rpg.quests.notify('photo', { target: o.target });
     } else if (o.type === 'quest') {
+      // Drive the sub-quest through the SAME real paths rather than calling
+      // `complete()` on it -- `main_ch1_pauper` now depends on `hunt_sabertusks`,
+      // which is seeded accepted-and-incomplete, so its kills are the act.
       const other = rpg.quests.states[o.target];
-      if (other && other.status !== 'complete') { rpg.quests.accept(o.target); rpg.quests.complete(o.target); }
+      if (other && other.status !== 'complete') {
+        if (other.status !== 'active') rpg.quests.accept(o.target);
+        if (rpg.quests.status(o.target) === 'active') drive(o.target);
+        check(`${id}/${o.id} sub-quest ${o.target} completes`, rpg.quests.status(o.target) === 'complete', q(o.target));
+      }
       rpg.quests.settle(id);
     } else if (o.type === 'draw' || o.type === 'craft') {
       rpg.quests.notify(o.type, { target: o.target });

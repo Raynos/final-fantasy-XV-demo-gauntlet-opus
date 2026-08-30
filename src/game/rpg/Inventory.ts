@@ -785,6 +785,10 @@ export class Inventory {
     const taken = this.add(id, n, 'shop');
     if (taken < n) { this.remove(id, taken); return { ok: false, reason: 'no-room' }; }
     this.spendGil(cost);
+    // A purchase is not an `item-gained` a quest can tell apart -- forage,
+    // drops and chests all raise that -- so shopping gets its own event.
+    // `main_ch1_pauper` keys off it. @see RpgSystem._wire
+    this.emitter?.emit('item-bought', { id, name: def.name, count: n, cost, def });
     return { ok: true, cost };
   }
 

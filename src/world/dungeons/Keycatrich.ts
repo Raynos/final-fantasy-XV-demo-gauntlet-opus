@@ -106,7 +106,7 @@ export const KEYCATRICH: DungeonDef = {
     L.chest({ at: [19.6, -40.4], name: 'Quartermaster Locker', items: ['mega_potion', 'remedy', 'magitek_booster'], gil: 900, magitek: true });
     L.chest({ at: [16.4, -44.2], name: 'Ration Crate', items: ['ether', 'antidote', 'luncheon_meat'], rot: 0.4 });
     L.chest({ at: [18.6, -65.4], name: 'Sunken Strongbox', items: ['trench_keycard', 'imperial_relay'], gil: 300, magitek: true });
-    L.chest({ at: [21.4, -94.4], name: 'Imperial Vault', items: ['elixir', 'mythril_shaft', 'iron_duke'], gil: 3200, big: true, magitek: true });
+    L.chest({ at: [21.4, -94.4], name: 'Imperial Vault', items: ['elixir', 'mythril_shaft', 'iron_duke', 'sword_wise'], gil: 3200, big: true, magitek: true });
     L.chest({ at: [18.6, -98.2], name: 'Officer\'s Case', items: ['hi_elixir', 'sky_gemstone'], gil: 1500, magitek: true });
 
     // --- hazards ---------------------------------------------------------

@@ -334,6 +334,12 @@ export class RpgSystem {
     // 0/3 with three in the bag. @see QuestLog.settle
     this._attachHoldings();
     this.emitter.on('item-gained', () => this.quests.settleAll());
+    // `buy` is event-only -- `settle()` cannot ask the bag "was this bought" --
+    // so this listener is the whole of the notifier. Weapons report as
+    // `weapon` so an objective can ask for "a weapon, any weapon".
+    this.emitter.on('item-bought', (p: { id: string; def?: { category?: string } }) => {
+      this.quests.notify('buy', { target: p.def?.category === 'weapon' ? 'weapon' : p.id });
+    });
     this.emitter.on('gil-changed', () => this.quests.settleAll());
 
     // Record the rung the save is already on, so the first hunt of the session

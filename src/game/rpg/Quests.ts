@@ -173,6 +173,9 @@ const photo = (id: string, target: string, count: number, desc: string, waypoint
 const craft = (id: string, target: string, count: number, desc: string): Objective => ({ id, type: 'craft', target, count, desc });
 const rest  = (id: string, desc: string, waypoint?: number[]): Objective => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 const fish  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'fish', target, count, desc, waypoint });
+// `buy` is event-only: `settle()` has no standing read of "did you ever shop",
+// so the notify out of `Inventory.buy` is the ONLY thing that can tick it.
+const buy   = (id: string, target: string, desc: string, waypoint?: number[]): Objective => ({ id, type: 'buy', target, count: 1, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -191,7 +194,7 @@ const fish  = (id: string, target: string, count: number, desc: string, waypoint
  */
 export type ObjectiveKind =
   | 'kill' | 'fetch' | 'reach' | 'talk' | 'escort' | 'photo'
-  | 'craft' | 'cook' | 'rest' | 'draw' | 'fish' | 'quest';
+  | 'craft' | 'cook' | 'rest' | 'draw' | 'fish' | 'quest' | 'buy';
 
 /** One step of a quest, **as authored**. */
 export interface Objective {
@@ -299,11 +302,19 @@ const QUEST_TABLE: Quest[] = [
   {
     id: 'main_ch1_pauper', type: 'main', chapter: 1, name: 'The Pauper Prince',
     region: 'leide', level: 2, giver: 'Cid', requires: ['main_ch1_departure'],
-    summary: 'Repairs cost gil the prince does not have. Take a bounty and earn it.',
+    summary: 'Repairs cost gil the prince does not have. Take a bounty, earn it, and kit yourself out.',
+    // Re-authored 2026-08-30. Every act here is one the player performs THIS
+    // session. The old list did not: `hunt_killer_wasps` is pre-completed by
+    // the mid-game seed and the wallet boots on 42,180 gil, so two of the three
+    // objectives were already satisfied before the quest was accepted and the
+    // whole of chapter 1 closed itself the moment you spoke to Takka.
+    // `hunt_sabertusks` is seeded *accepted and incomplete*, so it is a real
+    // hunt; the weapon purchase is a real trip to Takka's counter.
     objectives: [
       talk('tipster', 'takka', 'Ask Takka about hunting work', at('hammerhead')),
-      { id: 'bounty', type: 'quest', target: 'hunt_killer_wasps', count: 1, desc: 'Complete any bounty' },
-      fetch_('gil', 'gil:1500', 1, 'Earn 1,500 gil for the repairs'),
+      { id: 'bounty', type: 'quest', target: 'hunt_sabertusks', count: 1, desc: 'Take down the Sabertusk pack', waypoint: at('three_valleys', 0, 200) },
+      buy('kit', 'weapon', 'Spend the bounty on a weapon', at('hammerhead')),
+      talk('cindy', 'cindy', 'Tell Cindy the repairs are paid for', at('hammerhead')),
     ],
     rewards: { gil: 0, exp: 600, ap: 8, items: [{ id: 'hi_potion', count: 2 }], unlocks: ['regalia'] },
   },
@@ -327,7 +338,12 @@ const QUEST_TABLE: Quest[] = [
       // The bestiary key is `mt`; `magitek_trooper` matched nothing, so this
       // objective -- and `side_power_play`'s below -- could never tick.
       kill('mts', 'mt', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
-      fetch_('sword', 'sword_wise', 1, 'Claim the Sword of the Wise', at('tomb_wise')),
+      // Was a `fetch` for `sword_wise` -- an item nothing in the game grants
+      // (no shop stocks royals, no chest held it, no enemy drops it), so ch3
+      // could never close and ch4-5, six side quests and both set pieces were
+      // unreachable. The quest's own reward hands the blade over; standing in
+      // the tomb is the act that earns it.
+      reach('sword', 'tomb_wise', 'Claim the Sword of the Wise', at('tomb_wise'), 18),
     ],
     rewards: { gil: 1200, exp: 4000, ap: 25, items: [{ id: 'sword_wise', count: 1 }], unlocks: ['armiger'] },
   },
