@@ -416,6 +416,99 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
 }
 
 /**
+ * Laid paving — a town square, a station forecourt, a landing pad.
+ *
+ * This exists because of a defect a whole lane found by looking rather than by
+ * measuring: *"the one thing dragging every city frame down is the plaza — a
+ * flat, untextured plane in all of them."* It was `M.concrete`, which is
+ * `plain()`, which is a mapless colour, spread over a 22 m disc that the player
+ * stands still in the middle of. A settlement's square is the one piece of
+ * ground a camera dwells on, and it had nothing on it at all.
+ *
+ * The instrument is a **slab grid**, not more noise, and that is the whole
+ * argument. `concreteMaterial`'s features are a 26-cell worley pit and a
+ * 40-octave grain — centimetres — and `curtainMaterial`'s docblock above
+ * already records what happens to centimetre features at range: every tile
+ * mips to its own mean and the surface reads as one number again. What a
+ * paved square shows from anywhere is its **joints**: a rectangular rhythm at
+ * roughly a metre, which at any distance you can still see the square from is
+ * several pixels wide.
+ *
+ * - **Slabs at `mpt / 4`**, so the default 4.8 m tile is a 1.2 m flag — real
+ *   paving, and a rhythm rather than a grid of tiles.
+ * - **Per-slab value jitter** at ±7%, because a perfectly even course reads as
+ *   graph paper; and a **half-slab course offset on alternate rows**, because
+ *   an unbroken cross joint is the thing that says "texture" instead of
+ *   "pavement".
+ * - **Joints darker and rougher than the slab**, carried in the normal as a
+ *   groove, so the rhythm survives a sun angle that flattens the albedo.
+ * - Fine grain and a low-frequency wear stain on top, at a third of the
+ *   joint's amplitude — enough that a slab is not a flat swatch close up,
+ *   never enough to compete with the joint at range.
+ *
+ * `vertexColors` is on, like `groundMaterial`: a plaza that is part of a graded
+ * pad carries `gradePad`'s tint in `attributes.color` and this must modulate
+ * it, not replace it.
+ *
+ * @param tint base albedo of the slab stock
+ * @param rough roughness of the slab face
+ * @param mpt world metres per texture tile; the caller sets UVs in metres
+ */
+export function pavingMaterial(tint = 0x8d8779, rough = 0.88, mpt = 4.8) {
+  return memoMat(`paving${tint}${rough}${mpt}`, (mk) => {
+    const n = new Noise(9137);
+    /** Slabs per tile on each axis. */
+    const S = 4;
+    /** Joint half-width as a fraction of a slab. */
+    const J = 0.045;
+    /** Deterministic ±1 per slab, so a course is not a picket fence. */
+    const jitter = (i: number, j: number) => {
+      const s = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453;
+      return (s - Math.floor(s)) * 2 - 1;
+    };
+    /** Height field: 1 on a slab face, 0 in a joint. */
+    const h = (u: number, v: number) => {
+      const row = Math.floor(v * S);
+      // Half-slab offset on alternate courses: no cross joint runs unbroken.
+      const uu = u + (row % 2 === 0 ? 0 : 0.5 / S);
+      const col = Math.floor(uu * S);
+      const fu = uu * S - col, fv = v * S - row;
+      const dx = Math.min(fu, 1 - fu), dz = Math.min(fv, 1 - fv);
+      const joint = THREE.MathUtils.smoothstep(Math.min(dx, dz), 0, J);
+      const grain = n.fbm2(uu * 46, v * 46, 3) * 0.5 + 0.5;
+      return joint * (0.80 + grain * 0.20);
+    };
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
+    const map = bakedTexture(`props/${mk}/map`, 512, (u: number, v: number, c: Texel) => {
+      const row = Math.floor(v * S);
+      const uu = u + (row % 2 === 0 ? 0 : 0.5 / S);
+      const col = Math.floor(uu * S);
+      // Value per slab, and a slow wear stain that ignores the courses --
+      // traffic does not respect masonry.
+      const k = h(u, v) * (1 + jitter(col, row) * 0.07)
+        * (0.90 + 0.16 * (n.fbm2(u * 2.3 + 17, v * 2.3 - 5, 3) * 0.5 + 0.5));
+      c[0] = Math.min(1, base.r * (0.52 + k * 0.62));
+      c[1] = Math.min(1, base.g * (0.52 + k * 0.60));
+      c[2] = Math.min(1, base.b * (0.52 + k * 0.56));
+    }, { repeat: 1 });
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(1 / mpt, 1 / mpt);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 512, h, 1.5);
+    normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+    normalMap.repeat.set(1 / mpt, 1 / mpt);
+    // Dirt collects in a joint, so a joint is rougher than the slab it is
+    // between. This is what keeps the rhythm alive in a specular highlight.
+    const roughnessMap = bakedDataMap(`props/${mk}/rough`, 256, (u: number, v: number) => 0.98 - h(u, v) * 0.24);
+    roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+    roughnessMap.repeat.set(1 / mpt, 1 / mpt);
+    return new THREE.MeshStandardMaterial({
+      color: 0xffffff, map, normalMap, roughnessMap, roughness: rough, metalness: 0,
+      normalScale: new THREE.Vector2(0.8, 0.8), vertexColors: true,
+    });
+  });
+}
+
+/**
  * Curtain wall — the face of a skyscraper, seen from kilometres away.
  *
  * `concreteMaterial` was the wrong instrument for Insomnia and it took two

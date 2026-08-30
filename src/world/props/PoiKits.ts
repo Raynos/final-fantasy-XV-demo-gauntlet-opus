@@ -15,7 +15,7 @@ import { findTarns, type TarnBasin } from '../water/Tarns.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial, rockMaterial,
-  groundMaterial, signTexture, imperialTexture, runeTexture,
+  groundMaterial, pavingMaterial, signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
 import { rockGeometry, KINDS } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
@@ -438,6 +438,29 @@ export const PAD_R: Record<string, number> = {
   dungeon: 11, landmark: 8,
 };
 
+/**
+ * Rewrite a geometry's UVs as **world metres in its own XZ plane**.
+ *
+ * `groundMaterial` and {@link pavingMaterial} tile in metres -- they set
+ * `map.repeat` to `1/mpt` and expect the UV to be a distance. The aprons carry
+ * metre UVs by construction; a `CylinderGeometry` does not. Its cap UVs run
+ * 0..1 across the *diameter*, so a 22 m plaza got a quarter of one tile and
+ * mipped to a single colour, which is exactly what a mapless material looks
+ * like. Applied to the geometry rather than to the material because the
+ * material is memoised and shared: two discs of different radius must not
+ * fight over one `repeat`.
+ *
+ * @param g geometry to rewrite in place
+ * @returns the same geometry, for chaining into a `put`
+ */
+function worldUv(g: THREE.BufferGeometry) {
+  const pos = g.attributes.position, uv = g.attributes.uv;
+  if (!pos || !uv) return g;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
+  uv.needsUpdate = true;
+  return g;
+}
+
 export function poiMaterials() {
   return {
     // Anything bigger than a couple of metres gets a *plain* material.
@@ -472,6 +495,19 @@ export function poiMaterials() {
      */
     ground: groundMaterial(0x796450, 0.96, 4.0, 0),
     gravel: groundMaterial(0x796f5f, 0.95, 3.4, 1),
+    /**
+     * **Laid paving, for the two discs a camera actually dwells on.** A town
+     * square and an imperial landing pad were `concrete` -- a `plain()`, i.e. a
+     * mapless colour -- stretched over a 22 m disc, and lane 19 named it after
+     * looking at its own city captures: *"the one thing dragging every city
+     * frame down is the plaza: a flat, untextured plane in all of them."* It is
+     * NOT a change to `concrete`, which is right where it is used: as a wall
+     * and trim role at building scale, where the `plain()` argument at the top
+     * of this table applies. See {@link pavingMaterial} for why the feature is
+     * a slab joint rather than more noise, and `worldUv` below for the UVs it
+     * needs.
+     */
+    paving: pavingMaterial(0x8d8779, 0.88, 4.8),
     roof: plain(0x4b5058, 0.72, 0.3),
     wall: plain(0xa2957e, 0.82),
     wall2: plain(0x7b7160, 0.84),
@@ -1436,7 +1472,7 @@ export class PoiKits {
       }
     }
     // the square: a paved plaza, market stalls and strung lights
-    put(M.concrete, new THREE.CylinderGeometry(11, 11, 0.35, 22), [0, 0.5, 0]);
+    put(M.paving, worldUv(new THREE.CylinderGeometry(11, 11, 0.35, 22)), [0, 0.5, 0]);
     // Named points on the square, published through `KitResult.anchors` so a
     // city hub can put a counter, a board and a person on real pavement. The
     // disc is 0.35 thick and sits at y 0.5, so its walkable top is PLAZA_Y.
@@ -1978,7 +2014,7 @@ export class PoiKits {
     // the gravel, with the approach chevrons and the edge lights that make a
     // helipad legible from the air.
     put(M.magitek, new THREE.CylinderGeometry(11, 11.3, 0.55, 24), [0, 0.6, 0]);
-    put(M.concrete, new THREE.CylinderGeometry(11.5, 11.8, 0.34, 24), [0, 0.3, 0]);
+    put(M.paving, worldUv(new THREE.CylinderGeometry(11.5, 11.8, 0.34, 24)), [0, 0.3, 0]);
     put(M.red, new THREE.TorusGeometry(8.4, 0.28, 5, 26).rotateX(Math.PI / 2), [0, 0.88, 0]);
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
