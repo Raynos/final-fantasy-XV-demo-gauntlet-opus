@@ -435,8 +435,10 @@ p99.5 does not move or the crown goes flatter than it already is. Noctis'
 `p50 Y 0` is not expected to move — that is the self-occlusion residue and no
 exponent fixes it.
 
-Also un-run: `probe.mts probes/nanscan.mts` and one `--cold` capture after the
-shader edits (both queued, neither returned). The shader change is a numeric
+Both now RUN and both green: `nanscan` reports **0 of 142 shots carry NaN**,
+`hits: []`, and the `--cold` `hero_portrait` came back with zero page errors.
+(The `WebGLTextures: 16 texture units` warning in the nanscan log is
+pre-existing and not from this lane.) The shader change is a numeric
 retune of an existing block plus one `<alphatest_fragment>` replacement, so a
 link failure is unlikely, but the discipline says prove it.
 
