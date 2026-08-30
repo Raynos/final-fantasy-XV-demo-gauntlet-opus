@@ -60,3 +60,42 @@ black. The bottom fifth of the frame is still a murky dark mass.
 
 - The remaining foreground crush is cloud shadow (7 → 28 with it off). Task 21.
 - Not yet done: 20 (mid-frequency geology), 22 (hue range).
+
+## 22 — hue range: instrument built, one lever landed, one measured negative
+
+`huestat.mts` (commit `7f1b120`) measures hue range on a **sky-matched slice**
+(bottom 45 %), which is what `imagestats.mts:418`'s own caveat demands. Columns:
+`arc90` (narrowest contiguous hue arc holding 90 % of the slice's chroma mass),
+`dom`, `2nd` (busiest window ≥45° off `dom`), mean chroma.
+
+| slice | arc90 | dom | 2nd |
+|---|---|---|---|
+| `FFXV-field` plates, median (n=10) | **140°** | 67.3 % @ 60° olive | 18.0 % @ 195° blue |
+| ours, `zone_three_valleys` | **15-20°** | 97.6 % @ 25° ochre | 0.6 % |
+| ours, `zone_vannath` | 55° | 78.8 % @ 30° | 6.2 % |
+| ours, `zone_longwythe` | 15° | 98.3 % @ 30° | 0.4 % |
+
+**The cause is upstream of the tell.** All six layer recipes' mean linear
+albedos sit between hue **21° and 36°** — sand 26, dirt 24, gravel 29, rock 21,
+grass 31, road 36. A per-zone multiplier in `Biome.ts` scales a hue; it cannot
+create a second one.
+
+**Measured negative, recorded:** pushing `three_valleys`'s `rock` to a cool
+grey-blue `[1.02, 1.05, 1.08]` in `Biome.ts` moved the slice by nothing
+(arc90 20° → 15°, dom 97.1 → 97.6). Its visible ground is not the rock layer.
+`surfaceAt()` at the shot target arrives as authored ([1.087, 0.966, 0.821]),
+so this is not blend dilution — the lever simply is not on that surface.
+
+**Landed:** `444a988` — gravel's cool pebble half given real chroma (0.023 →
+0.078 at hue 220), scrub rotated 46-47° → 52-55° khaki, both at matched luma,
+`LAYER_AVG` re-derived with `layeravg.mts`.
+
+**LANDMINE found, and it cost a measurement.** `--dirty` did NOT pick up a
+`Layers.ts` recipe edit. The texel bake is content-hashed against `Layers.ts`
+but `vite-plugin-bake` only re-checks that hash in `configResolved`, i.e. at
+**server start**, and its `handleHotUpdate` path is dead because live reload is
+off. The daemon keeps one long-lived `dirty:` server, so a recipe edit made
+after that server started is served from the stale cache with no symptom. Worse,
+the frame that looked like a big win from it was another lane's in-flight edit
+arriving through the same shared `dirty:` tree. **A/B a recipe by sha, never by
+`--dirty`.**
