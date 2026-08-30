@@ -569,3 +569,82 @@ Three causes, one idea, landed together:
 
 Plus a 45% mix toward a cool sky hue, per §12.3's "hair shadows are blue-black
 where skin in the same frame is warm".
+
+### `9672122` measured — right mechanism, a third of the way (VERIFIED, by number and by eye)
+
+`l1-fc6` -> `l1-fc7`, same rect, and on Prompto the same framing (so this one is
+a clean A/B; see the landmine above for why Noctis' is not):
+
+```
+                    p5      p50    p99.5     R-B@p50
+  prompto  before    1       62      203       +26
+  prompto  after     5       69      204       +25
+  plate             22       81      176      cool
+  noctis   before    0        1      101(*)     +1
+  noctis   after     0       15      129(*)     +2
+  plate             20       37      140      cool
+```
+
+Every number moved the right way and none moved the wrong way. The whole step
+cost Prompto **one Y at p99.5**, which is the important part: the fill is
+additive and small beside the specular, so it buys the dark end nearly free.
+
+**Verified by eye and it is not subtle.** The same 3x crop of Noctis' crown,
+same framing with mountains behind in both (`l1-fc5/noc_crown.png` vs
+`l1-fc8/noc_crown.png`): before, the shadow half of the groom is dead black with
+no information in it and four chalk-white streaks laid on top; after, the locks
+read across the whole crown and the mass has form. The full 0.55 m frame goes
+from "black helmet" to a groom with a fringe, side locks and a value gradient.
+
+`6c5d68e` takes the coefficient 0.11 -> 0.30 on that arithmetic. **Result
+pending when this was written — read `tmp/shots/l1-fc9` and the rect above.**
+If a median overshoots, the coefficient is the only thing to touch.
+
+**Still open on hair, in order:**
+
+1. **The crown band reads as drybrush paint, not sheen.** Broad flat grey
+   patches with hard edges that follow whole card silhouettes, because `a1` is
+   a function of the macro normal and the per-lock `jit` is +/-60% — adjacent
+   cards get very different values and the band never becomes continuous across
+   the head. §12.3 wants "high-intensity, low-saturation and thin".
+2. **The tint is still warm.** R-B +25 at p50 on Prompto, +2 on Noctis; §12.3's
+   plates are `B > G > R` at p10 AND p50 on every one of them, and call two
+   different shadow hues on one head (warm skin, cool hair) the thing to
+   reproduce. The fill is mixed only 45% toward cool and is a small addition on
+   top of a large warm diffuse. The lever with real authority is the authored
+   `Cast.ts` hair colour, which is **lane 2's file** and needs a named
+   cross-lane one-liner.
+3. **`jit` is not per-lock any more.** The comment at the top of the hair block
+   is explicit that jittering the shift per *fragment* replaces the band with
+   noise, and it derives `jit` from `vColor` luminance — but `emitCard` already
+   multiplies vColor by `crest` (across the ribbon) and `rootDark` (along it),
+   so luminance varies by ~15% per fragment and `fract(luminance * 137.31)` is
+   many cycles of that. The jitter it documents is not the jitter it computes.
+
+### `b9375a2` — the eye had no pupil and no catchlight (VERIFIED by eye)
+
+Read at 7x on the 0.55 m frame, which is the only range this is visible at.
+`tmp/shots/l1-fc6/noc_eye.png` (before) against `l1-fc8/noc_eye.png` (after).
+
+Before: a flat uniform navy disc with a hard edge, a bright sclera beside it,
+and no white anywhere on the eye. After: a saturated blue iris with **a clearly
+dark pupil in its centre**, visible radial fibre, and a small pale catchlight at
+12 o'clock on the limbus.
+
+Three arithmetic causes, none of them sculpt:
+
+- `radial = 0.18 + 0.82 * q^1.45` put the inner iris at 0.18 of the iris colour
+  against a pupil at 0.013-0.033 — within a stop of each other on a mid blue, so
+  the pupil was not in the frame at all. Now `0.34 + 0.66 * q^1.15`.
+- The limbal ring ran `mix(1.0, 0.04, smoothstep(0.78, 0.96))`: the outer FIFTH
+  of the iris crushed to 4%. Dark centre plus dark rim leaves a bright annulus
+  too thin to survive any real viewing distance, and the disc averages to one
+  navy. Now `mix(1.0, 0.16, smoothstep(0.87, 0.99))`.
+- The sky catchlight was aimed under the lid. `uSkyDirView` is straight up, so
+  `normalize(uSkyDirView * 0.85 + eV)` sits ~40 degrees above the view axis and
+  reflects off the part of the globe the upper lid covers. 0.48 puts it ~25
+  degrees up, inside the fissure.
+
+**The grey-blue crescent below the lower lid margin is unchanged** — that is
+still the socket/skull residue the previous respawn measured and filed, and it
+is still a sculpt job.
