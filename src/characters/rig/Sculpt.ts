@@ -509,12 +509,40 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
   const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor | Uint8ArrayConstructor][] = [
     ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
     ['color', 3, Float32Array], ['aEmissive', 3, Float32Array], ['aMat', 2, Float32Array],
-    // Uint8-normalised to match `Geo.ts`'s generator (plan task 38). Nothing
-    // in this file or in `CreatureGeo.ts` writes skin weights today, so the
-    // row is unreachable and the guard above skips it — it is kept in step so
-    // that the day something does, the two builders cannot disagree about the
-    // format and hand `mergeGeometries` a null.
-    ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Uint8Array],
+    /**
+     * **`skinWeight` is `Float32Array`, and it must stay that way while
+     * `RigBuilder` feeds this function.**
+     *
+     * This row was `Uint8Array` for four hours on 2026-08-31, under a comment
+     * saying "nothing in this file or in `CreatureGeo.ts` writes skin weights
+     * today, so the row is unreachable and the guard above skips it". The
+     * guard is `if (!geos[0].attributes[name]) continue`, and the premise is
+     * false: `RigBuilder.attach`, `.attachBlend` and `.attachChain` all write
+     * `skinWeight` as a `Float32BufferAttribute`, and `Rig.build` calls
+     * straight into here. The row is therefore reached by **every creature in
+     * the bestiary**, and `arr.set(float32Src, off)` into a `Uint8Array`
+     * truncates each weight toward zero.
+     *
+     * The truncation is not uniformly destructive, and that is exactly what
+     * made it invisible: a rigid `attach` writes a weight of exactly 1.0 and
+     * survives, while a blended `attachChain` writes 0.98/0.02 and both slots
+     * become 0. A vertex whose weights sum to zero skins to the mesh origin,
+     * so a creature keeps every rigidly-bound part and everything
+     * joint-blended collapses into a fan of triangles converging on its own
+     * feet. Nothing errors, and the parts that still render look correct.
+     *
+     * Measured before the revert (`src/tools/probes/skinweightblast.mts`):
+     * **23 of 23 species affected, 16,234 of 276,524 vertices** skinning to
+     * the origin -- anak 27.9%, coeurl 24.3%, dualhorn 22.3%, sabertusk 17.9%,
+     * and the collapse is worst on exactly the animals whose limbs are most
+     * blended.
+     *
+     * If a Uint8 skin-weight format is wanted for memory it needs the weights
+     * *scaled* by 255 on the way in and `new BufferAttribute(arr, size, true)`
+     * on the way out; an unnormalised Uint8 attribute reads 0..255 raw in the
+     * shader and is just as wrong in the other direction.
+     */
+    ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],
   ];
   for (const [name, size, Type] of specs) {
     if (!geos[0].attributes[name]) continue;
