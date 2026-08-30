@@ -212,6 +212,15 @@ not have the confound.
   blue-grey rain with a readable ridge, overcast a grey deck with relief and a
   bright break at the right.
 
+## One more measured near-null
+
+`uBaseShade` (clear preset, 0.78) is the sky-occlusion term that sculpts the
+underside, and it looks like a pure ratio lever because it darkens the base and
+leaves the crown alone. At 0.92 it moves `bStops` 2.87 → 2.98 on `vista_noon`
+and 2.46 → 2.48 on `zone_vannath`, with `cStops` and `bP50` unchanged. Two
+captures of the same shot differ by ~1.5/255 (`src/tools/README.md`), so this
+is at the edge of the floor. Not landed. `tmp/shots/l4-sh92`.
+
 ## The defect this lane did NOT cause and did not fix
 
 **Horizontal comb teeth on mid-distance cloud**, plainly visible in
