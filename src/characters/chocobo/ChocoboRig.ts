@@ -16,11 +16,11 @@ import { tube, blob, spike, loft, place, tint, glow, bladeCross, circleCross } f
  * Four things separate a chocobo from a yellow ostrich-shaped mannequin, and
  * all four are geometry here rather than a texture:
  *
- * - **A feathered silhouette.** The barrel is not a smooth egg: three rings of
+ * - **A feathered silhouette.** The barrel is not a smooth egg: five rings of
  *   contour feathers are shingled over it, each rolled to lie tangent to the
  *   surface it sits on, so the outline is serrated the way a bird's is and the
  *   light breaks along a hundred overlapping edges instead of one sphere.
- * - **The plume and the crest.** A seven-feather tail fan and the three
+ * - **The plume and the crest.** A nine-feather tail fan and the seven
  *   forward-swept head plumes are the two shapes that read as *chocobo* at
  *   200 m, before any colour does. They are on their own bone chains, so they
  *   trail and bob rather than being welded to the back.
@@ -103,7 +103,7 @@ const FEATHER = 0.90, KERATIN = 0.34, LEATHER = 0.62, CLOTH = 0.86, WET = 0.12;
  *
  * The width profile is the part that matters. A feather is not a leaf: it is
  * narrow at the calamus, widest about a third of the way up, and tapers to a
- * round tip — and the floor of `0.12` on the vane exists because a section of
+ * round tip — and the floor of `0.10` on the vane exists because a section of
  * width exactly zero produces a degenerate ring whose normals come out NaN and
  * whose triangles the GPU discards.
  *
@@ -116,7 +116,12 @@ function feather(len: number, w: number, bend = 0.2, twist = 0, seg = 5) {
   const secs = [];
   for (let i = 0; i < seg; i++) {
     const t = i / (seg - 1);
-    const vane = 0.12 + Math.sin(Math.pow(t, 0.72) * Math.PI * 0.94) * 0.88;
+    // A ruffle on the width, not just a taper. A vane that is one clean lens
+    // reads as a petal; real plumage has a slightly ragged edge, and at this
+    // scale two cycles of it is the difference between "feather" and
+    // "artichoke leaf" -- which is what the first pass photographed as.
+    const ruffle = 1 + Math.sin(t * Math.PI * 3.1) * 0.10;
+    const vane = (0.10 + Math.sin(Math.pow(t, 0.72) * Math.PI * 0.94) * 0.86) * ruffle;
     secs.push({
       y: t * len,
       sx: w * vane,
@@ -168,8 +173,14 @@ function scutes(y0: number, y1: number, r: number, n: number) {
 
 /** Bind position table, so the pose code and the saddle anchor agree with the art. */
 export const CHOCOBO_BONES = {
-  /** Where a rider's hips sit, in the bird's own frame. */
-  seat: P(0, 1.62, -0.02),
+  /**
+   * Where a rider's hips sit, in the bird's own frame.
+   *
+   * On top of the seat pad (y 1.82), not inside the barrel. The first pass put
+   * it at 1.62 — below the barrel's own crown at ~1.74 — which would have
+   * seated Noctis inside the bird with his legs coming out of its ribs.
+   */
+  seat: P(0, 1.86, -0.02),
   /** Top of the head in bind pose — the ridable height the camera frames on. */
   headTop: 2.34,
 };
@@ -231,7 +242,7 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   mat(belly, FEATHER, 0);
   rig.attachChain(belly, ['hips', 'spine', 'chest'], 1.0);
 
-  const breast = place(blob(0.25, 0.29, 0.24, 14, 10), { pos: [0, 1.30, 0.52] });
+  const breast = place(blob(0.215, 0.255, 0.215, 14, 10), { pos: [0, 1.29, 0.50] });
   tint(breast, col.down, 0.03);
   mat(breast, FEATHER, 0);
   rig.attachBlend(breast, 'chest', 'neck1', 1.0);
@@ -241,10 +252,14 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
    * station is read off the body loft above so the feathers sit ON the
    * surface rather than hovering over it or sinking into it.
    */
+  /** Radians either side of vertical left bare for the tack to sit on. */
+  const SADDLE_PATCH = 0.85;
   const stations = [
-    { z: 0.30, i: 3, len: 0.26, w: 0.075, rows: [0.55, 1.05, 1.55, 2.05] },
-    { z: 0.02, i: 2, len: 0.32, w: 0.090, rows: [0.30, 0.80, 1.30, 1.80, 2.30] },
-    { z: -0.28, i: 1, len: 0.34, w: 0.090, rows: [0.35, 0.85, 1.35, 1.85, 2.35] },
+    { z: 0.32, i: 3, len: 0.24, w: 0.042, rows: [0.28, 0.62, 0.96, 1.30, 1.64, 1.98, 2.32] },
+    { z: 0.16, i: 3, len: 0.27, w: 0.045, rows: [0.45, 0.79, 1.13, 1.47, 1.81, 2.15] },
+    { z: 0.00, i: 2, len: 0.30, w: 0.048, rows: [0.26, 0.60, 0.94, 1.28, 1.62, 1.96, 2.30] },
+    { z: -0.16, i: 2, len: 0.31, w: 0.048, rows: [0.42, 0.76, 1.10, 1.44, 1.78, 2.12] },
+    { z: -0.32, i: 1, len: 0.32, w: 0.046, rows: [0.30, 0.64, 0.98, 1.32, 1.66, 2.00, 2.34] },
   ];
   for (const st of stations) {
     const [rx, ry] = bodyR[st.i];
@@ -254,6 +269,13 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
         // the top-of-the-back feather is shared between the two sides; skip the
         // duplicate rather than z-fighting two coincident vanes
         if (s > 0 && phi0 < 0.36) continue;
+        // **No plumage under the saddle.** The topline within `SADDLE_PATCH` of
+        // vertical is bare barrel, because the blanket covers it — and because
+        // the first pass shingled straight over the tack and buried it: the
+        // saddle, the blanket and both stirrup leathers photographed as dark
+        // slivers between feathers. A bird nobody can see a saddle on is not a
+        // mount, and the tack is most of what says this one is ridable.
+        if (phi0 < SADDLE_PATCH) continue;
         const px = -Math.sin(phi) * rx * 0.90;
         const py = 1.345 + Math.cos(phi) * ry * 0.90;
         const g = feather(st.len, st.w, 0.30, 0);
@@ -274,9 +296,9 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   rig.attachChain(neck, ['chest', 'neck1', 'neck2', 'neck3', 'head'], 1.0);
 
   // the ruff where the neck meets the shoulders — a skirt of down pointing back
-  for (let i = 0; i < 11; i++) {
-    const a = -Math.PI * 0.92 + (i / 10) * Math.PI * 1.84;
-    const g = feather(0.20, 0.062, 0.45, 0);
+  for (let i = 0; i < 17; i++) {
+    const a = -Math.PI * 0.94 + (i / 16) * Math.PI * 1.88;
+    const g = feather(0.21, 0.036, 0.45, 0.12);
     tint(g, mixc(col.down, col.plume, 0.45).getHex(), 0.05);
     mat(g, FEATHER, 0);
     shingle(g, a, 0.95, -Math.sin(a) * 0.185, 1.50 + Math.cos(a) * 0.185, 0.50);
@@ -358,14 +380,16 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
    * that reads as "chocobo" at 200 m, before the colour does.
    */
   const crest: Array<[number, number, number, number, number, string]> = [
-    [0.00, 0.42, 0.075, -0.55, 0.00, 'crest1'],
-    [-0.055, 0.36, 0.062, -0.50, -0.22, 'crest1'],
-    [0.055, 0.36, 0.062, -0.50, 0.22, 'crest1'],
-    [-0.095, 0.24, 0.050, -0.40, -0.50, 'head'],
-    [0.095, 0.24, 0.050, -0.40, 0.50, 'head'],
+    [0.000, 0.46, 0.034, -0.62, 0.00, 'crest1'],
+    [-0.032, 0.42, 0.031, -0.58, -0.16, 'crest1'],
+    [0.032, 0.42, 0.031, -0.58, 0.16, 'crest1'],
+    [-0.062, 0.35, 0.028, -0.52, -0.34, 'crest1'],
+    [0.062, 0.35, 0.028, -0.52, 0.34, 'crest1'],
+    [-0.090, 0.26, 0.024, -0.42, -0.56, 'head'],
+    [0.090, 0.26, 0.024, -0.42, 0.56, 'head'],
   ];
   for (const [cx, len, w, bend, roll, bone] of crest) {
-    const g = feather(len, w, bend, 0.25);
+    const g = feather(len, w, bend, 0.35);
     tint(g, mixc(col.plume, col.down, 0.30).getHex(), 0.05);
     mat(g, FEATHER, 0);
     place(g, { pos: [cx, 2.235, 0.585], quat: new THREE.Quaternion()
@@ -389,7 +413,7 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
 
     for (let i = 0; i < 5; i++) {
       const t = i / 4;
-      const g = feather(0.38 + t * 0.20, 0.055 + t * 0.012, 0.16, 0.10 * s);
+      const g = feather(0.38 + t * 0.20, 0.038 + t * 0.008, 0.16, 0.10 * s);
       tint(g, mixc(col.plume, col.plumeDark, 0.25 + t * 0.6).getHex(), 0.04);
       mat(g, FEATHER, 0);
       // splayed slightly in the flank plane, all pointing at the tail
@@ -409,16 +433,20 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   mat(tailBase, FEATHER, 0);
   rig.attachBlend(tailBase, 'hips', 'tail1', 1.0);
 
-  for (let i = 0; i < 7; i++) {
-    const t = (i / 6) * 2 - 1;                       // -1 .. 1 across the fan
-    const len = 0.82 - Math.abs(t) * 0.24;
-    const g = feather(len, 0.085 - Math.abs(t) * 0.018, -0.10, 0.18 * Math.sign(t || 1));
+  for (let i = 0; i < 9; i++) {
+    const t = (i / 8) * 2 - 1;                       // -1 .. 1 across the fan
+    const len = 0.90 - Math.abs(t) * 0.26;
+    // Wider vanes than the contour feathers, on purpose. Narrowing these to
+    // match the body plumage turned the plume into a broom — a chocobo's tail
+    // is a fan of BROAD rectrices, and it is the silhouette that carries the
+    // animal from behind and at distance.
+    const g = feather(len, 0.105 - Math.abs(t) * 0.022, -0.14, 0.22 * Math.sign(t || 1));
     tint(g, mixc(col.plume, col.plumeDark, 0.15 + Math.abs(t) * 0.35).getHex(), 0.05);
     mat(g, FEATHER, 0);
     place(g, {
-      pos: [t * 0.075, 1.38, -0.54],
-      quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -t * 0.42))
-        .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.05, 0, 0))),
+      pos: [t * 0.070, 1.40, -0.56],
+      quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -t * 0.66))
+        .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.70, 0, 0))),
     });
     rig.attachChain(g, ['tail1', 'tail2', 'tail3'], 1.0);
   }
@@ -497,41 +525,41 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
    * into transport: the player reads the silhouette as ridable before any
    * prompt says it is.
    */
-  const TAN = 0x6b4a2e, TAN_DARK = 0x3f2c1a, BRASS = 0xa9822f, RUG = 0x2f5f7a, RUG_TRIM = 0xd9c07a;
+  const TAN = 0x6b4a2e, TAN_DARK = 0x3f2c1a, BRASS = 0xa9822f, RUG = 0x2a4d63, RUG_TRIM = 0xd9c07a;
 
   const blanket = tube([
-    P(0, 1.52, -0.40), P(0, 1.58, -0.12), P(0, 1.58, 0.16), P(0, 1.52, 0.40),
-  ], [[0.34, 0.10], [0.40, 0.10], [0.40, 0.10], [0.33, 0.09]], { radialSeg: 12 });
+    P(0, 1.665, -0.36), P(0, 1.725, -0.10), P(0, 1.725, 0.14), P(0, 1.665, 0.36),
+  ], [[0.30, 0.085], [0.355, 0.085], [0.355, 0.085], [0.29, 0.075]], { radialSeg: 12 });
   tint(blanket, RUG, 0.03);
   mat(blanket, CLOTH, 0);
   rig.attachChain(blanket, ['hips', 'spine', 'chest'], 1.0);
 
   const trim = tube([
-    P(0, 1.50, -0.42), P(0, 1.56, -0.14), P(0, 1.56, 0.14), P(0, 1.50, 0.40),
-  ], [[0.355, 0.055], [0.415, 0.055], [0.415, 0.055], [0.345, 0.05]], { radialSeg: 12 });
+    P(0, 1.645, -0.38), P(0, 1.705, -0.12), P(0, 1.705, 0.12), P(0, 1.645, 0.36),
+  ], [[0.315, 0.048], [0.370, 0.048], [0.370, 0.048], [0.305, 0.044]], { radialSeg: 12 });
   tint(trim, RUG_TRIM, 0.03);
   mat(trim, CLOTH, 0);
   rig.attachChain(trim, ['hips', 'spine', 'chest'], 1.0);
 
   const seat = tube([
-    P(0, 1.60, -0.26), P(0, 1.635, -0.08), P(0, 1.635, 0.10), P(0, 1.60, 0.28),
+    P(0, 1.785, -0.26), P(0, 1.820, -0.08), P(0, 1.820, 0.10), P(0, 1.785, 0.28),
   ], [[0.20, 0.075], [0.27, 0.085], [0.27, 0.085], [0.19, 0.070]], { radialSeg: 12 });
   tint(seat, TAN, 0.03);
   mat(seat, LEATHER, 0);
   rig.attachChain(seat, ['spine', 'chest'], 1.0);
 
   // pommel forward, cantle behind — a seat you could not slide out of
-  const pommel = place(blob(0.075, 0.105, 0.055, 10, 8), { pos: [0, 1.665, 0.29], rot: [-0.35, 0, 0] });
+  const pommel = place(blob(0.075, 0.105, 0.055, 10, 8), { pos: [0, 1.850, 0.29], rot: [-0.35, 0, 0] });
   tint(pommel, TAN_DARK, 0.02);
   mat(pommel, LEATHER, 0);
   rig.attach(pommel, 'chest');
 
-  const cantle = place(blob(0.135, 0.115, 0.055, 10, 8), { pos: [0, 1.675, -0.28], rot: [0.42, 0, 0] });
+  const cantle = place(blob(0.135, 0.115, 0.055, 10, 8), { pos: [0, 1.860, -0.28], rot: [0.42, 0, 0] });
   tint(cantle, TAN_DARK, 0.02);
   mat(cantle, LEATHER, 0);
   rig.attach(cantle, 'spine');
 
-  const horn = place(blob(0.030, 0.048, 0.030, 8, 6), { pos: [0, 1.735, 0.275] });
+  const horn = place(blob(0.030, 0.048, 0.030, 8, 6), { pos: [0, 1.920, 0.275] });
   tint(horn, BRASS);
   mat(horn, 0.30, 0.85);
   rig.attach(horn, 'chest');
@@ -553,14 +581,14 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
 
     // stirrup leather and the iron on the end of it
     const strap = tube([
-      P(0.245 * s, 1.60, 0.06), P(0.315 * s, 1.36, 0.05), P(0.335 * s, 1.16, 0.05),
+      P(0.245 * s, 1.785, 0.06), P(0.330 * s, 1.42, 0.05), P(0.350 * s, 1.16, 0.05),
     ], [[0.022, 0.011], [0.022, 0.011], [0.020, 0.010]], { radialSeg: 6 });
     tint(strap, TAN_DARK, 0.02);
     mat(strap, LEATHER, 0);
     rig.attachBlend(strap, 'spine', 'chest', 1.0);
 
     const iron = new THREE.TorusGeometry(0.065, 0.014, 5, 14);
-    place(iron, { pos: [0.335 * s, 1.09, 0.05], rot: [0, Math.PI / 2, 0] });
+    place(iron, { pos: [0.350 * s, 1.09, 0.05], rot: [0, Math.PI / 2, 0] });
     tint(iron, BRASS);
     mat(iron, 0.34, 0.85);
     rig.attach(iron, 'spine');
@@ -577,7 +605,16 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   }
   const noseband = new THREE.TorusGeometry(1, 0.013, 5, 16);
   noseband.rotateX(Math.PI / 2);
-  noseband.scale(0.098, 0.082, 1);
+  /**
+   * **The ring radius is in X and Z here, and the TUBE is in Y.**
+   * `TorusGeometry` builds its ring in XY with the tube along Z; `rotateX` has
+   * just swapped Y and Z, so the two axes to squash into an oval are X and Z
+   * and the one that must stay at 1 is Y. Scaling `(0.098, 0.082, 1)` instead
+   * left the ring radius at 1.0 in Z and hung a **two-metre black ellipse**
+   * off the bird's beak, which photographed as a slab lying on the ground
+   * beside it in two capture rounds before anyone looked at what it was.
+   */
+  noseband.scale(0.098, 1, 0.082);
   place(noseband, { pos: [0, 2.108, 0.775], rot: [0.18, 0, 0] });
   tint(noseband, TAN_DARK, 0.02);
   mat(noseband, LEATHER, 0);
@@ -586,7 +623,7 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   for (const s of [-1, 1]) {
     const rein = tube([
       P(0.095 * s, 2.100, 0.770), P(0.140 * s, 1.980, 0.660), P(0.150 * s, 1.830, 0.520),
-      P(0.130 * s, 1.735, 0.370), P(0.055 * s, 1.700, 0.290),
+      P(0.130 * s, 1.860, 0.370), P(0.055 * s, 1.840, 0.290),
     ], [[0.011, 0.007], [0.011, 0.007], [0.011, 0.007], [0.011, 0.007], [0.010, 0.006]], { radialSeg: 6 });
     tint(rein, mixc(TAN_DARK, 0x000000, 0.2).getHex(), 0.02);
     mat(rein, LEATHER, 0);

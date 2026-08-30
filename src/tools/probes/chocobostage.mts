@@ -59,13 +59,17 @@ if (mode === 'ride' || mode === 'gallop') {
   out.push(`mount: ${cb.mount()}`);
   step(8);
   if (mode === 'gallop') {
-    // drive it forward at full tilt so the gait is photographed at speed
+    // Drive it forward at full tilt so the gait is photographed at speed.
+    // `Input.update` writes `this.move.set(...)` at the top of every
+    // `Game.frame`, so replacing the vector wholesale throws and setting it
+    // before the frame is overwritten by it. Wrap `update` instead.
     const inp = g.input;
-    const realMove = inp.move;
-    inp.move = { x: 0, y: 1 };
-    for (let i = 0; i < 150; i++) step();
-    out.push(`speed ${cb.body ? cb.body.speed.toFixed(2) : '?'} m/s after 2.5 s`);
-    inp.move = realMove;
+    const realUpdate = inp.update.bind(inp);
+    inp.update = () => { realUpdate(); inp.move.set(0, 1); };
+    for (let i = 0; i < 200; i++) step();
+    out.push(`speed ${cb.body ? cb.body.speed.toFixed(2) : '?'} m/s after 3.3 s`);
+    out.push(`stamina ${cb.body ? cb.body.stamina.toFixed(2) : '?'}`);
+    inp.update = realUpdate;
     step(2);
   }
 } else {
@@ -83,7 +87,7 @@ out.push(`bird root (${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}), h
 const views = [
   { name: 'side', bearing: Math.PI * 0.5, dist: 1.55, eye: 0.60, aim: 0.52, fov: 34 },
   { name: 'front34', bearing: Math.PI * 0.18, dist: 1.45, eye: 0.66, aim: 0.54, fov: 34 },
-  { name: 'head', bearing: Math.PI * 0.26, dist: 0.62, eye: 1.02, aim: 0.94, fov: 30 },
+  { name: 'head', bearing: Math.PI * 0.26, dist: 0.62, eye: 1.00, aim: 0.92, fov: 30, fwd: 0.60 },
   { name: 'feet', bearing: Math.PI * 0.42, dist: 0.80, eye: 0.22, aim: 0.16, fov: 32 },
   { name: 'far', bearing: Math.PI * 0.34, dist: 3.4, eye: 0.66, aim: 0.50, fov: 30 },
   { name: 'rear34', bearing: Math.PI * 0.80, dist: 1.55, eye: 0.64, aim: 0.52, fov: 34 },
@@ -96,7 +100,12 @@ for (const v of views) {
   const cx = p.x + Math.sin(a) * d;
   const cz = p.z + Math.cos(a) * d;
   const cy = Math.max(p.y + v.eye * h, terr.heightAt(cx, cz) + 0.30);
-  rig.setShot({ pos: [cx, cy, cz], target: [p.x, p.y + v.aim * h, p.z], fov: v.fov });
+  // The head sits 0.62 m FORWARD of the root, so aiming at the root's own xz
+  // at head height points the lens at the shoulder -- which is what the first
+  // `head` framing photographed.
+  const fx = p.x + Math.sin(bird.heading) * (v.fwd || 0);
+  const fz = p.z + Math.cos(bird.heading) * (v.fwd || 0);
+  rig.setShot({ pos: [cx, cy, cz], target: [fx, p.y + v.aim * h, fz], fov: v.fov });
   step(3);
   await window.__shot(`${mode}-${v.name}`);
 }
