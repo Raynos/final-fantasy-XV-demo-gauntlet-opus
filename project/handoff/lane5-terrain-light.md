@@ -270,3 +270,40 @@ coordinate. That keeps every offset bug catchable — an offset moves p99 and th
 mean together — while not failing on one triangle over a gully.
 `driftcheck --build 7da60d5` is still the check on whether 0.520 predates the
 wave, and it is still queued.
+
+### CORRECTION — the baseline PASSES, so it DID break tonight
+
+`driftcheck --build 7da60d5` came back **PASS (tolerance 0.05 m drift, 0.45 m
+vs heightAt)**. My "the 0.520 predates the wave" hypothesis is **wrong** and is
+struck. (I truncated my own capture with `tail -14` and lost the baseline's
+`worst` value; re-submitted with a grep that keeps it.)
+
+**What survives the correction, and it is the useful half.** The byte-comparison
+still holds: `FIELD_GLSL`, `VERT_PARS` and `VERT_BEGIN` are identical to the
+baseline, `Field.ts` / `Terrain.ts` / `Wear.ts` / `Clipmap.ts` were touched by
+nobody, and `heightcheck` reads 0.000. So the shader arithmetic and the field
+function are not the carrier. Combined with the distribution — **mean −0.001 m,
+p99 0.229 m, one texel in 36 864 at −0.520, sign always negative** — there is
+exactly one mechanism left that fits every one of those facts at once:
+
+> Something **sharpened the ground content** near (−39.8, −68.2) without
+> breaking `tf_height() == heightAt()`. A steeper feature raises the sag of the
+> 1.5 m tessellation chord through a field both sides still agree on perfectly.
+> `heightcheck` cannot see it by construction; `driftcheck` can, because it
+> renders triangles.
+
+That is why the mean did not move and only the worst texel did. **The suspects
+are the two commits that stamp the heightfield through `Wear.gradePad`:**
+
+- `ca8929e` — *PoiKits: publish named kit anchors, and give `_town` the square*
+- `0fb3087` — *Props: pack the 115 POI sites that stream in during play*
+
+and the mechanism to look at first is `gradePad`'s **cliff branch**, which
+LANDMINES already records as building "a kerb and then a retaining wall straight
+down" — a vertical step is the maximum-chord-sag shape there is, and
+(−39.8, −68.2) is ~80 m from spawn, well inside POI seating range. Not lane 5's
+files; handed to the coordinator with those two shas named.
+
+The p99-not-max recommendation above still stands on its own merits, but it is
+now a **second** point and not the diagnosis: something real moved tonight and
+should be found before the gate is reshaped.
