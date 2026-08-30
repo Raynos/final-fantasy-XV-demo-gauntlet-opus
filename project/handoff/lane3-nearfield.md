@@ -216,20 +216,25 @@ last-half-hour change.
 - **Task 14 (midground) not started** — it is a refuted claim in the plan and
   only acts if a later judged round ranks it.
 
-## Done / left
+## Status
 
-- [x] Baseline measured (framedepth, vegcensus, draw counts) — verified
-- [x] Star-tuft carrier named by ablation — verified
-- [ ] Reframe pass in Shots.ts + noise-floor recalibration → **release Shots.ts**
-- [ ] Clump-ring near clamp + blade-ring near-field density
-- [ ] Occluders per judged vista
-
-## Next step
-
-Derive candidate framings with `framecam.mts` (never hand-write coordinates),
-targeting bottom-of-frame 20–34 m on the five vistas, and a clean vista_dawn.
+Tasks 11-13 are as finished as this window allows; 14 was refuted in the plan and
+is untouched. The sward-proxy lever named above as "unexamined" HAS since been
+measured and is a negative — `--hide grass_sward` on `hero_full` is 0.188/255
+over 0.80% of pixels, under the 2.25 floor. Everything left is in
+`project/TASKS.md` under "Lane 3 residue". The item a fresh agent should pick up
+first is the near 0-12 m vegetation LOD: it is the only place where this lane
+made one frame worse in exchange for making another right, and it wants a judged
+round or a geometry change, not another density tweak.
 
 ## Files
 
-Owned: `src/game/Shots.ts`, `src/world/veg/**`.
-Touched so far: none (measurement only).
+Owned: `src/game/Shots.ts` (RELEASED at `e5db679`), `src/world/veg/**`.
+Touched: `src/world/veg/GrassField.ts`, `src/game/Shots.ts`,
+`project/noise-floors.json`, `project/LANDMINES.md`, `project/TASKS.md`,
+`src/tools/probes/nearframe.mts` (new).
+
+Commits: `a905fcd` measurements · `03089ba` ring-test sign · `e5db679` Shots.ts
+re-framings (**released here**) · `1075cf5` release note · `4954eba` noise floors
+· `3d1ed68` LANDMINES · `3387c5c` name the sward proxy · `cd1c1fb` ring starts ·
+`b64d65e` TASKS residue · `e51bc96`/`28b0c71`/`8dbd8ac` this handoff.
