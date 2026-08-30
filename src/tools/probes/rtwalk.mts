@@ -28,7 +28,25 @@
 // postfx -> renderer -> shadow -> systems -> scene, so `post` claims what it
 // owns and the world keeps the rest. The plan's <120 MB exit is the `post`
 // subtotal; the recorded 181 MB/33 includes the world half.
+//
+// ## Declared is not resident, and that is half the answer
+//
+// three allocates a render target's framebuffer **lazily, on the first
+// `setRenderTarget`**. Two of the largest targets on this page are never
+// bound: `SMAAPass`'s edges and weights buffers exist because the pass is
+// constructed and then left `enabled = false` (TAA is the AA mode), and
+// `GTAOPass`'s `normalRenderTarget` exists because its constructor calls
+// `setGBuffer()` with no arguments before `PostFX` calls it again with our
+// depth texture. Neither has ever cost a byte of VRAM.
+//
+// A walk that cannot tell those apart reports 44 MB of memory that does not
+// exist, and an agent told to cut 100 MB will spend its night deleting them.
+// `renderer.properties.get(rt).__webglFramebuffer` is three's own record of
+// whether it has uploaded the thing, so `residentMB` is what is really there
+// and `declaredMB` is what the code asks for. Both are printed: the gap is a
+// list of allocations to delete for tidiness, not a memory win.
 const g = window.GAME;
+const props = g.renderer.properties;
 
 // three's enums, spelled out because a probe body has no imports.
 const T = { UB: 1009, BYTE: 1010, SHORT: 1011, USHORT: 1012, INT: 1013, UINT: 1014, FLOAT: 1015, HALF: 1016, UINT248: 1020 };
@@ -99,7 +117,11 @@ function walk(root, owner, label) {
       if (!seen.has(o)) {
         seen.add(o);
         const p = priceRt(o);
-        if (p) rows.push(Object.assign({ owner, path, name: (o.texture && o.texture.name) || '' }, p));
+        if (p) {
+          let resident = false;
+          try { resident = props.get(o).__webglFramebuffer !== undefined; } catch {}
+          rows.push(Object.assign({ owner, path, resident, name: (o.texture && o.texture.name) || '' }, p));
+        }
       }
       continue;
     }
@@ -124,18 +146,23 @@ walk(g.scene, 'world', 'scene');
 rows.sort((a, b) => b.total - a.total);
 const MB = (b) => +(b / 1048576).toFixed(2);
 const by = {};
-for (const r of rows) { const o = (by[r.owner] || (by[r.owner] = { mb: 0, n: 0 })); o.mb += r.total; o.n++; }
-for (const k in by) by[k].mb = MB(by[k].mb);
+for (const r of rows) {
+  const o = (by[r.owner] || (by[r.owner] = { declaredMB: 0, residentMB: 0, n: 0, residentN: 0 }));
+  o.declaredMB += r.total; o.n++;
+  if (r.resident) { o.residentMB += r.total; o.residentN++; }
+}
+for (const k in by) { by[k].declaredMB = MB(by[k].declaredMB); by[k].residentMB = MB(by[k].residentMB); }
 
 return {
   dpr: g.renderer.getPixelRatio(),
   drawing: g.renderer.getContext().drawingBufferWidth + 'x' + g.renderer.getContext().drawingBufferHeight,
   quality: g.rnd ? g.rnd.quality : '?',
-  totalMB: MB(rows.reduce((s, r) => s + r.total, 0)),
+  declaredMB: MB(rows.reduce((s, r) => s + r.total, 0)),
+  residentMB: MB(rows.filter((r) => r.resident).reduce((s, r) => s + r.total, 0)),
   byOwner: by,
   rows: rows.map((r) => ({
     path: r.path + (r.name ? ' <' + r.name + '>' : ''),
-    own: r.owner,
+    own: r.owner + (r.resident ? '' : ' NOT-RESIDENT'),
     px: r.w + 'x' + r.h + (r.n > 1 ? ' x' + r.n : '') + (r.samples > 1 ? ' MSAA' + r.samples : ''),
     colorMB: MB(r.color), depthMB: MB(r.depth), msaaMB: MB(r.ms), MB: MB(r.total),
   })),
