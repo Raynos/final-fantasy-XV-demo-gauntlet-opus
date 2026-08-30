@@ -166,9 +166,10 @@ two were wrong in different ways.**
 - **`longplay` and `gameplay` were never run** — both need the exclusive lease,
   which was held by co-agents for most of this lifetime. Task 72's done-when
   says "`longplay` clean" and that half is **open**.
-- **`shotswim.mts` never returned** — the cross-lane question (does any corpus
-  shot now stand in >1.2 m of water and silently change?) is **unanswered**.
-  Its run was queued at `4af4d26` when this lifetime ended. **Run it first.**
+- ~~`shotswim.mts` never returned~~ — **it did, and the answer is clean:**
+  `[shotswim] 0 of 162 shots stand in water; 0 engage the swim state`, at
+  `4af4d26`. **No corpus frame changes because of this lane.** The cross-lane
+  risk is retired; re-run it only if `Shots.ts` gains a water framing.
 - The breath gauge's DOM has never been in a frame — it only draws while
   swimming, and no capture has had a swimmer in it.
 - Older, superseded notes below.

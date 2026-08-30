@@ -561,12 +561,11 @@ verified: high-frequency energy in a box of clear blue at `vista_noon` falls
   end-of-trunk window is entirely plausible. **`stats.confluences` settles it in
   one probe line**: 0 means the routing genuinely found none and there is
   nothing to fix; > 0 with an empty `joins` is a real bug. `lane7`
-- **Does any corpus shot now stand in >1.2 m of water?** The swim state takes
-  over foot IK, both locomotion speeds, the drawn blade, combat input and the
-  retinue's positions, so a shot posed in a lake silently changes in somebody
-  else's baseline. `src/tools/probes/shotswim.mts` answers it over the whole
-  corpus in one boot; its run was still queued when lane 23's first lifetime
-  ended. **Run it before the judged round.** `coordinator`
+- ~~Does any corpus shot now stand in >1.2 m of water?~~ **ANSWERED, CLEAN.**
+  `src/tools/probes/shotswim.mts` at `4af4d26`: `0 of 162 shots stand in water;
+  0 engage the swim state`. No corpus frame changes because of lane 23. Re-run
+  that probe only if `Shots.ts` gains a water framing — lane 21's two underwater
+  shots above will be the first. `done`
 
 ## Combat: what lane 11 left behind (2026-08-31)
 
