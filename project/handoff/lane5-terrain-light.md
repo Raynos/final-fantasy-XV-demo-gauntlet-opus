@@ -196,3 +196,38 @@ rect onto different ground and moves a worst-case statistic with it.
 dispatch baseline. If it also reads ~0.520 the gate was red before any lane
 committed and the tolerance, not tonight's work, is what needs the argument.
 Queue depth was 8 in the fix lane and 43 in sweep when it was submitted.
+
+### ...and the disproof does not need the browser at all
+
+Extracting every `/* glsl */` chunk from `TerrainMaterial.ts` at `7da60d5` and
+at `HEAD` and comparing them byte for byte:
+
+    FIELD_GLSL    IDENTICAL   4130 -> 4130 chars     <- tf_height lives here
+    VERT_PARS     IDENTICAL    467 ->  467
+    VERT_BEGIN    IDENTICAL    789 ->  789
+    FRAG_MAP / FRAG_NORMAL / FRAG_ROUGH / NOISE_GLSL   IDENTICAL
+    FRAG_AO       CHANGED      511 ->  964
+    FRAG_PARS     CHANGED    91917 -> 95030
+
+`driftcheck` renders the clipmap through `VERT_PARS` + `VERT_BEGIN` into a float
+target. Those two, and the field function they call, are **byte-identical to the
+dispatch baseline**. The geometry the gate measures cannot have moved from lane
+5's work, and no other lane touched a terrain file. Handing back to the
+coordinator: the suspect is not here.
+
+`driftcheck --build 7da60d5` was submitted to settle whether the 0.520 m
+predates the wave; it was still queued behind a fix-lane depth of 8 and a sweep
+depth of 43 at the stop. **That one command is the next step.**
+
+## Gates run
+
+- `nanscan` (`probes/nanscan.mts`): **0 of 142 shots carry NaN**.
+- `pre-commit` green on all eight of this lane's commits (build + both
+  typechecks + 4 cheap gates).
+- Draw calls: 436 / 502 / 616 against a budget of 800.
+- `pnpm run check` was run ONCE, before the coordinator's stop-running-check
+  rule, and failed on `build` — the failure is another lane's half-saved
+  `src/engine/postfx/GradePass.ts:161` in the shared working tree, not this
+  lane's. Not re-run.
+- NOT obtained: `reliefstat` for task 20 (queued behind 43 sweep jobs, never
+  ran) and `driftcheck --build 7da60d5` (same).
