@@ -2408,3 +2408,49 @@ Pair this with the standing rule that a gate nobody has watched fail is a gate
 nobody has tested: **make it fail on purpose, and make it fail to *run* on
 purpose.** Those are two different tests and only the first is usually done.
 
+## The Disc's crater rim was 70-90 m underground for the whole life of the project
+
+`landmark_meteor`'s blind-critic verdict — *"does not read as a meteorite"* — was
+chased through shading, emissive strength, bloom and two measured negatives.
+The cause, found 2026-08-31, is geometry: **the rim ring and apron were buried.**
+Measured median **−70 m against `Terrain.heightAt`**.
+
+The mechanism is a units mismatch of the kind this file keeps recording:
+`ground()` returns a **relative** height, the meteor group's origin is
+**deliberately sunk 90 m**, and every apron shard and rim block was placed at
+`ground() + a small lift`. Each of those three decisions is individually
+reasonable. Composed, they put the entire crater under the terrain.
+
+**Nothing downstream could have caught it.** There is no gate for "the thing you
+authored is above the ground", the frames showed a rock and a rock is what a
+buried-rim meteor looks like, and both engineering levers people reached for
+instead produced honest measured negatives — because the levers worked and the
+subject was not there.
+
+Two lessons, and the second is the transferable one:
+
+- **A "does not read as X" art verdict can have a geometry cause.** Before
+  re-lighting or re-shading a landmark that reads wrong, verify its parts are
+  where you think they are, in world space, against the terrain.
+- **When a relative height, a sunk origin and a small lift are composed, check
+  the sum against something absolute.** Related: 19 of the 22 emissive slabs
+  were also sealed *inside* the rock, visible = 0 from all five stands
+  (`probes/discglow.mts`, on demand). Two independent burials in one landmark.
+
+## A judged shot can clear almost none of its own subject
+
+Same landmark, separately measured: from the `landmark_meteor` stand,
+`probes/discview.mts` (24 bearings x 5 ranges, marching `Terrain.heightAt` and
+converting the highest occluding sample to an elevation angle) reports the frame
+clears **0.09** of the Disc — a foreground ridge eats everything below the
+crown, at every time of day. No crater, no rim, no apron, and **no art inside the
+group can fix it.**
+
+Exactly **one** stand in the world sees the crater rim: the Disc overlook off the
+Cauthess highway, ~40 m above the parking, at frac 0.82.
+
+So: **before grading a subject, measure what fraction of it the camera can
+actually see.** A corpus shot that cannot see its subject will produce a stable,
+reproducible, entirely honest verdict about nothing — and this one had been
+doing so for the life of the judged set.
+
