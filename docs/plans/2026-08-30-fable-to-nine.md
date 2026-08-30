@@ -99,6 +99,21 @@ sector kits go after it. **Overrun cut order (human decision): lane 20
 `project/handoff/<lane>.md` current and respawns from it at the ~3 h/150-
 turn stop.
 
+**Cold-start briefs: every lane has one at `project/handoff/lane-*.md`.**
+Read yours before anything else — verified anchors (file:line), copyable
+row formats, exact commands, a first-commit sequence, and the landmines
+that apply. They were researched 2026-08-30 against `66b354ad`. Ownership
+fix found during briefing: **lane 1 owns all of `src/characters/rig/`;
+lane 2 owns `src/characters/` outside `rig/` plus `rig/Outfit.ts` and
+`rig/Look.ts`** (the original split double-claimed Materials/Geo/
+Character). Three more brief findings that correct this plan's text:
+`uCloudSunGain`'s 0.42 is a dead constructor value — the live value is
+`lerp(0.26, 0.20, overcast)` written every frame at `Sky.ts:1035-1036`
+(edit the lerp); the 85.5 MB first-load figure came from `coldload`
+navigating `?q=high`, which skips the geo fetch entirely
+(`GeoBake.ts:261`) — not from a missing file; and route id `route19` is
+taken ("Vesperpool Causeway") — the new roads are ids `route20`/`route21`.
+
 ---
 
 # Part A — Presentation, in the judge's own order
