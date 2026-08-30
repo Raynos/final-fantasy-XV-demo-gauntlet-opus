@@ -100,3 +100,50 @@ then verify, immediately before R1 and before any final perf, memory or
 cold-load number. A capture taken with two of six artifacts missing is not the
 game.
 
+## The endgame sequence, in order — coordinator only
+
+Everything below needs the tree quiet or nearly so. **Do not start it while more
+than two lanes are live**; the exclusive-lease gates serialise against each other
+and against every lane's captures.
+
+1. **Let the lanes drain.** No new lanes after this point except a respawn that
+   closes a Definition-of-Done clause.
+2. **`node src/tools/drawcheck.mts --worst 30`** — lane 18's one outstanding
+   gate, and the corpus is now 162 shots (from 142). Peak must be ≤800.
+3. **The exclusive-lease gates, one at a time, each behind
+   `daemon.mts --wait exclusive-free`:** `perf`, `gameplay`, then
+   **`longplay` (30 min) and `longplay --night`.** These are the last unmet
+   clauses on lane 23 (task 72's "longplay clean") and lane 18 (task 64's
+   `_nightRoadDanger`, which `longplay --night` has never exercised).
+   **`longplay` dies if a co-agent takes the exclusive lease mid-run** — its own
+   header documents that `withExclusive` closes every context including the one
+   `longplay` holds, which reads like a crash and is not one. Check
+   `daemon --health` reads `"exclusive": null` first, and use `run_in_background`.
+4. **`pnpm run build:full`, then `node src/tools/bakecheck.mts`, with commits
+   held.** The two browser-recorded caches cannot survive a co-agent's
+   `pre-commit`, so this must be the last thing before any judged or certified
+   number. MISSING is safe; **STALE is not** — a stale `texc` renders every face
+   a version behind its sculpt.
+5. **`pnpm run check`** — must be green. Known outstanding at the time of
+   writing: `combatloop` 34/35 (the poise row, with lane 11 respawned on a
+   specific hypothesis) and `bakecheck` (step 4 fixes it).
+6. **R1 — judge round 17.** Fresh `--jpeg` corpus at HEAD, then
+   `compare.mts --shots <dir>`, then a **fresh** critic agent judges every
+   `ab-*.jpg` blind, writing a reason per pair **before** `ANSWER-KEY.json` is
+   opened. Round 16's method: the eight control pairs are **shuffled into** the
+   real ones and judged in one undifferentiated pile, because a control run
+   *after* twenty game-vs-plate pairs is not blind. Bar: **hesitation ≥30% with
+   ≥2 called wrong.** Rank the four items in the watch list above deliberately.
+7. **R2 — the agent playtest proxy** (human decision at dispatch): a fresh agent
+   plays 30 minutes with no instruction and returns a ranked
+   what-felt-broken list, which becomes lane 12's queue. The human's own
+   playtest is a confirmation pass in the morning, not a blocker.
+8. **§4's loop**: if a round misses the bar, its ranked tells re-order into the
+   next fix wave and another round runs — until the bar is met **or a full fix
+   wave moves the number by nothing**, which is a measured plateau and also a
+   valid end. Publish the numbers either way.
+9. **Archive**: `docs/plans/` → `project/archive/plans/`, every
+   `project/handoff/<lane>.md` → `project/archive/handoff/` after lifting
+   anything durable into `LANDMINES.md`, a session entry in `project/journal/`,
+   and `STATUS.md` replaced with the post-build snapshot.
+
