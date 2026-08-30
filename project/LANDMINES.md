@@ -2174,3 +2174,29 @@ came from one cache.
 **On a wave, an A/B against an old sha is not a bisect.** Rebake, or measure
 something the cache does not feed.
 
+## A spec in world metres, graded by an instrument in pixels, is two different claims
+
+The plan asked for "mid-frequency geology in the verified ~0.65 -> 300 m gap"
+and named `reliefstat` as the grader. **`reliefstat`'s bands `d1..d64` are in
+PIXELS.** Metres and pixels are related only through camera distance, so the two
+halves of that task were never the same claim.
+
+Worked, 2026-08-31: a 139 m swell seen from 300 m at 44 deg fov spans roughly
+950 px — it lands **past `d64`, off the top of the pyramid**. Meanwhile the
+d16/d32 shortfall the plan quotes is 16-32 px, which at 200-400 m is about
+**2-8 m of world**. So the lane built for the band the plan named, correctly,
+and the result was structurally invisible to the instrument the plan cited:
+tier-B moved d16 by 0.00-0.04 and d32 by 0.17-0.47 against a shortfall of -6.80
+and -7.82, with d1/d2 reproducing to 0.01 between runs. The d16/d32 deficit
+belongs to a different band entirely.
+
+**Before grading a spatial claim, convert the spec into the instrument's own
+units and check the target band is on the scale at all.** A null from an
+instrument that cannot see the change is not a measured negative — it is silence,
+and the difference matters because a measured negative closes an item in this
+project and silence must not.
+
+(The tier-B block shipped anyway, with `?post=nomacroh`/`macrohmax` so the next
+agent can price it against a better-matched instrument: it is not a regression on
+any band, and its frames were read by eye.)
+

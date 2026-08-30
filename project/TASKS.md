@@ -13,6 +13,9 @@ plan's negatives table is the list of things already decided against.
 
 ## Live defects nobody had recorded
 
+- **Five menu screens sit 29–54% empty below their last line of text** — `elemancy` 54%, `inventory` 49%, `system` 40%, `photo` 38%, `quests` 35%, `armiger` 29%, measured by `src/tools/_probe/menufill.mts` (lowest ink in the 150–812 px reading band, per screen; it counts text and glyphs only, because plates and dividers run the full band height and an earlier version reported 0–6% for all sixteen). **Lane 12 candidate** — layout is not lane 10's, and if a first-time player names one in R2 the number is already attached.
+- **`ui-shoot.mts` has no `--jpeg` flag.** It prints `unknown scene --jpeg`, treats it as a scene name, and writes PNGs regardless — while the plan's own command lines offer it. A trap for any lane following a brief literally; either add the flag or stop suggesting it.
+
 - **Nothing in `check` fails when a bake artifact is missing.** `geo.bin.gz` was absent for a day (~1.2 s of cold boot) while five handoffs said "whoever is next should re-bake". `daemon --health` warns; no gate does.
 
 ## Memory — 1.5 GB the tab, 2.5 GB the tree
@@ -376,3 +379,12 @@ with the respawned lane, not backlog, and are deliberately not listed here.*
   stack it promotes; the other kept the baseline for the layered ridges, the
   meteor, the skyline and the rest stop. Left at baseline. A judged round should
   settle it rather than another agent's eye. `shots`
+
+- **The d16/d32 relief deficit is tier-C's, not tier-B's, and it is still open.**
+  Measured 2026-08-31: ours `longwythe` d16 15.58 / d32 19.23 against
+  `FFXV-ground` 21.42 / 23.60, total 38.01 vs 51.10. Tier-B (30-300 m world)
+  is off the top of `reliefstat`'s pixel pyramid and moved it 0.5-6% of the gap.
+  16-32 px at 200-400 m is ~2-8 m of world, which is tier-C's band. Anyone taking
+  this must first convert the spec into the instrument's units — see the
+  LANDMINES entry. `lane5`
+
