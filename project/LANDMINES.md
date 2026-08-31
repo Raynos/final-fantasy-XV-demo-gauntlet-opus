@@ -2983,3 +2983,42 @@ all**, and one (`meldacio_layby`) lands **inside geometry**. The pad-height
 hypothesis for the Hammerhead case was tested and is a **measured negative** —
 1 of 56, and not that one.
 
+## A raycast against three properties that have never existed
+
+`CameraRig._armDistance` swept terrain and nothing else. Where a prop sweep
+should have been sat a **dead comment** describing a raycast against
+`Props.cameraColliders || Props.colliders || Props.collisionMeshes` — **none of
+which `Props` has ever had.** The chain short-circuited to undefined, the ray
+never ran, and the code read as implemented to everyone who opened the file.
+
+A `||` chain over three plausible property names is indistinguishable from
+working code until you check that one of them exists. **When a system "already
+handles" something and the symptom says otherwise, verify the handle resolves
+before you tune what it feeds.**
+
+## Characters walk through boulders, and that is what "fights inside a hill" meant
+
+The playtest's worst complaint — *"my whole screen became a wall of blurred brown
+mud"* — was investigated as a camera defect and the camera fix is real
+(lens-inside-a-boulder **1.24% -> 0.62%** over 3552 paired poses). But the
+camera was never the cause.
+
+**`Harvest.collectRockProxies` returns `[]`.** Nothing stops a character entering
+a rock. Measured on live dens: **Noctis's own chest is inside a boulder on 31.5%
+of combat frames** — 64%, 58%, 93% and 100% in the four fights that happened in a
+tor. The player was not looking at a hill *behind* the fight; the fight was
+*inside* the rock, and so was he.
+
+Two measured negatives from the same investigation, both worth keeping:
+- **The terrain is innocent.** 0.00% of 2592 poses put the player behind the
+  ground. The 0.7 m ground clearance is real and is not the cause.
+- **A radial push-out made it worse**, photographed: it turned a legible frame
+  into a wall of brown rock. The fix that works is a jump to the desired point on
+  the arm line, clear by construction.
+
+And a measurement caveat that generalises: **`fightcam`'s absolute percentages
+are not quotable across runs**, because the camera arm feeds `Props.update`, which
+drives streaming, which changes `drawnHeightAt`, which changes where feet land.
+Quote the **paired** sweep instead. An instrument whose subject moves when the
+instrument moves needs a paired design.
+
