@@ -2658,3 +2658,37 @@ looks wildly noisy at one sample length and quiet at another was never noisy.
 And note which way this cut: the aliased instrument's error was **large and
 signed**, so it did not look like noise, it looked like a discovery.
 
+## A prompt that moves while it is being offered, and nine that passed by luck
+
+`Tombs.install` handed `Interaction` a **live** `Vector3` on the POI pin;
+`Tombs.update` then re-pointed that same vector onto the kit's `sarcophagus`
+anchor the first time `PoiKits` built the temple. `_pick` reads `pos` live. So
+the target moved **mid-walk-up**, 7.19 m, at every one of the ten tombs — only
+the bearing turning with the kit's random yaw.
+
+`integration` samples `it.pos`, walks 2.2 m out, and asserts 8 frames later. For
+one tomb the re-bind landed inside that window:
+
+    pos0=(-2514.0,51.9,-3292.0) r0=15 -> pos1=(-2514.7,58.9,-3284.8) r1=6.5 moved=7.19
+    walk=(-2512.4,52.7,-3290.4) dEnd=6.05 cone=200 -> nothing
+
+**`dEnd=6.05` is inside the 6.5 m reach — it failed on *facing*.** The coffin came
+to rest **107 deg** off the approach and `cone: 200` admits +-100. **The other nine
+passed by the luck of a 0.3 s throttle, not by any property of themselves.**
+
+A second, yaw-independent defect fell out of the same numbers: the prompt was
+advertised at the pin with `REACH_FAR = 15` and re-anchored with
+`REACH_NEAR = 6.5`, and **6.5 < 7.19** — so on binding it no longer reached the
+place it had just been offered from.
+
+**The invariant `_pick` was written against, now enforced:** once a prompt
+exists, its position never moves. The fix gates the prompt on `anchored`, so it
+simply does not exist until it is where it belongs. New `probes/tombreach.mts`
+asserts it directly — *no enabled item's `pos` moves during its own walk-up* —
+across 96 interactables.
+
+**Generalise:** a gate that samples a position, acts, and asserts later cannot
+see a target that moves between the sample and the assertion. When such a gate
+fails on one of N identical things, suspect a race, not that one thing — and be
+suspicious of the N-1 that passed.
+

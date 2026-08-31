@@ -908,4 +908,10 @@ until tonight.*
   confirmed `framecam`-only, since all five `shoot.mts` captures in the same
   session were clean. A preview fault, not a corpus one; closes an open question
   from an earlier pass. `lane21`
+- **Three HUD elements draw at the same screen point and stack.** In both tomb
+  frames a live `Claim` prompt is **completely hidden** behind the onboarding
+  hint card, and the `COEURL / VICTORY` banner lands there too — prompt, hint
+  and victory banner all centre on the thing you are standing at. **Nobody owns
+  HUD stacking**, and lane 11 independently reported nameplates and damage
+  numbers colliding at 5-8 enemies. `tomb-reach`/`lane11`
 
