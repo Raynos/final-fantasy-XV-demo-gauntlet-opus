@@ -166,9 +166,17 @@ export function touchActive(): boolean { return TOUCH; }
  * still a 1170x2532 panel driven at 390x844 native-equivalent; the fragment
  * cost of a full deferred-ish forward pass at that size is what cooks it.
  *
- * 0.62 renders **38% of the pixels**. That is the single largest GPU lever
- * available without touching a shader, and on a screen this small the browser's
- * upscale is much less visible than the frame rate is.
+ * **It is 1 now, and the interesting part is why it was ever anything else.**
+ *
+ * The low tier already caps `devicePixelRatio` at 1.0, and on a phone that is
+ * a 3x panel — so `low` alone renders at a THIRD of the screen's linear
+ * resolution. Multiplying that by 0.62, as the first pass did, put it at a
+ * fifth, and the device frames came back blocky enough that the report was the
+ * build had gone "from PS5 to PS1". It was right, and the mistake was mine:
+ * this knob compounds with a cap that was already doing the work.
+ *
+ * `?rs=` still overrides, which is how the trade gets walked back if a slower
+ * device ever needs it.
  *
  * `?rs=` overrides it, so the trade can be walked back from the URL without a
  * build — a phone that turns out to have headroom can ask for 1.0.
@@ -176,7 +184,7 @@ export function touchActive(): boolean { return TOUCH; }
 export function renderScale(): number {
   const want = Number(params().get('rs'));
   if (Number.isFinite(want) && want > 0.2 && want <= 2) return want;
-  return DEMO ? 0.62 : 1;
+  return DEMO ? 1 : 1;
 }
 
 /**
@@ -220,13 +228,13 @@ export function demoFps(): number { return 30; }
 export function demoVegRange(): number {
   const want = Number(params().get('veg'));
   if (Number.isFinite(want) && want > 0 && want <= 1) return want;
-  return DEMO ? 0.55 : 1;
+  return DEMO ? 0.8 : 1;
 }
 
 export function demoDensity(): number {
   const want = Number(params().get('dens'));
   if (Number.isFinite(want) && want > 0 && want <= 1) return want;
-  return DEMO ? 0.55 : 1;
+  return DEMO ? 0.8 : 1;
 }
 
 export function resolveQualityTier(): QualityTier {

@@ -1,4 +1,4 @@
-import { resolveQualityTier } from '../Device.ts';
+import { demoActive, resolveQualityTier } from '../Device.ts';
 
 /**
  * One answer to "how many MSAA samples will the scene target have", available
@@ -43,6 +43,14 @@ export function sceneSamples(): number {
   const params = new URLSearchParams(location.search);
   const post = (params.get('post') || '').toLowerCase();
   if (post.split(',').some((t) => t.trim() === 'nomsaa')) return 0;
+  // The phone is the one place where MSAA is close to free and badly needed.
+  // Handset GPUs are tile-based: they resolve multisampling inside tile memory
+  // and never pay the bandwidth a desktop immediate-mode GPU pays for it. And
+  // it is needed because the demo renders well under the panel's native
+  // resolution, so every silhouette in the game -- a chocobo's neck, a bare
+  // tree, a sabertusk -- arrives as stair-steps that no post-process AA fully
+  // hides. The device frames were unambiguous about it.
+  if (demoActive()) return 4;
   switch (resolveQualityTier()) {
     case 'low': return 0;
     case 'medium': return 2;

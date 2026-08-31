@@ -533,9 +533,23 @@ export class PostFX {
     //    in reads for a glow nobody is looking for on a 390 px screen.
     //  - **CAS** is a sharpen, and we are upsampling from 62% anyway.
     if (demoActive()) {
+      // No post-process AA at all: the demo runs 4x MSAA instead (see
+      // `Msaa.sceneSamples`), which on a tile-based handset GPU resolves in
+      // tile memory and is close to free. TAA would be worse than nothing --
+      // `velocity` is off at low, so it would reproject with no motion vectors
+      // -- and SMAA on top of MSAA is a second pass doing the same job with
+      // less information.
       this.setAA('none');
-      this.bloom.enabled = false;
-      this.cas.enabled = false;
+      // Bloom and CAS came BACK. Turning them off was the wrong economy: bloom
+      // is most of what makes a sky read as sky rather than as a gradient --
+      // the first device report on it was "the skybox looks like dogshit" --
+      // and CAS is a single sharpen pass that directly undoes the softness of
+      // rendering below native and upscaling. Together they are a fraction of
+      // the frame and most of the difference between this looking finished and
+      // looking like a placeholder.
+      this.bloom.enabled = true;
+      this.cas.enabled = true;
+      this.cas.sharpness = 0.55;
     }
   }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { renderScale, resolveQualityTier } from './Device.ts';
+import { demoActive, renderScale, resolveQualityTier } from './Device.ts';
 
 /**
  * The four render quality tiers, worst to best.
@@ -232,7 +232,11 @@ export class Renderer {
    * the camera exists.
    */
   _applyTier(tier: QualityTier) {
-    const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
+    // `low` caps at 1.0 on a desktop. On a phone that is a 3x panel and 1.0 is
+    // already a third of the screen's linear resolution, which reads as blocky
+    // rather than as soft -- so the demo gets 1.35, still well under native and
+    // enough that edges stop looking like a different console generation.
+    const cap = tier === 'ultra' ? 2 : tier === 'low' ? (demoActive() ? 1.35 : 1) : 1.5;
     // `renderScale` is 1 everywhere but the phone demo, where it is the
     // largest GPU lever in the build: 0.62 fills 38% of the pixels. It
     // multiplies the tier cap rather than replacing it, so `?q=` still means

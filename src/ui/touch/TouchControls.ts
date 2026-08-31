@@ -66,9 +66,15 @@ export class TouchControls {
     // Only the LEFT stick draws a base. The right side is drag-anywhere to
     // look, and drawing a home for it put a second joystick under the ATTACK
     // button — the fan is the only thing that should be visible over there.
+    // BOTH sticks draw a home. The right one is drag-anywhere-on-that-half,
+    // so a home is not strictly needed to use it -- but "I can't turn the
+    // camera" was the first thing said about a build that drew nothing there,
+    // and a control nobody can find is a control that does not exist. Its base
+    // sits low and inboard of the fan (see `.tc-rest-right`) so it reads as the
+    // camera stick rather than as a button somebody forgot to label.
     this.sticks = [
       new Stick(this.pad, 'left', 0, PAD.l3, true),
-      new Stick(this.pad, 'right', 2, -1, false),
+      new Stick(this.pad, 'right', 2, -1, true),
     ];
     for (const s of this.sticks) this.root.appendChild(s.root);
 
@@ -129,6 +135,24 @@ export class TouchControls {
     // held when the page hides would stay held on the way back.
     this._onVis = () => { if (document.hidden) this.releaseAll(); };
     document.addEventListener('visibilitychange', this._onVis);
+
+    // The other half of stopping iOS zoom. `touch-action` handles double-tap;
+    // pinch arrives as Safari's non-standard `gesture*` events, which no CSS
+    // reaches. Both are meaningless here -- there is nothing on this page to
+    // zoom into -- and a game that zooms out from under a thumb mid-fight is
+    // the most annoying possible bug.
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(type, (e: Event) => e.preventDefault(), { passive: false });
+    }
+    // Belt and braces for the double-tap that slips past `touch-action` on
+    // older iOS: a second tap inside 320 ms at the same spot is a zoom
+    // gesture, and never something this game wants.
+    let lastTap = 0;
+    document.addEventListener('touchend', (e: TouchEvent) => {
+      const now = performance.now();
+      if (now - lastTap < 320) e.preventDefault();
+      lastTap = now;
+    }, { passive: false });
 
     const tick = () => { this._raf = requestAnimationFrame(tick); this.update(); };
     this._raf = requestAnimationFrame(tick);

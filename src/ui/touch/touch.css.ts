@@ -30,6 +30,14 @@ const CSS = `
   touch-action: none;
 }
 #touch * { box-sizing: border-box; touch-action: none; }
+
+/* iOS Safari ignores user-scalable=no, so the meta tag alone does not stop
+   double-tap-to-zoom. touch-action: manipulation does: it keeps scroll and
+   pinch semantics the browser needs and drops the double-tap gesture, which is
+   the one that fires when a player taps ATTACK twice quickly. On the canvas
+   and the control layer we can go further and take everything. */
+html.has-touch, html.has-touch body { touch-action: manipulation; overscroll-behavior: none; }
+html.has-touch #app, html.has-touch #app canvas, html.has-touch #ui { touch-action: none; }
 #touch[hidden] { display: none; }
 
 /* ---------- stick zones ----------------------------------------------
@@ -40,9 +48,12 @@ const CSS = `
   pointer-events: auto;
 }
 .tc-zone-left  { left: 0;  width: 42%; }
-/* Stops short of the bottom-right corner: that block is the fan, and a look
-   drag that begins on a button is a drag the player did not mean. */
-.tc-zone-right { right: 0; width: 42%; bottom: 200px; }
+/* Full height, like the left one. It briefly stopped 200 px short of the
+   bottom to keep a look-drag from starting on a button -- which the buttons
+   already prevent for themselves by stopping propagation -- and the actual
+   effect was to leave a 73 px sliver on a 390 px screen and make the camera
+   almost impossible to turn. */
+.tc-zone-right { right: 0; width: 42%; }
 .tc-zone[hidden] { display: none; }
 
 /* The stick at rest, DRAWN -- not a hint, the thing itself.
@@ -66,7 +77,16 @@ const CSS = `
   background: rgba(182, 214, 248, 0.16);
 }
 .tc-rest-left  { left: calc(26px + env(safe-area-inset-left));  bottom: calc(26px + env(safe-area-inset-bottom)); }
-.tc-rest-right { right: calc(26px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
+/* Inboard of the fan, not under it: the fan owns the corner, so the camera
+   stick's home sits to its left where a right thumb still reaches it and
+   nothing is drawn on top. */
+.tc-rest-right { right: calc(268px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
+.tc-rest-right::before {
+  content: 'LOOK';
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 8px; letter-spacing: 0.14em; color: var(--ink-4);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
 .tc-rest[hidden] { display: none; }
 
 .tc-ring, .tc-knob {
