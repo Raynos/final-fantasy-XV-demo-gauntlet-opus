@@ -573,3 +573,53 @@ the near field, and does not beat it on the axis the batch was run to test.
 This is the LANDMINES "diagnoses that were wrong" shape exactly: a real
 observation (blue sky at 6.9), a plausible mechanism (the atmosphere ignores sun
 elevation), and a control that was one capture away and would have killed it.
+
+## The graveyard's skyline, MEASURED: the site is 990 m from Insomnia
+
+The bearing trick failed and it was worth knowing why, so `tmp/l21/mega.mts`
+stands at the graveyard camera `(3054.7, 41.1, −2391.6)` looking at bearing 60°
+and lists every megastructure mesh within 12 km with its distance and its angle
+off the look axis:
+
+```
+capital_mega_beacon   at(2436,-2654)  d=672m   143deg off-axis  y 327..766
+capital_mega_pale     at(2362,-2743)  d=776m   147deg off-axis  y -40..150
+capital_mega_cityLit  at(2350,-2744)  d=788m   147deg off-axis  y 156..636
+capital_mega_lamp     at(2243,-2862)  d=938m   150deg off-axis  y 805..815
+```
+
+(The probe keeps the nearest instance per mesh name, so those angles are the
+nearest *corner* of the city, not its extent — but the distances are the point.)
+
+**The Adamantoise Graveyard's pin is 990 m from Insomnia** — (3100, −2350)
+against (2560, −3180) — and the pin lane 18 moved it *from*, (2600, −2800), was
+**382 m**. A `capital_mega_cityLit` slab 776 m away and 636 m tall subtends about
+39° of elevation; there is no bearing on a 24-bearing ring that hides it, which
+is exactly what the eight frames showed.
+
+So this is not a framing problem, not a fog problem this lane can dodge, and not
+a defect in lane 18's kit — which is good: the rib arches *do* read as pointed
+arches and the carapace *does* read as a shell. It is a map decision. Filed in
+`HUMAN_REVIEW.md` with these numbers.
+
+## Corpus verification — the preview and the corpus AGREE this time
+
+`shoot.mts threshold_stones northwatch_ruin --out tmp/shots/l21-lm`, both read.
+Both corpus frames match their `framecam` previews closely, which is worth
+recording because the predecessor's hard lesson was that they often do not.
+
+- `northwatch_ruin` (384 draws) — a dark garrison silhouette: crenellated wall,
+  barrel-vaulted hangar, two stilted watchtowers with orange lamps at the frame
+  edges, a third behind the wall, lightning striking the mountain behind, rain
+  streaks, misty ridges receding. **The best frame of this lane's two sessions.**
+  Defect, lane 18's: four flat untextured cream lamp housings with no fixture
+  behind them, and they are the highest value in the plate after the storm break.
+- `threshold_stones` (not counted here; capture clean) — the felled milestone
+  across the left foreground with chevrons incised down its flank, one stone at
+  centre with three collar bands, four marching right over the ridge, a cliff and
+  forested slopes far right, big cumulus, birds. **Defect, lane 18's: the shafts
+  are flat untextured tan with no grain, no wear and no dirt at the foot, so at
+  21 m they read as moulded clay rather than cut stone.** I disagree with lane
+  18's "reads as cut by someone" — the *carving* landed, the *material* did not.
+  Also in frame: four rock chunks floating in mid-air at the right, and a
+  pale-grey placeholder post at bottom-centre-right.
