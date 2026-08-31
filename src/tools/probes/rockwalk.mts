@@ -120,6 +120,17 @@ for (let i = 0; i < chosen.length; i++) {
   }
   if (!start) { emit(`site ${i + 1}: no clear approach, skipped`); continue; }
   const yaw = yawTo(start[0], start[1], sx, sz);
+  /**
+   * Which frame of the approach to photograph, chosen on the OFF run and then
+   * reused on the ON run so the pair is the same instant of the same walk.
+   *
+   * The first cut photographed the frame nearest the site's centre and got two
+   * frames of open ground: the closest approach is where the walk ENDS UP, and
+   * a walk that ends up beside the tor spent its buried frames in the middle.
+   * The beat worth a picture is the middle of the longest unbroken run with the
+   * chest inside a boulder -- the frame the playtest was complaining about.
+   */
+  let shotAt = -1;
 
   for (const push of [false, true]) {
     const key = push ? 'on' : 'off';
@@ -135,7 +146,8 @@ for (let i = 0; i < chosen.length; i++) {
     const from = { x: player.position.x, z: player.position.z };
     const push0 = field.hits;
 
-    const r = { f: 0, hero: 0, feet: 0, ally: 0, allyF: 0, deepest: -1, deepAt: 0 };
+    const r = { f: 0, hero: 0, feet: 0, ally: 0, allyF: 0 };
+    let runFrom = -1, bestRun = 0;
     inp.keys.add('KeyW');
     for (let f = 0; f < SECS * 60; f++) {
       g.frame(dt);
@@ -145,6 +157,10 @@ for (let i = 0; i < chosen.length; i++) {
       r.f++;
       const hero = chestIn(p);
       if (hero) r.hero++;
+      if (hero) {
+        if (runFrom < 0) runFrom = f;
+        if (f - runFrom + 1 > bestRun) { bestRun = f - runFrom + 1; if (shotAt < 0 || !push) shotAt = (runFrom + f) >> 1; }
+      } else runFrom = -1;
       if (feetIn(p)) r.feet++;
       // A `PartyMember` carries `root`, not `position` -- the first cut of this
       // probe read `m.position`, found undefined on every member and reported a
@@ -156,9 +172,6 @@ for (let i = 0; i < chosen.length; i++) {
         r.allyF++;
         if (chestIn(mp)) r.ally++;
       }
-      // The frame to photograph is the one nearest the site's heart.
-      const d = -Math.hypot(p.x - sx, p.z - sz);
-      if (d > r.deepest) { r.deepest = d; r.deepAt = f; }
     }
     inp.keys.clear();
     const p = player.position;
@@ -172,8 +185,8 @@ for (let i = 0; i < chosen.length; i++) {
     totals[key].f += r.f; totals[key].hero += r.hero; totals[key].feet += r.feet;
     totals[key].ally += r.ally; totals[key].allyF += r.allyF;
 
-    if (window.__shot) {
-      // Re-walk to the closest beat and photograph it, so the pair is the same
+    if (window.__shot && shotAt >= 0) {
+      // Re-walk to `shotAt` and photograph there, so the pair is the same
       // instant of the same approach rather than two arbitrary frames.
       player.root.position.set(start[0], start[2], start[1]);
       player.velocity?.set?.(0, 0, 0);
@@ -183,9 +196,13 @@ for (let i = 0; i < chosen.length; i++) {
       rig._first = true;
       step(90);
       inp.keys.add('KeyW');
-      for (let f = 0; f <= r.deepAt; f++) { g.frame(dt); rig.yawTarget = yaw; if (f % 240 === 0) await breathe(); }
+      for (let f = 0; f <= Math.max(0, shotAt); f++) { g.frame(dt); rig.yawTarget = yaw; if (f % 240 === 0) await breathe(); }
       inp.keys.clear();
-      step(20);
+      step(4);
+      const sp = player.position;
+      emit(`  shot s${i + 1}-${key} at frame ${shotAt} (${(shotAt / 60).toFixed(1)}s):`
+        + ` Noctis (${sp.x.toFixed(1)}, ${sp.z.toFixed(1)})  chest in rock ${chestIn(sp)}`
+        + `  feet in rock ${feetIn(sp)}`);
       await window.__shot(`s${i + 1}-${key}`);
     }
   }
