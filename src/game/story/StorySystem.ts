@@ -345,6 +345,17 @@ export class StorySystem {
   }
 
   _titleChoice(pick: TitleChoice) {
+    // The only row that is not a destination inside this page. Everything the
+    // demo changes is decided during boot, so the way in is a reload, not a
+    // branch -- and `touch=1` rides along because a desktop asking for the
+    // phone build is asking to see the phone build, controls included.
+    if (pick === 'demo') {
+      const p = new URLSearchParams(location.search);
+      p.set('demo', '1');
+      p.set('touch', '1');
+      location.search = p.toString();
+      return;
+    }
     if (pick === 'continue') {
       const rpg = this.rpg;
       if (rpg && rpg.loadGame) rpg.loadGame('auto');

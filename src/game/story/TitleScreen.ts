@@ -18,7 +18,7 @@ import type { Game } from '../Game.ts';
  * it loops forever with no seam and no state to reset.
  */
 /** What the title screen's menu can answer with. */
-export type TitleChoice = 'new' | 'continue' | 'extras';
+export type TitleChoice = 'new' | 'continue' | 'extras' | 'demo';
 
 /** One menu row as authored. */
 interface TitleItem {
@@ -98,9 +98,19 @@ export class TitleScreen {
     this.root.appendChild(this.mark);
 
     // ---- menu ------------------------------------------------------------
+    // The demo is a BOOT mode, not a menu mode: the render tier, the touch
+    // layer and which texture container a key lives in are all decided during
+    // `Game.init()`, and the title is shown after it. So the row a phone sees
+    // is not a different destination, it is a different *name* for the one it
+    // is already in -- and the row a desktop sees is a reload, which is the
+    // only way to reach a decision that has already been taken.
+    const phone = demoActive();
     this.items = [
-      { id: 'new', title: 'New Game', desc: 'Chapter I — Departure' },
+      phone
+        ? { id: 'new', title: 'Phone Game', desc: 'All of Eos, cut to fit a handset' }
+        : { id: 'new', title: 'New Game', desc: 'Chapter I — Departure' },
       { id: 'continue', title: 'Continue', desc: 'Load the last save' },
+      ...(phone ? [] : [{ id: 'demo' as const, title: 'Phone Demo', desc: 'Touch controls, a smaller download' }]),
       { id: 'extras', title: 'Extras', desc: 'Not in this build' },
     ];
     this.menu = el('div.ti-menu');
