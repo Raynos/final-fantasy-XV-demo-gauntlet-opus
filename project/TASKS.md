@@ -915,3 +915,49 @@ until tonight.*
   HUD stacking**, and lane 11 independently reported nameplates and damage
   numbers colliding at 5-8 enemies. `tomb-reach`/`lane11`
 
+
+## Content shots: what lane 21's final pass left behind (2026-08-31)
+
+Everything here was seen in a frame this session and the frame is named. Nothing
+here is a framing problem; `galdin_pier_sunset` was the last one that was, and it
+is landed.
+
+- **Galdin's sea offers exactly two looks and both fight the plate.** Deep water
+  (sea bed under about −8 m) renders **near-black** and holds only ripple and
+  specular glitter; shallow water renders as a **gold-and-black mottled stipple**
+  because the lit sand bottom shows through, and at any size it reads as a wet
+  sand flat rather than sea. There is no turquoise between them, which is the
+  one thing every FFXV Galdin plate is made of. Measured across 44 framings
+  spanning 55–260 m offshore. `tmp/shots/l21-pf/GB_mid.jpg` is the stipple,
+  `tmp/shots/l21-pg/HA.jpg` the black. **Chroma, not framing.**
+- **`lest_street_night`'s two near-lens NPCs render as unlit black cutouts** —
+  no material, no rim, no read — and one of them is in the arms-raised
+  palms-out broken idle. It is a judged PAIRING row.
+  `tmp/shots/l21-city3/lest_street_night.jpg`.
+- **A cyan pickup-glint sprite floats over the beach** in the landed
+  `galdin_pier_sunset` at x 0.93, y 0.37, and in six other shore candidates.
+  `tmp/shots/l21-pfinal/galdin_pier_sunset.jpg`.
+- **An animal stands on top of an untextured flat-shaded mesa island out at
+  sea**, on ground it could not have walked to. `tmp/shots/l21-pier/PS2o.jpg`.
+- **Shore foam renders as a bright continuous white band**, and from stands
+  inside ~110 m as flat white axis-aligned rectangles.
+  `tmp/shots/l21-pf/{GD_midHigh,GE_nearHigh,GK_wide}.jpg`.
+- **The location title card and the "WHERE YOU ARE" tutorial card are composited
+  into `framecam` captures and not into `shoot.mts` ones.** Confirmed again this
+  session: eight corpus captures clean, half the previews carrying it. A preview
+  fault, but it costs an agent a re-shoot every time it mistakes one for a
+  corpus defect. `tmp/shots/l21-pf/GB_mid.jpg` against
+  `tmp/shots/l21-pfinal/galdin_pier_sunset.jpg`.
+- **`imgdiff --calibrate` overwrites `project/noise-floors.json`'s `note` with a
+  two-line stub**, discarding the stale-output-directory warning that the file
+  exists to carry — the warning about the exact mistake `--calibrate` invites.
+  Restored by hand this session; it will be thrown away again by the next
+  calibration unless the tool preserves an existing note.
+- **`lest_market_day`'s crowd is bunched at the two frame edges** with about 30%
+  of the image bare paving and one lone walker in it, and the plaza paving reads
+  as a regular tiled floor with very dark joints rather than laid flags.
+  `tmp/shots/l21-city3/lest_market_day.jpg`.
+- **`lest_overlook_disc`'s upper-left quadrant is ragged black cloud blobs with
+  vertical comb artefacts over fat white star sprites**, and the Meteor's
+  fissures read as flat cyan patches painted on facets rather than as glowing
+  cracks. `tmp/shots/l21-city3/lest_overlook_disc.jpg`.
