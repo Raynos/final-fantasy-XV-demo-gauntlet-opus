@@ -70,6 +70,7 @@ are the three parallel plans that ran beside it.
   2026-08-27-opus-gate-audit                  SUPERSEDED 08-28 — items 1-2 built
   2026-08-28-opus-the-100x-map                SUPERSEDED 08-28 — it was a RECORD
   2026-08-28-opus-close-out                   DONE 08-28 -> archive/plans/
+  2026-08-31-opus-mobile-10x                  DONE 08-31 -> archive/plans/
                     |                           8 of 10 closed the same night;
                     v                           5 of those as NEGATIVE results
   2026-08-26-opus-the-standing-backlog §WS-12   the two that were builds:
@@ -82,6 +83,13 @@ every phase and was held open by a DoD written against a calendar; the gate audi
 had built two of its four items and staffed neither of the rest; the 100x map was
 a retrospective wearing a `Status:` line. Their residue became close-out's ten
 items, and close-out itself graduated the same night.
+
+`mobile-10x` is the newest and the one to read first if the phone build is the
+subject: it carries two counter-intuitive measurements that are expensive to
+rediscover — **WebP beats gzip 3x on textures and LOSES on terrain**, and
+`?q=low` had shadows switched on for the project's whole life because
+`Sky.init` overwrote the tier. It closed 4 of 5 steps and **declined the fifth
+with a number** rather than leaving it open.
 
 **Read close-out's "What actually happened" before re-opening any harness cost
 work.** Five of its ten items closed as measured negatives — deleting
