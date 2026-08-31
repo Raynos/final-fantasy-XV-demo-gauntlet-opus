@@ -2075,22 +2075,97 @@ export class PoiKits {
    * and from the fact that it is built out of boards: so it gets a plinth, a
    * board-and-batten elevation, a real gable with barge boards, a sliding door
    * on a rail with its own head beam, and a hay door in the loft.
+   *
+   * ## The layout, and why it is arithmetic rather than taste
+   *
+   * Four defects were read off `tmp/shots/l22hub/` at 80 m and every one of
+   * them is a number that was never checked against another number:
+   *
+   * - **The gable was a stair of five boxes and the roof did not cover it.**
+   *   Step `i` took the triangle's width at the BOTTOM of its band,
+   *   `W * (1 - i/NG)`, and carried it to the top of that band — so every step
+   *   stood `W / (2 * NG)` = **1.3 m** proud of the rake at its own top corner,
+   *   0.14 m clear of the roof slab's upper surface. That is the saw-tooth of
+   *   bright red tabs along both rakes. It is now one extruded triangle, which
+   *   is what a gable is; solved, the apex clears the roof underside by 0.04 m
+   *   at the ridge and the gap widens down the rake, so no part of it can
+   *   surface again if the pitch is retuned.
+   * - **The paddock fence ran through the barn.** Barn centre was kit-local
+   *   (−9, −11) with a 14.5 x 10 roof envelope, so its far corner sat at radius
+   *   **21.9 m** against a ring of `R = 20`. There is no seat for a 14.5 m barn
+   *   *outside* a paddock that also fits inside a 22 m pad — the barn's east
+   *   face would have to be at −9 m and its west at −23.5, off the deck — so
+   *   the barn goes **inside** the ring, which is what a stable yard is anyway:
+   *   the birds walk out of the barn into the paddock. Centre (−7, −5.8), far
+   *   roof corner at **17.9 m**, ring at 19.0: 1.1 m of clearance, and the deck
+   *   edge wobbles no closer than `22 * (1 - 0.085)` = 20.1, so the ring is on
+   *   the deck at every bearing.
+   * - **A ring with no way in.** 34 posts all the way round, and the pad's own
+   *   ramp arrives on local +z (`_apron` takes `rampYaw = pi/2 - yaw` and the
+   *   kit's +z is the bearing away from the road). So the posts now run one
+   *   open arc and the 6.1 m the arc omits is a gateway with two stout posts
+   *   and a header, aimed down the ramp.
+   * - **Three of six hay bales floated at y = 2.5** on `0.9 + (i > 3 ? 1.6 : 0)`
+   *   with nothing beneath them, and their x/z came off `rng.range` spans wide
+   *   enough to put one inside the barn and two through the tarp. They are a
+   *   stack now: three on the ground at y = 0.8 (radius 0.8, so base exactly 0)
+   *   and two nestled in the valleys at `0.8 + sqrt(1.6^2 - 0.9^2)` = 2.12.
+   *
+   * **`_apron`'s `wear` points are in the group's own unrotated frame; every
+   * other number in this kit is kit-local and post-yaw.** `gradePad` builds its
+   * geometry world-axis-aligned and `B.add`s it with a null transform, while
+   * `put` multiplies by `world`. So the three desire lines were walking to
+   * where the barn, the trough and the sign would have been at yaw 0 — at Wiz's
+   * yaw they miss by tens of metres. They are rotated at the call site.
    */
   _chocobo(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 22, 9, 63, M.gravel, { yaw, wear: [[-9, -11, 1.4], [6, 4, 0.9], [13, 12, 0.6]] });
-    // paddock: post and two rails, all the way round
-    const N = 34, R = 20;
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2, a2 = ((i + 1) / N) * Math.PI * 2;
-      put(M.plank, new THREE.CylinderGeometry(0.09, 0.11, 1.5, 6), [Math.cos(a) * R, 0.9, Math.sin(a) * R]);
+    /** Kit-local (post-yaw) to the pad's own unrotated frame. See the docstring. */
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const pad = (lx: number, lz: number, half: number) => [lx * cy + lz * sy, -lx * sy + lz * cy, half];
+    const BARN_X = -7.0, BARN_Z = -5.8;
+    this._apron(B, 22, 9, 63, M.gravel, {
+      yaw, wear: [pad(BARN_X, BARN_Z + 5.4, 1.4), pad(6, 4, 0.9), pad(13, 12, 0.6)],
+    });
+
+    /*
+     * The paddock: post and two rails, one open arc with a gateway in the gap.
+     *
+     * `R` is set off the deck and the barn, not chosen: `22 * (1 - 0.085)` is
+     * the closest `gradePad`'s wobbled edge ever comes, and the barn's far roof
+     * corner is 17.9 m out. 19.0 sits between them with a metre either side.
+     * The posts are 1.5 m long centred at 0.72 so their feet are 0.03 m under
+     * the deck rather than 0.15 m above it, which is what they were.
+     */
+    const R = 19, GATE_HALF = 0.16, N = 34;
+    const A0 = Math.PI / 2 + GATE_HALF, SWEEP = Math.PI * 2 - GATE_HALF * 2;
+    for (let i = 0; i <= N; i++) {
+      const a = A0 + (i / N) * SWEEP;
+      put(M.plank, new THREE.CylinderGeometry(0.09, 0.11, 1.5, 6), [Math.cos(a) * R, 0.72, Math.sin(a) * R]);
+      if (i === N) break;
+      const a2 = A0 + ((i + 1) / N) * SWEEP;
       const mx = (Math.cos(a) + Math.cos(a2)) * 0.5 * R, mz = (Math.sin(a) + Math.sin(a2)) * 0.5 * R;
       const len = Math.hypot(Math.cos(a2) - Math.cos(a), Math.sin(a2) - Math.sin(a)) * R;
-      for (const h of [0.8, 1.3]) {
+      for (const h of [0.62, 1.14]) {
         put(M.plank, new THREE.BoxGeometry(len + 0.1, 0.1, 0.06), [mx, h, mz], [0, -(a + a2) * 0.5 + Math.PI / 2, 0]);
       }
+    }
+    {
+      // The gateway. Two stout posts on the ends of the arc and a header across
+      // them, so the opening reads as a way in from the road rather than as a
+      // hole in the fence. A hung leaf was tried on paper and rejected: at the
+      // 80 m this place is read from, a 3 m five-bar gate is four pixels of
+      // slat and the header is the whole signal.
+      const a0 = Math.PI / 2 - GATE_HALF, a1 = A0;
+      const p0: [number, number] = [Math.cos(a0) * R, Math.sin(a0) * R];
+      const p1: [number, number] = [Math.cos(a1) * R, Math.sin(a1) * R];
+      for (const p of [p0, p1]) put(M.plank, new THREE.CylinderGeometry(0.15, 0.17, 3.0, 8), [p[0], 1.45, p[1]]);
+      const span = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      const th = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+      put(M.plank, box(span + 0.3, 0.3, 0.24, { arris: 0.04 }),
+        [(p0[0] + p1[0]) / 2, 2.9, (p0[1] + p1[1]) / 2], [0, -th, 0]);
     }
 
     // Barn.
@@ -2121,14 +2196,27 @@ export class PoiKits {
         if (Math.abs(bx) < 2.4) continue;
         for (const sz of [-1, 1]) b.wood.push(box(0.09, H, 0.045, { x: bx, y: y0 + H / 2, z: sz * (D / 2 + 0.02) }));
       }
-      // Gable ends, stepped so every piece stays a chamfered box, and the two
-      // roof planes over them with barge boards on the rake.
+      // The 9 m side walls carried no battens at all, so the two elevations you
+      // actually drive past read as flat red panels beside a boarded gable.
+      const nd = Math.round((D - T * 2) / 0.62);
+      for (let i = 0; i <= nd; i++) {
+        const bz = -(D - T * 2) / 2 + ((D - T * 2) * i) / nd;
+        for (const sx of [-1, 1]) b.wood.push(box(0.045, H, 0.09, { x: sx * (W / 2 + 0.02), y: y0 + H / 2, z: bz }));
+      }
+      /*
+       * The gable, as one extruded triangle per end.
+       *
+       * It was five stacked boxes and the docstring above has the arithmetic of
+       * why they punched through. A triangle needs no falloff rule and no step
+       * count: `y = y0 + H + rise * (1 - |x| / (W/2))` is under the roof slab's
+       * underside, `y0 + H + 3.140 - 0.4429 * |x|`, by 0.04 m at the ridge
+       * widening to 0.26 m at the eave, and the ridge cap covers the 0.04.
+       */
       for (const sz of [-1, 1]) {
-        const NG = 5;
-        for (let i = 0; i < NG; i++) {
-          const t = i / NG;
-          b.shell.push(box(W * (1 - t), rise / NG, T, { y: y0 + H + rise * (t + 0.5 / NG), z: sz * (D / 2 - T / 2) }));
-        }
+        const sh = new THREE.Shape();
+        sh.moveTo(-W / 2, 0); sh.lineTo(W / 2, 0); sh.lineTo(0, rise); sh.closePath();
+        const tri = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false });
+        b.shell.push(xform(tri, { y: y0 + H, z: sz * (D / 2 - T / 2) - T / 2 }));
         for (const sx of [-1, 1]) {
           const len = Math.hypot(W / 2, rise), ang = Math.atan2(rise, W / 2);
           b.trim.push(xform(box(len, 0.22, 0.14), {
@@ -2145,11 +2233,21 @@ export class PoiKits {
       }
       // The sliding door: a leaf hung on a rail outside the opening, with a
       // head beam over it. A hole with a leaf beside it beats a black rectangle.
+      //
+      // The leaf was `M.plank` — the dark coarse-grained board material — over
+      // a 2.5 x 3.9 m panel, and at that scale its grain reads as **straw**:
+      // the frames called it a bale stood on end against the barn. It is a
+      // painted leaf now (`trim`, the same cream as the barge boards) with a
+      // plank Z-brace on it, which is both what a barn door looks like and the
+      // one place on this elevation with any tonal contrast.
       b.dark.push(box(4.4, 4.0, 0.1, { y: y0 + 2.0, z: D / 2 - T - 0.06, sharp: true }));
       b.trim.push(box(5.4, 0.26, 0.3, { y: y0 + 4.3, z: D / 2 + 0.16 }));
       b.metal.push(box(5.6, 0.09, 0.09, { y: y0 + 4.14, z: D / 2 + 0.28 }));
-      b.wood.push(box(2.5, 3.9, 0.12, { x: -2.9, y: y0 + 1.98, z: D / 2 + 0.28 }));
-      for (let i = 0; i < 5; i++) b.wood.push(box(0.1, 3.9, 0.05, { x: -4.0 + i * 0.55, y: y0 + 1.98, z: D / 2 + 0.35 }));
+      b.trim.push(box(2.5, 3.9, 0.12, { x: -2.9, y: y0 + 1.98, z: D / 2 + 0.28 }));
+      for (const dy of [-1.65, 1.65]) b.wood.push(box(2.4, 0.16, 0.05, { x: -2.9, y: y0 + 1.98 + dy, z: D / 2 + 0.35 }));
+      b.wood.push(xform(box(Math.hypot(2.4, 3.3), 0.16, 0.05), {
+        rz: Math.atan2(3.3, 2.4), x: -2.9, y: y0 + 1.98, z: D / 2 + 0.35,
+      }));
       // Loft door and its hoist beam.
       b.dark.push(box(1.9, 1.5, 0.1, { y: y0 + H + 1.25, z: D / 2 - 0.1, sharp: true }));
       b.wood.push(box(0.22, 0.22, 1.5, { y: y0 + H + 2.3, z: D / 2 + 0.6 }));
@@ -2163,24 +2261,34 @@ export class PoiKits {
         if (role !== 'glow' && role !== 'dark') {
           bakeTone(g, { y0: 0, y1: y0 + H + rise, grime: 0.7, bleach: 1.08, jitter: tv.jitter, tint: tv.tint, streak: 0.22 });
         }
-        put(roleMat[role] ?? M.red, g, [-9, 0, -11]);
+        put(roleMat[role] ?? M.red, g, [BARN_X, 0, BARN_Z]);
       }
-      put(M.lamp, new THREE.BoxGeometry(0.6, 0.24, 0.14), [-6, 5.0, -6.4]);
+      put(M.lamp, new THREE.BoxGeometry(0.6, 0.24, 0.14), [BARN_X + 3, 5.0, BARN_Z + 4.6]);
     }
 
-    // feed silo
-    put(M.steel, new THREE.CylinderGeometry(1.9, 1.9, 7.5, 14), [4, 4.1, -13]);
-    put(M.steel, new THREE.ConeGeometry(2.0, 1.6, 14), [4, 8.6, -13]);
-    put(M.steel, new THREE.ConeGeometry(1.9, 2.2, 14).rotateZ(Math.PI), [4, 0.9, -13]);
+    // feed silo — clear of the barn's 10 m roof envelope by 1.2 m
+    put(M.steel, new THREE.CylinderGeometry(1.9, 1.9, 7.5, 14), [5, 4.1, -14]);
+    put(M.steel, new THREE.ConeGeometry(2.0, 1.6, 14), [5, 8.6, -14]);
+    put(M.steel, new THREE.ConeGeometry(1.9, 2.2, 14).rotateZ(Math.PI), [5, 0.9, -14]);
     for (let i = 0; i < 5; i++) {
-      put(M.steel, new THREE.TorusGeometry(1.95, 0.05, 4, 14).rotateX(Math.PI / 2), [4, 1.4 + i * 1.5, -13]);
+      put(M.steel, new THREE.TorusGeometry(1.95, 0.05, 4, 14).rotateX(Math.PI / 2), [5, 1.4 + i * 1.5, -14]);
     }
     // trough, hay under a tarp, signboard
     put(M.plank, box(4.4, 0.6, 1.1, { arris: 0.04 }), [6, 0.65, 4]);
     for (const sx of [-1, 1]) put(M.plank, box(0.14, 0.5, 0.9, { arris: 0.03 }), [6 + sx * 2.1, 0.25, 4]);
+    /*
+     * The bale stack. Three on the ground and two in the valleys between them:
+     * a 0.8 m round bale resting on two 0.8 m bales whose axes are 1.8 m apart
+     * sits `sqrt(1.6^2 - 0.9^2)` = 1.32 m above them, so the stack is stable
+     * arithmetic rather than a guessed offset, and nothing is in the air.
+     */
+    const BALE_X = 7.0, BALE_Z = -10.2;
     for (let i = 0; i < 6; i++) {
-      put(M.wood, new THREE.CylinderGeometry(0.8, 0.8, 1.5, 10).rotateZ(Math.PI / 2),
-        [rng.range(-14, 12), 0.9 + (i > 3 ? 1.6 : 0), rng.range(-4, 8)], [0, rng.next() * 3, 0]);
+      const p: Vec3 = i < 3 ? [BALE_X + i * 1.8, 0.8, BALE_Z]
+        : i < 5 ? [BALE_X + 0.9 + (i - 3) * 1.8, 2.12, BALE_Z]
+          : [-1.5, 0.8, 5.2];
+      put(M.wood, new THREE.CylinderGeometry(0.8, 0.8, 1.5, 10).rotateZ(Math.PI / 2), p,
+        [0, rng.range(-0.14, 0.14), 0]);
     }
     {
       // A tarp over the stacked bales: the `max` envelope gives it the ridge
@@ -2193,11 +2301,11 @@ export class PoiKits {
           { x: 1.9, z: -0.1, w: 1.5, d: 2.2, h: 0.95 },
         ],
       });
-      put(M.cloth, tarp, [11, 0.05, -4], [0, rng.range(0, 3), 0]);
+      put(M.cloth, tarp, [12, 0.05, -3.4], [0, rng.range(0, 3), 0]);
     }
-    put(M.plank, new THREE.CylinderGeometry(0.13, 0.15, 4.4, 6), [13, 2.4, 12]);
-    put(M.sign, new THREE.PlaneGeometry(3.4, 1.8), [13, 4.6, 12.1]);
-    put(M.cream, box(3.6, 2.0, 0.16, { arris: 0.04 }), [13, 4.6, 12]);
+    put(M.plank, new THREE.CylinderGeometry(0.13, 0.15, 4.6, 6), [13, 2.3, 12]);
+    put(M.sign, new THREE.PlaneGeometry(3.4, 1.8), [13, 4.4, 12.1]);
+    put(M.cream, box(3.6, 2.0, 0.16, { arris: 0.04 }), [13, 4.4, 12]);
     return { cast: true, r: 26 };
   }
 
