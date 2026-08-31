@@ -99,10 +99,13 @@ function sees(lx, ly, lz, fx, fy, fz) {
  * baseline run and a fixed run are the same measurement.
  */
 const legacyFloor = rig.groundClearance ?? (rig.probeRadius + 0.42);
-function solve(fx, fy, fz, yaw, pitch, out) {
+function solve(fx, fy, fz, yaw, pitch, out, push) {
   focus.set(fx, fy, fz);
   if (typeof rig._solveLens === 'function') {
+    const was = rig.occluderPush;
+    rig.occluderPush = push;
     rig._solveLens(g, focus, yaw, pitch, WANTED, out);
+    rig.occluderPush = was;
     return;
   }
   const cp = Math.cos(pitch);
@@ -112,6 +115,56 @@ function solve(fx, fy, fz, yaw, pitch, out) {
   const fl = terr.heightAt(out.x, out.z) + legacyFloor;
   if (out.y < fl) out.y = fl;
 }
+
+/**
+ * Everything one placed lens is graded on. Called twice per pose -- push-out on
+ * and push-out off -- so the before and the after are the SAME poses in the
+ * same world, which is the only comparison this lane can make honestly: a
+ * live-fight A/B cannot hold the route fixed, because the arm feeds
+ * `Props.update(camPos)` and therefore the streaming and therefore where the
+ * player's feet land.
+ */
+function grade(lensP, fx, fy, fz) {
+  fwd.set(fx - lensP.x, fy - lensP.y, fz - lensP.z);
+  const dl = fwd.length() || 1;
+  fwd.multiplyScalar(1 / dl);
+  right.copy(fwd).cross(WORLD_UP).normalize();
+  up.copy(right).cross(fwd).normalize();
+  let n3 = 0, n8 = 0;
+  for (let iy = 0; iy < NY; iy++) {
+    const sy = (2 * (iy + 0.5) / NY - 1) * th;
+    for (let ix = 0; ix < NX; ix++) {
+      const sx = (2 * (ix + 0.5) / NX - 1) * th * ASPECT;
+      ray.copy(fwd).addScaledVector(right, sx).addScaledVector(up, sy).normalize();
+      const t = Math.min(rayGround(lensP.x, lensP.y, lensP.z, ray.x, ray.y, ray.z),
+        raySolid(lensP.x, lensP.y, lensP.z, ray.x, ray.y, ray.z));
+      if (t < 3) n3++;
+      if (t < 8) n8++;
+    }
+  }
+  const cells = NX * NY;
+  return {
+    mud3: n3 / cells,
+    mud8: n8 / cells,
+    clear: lensP.y - terr.heightAt(lensP.x, lensP.z),
+    inRock: !!(occ && occ.count && occ.inside(lensP.x, lensP.y, lensP.z, rig.probeRadius)),
+    see: sees(lensP.x, lensP.y, lensP.z, fx, fy, fz)
+      && raySolid(lensP.x, lensP.y, lensP.z, fwd.x, fwd.y, fwd.z) >= dl - 0.1,
+  };
+}
+/** One column of the report. */
+const col = () => ({ poses: 0, blind: 0, inRock: 0, mud3: 0, mud8: 0, clear: 0,
+  half: 0, nine: 0, worstClear: 1e9 });
+const tally = (c, m) => {
+  c.poses++; c.mud3 += m.mud3; c.mud8 += m.mud8; c.clear += m.clear;
+  if (!m.see) c.blind++;
+  if (m.inRock) c.inRock++;
+  if (m.mud3 > 0.5) c.half++;
+  if (m.mud3 > 0.9) c.nine++;
+  if (m.clear < c.worstClear) c.worstClear = m.clear;
+};
+const ON = col(), OFF = col();
+const lensOff = new V();
 
 const th = Math.tan((rig.baseFov * Math.PI / 180) / 2);
 const ASPECT = 16 / 9;
@@ -140,46 +193,23 @@ for (let ox = -EXT; ox <= EXT; ox += STEP) {
       const yaw = (a / YAWS) * Math.PI * 2;
       for (const pitch of PITCHES) {
         const fy = h0 + 1.62;
-        solve(gx, fy, gz, yaw, pitch, lens);
-        // frame basis: the rig always looks AT the focus, whatever the arm did
-        fwd.set(gx - lens.x, fy - lens.y, gz - lens.z).normalize();
-        right.copy(fwd).cross(WORLD_UP).normalize();
-        up.copy(right).cross(fwd).normalize();
-        let n3 = 0, n8 = 0;
-        for (let iy = 0; iy < NY; iy++) {
-          const sy = (2 * (iy + 0.5) / NY - 1) * th;
-          for (let ix = 0; ix < NX; ix++) {
-            const sx = (2 * (ix + 0.5) / NX - 1) * th * ASPECT;
-            ray.copy(fwd).addScaledVector(right, sx).addScaledVector(up, sy).normalize();
-            const t = Math.min(rayGround(lens.x, lens.y, lens.z, ray.x, ray.y, ray.z),
-              raySolid(lens.x, lens.y, lens.z, ray.x, ray.y, ray.z));
-            if (t < 3) n3++;
-            if (t < 8) n8++;
-          }
-        }
-        const cells = NX * NY;
-        const mud3 = n3 / cells, mud8 = n8 / cells;
-        const clear = lens.y - terr.heightAt(lens.x, lens.z);
-        // Blind means "cannot see Noctis": ground in the way, or a rock in it.
-        const dvx = gx - lens.x, dvy = fy - lens.y, dvz = gz - lens.z;
-        const dl = Math.hypot(dvx, dvy, dvz) || 1;
-        const see = sees(lens.x, lens.y, lens.z, gx, fy, gz)
-          && raySolid(lens.x, lens.y, lens.z, dvx / dl, dvy / dl, dvz / dl) >= dl - 0.1;
+        solve(gx, fy, gz, yaw, pitch, lens, true);
+        const on = grade(lens, gx, fy, gz);
+        solve(gx, fy, gz, yaw, pitch, lensOff, false);
+        const off = grade(lensOff, gx, fy, gz);
+        tally(ON, on); tally(OFF, off);
         poses++;
-        mud3sum += mud3; mud8sum += mud8; clearSum += clear;
-        if (clear < worstClear) worstClear = clear;
-        if (!see) blind++;
-        if (mud3 > 0.5) half++;
-        if (mud3 > 0.9) nine++;
-        hist[Math.min(9, Math.floor(mud3 * 10))]++;
+        hist[Math.min(9, Math.floor(on.mud3 * 10))]++;
         if (steep) {
-          sPoses++; sMud3 += mud3;
-          if (!see) sBlind++;
-          if (mud3 > 0.5) sHalf++;
-          if (mud3 > 0.9) sNine++;
+          sPoses++; sMud3 += on.mud3;
+          if (!on.see) sBlind++;
+          if (on.mud3 > 0.5) sHalf++;
+          if (on.mud3 > 0.9) sNine++;
         }
-        if (mud3 > 0.5 || !see) {
+        const mud3 = on.mud3, see = on.see, clear = on.clear;
+        if (mud3 > 0.5 || !see || off.inRock) {
           worst.push({ x: gx, z: gz, yaw: +yaw.toFixed(2), pitch, mud3: +mud3.toFixed(2),
+            was: +off.mud3.toFixed(2), rock: off.inRock, stillRock: on.inRock,
             clear: +clear.toFixed(2), see, slope: +(Math.atan(sl) * 180 / Math.PI).toFixed(0) });
         }
       }
@@ -188,25 +218,30 @@ for (let ox = -EXT; ox <= EXT; ox += STEP) {
 }
 
 const pc = (n, d) => `${(100 * n / Math.max(1, d)).toFixed(2)}%`;
-worst.sort((p, q) => (q.mud3 - p.mud3) || ((p.see ? 1 : 0) - (q.see ? 1 : 0)));
+worst.sort((p, q) => (q.was - p.was) || (q.mud3 - p.mud3));
 const out = [];
 out.push(`solver: ${typeof rig._solveLens === 'function' ? '_solveLens (fixed)' : '_armDistance + floor (legacy)'}`);
 out.push(`poses ${poses}  (${sPoses} on ground steeper than 15 deg)  rays ${NX}x${NY}  arm ${WANTED} m  far ${FAR} m`);
 out.push(`centred on the player at (${OX}, ${OZ}), half-width ${EXT} m, step ${STEP} m`);
 if (occ) out.push(`boulder proxies in the last window: ${occ.count} of ${occ.scanned} instances scanned, ${occ.lastMs.toFixed(3)} ms, ${occ.rebuilds} rebuilds`);
-out.push(`occluderPush: ${rig.occluderPush === undefined ? 'n/a (pre-fix rig)' : rig.occluderPush}`);
 out.push('');
-out.push(`  BLIND (own character behind the ground)   ${blind}  ${pc(blind, poses)}      steep: ${pc(sBlind, sPoses)}`);
-out.push(`  frame >50% ground within 3 m              ${half}  ${pc(half, poses)}      steep: ${pc(sHalf, sPoses)}`);
-out.push(`  frame >90% ground within 3 m              ${nine}  ${pc(nine, poses)}      steep: ${pc(sNine, sPoses)}`);
-out.push(`  mean mud3                                 ${(mud3sum / poses).toFixed(4)}          steep: ${(sMud3 / Math.max(1, sPoses)).toFixed(4)}`);
-out.push(`  mean mud8                                 ${(mud8sum / poses).toFixed(4)}`);
-out.push(`  mean clearance under the lens             ${(clearSum / poses).toFixed(2)} m   min ${worstClear.toFixed(2)} m`);
+out.push('                                      push-out ON     push-out OFF');
+const row = (label, on, off) => out.push(`  ${label.padEnd(36)}${String(on).padStart(9)}    ${String(off).padStart(12)}`);
+row('lens INSIDE a boulder', pc(ON.inRock, ON.poses), pc(OFF.inRock, OFF.poses));
+row('BLIND (Noctis behind ground or rock)', pc(ON.blind, ON.poses), pc(OFF.blind, OFF.poses));
+row('frame >50% solid within 3 m', pc(ON.half, ON.poses), pc(OFF.half, OFF.poses));
+row('frame >90% solid within 3 m', pc(ON.nine, ON.poses), pc(OFF.nine, OFF.poses));
+row('mean mud3', (ON.mud3 / ON.poses).toFixed(4), (OFF.mud3 / OFF.poses).toFixed(4));
+row('mean mud8', (ON.mud8 / ON.poses).toFixed(4), (OFF.mud8 / OFF.poses).toFixed(4));
+row('mean clearance, m', (ON.clear / ON.poses).toFixed(2), (OFF.clear / OFF.poses).toFixed(2));
+row('min clearance, m', ON.worstClear.toFixed(2), OFF.worstClear.toFixed(2));
 out.push('');
-out.push(`  mud3 histogram (0.0 .. 1.0 in tenths): ${hist.join(' ')}`);
+out.push(`  on steep ground (>15 deg), push-out ON: blind ${pc(sBlind, sPoses)}, >50% mud ${pc(sHalf, sPoses)}, >90% ${pc(sNine, sPoses)}, mean mud3 ${(sMud3 / Math.max(1, sPoses)).toFixed(4)}`);
+out.push(`  mud3 histogram, push-out ON (0.0 .. 1.0 in tenths): ${hist.join(' ')}`);
 out.push('');
-out.push('  worst poses:');
-for (const w of worst.slice(0, 8)) {
-  out.push(`    (${w.x}, ${w.z}) yaw ${w.yaw} pitch ${w.pitch} slope ${w.slope}deg -> mud3 ${w.mud3} clear ${w.clear} ${w.see ? '' : 'BLIND'}`);
+out.push('  worst poses (was = mud3 without push-out):');
+for (const w of worst.slice(0, 10)) {
+  out.push(`    (${w.x}, ${w.z}) yaw ${w.yaw} pitch ${w.pitch} slope ${w.slope}deg -> mud3 ${w.mud3} (was ${w.was})`
+    + `${w.rock ? ' rock->' + (w.stillRock ? 'STILL IN ROCK' : 'out') : ''} clear ${w.clear}${w.see ? '' : ' BLIND'}`);
 }
 return out.join('\n');

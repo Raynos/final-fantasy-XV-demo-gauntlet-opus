@@ -359,12 +359,6 @@ export class CameraRig {
       if (out.y < y) out.y = y;
     };
     floor();
-    if (this.occluderPush && this.occluders.count) {
-      for (let i = 0; i < 3; i++) {
-        if (this.occluders.push(out, this.probeRadius) <= 0) break;
-        floor();
-      }
-    }
     return d;
   }
 
@@ -635,27 +629,30 @@ export class CameraRig {
     // its own, and a tor that streams in beside a running player arrives around
     // the lens rather than in front of it.
     //
-    // Floor and push alternate, because each can undo the other: a push out of
-    // a half-buried boulder can put the lens under the hill, and the floor can
-    // lift it into the block sitting on top. Three rounds settle it or nothing
-    // will.
+    // The recovery is a JUMP TO `_desired` AND NOTHING ELSE, and that is a
+    // correction: this first pushed the lens out radially, out of the deepest
+    // ellipsoid it was in, and `probes/camlook.mts` photographed what that
+    // does. At the outcrop at (180, 360) it lifted the lens two metres, out of
+    // one proxy and flat against the face of the next one, and turned a frame
+    // with the whole party legible in it into a full-screen wall of blurred
+    // brown rock — the playtest's own complaint, manufactured by the fix for
+    // it. Two reasons it was never going to work: an ellipsoid is not the
+    // fractured hull it stands for, so "inside a proxy" is not "inside a rock";
+    // and a radial direction is not a direction the shot has any interest in.
+    //
+    // `_desired` is on the arm line, which is the one direction the shot does
+    // care about, and it is clear by construction — `arm` returns a length no
+    // longer than the first entry into the union of proxies. When it is not
+    // clear (Noctis inside an outcrop with no way out along this arm) the lens
+    // is left exactly where the plain arm put it, because that frame, whatever
+    // else is wrong with it, is the one the old camera gave and it showed the
+    // party.
     floor();
-    if (this.occluderPush && this.occluders.count) {
-      for (let i = 0; i < 3; i++) {
-        if (this.occluders.push(this._smooth, this.probeRadius) <= 0) break;
-        floor();
-      }
-      // A tor is not one boulder: it is five to nine overlapping blocks, and
-      // radial push-out of the deepest can land in a neighbour every time. The
-      // swept point cannot -- `sweep` returns the first entry into the UNION
-      // along the arm, so everything short of it is outside every proxy. Taking
-      // it is a cut, and a cut is what you want here: the alternative on offer
-      // is another frame of the inside of a rock.
-      if (this.occluders.inside(this._smooth.x, this._smooth.y, this._smooth.z, this.probeRadius)
-        && !this.occluders.inside(this._desired.x, this._desired.y, this._desired.z, this.probeRadius)) {
-        this._smooth.copy(this._desired);
-        floor();
-      }
+    if (this.occluderPush && this.occluders.count
+      && this.occluders.inside(this._smooth.x, this._smooth.y, this._smooth.z, this.probeRadius)
+      && !this.occluders.inside(this._desired.x, this._desired.y, this._desired.z, this.probeRadius)) {
+      this._smooth.copy(this._desired);
+      floor();
     }
 
     // ---- commit ----------------------------------------------------------

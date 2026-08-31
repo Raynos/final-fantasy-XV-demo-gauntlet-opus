@@ -249,41 +249,6 @@ export class CameraOccluders {
     return Math.min(wanted, exit + Math.min(0.35, after));
   }
 
-  /**
-   * Push a point out of every proxy it is inside, along the local radial.
-   * @returns metres moved
-   */
-  push(p: THREE.Vector3, probe: number) {
-    const d = this.data;
-    let moved = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      let worst = 0, wi = -1;
-      for (let i = 0; i < this.count; i++) {
-        const l = this._local(i, p.x, p.y, p.z, probe, false).length();
-        // Depth in the normalised frame: 1 is the surface, 0 the centre.
-        const pen = 1 - l;
-        if (pen > worst) { worst = pen; wi = i; }
-      }
-      if (wi < 0) break;
-      const u = this._local(wi, p.x, p.y, p.z, probe, false);
-      let l = u.length();
-      // Dead centre: any direction is as good as another, so take up.
-      if (l < 1e-4) { u.set(0, 1, 0); l = 1; }
-      u.multiplyScalar(1.0001 / l);
-      const o = wi * STRIDE;
-      // back to world: scale up, then rotate by the forward rotation, which is
-      // the transpose of what is stored
-      const sx = u.x * (d[o + 3] + probe), sy = u.y * (d[o + 4] + probe), sz = u.z * (d[o + 5] + probe);
-      const wx = d[o + 6] * sx + d[o + 9] * sy + d[o + 12] * sz;
-      const wy = d[o + 7] * sx + d[o + 10] * sy + d[o + 13] * sz;
-      const wz = d[o + 8] * sx + d[o + 11] * sy + d[o + 14] * sz;
-      const nx = d[o] + wx, ny = d[o + 1] + wy, nz = d[o + 2] + wz;
-      moved += Math.hypot(nx - p.x, ny - p.y, nz - p.z);
-      p.set(nx, ny, nz);
-    }
-    return moved;
-  }
-
   /** Is a sphere of radius `probe` at this point inside a proxy? */
   inside(x: number, y: number, z: number, probe: number) {
     for (let i = 0; i < this.count; i++) {
