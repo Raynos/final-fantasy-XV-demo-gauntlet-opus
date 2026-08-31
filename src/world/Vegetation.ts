@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { demoDensity } from '../engine/Device.ts';
+import { demoDensity, demoVegRange } from '../engine/Device.ts';
 import { Ecology } from './veg/Ecology.ts';
 import { GrassField } from './veg/GrassField.ts';
 import { Bushes } from './veg/Bushes.ts';
@@ -54,18 +54,30 @@ export class Vegetation {
       installAlphaCardGuard(game.scene);
     });
 
+    // Range is the second lever and it is the one that decides DRAW CALLS:
+    // every impostor band and mass ring is its own batch whether it holds ten
+    // plants or ten thousand. Density only thins what is inside them. `r` is 1
+    // everywhere but the phone -- these are the shipped defaults, scaled.
+    const r = demoVegRange();
+    const scale = (v: number) => Math.round(v * r);
+
     bootPhase('Vegetation.grass.build', () => {
       this.grass = new GrassField(this.ecology, game.scene, { quality });
       this.grass.build();
     });
 
     bootPhase('Vegetation.bushes.build', () => {
-      this.bushes = new Bushes(this.ecology, game.scene, { quality });
+      this.bushes = new Bushes(this.ecology, game.scene, {
+        quality, range: scale(96), impRange: scale(440), massNear: scale(380), massRange: scale(2600),
+      });
       this.bushes.build(game.renderer);
     });
 
     bootPhase('Vegetation.trees.build', () => {
-      this.trees = new Trees(this.ecology, game.scene, { quality });
+      this.trees = new Trees(this.ecology, game.scene, {
+        quality, geoRange: scale(250), impRange: scale(330),
+        canopyNear: scale(296), canopyRange: scale(1250),
+      });
       this.trees.build(game.renderer);
     });
 

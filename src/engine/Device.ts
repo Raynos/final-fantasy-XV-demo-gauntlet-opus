@@ -189,6 +189,27 @@ export function demoFps(): number { return 30; }
  * about a *look* and this is a promise about a *device*. `?dens=` overrides,
  * so the trade is walkable from the URL.
  */
+/**
+ * How far the phone draws vegetation, as a fraction of the desktop's ranges.
+ *
+ * Density and range are different levers and only one of them was pulled.
+ * Density thins what is in a given volume; range decides how big the volume
+ * is, and it is range that decides how many *draw calls* the forest costs --
+ * every impostor band and mass ring is its own batch whether it holds ten
+ * plants or ten thousand.
+ *
+ * 0.55 takes the bush impostor band from 440 m to 242 and the tree canopy
+ * from 1250 to 688. At a 0.55 Mpx backing store a plant at 700 m is under a
+ * pixel, so this is very close to free.
+ *
+ * `?veg=` overrides.
+ */
+export function demoVegRange(): number {
+  const want = Number(params().get('veg'));
+  if (Number.isFinite(want) && want > 0 && want <= 1) return want;
+  return DEMO ? 0.55 : 1;
+}
+
 export function demoDensity(): number {
   const want = Number(params().get('dens'));
   if (Number.isFinite(want) && want > 0 && want <= 1) return want;
