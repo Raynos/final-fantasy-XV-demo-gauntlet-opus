@@ -35,13 +35,18 @@ export function portraitHref(id: string): string | null {
 /**
  * Open a slot. Called by `Icons.portrait` for every plate it draws.
  *
- * The slot list is append-only and small (a dozen plates over a session), but
- * menu screens are rebuilt on every open, so detached slots are swept here
- * rather than left to grow: a node whose `<svg>` root has no parent is gone.
+ * Menu screens are rebuilt on every open, so dead slots are swept rather than
+ * left to grow — but **only slots that have already been filled**. An empty one
+ * is still detached at this moment by construction: every caller builds its
+ * plate and appends it to the document afterwards, so a sweep on `isConnected`
+ * alone deletes the plate that is being registered a moment before it is
+ * attached, and it never fills. Today the party stack survives that only
+ * because it appends each row before building the next.
  */
 export function registerPortraitSlot(id: string, img: SVGElement, bust: SVGElement | null) {
   for (let i = slots.length - 1; i >= 0; i--) {
-    if (!slots[i].img.isConnected && !slots[i].img.ownerSVGElement?.isConnected) slots.splice(i, 1);
+    const s = slots[i];
+    if (s.img.getAttribute('opacity') === '1' && !s.img.isConnected) slots.splice(i, 1);
   }
   slots.push({ id, img, bust });
   const href = baked.get(id);
