@@ -63,10 +63,14 @@ hud.setMenuOpen(false); step(4);
  * compare at the very end of the run. A prompt offered at A and standing at B
  * is a violation whoever's window the move fell in.
  *
- * `npc_*` is excluded and the exclusion is *measured*, not assumed: a talk
+ * **Nothing is excluded.** `npc_*` looked like it would have to be -- a talk
  * anchor tracks a person who is allowed to walk, and `Npcs.update` rewrites it
- * every frame inside 85 m. Their drift is counted and printed separately so
- * this stays an argument rather than a blanket.
+ * every frame inside 85 m -- so the first version counted their drift
+ * separately as a control. It read **0 of 101 items on two runs at two
+ * different shas**, so the exclusion was a blanket rule with no instances and
+ * it is gone. If an `npc_` id ever shows up here, that is a person whose prompt
+ * moved out from under a walk-up, and it wants looking at rather than filtering
+ * out.
  */
 const firstSeen = new Map();
 const observe = () => {
@@ -134,25 +138,19 @@ for (const it of items) {
 
 observe();
 
-/*
- * The whole-run half of claim 3. `drifted` is the one that matters; `npcDrift`
- * is the control that keeps the `npc_` exclusion honest -- if it ever reads 0,
- * the exclusion is dead weight and should go.
- */
-const drifted = [], npcDrift = [];
+/* The whole-run half of claim 3. Measured pre-fix at 32.39 m and 20.30 m. */
+const drifted = [];
 for (const [id, p0] of firstSeen) {
   const it = ix.items.get(id);
   if (!it) continue;
   const d = Math.hypot(it.pos.x - p0[0], it.pos.z - p0[1]);
-  if (d <= 0.01) continue;
-  (id.indexOf('npc_') === 0 ? npcDrift : drifted).push(`${id} moved ${d.toFixed(2)} m after being offered`);
+  if (d > 0.01) drifted.push(`${id} moved ${d.toFixed(2)} m after being offered`);
 }
 
 out.push(`${rpg.tombs.nodes.length} tombs; ${unanchored} never anchored; ${offPitch} off the 7.19 m pin-to-coffin pitch`);
 for (const a of anchors) out.push(a);
 out.push(`walk-up: ${items.length} enabled interactables, ${missed.length} unreachable, ${moved.length} moved while offered`);
-out.push(`whole run: ${firstSeen.size} items seen enabled, ${drifted.length} moved after being offered`
-  + ` (${npcDrift.length} npc talk anchors excluded -- they track people who walk)`);
+out.push(`whole run: ${firstSeen.size} items seen enabled, ${drifted.length} moved after being offered`);
 for (const m of missed.slice(0, 8)) out.push(`  MISS  ${m}`);
 for (const m of moved.slice(0, 8)) out.push(`  MOVED ${m}`);
 for (const m of drifted.slice(0, 8)) out.push(`  DRIFT ${m}`);
@@ -166,7 +164,6 @@ return {
   missed,
   moved,
   drifted,
-  npcDrift: npcDrift.length,
   pass: unanchored === 0 && offPitch === 0 && missed.length === 0 && moved.length === 0
     && drifted.length === 0,
 };
