@@ -186,7 +186,7 @@ const SHOOT = Number(window.__FC_SHOOT ?? 1);
 
 const rows = [];
 const emit = (s) => { rows.push(s); console.log(s); };
-const all = { frames: 0, solid: 0, blind: 0, clearSum: 0, worstClear: 1e9, was: 0 };
+const all = { frames: 0, solid: 0, blind: 0, clearSum: 0, worstClear: 1e9, was: 0, heroIn: 0, wallOnly: 0 };
 const beats = [];
 
 for (let round = 0; round < ROUNDS; round++) {
@@ -208,7 +208,10 @@ for (let round = 0; round < ROUNDS; round++) {
 
   /* ---- the fight ----------------------------------------------------- */
   const r = { round: round + 1, frames: 0, solid: 0, blind: 0, worstClear: 1e9,
-    clearSum: 0, mud: [], solidRuns: 0, was: 0, wasRuns: 0, prox: 0 };
+    clearSum: 0, mud: [], solidRuns: 0, was: 0, wasRuns: 0, prox: 0,
+    /** Noctis' own chest inside a boulder -- rocks have no CHARACTER collision
+     *  either, so he can stand in one, and then no arm can save the frame. */
+    heroIn: 0, wallOnly: 0 };
   let wasWas = false;
   let wasSolid = false;
   const sampleAt = new Set([0, 60, 150, 300, 600]);
@@ -230,7 +233,10 @@ for (let round = 0; round < ROUNDS; round++) {
     if (solWas && !wasWas) r.wasRuns++;
     wasWas = solWas;
     r.prox = Math.max(r.prox, occ ? occ.count : 0);
-    const sol = inSolid(p);
+    const rockNow = inRock(p), wallNow = inWall(p);
+    const sol = rockNow || wallNow;
+    if (wallNow && !rockNow) r.wallOnly++;
+    if (occ && occ.count && occ.inside(player.position.x, player.position.y + 1.3, player.position.z, 0.3)) r.heroIn++;
     const bl = !sees(p, player.position.x, player.position.y + 1.3, player.position.z);
     const clear = p.y - terr.heightAt(p.x, p.z);
     r.frames++; if (sol) r.solid++; if (bl) r.blind++;
@@ -248,13 +254,14 @@ for (let round = 0; round < ROUNDS; round++) {
   }
   mouse(false);
   inp.keys.clear();
-  all.frames += r.frames; all.solid += r.solid; all.blind += r.blind; all.was += r.was;
+  all.frames += r.frames; all.solid += r.solid; all.blind += r.blind; all.was += r.was; all.heroIn += r.heroIn; all.wallOnly += r.wallOnly;
   all.clearSum += r.clearSum; all.worstClear = Math.min(all.worstClear, r.worstClear);
   const pc = (n) => `${(100 * n / Math.max(1, r.frames)).toFixed(1)}%`;
   emit(`round ${r.round}: ${r.frames} combat frames  solid ${r.solid} (${pc(r.solid)}, ${r.solidRuns} runs)`
     + `  [no push-out: ${r.was} (${pc(r.was)}, ${r.wasRuns} runs)]`
     + `  blind ${r.blind} (${pc(r.blind)})  clear mean ${(r.clearSum / Math.max(1, r.frames)).toFixed(2)} m`
-    + ` min ${r.worstClear.toFixed(2)} m  proxies<=${r.prox}  mud3 ${r.mud.join(' ')}`);
+    + ` min ${r.worstClear.toFixed(2)} m  proxies<=${r.prox}  heroInRock ${pc(r.heroIn)}  wallOnly ${pc(r.wallOnly)}`
+    + `  mud3 ${r.mud.join(' ')}`);
   beats.push(r);
 }
 
@@ -263,6 +270,8 @@ emit('');
 emit(`=== ${beats.length} fights, ${all.frames} combat frames`);
 emit(`  lens INSIDE a solid   ${all.solid}  ${pc(all.solid)}`);
 emit(`  ...without push-out   ${all.was}  ${pc(all.was)}   (same frames, same fights, arm re-solved with rig.occluderPush = false)`);
+emit(`  ...of which WALL, not rock ${all.wallOnly}  ${pc(all.wallOnly)}   (town/landmark soup; the camera does not push out of those)`);
+emit(`  Noctis himself in a rock ${all.heroIn}  ${pc(all.heroIn)}   (characters have no boulder collision either -- no arm can fix these)`);
 emit(`  occluder window       ${occ.count} proxies now, ${occ.rebuilds} rebuilds, ${occ.scanned} instances scanned last, ${occ.lastMs.toFixed(3)} ms`);
 emit(`  Noctis BEHIND ground  ${all.blind}  ${pc(all.blind)}`);
 emit(`  clearance             mean ${(all.clearSum / Math.max(1, all.frames)).toFixed(2)} m   min ${all.worstClear.toFixed(2)} m`);

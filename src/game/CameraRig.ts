@@ -321,7 +321,14 @@ export class CameraRig {
     if (this.occluderPush && this.occluders.count) {
       const t = this.occluders.sweep(
         focus.x, focus.y, focus.z, dir.x, dir.y, dir.z, d, this.probeRadius);
-      if (t < d) d = Math.max(this.minDistance, t - 0.04);
+      // `minDistance` is NOT the floor here, and that was the first fix's own
+      // bug: measured, it left 19.8% of combat frames still inside a rock.
+      // 1.1 m is a *comfort* minimum for a camera being crowded by a hill; a
+      // boulder 0.6 m behind Noctis' shoulder is not a comfort question, and
+      // clamping to 1.1 m there puts the lens through the rock face rather
+      // than short of it. Over the shoulder at 40 cm is a real shot. Being
+      // inside the rock is not a shot at all.
+      if (t < d) d = Math.max(SOLID_MIN, t - 0.04);
     }
     return d;
   }
@@ -352,7 +359,10 @@ export class CameraRig {
     };
     floor();
     if (this.occluderPush && this.occluders.count) {
-      if (this.occluders.push(out, this.probeRadius) > 0) floor();
+      for (let i = 0; i < 3; i++) {
+        if (this.occluders.push(out, this.probeRadius) <= 0) break;
+        floor();
+      }
     }
     return d;
   }
@@ -609,18 +619,36 @@ export class CameraRig {
       const floorY = groundT.heightAt(this._smooth.x, this._smooth.z) + this.groundClearance;
       if (this._smooth.y < floorY) this._smooth.y = floorY;
     };
-    floor();
 
     // ---- and out of any boulder --------------------------------------------
-    // The arm sweep above stops the lens *entering* a rock along the arm. It
-    // cannot stop the lens being overtaken by one: `_smooth` lags `_desired` by
-    // a damped frame or two, the handheld layer adds a few centimetres of its
-    // own, and a tor that streams in beside a running player arrives around the
-    // lens rather than in front of it. So the committed position is pushed out
-    // radially as well, and the ground floor is re-applied after it, because a
-    // push out of a half-buried boulder can put the lens under the hill.
+    // The arm sweep stops the lens *entering* a rock along the arm. It cannot
+    // stop the lens being overtaken by one: `_smooth` lags `_desired` by a
+    // damped frame or two (11/s is 17% of the error per frame, so a push-in
+    // takes ten frames to arrive), the handheld layer adds a few centimetres of
+    // its own, and a tor that streams in beside a running player arrives around
+    // the lens rather than in front of it.
+    //
+    // Floor and push alternate, because each can undo the other: a push out of
+    // a half-buried boulder can put the lens under the hill, and the floor can
+    // lift it into the block sitting on top. Three rounds settle it or nothing
+    // will.
+    floor();
     if (this.occluderPush && this.occluders.count) {
-      if (this.occluders.push(this._smooth, this.probeRadius) > 0) floor();
+      for (let i = 0; i < 3; i++) {
+        if (this.occluders.push(this._smooth, this.probeRadius) <= 0) break;
+        floor();
+      }
+      // A tor is not one boulder: it is five to nine overlapping blocks, and
+      // radial push-out of the deepest can land in a neighbour every time. The
+      // swept point cannot -- `sweep` returns the first entry into the UNION
+      // along the arm, so everything short of it is outside every proxy. Taking
+      // it is a cut, and a cut is what you want here: the alternative on offer
+      // is another frame of the inside of a rock.
+      if (this.occluders.inside(this._smooth.x, this._smooth.y, this._smooth.z, this.probeRadius)
+        && !this.occluders.inside(this._desired.x, this._desired.y, this._desired.z, this.probeRadius)) {
+        this._smooth.copy(this._desired);
+        floor();
+      }
     }
 
     // ---- commit ----------------------------------------------------------
@@ -665,6 +693,12 @@ const FRAME_PITCH_RATE = 0.9;
 const FRAME_PITCH = 0.30;
 /** Damping rate on the lock point itself. */
 const LOCK_DAMP = 6.0;
+/**
+ * Shortest arm a solid may crowd the lens to, metres.
+ *
+ * Deliberately far below `minDistance`: see `_armDistance`.
+ */
+const SOLID_MIN = 0.4;
 
 /** Shortest-arc difference between two angles, in `(-pi, pi]`. */
 function shortestAngle(d: number) {
