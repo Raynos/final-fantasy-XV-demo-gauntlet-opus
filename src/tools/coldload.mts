@@ -400,8 +400,14 @@ async function main() {
       // what makes run 2..N a *warm* comparison rather than an accident.
       if (i === 0) await cdp.send('Network.clearBrowserCache');
       const t0 = Date.now();
-      const base = ORIGIN ? `${ORIGIN.replace(/\/+$/, '')}/` : `http://127.0.0.1:${PORT}/`;
-      await page.goto(`${base}?q=${Q}${PLAY ? '' : '&shoot=1'}${ha.extra ? `&${ha.extra}` : ''}`,
+      // An `--origin` may carry its own query, and silently discarding it is a
+      // footgun that costs a whole run to notice: `--origin '.../?demo=1'`
+      // measured the DESKTOP build and looked like a bug in the game. The
+      // origin's params go on first so this tool's own still win a conflict.
+      const originUrl = ORIGIN ? new URL(ORIGIN) : null;
+      const base = originUrl ? `${originUrl.origin}${originUrl.pathname.replace(/\/+$/, '')}/` : `http://127.0.0.1:${PORT}/`;
+      const carried = originUrl && originUrl.search ? `${originUrl.search.slice(1)}&` : '';
+      await page.goto(`${base}?${carried}q=${Q}${PLAY ? '' : '&shoot=1'}${ha.extra ? `&${ha.extra}` : ''}`,
         { waitUntil: 'commit', timeout: 600000 });
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 600000 });
       const wall = Date.now() - t0;
