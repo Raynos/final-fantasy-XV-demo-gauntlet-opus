@@ -36,19 +36,23 @@
 //    and the rate line below, which say how much wall clock a game minute
 //    costs on this machine.
 //
-// **THERE IS NO `--night` FLAG, AND THE CLOCK DOES NOT RUN.** Both halves of
-// that cost this gate its meaning once already, so they are written down here
-// rather than left to be rediscovered:
+// **THERE IS NO `--night` FLAG.** That cost this gate its meaning once already,
+// so it is written down here rather than left to be rediscovered:
 //
 //  - `probe.mts` parses `--shot`, `--ttl`, `--turbo`, `--set` and `--cpu` and
 //    forwards NOTHING else to the page. A run invoked as `longplay --night`
 //    drops `--night` on the floor without a word and reports a confident
 //    `PASS -- 30 minutes of continuous play` about a session at NOON. The knob
 //    is `--set __PLAY_NIGHT=1`, which is the idiom every other knob here uses.
-//  - Nothing advances the clock during a session. `Sky.hours` only ever moves
-//    inside `Sky.setTimeOfDay`, `DayCycle.syncFromSky` is true and `driveSky`
-//    is false, so `rpg.day` mirrors the sky and the sky sits where the last
-//    `applyShot` put it. Thirty game minutes is thirty minutes of ONE hour.
+//
+// The clock's other half is FIXED as of lane W3-D: `DayCycle.driveSky` is true
+// and the clock runs at 0.4 in-game minutes per real second, so a default day
+// session now crosses about twelve hours rather than sitting on the one hour
+// the last `applyShot` left in the sky. **Night mode pins it deliberately** --
+// see below -- because the whole point of `__PLAY_NIGHT` is to hold
+// `nightDanger()` above the feature's 0.5 floor for the length of the run, and
+// a clock that walked out of the night at minute nine would test the feature
+// for nine minutes and then quietly stop.
 //
 // So the summary below always names the hour and the `nightDepth` it played
 // at. A gate that cannot say what it tested is how a green run about the wrong
@@ -125,6 +129,14 @@ const NIGHT = NIGHT_ARG != null && NIGHT_ARG !== 0 && NIGHT_ARG !== ''
 const HOUR = NIGHT ? (Number(NIGHT_ARG) > 1.5 ? Number(NIGHT_ARG) : 23.2) : null;
 const sky = g.get('Sky');
 if (NIGHT && sky && sky.setTimeOfDay) sky.setTimeOfDay(HOUR);
+// PIN it. `DayCycle` drives the sky now (lane W3-D), so `setTimeOfDay` alone is
+// a starting hour rather than a setting: at 0.4 in-game min per real second a
+// 30-game-minute night run would walk 23:12 -> 11:12 and spend most of itself
+// in daylight. `running = false` is the documented switch for exactly this
+// ("set false during cutscenes and menus") and it stops the clock without
+// touching the sky, so the hour, the depth and every night-gated spawn table
+// hold where this probe put them. The day session is left to run.
+if (NIGHT && rpg && rpg.day) rpg.day.running = false;
 // One frame so `DayCycle.update` pulls `rpg.day.hour` onto the sky's hour --
 // it follows the sky by delta and is otherwise still at whatever the shot left.
 // Guarded, because `TIMINGS.md` records this probe's day run as identical to
