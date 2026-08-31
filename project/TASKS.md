@@ -1182,3 +1182,31 @@ is landed.
   stone. The next lever is which population is allowed up there at all —
   `_genOutcrop`'s `q` and `BIG`'s membership — not the size taper.
   `placeholder-props`
+
+## Seated and mounted, after W3-A (playtest complaint #2)
+
+- **`CombatSystem.hand` is an offset, not a socket.** It parents all five weapon
+  classes to a plain `Group` pinned at `(-0.30, 1.12, 0.12)` on `player.root`
+  (`CombatSystem.ts:332`), so it takes no notice of any pose in the game.
+  Mounted, that is bird-local `(-0.30, 2.0, 0.12)` — the base of the neck — and
+  sheathed weapons sit at reveal 0 and still draw as a pale blue ghost: this is
+  the literal source of the playtest's "Noctis's sword floating horizontally
+  through the bird's neck". `Occupants`/`Saddle` now hide the group while
+  somebody is aboard; the fix is `attach.handR`, and it will be wrong the same
+  way in every other non-locomotion pose — swimming, fishing, a haven. `w3a`
+- **The Regalia's cabin is ~0.53 m too shallow for the men in it.** Measured
+  (`probes/seatfit.mts`): the door top is 1.106 m off the road and the seat
+  squab top — the H-point — is 1.055 m, so the beltline is 5 cm above the hips
+  where a real convertible is about 60 cm. Every occupant's shoulders sit
+  0.26–0.31 m *above* the door line and the party read as sitting on the car
+  rather than in it. It is also why "one elbow on the sill" is impossible: the
+  upper arm would have to be 0.39 m and it is 0.305 m. `src/world/props/
+  Regalia.ts`, either a deeper cockpit opening or a lower floor pan. `w3a`
+- **One chocobo in the mounted flock has an empty saddle.** Four birds, three
+  visible riders, in every ridden frame before and after this lane's work, so it
+  is not the pose. `ChocoboSystem._ensureFlock` / `FLOCK_SLOTS` vs
+  `Saddle.enter`. `w3a`
+- **The mounted rider's two hand meshes still differ** — a closed dark glove
+  against a paler open hand, legible on a 20-degree lens at 3.4 m. Both finger
+  chains are now curled by the same amount in `POSE_RIDE`, so what remains is
+  `Outfit`/`Look` geometry, not the pose. `w3a`
