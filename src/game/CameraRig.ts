@@ -319,16 +319,17 @@ export class CameraRig {
     // not a raycast against an instanced group — the reason the old comment
     // gave for not doing this at all.
     if (this.occluderPush && this.occluders.count) {
-      const t = this.occluders.sweep(
-        focus.x, focus.y, focus.z, dir.x, dir.y, dir.z, d, this.probeRadius);
       // `minDistance` is NOT the floor here, and that was the first fix's own
       // bug: measured, it left 19.8% of combat frames still inside a rock.
       // 1.1 m is a *comfort* minimum for a camera being crowded by a hill; a
       // boulder 0.6 m behind Noctis' shoulder is not a comfort question, and
       // clamping to 1.1 m there puts the lens through the rock face rather
       // than short of it. Over the shoulder at 40 cm is a real shot. Being
-      // inside the rock is not a shot at all.
-      if (t < d) d = Math.max(SOLID_MIN, t - 0.04);
+      // inside the rock is not a shot at all -- and neither is the case
+      // `CameraOccluders.arm` exists for, where Noctis is inside the rock
+      // himself and the arm has to come out through the far side.
+      d = this.occluders.arm(focus.x, focus.y, focus.z, dir.x, dir.y, dir.z,
+        wanted, d, this.probeRadius, SOLID_MIN);
     }
     return d;
   }

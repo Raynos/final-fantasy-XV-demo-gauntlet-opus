@@ -177,6 +177,51 @@ export class CameraOccluders {
     return moved;
   }
 
+  /**
+   * The arm length to use, given what the arm wants and what the terrain allows.
+   *
+   * Two cases, and the second is the one that matters here. Normally the focus
+   * is in open air, the sweep finds where the arm would enter a rock, and the
+   * arm stops short of it — `minLen` rather than the rig's `minDistance`,
+   * because a boulder crowding Noctis' shoulder is not a comfort question.
+   *
+   * But **Noctis can be standing inside the rock**: `Harvest.collectRockProxies`
+   * returns `[]`, so characters have no boulder collision either, and
+   * `probes/fightcam.mts` measures him inside one on 31.5% of combat frames
+   * across four real den fights (64% and 58% in the two that were fought in a
+   * tor). The first version of this shortened the arm to 0.4 m there, which
+   * keeps the lens inside the rock with him and measured *worse* than no
+   * push-out at all — 55.4% against 30.6% on one round. When the focus is
+   * inside, the right answer is the opposite: run the arm OUT through the far
+   * face and stand the camera beyond it, which is the only place in that
+   * direction from which the fight is visible at all.
+   *
+   * @param terrainD what the terrain sweep already allows
+   * @returns metres along `dir`
+   */
+  arm(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
+    wanted: number, terrainD: number, probe: number, minLen: number) {
+    const entry = this.sweep(ox, oy, oz, dx, dy, dz, wanted, probe);
+    if (entry >= minLen) return Math.min(terrainD, Math.max(minLen, entry - 0.04));
+
+    // Focus inside the union: march for the far face. A 0.2 m step is finer
+    // than any proxy this keeps (`MIN_R` is 0.55) so it cannot tunnel one.
+    let exit = -1;
+    for (let t = 0.2; t <= wanted; t += 0.2) {
+      if (!this.inside(ox + dx * t, oy + dy * t, oz + dz * t, probe)) { exit = t; break; }
+    }
+    // Still inside at full stretch — an outcrop the size of a house. Nothing in
+    // this direction helps, so leave the arm where it wanted to be and let the
+    // radial push in `lateUpdate` have the last word.
+    if (exit < 0) return Math.min(terrainD, wanted);
+    // The terrain limit is deliberately NOT applied on this branch: the ground
+    // floor lifts a lens that ends up low, and a frame of hillside is a frame.
+    // A frame of the inside of a boulder is not.
+    const after = this.sweep(ox + dx * exit, oy + dy * exit, oz + dz * exit,
+      dx, dy, dz, wanted - exit, probe);
+    return Math.min(wanted, exit + Math.min(0.35, after));
+  }
+
   /** Is a sphere of radius `probe` at this point inside a proxy? */
   inside(x: number, y: number, z: number, probe: number) {
     const d = this.data;
