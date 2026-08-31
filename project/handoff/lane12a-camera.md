@@ -77,6 +77,14 @@ Two corrections came out of measuring, and both are in the git log:
 
 Every remaining failure is flagged `STILL IN ROCK` — Noctis inside an outcrop.
 
+A confirmation run of `probes/fightcam.mts` at `91e2a4f` (6 rounds, 4 fights,
+4376 combat frames) came back **0.00% on every column, including the
+counterfactual and including `heroInRock`**: all four dens it found were fought
+in the open, clearance mean 3.39 m / min 1.54 m, no blind frames. That is a
+null result, not a confirmation of the fix, and it is the run-to-run swing
+described in "Left / next step" item 4 — it does say the open-field camera is
+unregressed, and nothing more. **`camview`'s paired sweep is the number.**
+
 `probes/camproxy.mts`, the proxy graded against the **drawn `InstancedMesh`
 triangles** (walked directly; a probe body has no `Raycaster`), 546 rays from
 eight standing positions: **99.08% agreement, 0.00% mesh-only** (never misses a
