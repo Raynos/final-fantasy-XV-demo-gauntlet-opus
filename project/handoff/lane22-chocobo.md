@@ -1,239 +1,134 @@
 # Lane 22 — Chocobos (plan items 70, 71)
 
-Status: **task 70 landed and verified by eye (lifetime 1). Task 71 landed: two
-of three races verified end to end by a probe, the third cut as a measured
-negative, and both hubs looked at in frames.**
-Lifetime 2 of an expected 3–4.
+Status: **task 70 landed and verified. Task 71 landed: two of three races won
+end to end by a probe, the third cut as a measured negative. Lifetime 3 took
+`PoiKits._chocobo` over from lane 18 and fixed every defect the lifetime-2
+frames had found, verified by eye; exercised the mount-legality refusals for
+the first time; and moved the stable's prompts onto anchors the kit publishes.**
+Lifetime 3 of an expected 4.
 
-## The done-when that mattered: a race, run
+## Lifetime 3: what landed and what the frames showed
 
-`chocoborace.mts` against `HEAD`, Wiz Chocobo Post, verbatim:
+`PoiKits._chocobo` is **this lane's** now (lane 18 finished). Do not touch
+`_town`, `_landmark` or `_imperial` in that file — they are in judged frames.
+
+### The kit, four defects, all verified fixed by eye
+
+Shots: `tmp/shots/l22kit/` (four bearings, 80 m, before the gateway fix) and
+`tmp/shots/l22kit2/` (after). **Read `y315.jpg` for the current state**: a red
+board-and-batten barn with a clean navy gable inside an unbroken two-rail ring,
+a timber gateway with a hung nameboard on the road side, a banded feed silo, a
+hay corner with a 3+2 bale stack and the tarp beside it, trough and signboard.
+
+1. **The gable saw-tooth is gone.** It was five stacked boxes, each taking the
+   triangle's width at the BOTTOM of its band and carrying it to the top, so
+   every step stood `W/(2*NG)` = **1.3 m** proud of the rake and 0.14 m clear of
+   the roof slab's upper surface — a row of bright red tabs along both rakes at
+   every chocobo POI in the world. It is one `ExtrudeGeometry` triangle per end
+   now, under the roof underside by 0.04 m at the ridge widening to 0.26 m at
+   the eave.
+2. **The fence no longer runs through the barn.** There is no seat for a 14.5 m
+   barn *outside* a paddock that also fits inside a 22 m pad, so the barn is
+   **inside** the ring: centre (−7, −5.8), far roof corner 17.9 m, ring 19.0,
+   and `gradePad`'s wobbled edge comes no closer than `22*(1−0.085)` = 20.1.
+3. **The ring has a way in.** Posts run one open arc; the 6.1 m it omits is a
+   gateway aimed down the pad's own ramp (local +z).
+4. **The bales stand on the ground.** Three at y 0.8 and two nestled at
+   `0.8 + sqrt(1.6² − 0.9²)` = 2.12, not `0.9 + 1.6` over nothing.
+
+Plus: the sliding-door leaf was `M.plank`, whose grain at 2.5 × 3.9 m reads as
+straw, and is now a cream leaf with a Z-brace; the 9 m side walls carry battens;
+and `_apron`'s three `wear` points are rotated into the pad's frame (they are
+world-axis, the kit is yawed, so they were walking to yaw-0 positions).
+
+**The gateway's first version was a football goal** — two cylinders and a thin
+bar read as one from two opposite bearings (`l22kit/y225.jpg`, `y315.jpg`). It
+is square-section posts, caps, knee braces and a nameboard now.
+
+### The prompts are on the kit's own anchors
+
+`_chocobo` publishes `stable`, `board`, `gate`, `yard` through
+`KitResult.anchors`, and `ChocoboHub._reanchor` late-binds the two Wiz prompts
+onto them. **Verified**: `chocoborace.mts` now reports both prompts at ground
+**25.5 m** (the pad deck) where they used to read 24.9 (natural ground), i.e.
+inside the ring on the apron rather than 23.7 and 35.4 m out on grass.
+`meldacio_layby` is a `parking` kit and publishes nothing, so the Alpine
+Stable keeps its offsets and the poll expires after 20 s. That is correct.
+
+### Mount legality, exercised for the first time
+
+`src/tools/probes/chocobolegal.mts`, verbatim:
 
 ```
-Wiz Chocobo Post — poi wiz_chocobo at (-2050, 460), ground 25.0 m
-interactable chocobo-stable-wiz: "Tend Wiz Chocobo Post" at ground 24.9 m, 5.7 m away
-interactable chocobo-races-wiz:  "Read Race Board"       at ground 24.9 m, 17.2 m away
-dye Black -> node "dyed", colour now black, gil 42180 -> 30180, owned yellow/black
-feed -> node "fed", tier 1, greens left 0
-enter "The Paddock Sprint" -> started, entry 100 gil (30180 -> 30080)
-riding: true, gates 4
-  gate 1: (-1972, 522) h=24.9 r=9     gate 3: (-1954, 392) h=24.3 r=9
-  gate 2: (-1900, 468) h=25.3 r=9     gate 4: (-2044, 436) h=25.1 r=10
-RESULT WON  21.75 s  (par 44)  +1800 gil  +6 AP
-gil 42180 -> 31880   AP 148 -> 154
-after: running=false, riding=true, waypoint=cleared, clock DOM=removed
+WALKABLE_Y = cos(50 deg) = 0.6428; water level -6.50 m
+swept 6561 points on a 95 m lattice: lowest -47.5 m, steepest n.y 0.108 (83.8 deg)
+dry cold:    (-2038, 472) h=24.64 n.y=1.000 slope=1.6 deg -> canStandAt true
+dry settled: (-2038, 472) h=24.64 n.y=1.000 slope=1.6 deg -> canStandAt true
+dry: mountAt -> true, state away -> ridden bird at (-2038, 472)
+wet cold:    (3325, 3325) h=-47.52 n.y=0.993 slope=6.8 deg WET -> canStandAt false
+wet settled: (3325, 3325) h=-47.52 n.y=0.993 slope=6.8 deg WET -> canStandAt false
+wet: mountAt -> false, state waiting -> waiting
+steep cold:    (-665, 380) h=96.52 n.y=0.108 slope=83.8 deg -> canStandAt false
+steep settled: (-665, 380) h=96.52 n.y=0.108 slope=83.8 deg -> canStandAt false
+steep: mountAt -> false, state waiting -> waiting
 ```
 
-Everything in task 71's chain works: both prompts register on real ground, the
-dye and the feed transact **through the real dialogue rows**, the board takes
-the entry fee, the bird comes to the line, four gates are cleared in order, the
-purse and the AP pay, and the waypoint and the clock DOM clean themselves up.
-No gate needed the legality search on flat Duscae.
+Every candidate is measured cold and again after the player is teleported to
+within 30 m and given 90 frames, because `Terrain.heightAt` answers differently
+before and after the clipmap settles. They agreed at all three sites.
 
-**And the number found a defect.** Par was 44 and the perfect lap is 21.75, so
-the beat-par bonus was not a bonus. All three pars re-set against the measured
-decomposition in `56238a1`; the paddock is now par 25.
+### `race_paddock` still wins after all of it
 
-`race_weaverwilds` also won: **76.34 s** against a par of 118, six gates,
-ground 22.7–27.2 m, none legalised. Its par is now 88.
+`21.75 s against a par of 25`, gil and AP paid, waypoint and clock cleaned up.
 
-## The measured negative: the Alpine Stable
+## The Alpine Stable: still cut, and the reason is not this kit
 
-**`race_alpine` is cut and `meldacio_layby` is back to `type: 'parking'`
-(`af2ba26`).** Two instruments agreed, so the item closes.
+The lifetime-2 brief said "terrain-following placement plus a road-clearance
+offset is the precondition for the Alpine hub existing". **After reading
+`_apron`/`gradePad`, that framing is wrong and the item does not belong to
+`_chocobo`.** `_apron` grades a *level deck* out to `r*(1±0.085)` and lays it as
+geometry on top of the heightfield; inside that deck kit-local `y = 0` **is**
+the ground, and a kit that dropped its parts to `Terrain.drawnHeightAt` would
+put them under its own pad. What fails at `meldacio_layby` is upstream:
+`_base` clamps the deck to within ~3 m of the pin, the batter reaches only `r`
+further at 1:3 fill — about 7 m of drop over 22 m — and the terminus has 20–30 m
+of relief across the kit's ring. A 22 m level deck cannot be produced there by
+any change inside a kit function. **Residue for `_apron`/`gradePad`, not this
+lane.** `race_alpine` stays cut (DNF 240.01 s, par 80, 59 m of relief across
+five gates).
 
-```
-Alpine Stable — poi meldacio_layby at (-1560, -2860), ground 248.1 m
-  gate 1: (-1498, -2802) h=263.0     gate 4: (-1402, -3024) h=205.2
-  gate 2: (-1406, -2834) h=245.2  [legalised 18 m off the authored spot]
-  gate 3: (-1308, -2926) h=230.3     gate 5: (-1538, -2922) h=264.3
-RESULT DNF  240.01 s  (par 80)  +0 gil  +0 AP
-```
-
-59 m of relief across five gates and an autopilot on a perfect line at full
-sprint never finished inside four minutes. And with the POI re-typed `chocobo`,
-four `dresscam` bearings showed **`PoiKits._chocobo` has no terrain follow**:
-the barn's long wall overhung the Route 5 carriageway by ~1.7 m, half the feed
-silo stood on the road, the barn's east third was inside the mountain with its
-west gable cantilevered over a cliff, and the paddock ring, trough and
-signboard did not render at all.
-
-**The Alpine Stable keeps the half that works** — its prompts terrain-snap and
-the probe transacted a sylkis tier there. `ChocoboHub` now registers a race
-board only at a hub with a course posted, so there is no empty board.
-
-To bring it back: a `PoiKits` job first (terrain-following placement, a
-road-clearance offset, a ring sized off the POI's own `r` — 48 here against 200
-at Wiz, and the kit reads neither), then walk the pass with `dryground.mts` and
-author gates on rideable ground, wider than 11 m.
+The POI's own `r` (48 at the layby, 200 at Wiz) is also **not** a defect: the
+kit's whole envelope is 22 m and fits inside both. Scaling to `r` would give
+Wiz a 200 m barn.
 
 ## Where to pick this up (the exact next step)
 
-1. **The rider's arms.** The frames say they are *still* wrong: the near hand
-   holds the rein correctly (the strap runs from the bit to it) but the far hand
-   is open at chin height with the upper arm ~40° clear of the ribs, and it
-   reads as waving. **`POSE_RIDE`'s numbers are provably mirror-symmetric** —
-   `Skeleton.ts`:154 mirrors bone *translation* only (`mx` negates x and never
-   touches orientation), so both arms share one rest basis and `[x, −y, −z]`
-   *is* the correct mirror. So the asymmetry is not in the table. Two live
-   hypotheses, in order: (a) the whole arm chain simply reaches too high and
-   forward — `lowerArm x −0.72` with `hand z ±0.42` — and a ¾ view exaggerates
-   the far one; (b) what the `head` framing caught was a *companion's* arm, not
-   Noctis'. `e8051ea` widened the ride framings, so re-shoot before re-tuning.
-2. **Re-shoot the bird** — `chocobostage --set __MODE=ride` — and check the
-   shingle fix. The rump is fixed (thin dark-olive seams, not black slots, and
-   not artichoked) but the **shoulder/fore-flank still spikes**: the pitch
-   falloff `0.30 * (1 - phi0 * 0.28)` is keyed on the ring angle, and the
-   forward stations need it too.
-3. Take `npcdraws` / `drawcheck` with the bird in frame — still owed from
-   lifetime 1.
-
-**Harness note:** `harnessstats` reported **60% of all harness time spent
-queueing** tonight, p90 lease wait 4.3 min, worst 23 min. The `--dirty` arm
-additionally pays a cold prewarm (p50 **7.9 min**, p90 **28.8 min**) — a
-`--dirty` run of this probe was queued for 25 minutes and then failed on a
-one-line bug. **Commit, then run against `HEAD`**; post-commit prewarms the sha.
-
-## Task 71: what landed
-
-All committed. `race_paddock` is **verified end to end by a probe** (above).
-**Nothing here has been seen in a frame.** Treat every visual claim as *not
-verified*.
-
-- **`src/game/chocobo/ChocoboHub.ts`** — two stables (`wiz` at `wiz_chocobo`,
-  `alpine` at `meldacio_layby`), each registering two interactables: a `Tend`
-  prompt at the stable and a `Read` prompt on the race board. Both open a
-  `DialogueScript` through `Interaction.say()`.
-  - **Colours**: `DYE_PRICE` — yellow free, green 2 500, red 3 500, blue 5 000,
-    white 7 000, black 12 000. Sold **only at Wiz**, per the plan. A dye is a
-    rebuild of the merged prototype (cached per colour), driven by
-    `ChocoboSystem.setColour`, which puts a rider down first.
-  - **Sylkis**: `FEED_TIERS`, four steps, 0 / 2 / 4 / 7 bunches of
-    `sylkis_greens`. **They raise the sprint ceiling and the tank; they never
-    touch cruise.** That is the load-bearing decision — cruise is
-    `WorldMap.SPEED.chocobo` to two decimal places and the map's whole ETA table
-    is priced on it, so an upgrade that raised it would make the map a liar
-    again. `ChocoboBody.sprintMul` is the new knob.
-  - Feeding also finally reads `Ascension.value('chocoboStamina')`
-    (`exp_choco2`), which nothing in the repo had ever read.
-- **`src/game/chocobo/Races.ts`** — two authored courses, both **won by the
-  probe**: `race_paddock` (Wiz, 4 gates, par **25** s, 100 g in / 900 g + 4 AP,
-  measured 21.75) and `race_weaverwilds` (Wiz, 6 gates, par **88** s, 400 g in /
-  3 200 g + 9 AP, measured 76.34). Beating par doubles the purse and pays 1.5×
-  AP. **Par is set off the measured perfect lap, not an estimate** — the header
-  carries the decomposition, because the first guess was out by a factor of two.
-  A third, `race_alpine`, is cut; the note at the foot of `RACES` is its
-  obituary.
-  - Gates are authored as **offsets from the hub's POI** and legalised at the
-    start line through `canStandAt` with a bounded square spiral (6 m steps,
-    7 rings). A hand-placed number in generated terrain is a gate that can land
-    in a lake.
-  - Radius-tested here, **not** through `Triggers` — see the file header for
-    why. Markers are one open cylinder per gate, only the next two visible, so
-    a race costs two draws over the ride.
-  - The purse pays through `Ascension.grantRaw`, so no row was added to
-    `AP_RULES` in another lane's file.
-  - A dismount mid-race aborts it; so does `course.limit` seconds.
-- **`src/tools/probes/chocoborace.mts`** — the done-when instrument, and it
-  passes on `race_paddock` (see the top of this file). It walks
-  into the yard, checks both interactables registered, buys a dye and a feed
-  tier **through the real dialogue rows**, enters through the board's own row,
-  and then *plays* the course: an autopilot wraps `Input.update` and writes
-  `input.move` in camera space, so every metre goes through the real
-  `ChocoboBody`. A course this cannot finish is a course a player cannot finish.
-  **No `import('three')` in a probe body** — it is evaluated inside the page,
-  where a bare specifier does not resolve. `f522af4` replaced it with the
-  matrix arithmetic.
-- **`Quests.ts`** — `side_chocobo` re-keyed: `requires: []`, `autoAvailable`.
-  **Quest state only; no chapter and no POI `gate:` field** (lane 17 deleted
-  that repo-wide and its done-when is that grep stays at zero). The reward drops
-  the whistle — you start with it — and pays sylkis instead, plus a dye on the
-  house at Wiz's stall (read live from quest state in `ChocoboHub`, nothing is
-  granted or saved).
-- **`WorldMap.ts`** — `meldacio_layby` was re-typed `chocobo` and then **put
-  back to `parking`** after the frames; the row now carries the whole negative
-  as a comment so nobody re-types it without fixing `PoiKits` first.
-- **`NpcDialogue.ts`** — three new Wiz nodes (`dye`, `greens`, `racing`) plus a
-  correction to `done`, which still said "Whistle is yours".
-  **They are directions, not transactions.** Wiz cannot open the stable script
-  from a choice: `Dialogue._pick` (:280) runs `end()` after an `action` returns,
-  so a dialogue started from inside a choice is closed by the same key press.
-  The shop rows elsewhere in that file get away with it only because a *screen*
-  is not a dialogue. **Do not "fix" this by having her call `say()`.**
-
-## Task 70 (from lifetime 1) — still true, still verified
-
-The rig, the animator, summon → mount → ride on `Digit6`, **11.00 m/s
-sustained** matching `WorldMap.SPEED.chocobo`, the three-bird flock, the whistle
-in `STARTING_ITEMS`, `orphans` green. See the git history: `13b7ff8`, `ce162a3`,
-`5070a7f`, `9c35b9f`.
-
-## What the frames showed (a look-loop subagent, lifetime 2)
-
-Wiz Chocobo Post, `tmp/shots/l22hub/`: **it reads unambiguously as a farm post
-at 80 m** — red board-and-batten barn with a navy gable, a banded feed silo, an
-oval gravel apron inside a two-rail fence, hay bales, a tarp, a trough, a green
-signboard. Four defects, **none of them in this lane's files**, all worth a
-`TASKS.md` row:
-
-1. **The red gable steps punch through the roof planes** — a saw-tooth of bright
-   red tabs along both rakes, visible at 80 m, at every chocobo POI.
-   `PoiKits._chocobo`'s `NG=5` gable boxes are not covered by the roof slabs.
-2. **The paddock fence runs through the barn.** Barn centre is kit-local
-   (−9, −11) with a 13×9 footprint, so its far corner is at radius **21.9 m**
-   against a ring of `R = 20`.
-3. **Hay bales float and intersect the tarp** — three of the six get
-   `y = 0.9 + 1.6 = 2.5` with nothing beneath them.
-4. The barn's sliding-door leaf takes a coarse straw-looking `M.plank` texture
-   and reads as a bale stood on end; the 9 m side walls carry no battens.
-
-The bird, `tmp/shots/l22bird/`: the **rump shingle fix worked** — overlapping
-plates with thin dark-olive seams, no black slots, and not artichoked. The
-**shoulder/fore-flank still spikes** into hard triangular tips. Two defects the
-fix did not touch and which now dominate the read: **the thigh/hip masses are
-two bald smooth spheres** butted onto the shingled flank with no transition, and
-**the cream chest bib is a separate smooth egg** with a hard seam to the yellow
-body, visible even at 3.4 m. The shank scutes read as rectangular tabs bolted on
-with shadow under them.
-
-## Known defects
-
-1. ~~Dark gaps between the flank shingles on the rump~~ — **fixed in `52fe779`,
-   not yet verified by eye.** The cause was structural: the rows step at a fixed
-   0.34 rad and the vane width was authored per station, so the gap is
-   `ROW_STEP * r` and grows with the barrel — 0.105 m of arc against a 0.092 m
-   vane at the rump. The width is now solved for (16% overlap at every station)
-   and the pitch falls off down the flank.
-2. ~~The rider's left arm reads as flung out~~ — **fixed in `52fe779`, not yet
-   verified by eye.** `POSE_RIDE` inherited `Occupants.POSE_DRIVER`'s numbers;
-   a wheel is held at arm's width and a rein at hip's width. Roll and yaw on
-   both upper arms halved. It read as the *left* arm only because that is the
-   side the framing showed.
-3. The breast down still reads as one smooth pale mass; it wants a few down
-   feathers over it. **Not touched.**
+1. **The bird's sculpt, from lifetime 2's frames, not yet re-shot.** The
+   thigh/hip masses are two bald spheres butted onto the shingled flank with no
+   transition; the cream chest bib is a separate smooth egg with a hard seam;
+   the shoulder/fore-flank still spikes into triangular tips because the pitch
+   falloff `0.30 * (1 - phi0 * 0.28)` is keyed on the ring angle and the forward
+   stations need it too. **Re-shoot `chocobostage --set __MODE=ride` first.**
+2. **The rider's arms.** `POSE_RIDE` is provably mirror-symmetric
+   (`Skeleton.ts`:154 mirrors bone *translation* only), so the pose table is not
+   the bug — **re-shoot before re-tuning**; `e8051ea` widened the ride framings.
+3. **The paddock is empty of birds.** The single largest remaining gap in the
+   read of a chocobo post: `l22kit2/y315.jpg` is a stable yard with no animals
+   in it. `_chocobo` publishes a `yard` anchor for exactly this. Two or three
+   idle birds built by `ChocoboSystem._makeBird` and range-gated on the hub
+   would land it; nothing else in the frame needs work.
+4. `M.cloth` is a navy canvas and the hay tarp reads as a dark blue tent. Shared
+   material, six kits use it; needs a hay-tarp colour or the tarp dropping.
 
 ## Not done / owed
 
-- **`race_alpine` and `race_weaverwilds` have not been run.** `race_paddock`
-  has, and won.
-- **No frame of either hub has been looked at.** Specifically unverified:
-  - whether the four hub prompts land on the apron rather than inside the barn,
-    the silo or the paddock fence. Offsets are in `CHOCOBO_HUBS`
-    (`wiz` stable +21/+11, board +31/+17; `alpine` stable +9/+5, board +15/−3),
-    chosen so the three Wiz prompts — hers is at +26/+14 — never fight over one
-    E press;
-  - **whether the chocobo kit sits sanely on `meldacio_layby`.** It is a 40 m
-    paddock ring plus a barn dropped onto what was a hairpin turning circle at a
-    road junction. This is the highest-risk single change of the lifetime.
-- **No perf number for the mount.** Lifetime 1 recorded a **measured negative**:
-  `probes/chocobodraws.mts`'s two control arms read **589 and 489** draw calls
-  four frames apart against a present arm of 397 twice — a drift of 100 against
-  a delta of −142, which is not a result. Fix the settle (30+ frames, repeats
-  with the spread reported, a null ablation) before quoting anything.
-  `npcdraws`, `drawcheck` and `--perf` with the bird in frame are all still
-  owed, and must be taken behind `daemon.mts --wait exclusive-free`.
-- **Mount legality is coded but never exercised**: nobody has stood the bird on
-  a 55° slope or at a lake edge and watched it refuse.
+- **Draw numbers for the mount.** `chocobodraws.mts` was rewritten this lifetime
+  (240-frame warm-up, 30-frame arms, four A/B pairs, a null ablation as the
+  noise floor) because its first run's control drifted 100 calls against a
+  delta of −142. See the commits for whatever it printed.
+- `npcdraws` needs a `Shots.ts` framing with the bird in it and **lane 3/21 owns
+  `Shots.ts`** — the four framings this lane wants are in the cross-boundary
+  list below and have not landed.
 - **No `ControlsScreen` row** — see cross-boundary.
 
 ## Corrected anchors (the cold-start brief's were partly stale)
@@ -244,66 +139,71 @@ with shadow under them.
 | `src/characters/enemies/CreatureAnim.ts` | `src/characters/rig/CreatureAnim.ts` |
 | `src/game/Player.ts` | `src/characters/Player.ts` |
 | "`KeyY` is free" | **`KeyY` is `RegaliaSystem.KEY.camera`** (`RegaliaSystem.ts`:91) |
-| `Quests.ts:573` | `side_chocobo` is at `Quests.ts`:612 |
-| `NpcDialogue.ts:463` | Wiz's script starts at `NpcDialogue.ts`:509 |
-| `WorldMap.ts:611` | `meldacio_layby` is at `WorldMap.ts`:690 |
 
 Free key codes, re-grepped: `Digit6`–`Digit0` only. This lane took **`Digit6`**.
-
 Other verified anchors: per-vertex surface response is **`aMat`**
-(`Sculpt.ts`:504), not GeoKit's `aSurf`. `Occupants.exit` early-returns on a
-null `_saved`. `Ascension.awardAp('chocobo-distance', metres)` is gated on the
-`ap-chocobo` flag from `exp_choco1`. **`AP_RULES` has no racing row** — use
-`grantRaw`, which is documented for exactly this.
+(`Sculpt.ts`:504). `Occupants.exit` early-returns on a null `_saved`.
+**`AP_RULES` has no racing row** — use `grantRaw`.
+
+`PoiKits` anchors: `PAD_R.chocobo` is 22 and `Ecology.ts` reads that table, so
+changing the apron radius changes the vegetation clearing too. `gradePad`'s deck
+edge wobbles `r*(1±0.085)`. `anchorAt` allocates a fresh `Vector3` per call and
+returns `null` until `_make` has built the site.
+
+## Task 71 / task 70: what landed (unchanged from lifetime 2)
+
+Two stables in `CHOCOBO_HUBS`; dyes at Wiz only (`DYE_PRICE`); four sylkis
+tiers that raise sprint and tank and **never** cruise, because cruise is
+`WorldMap.SPEED.chocobo` and the map's ETA table is priced on it; two authored
+courses with pars set off the *measured* perfect lap; `side_chocobo` re-keyed to
+quest state with no chapter and no POI `gate:` field; three Wiz dialogue nodes
+that are **directions, not transactions** (`Dialogue._pick` :280 runs `end()`
+after an action, so a dialogue opened from a choice closes itself — do not "fix"
+this by having her call `say()`).
+
+Task 70: the rig, the animator, summon → mount → ride on `Digit6`, **11.00 m/s
+sustained**, the three-bird flock, the whistle in `STARTING_ITEMS`.
 
 ## The landmine this lane found (lifetime 1), kept because it is the best part
 
 `75d8768` changed `mergeCreature`'s `skinWeight` row from `Float32Array` to
 `Uint8Array` under a comment claiming the row was unreachable. It is reached by
-**every creature in the bestiary**. Measured with
-`src/tools/probes/skinweightblast.mts`: **23 of 23 species, 16,234 of 276,524
-vertices (5.9%)** collapsing to the mesh origin. Reverted in **`ce162a3`**;
-`skinweightblast.mts` is its regression test — keep it.
-
+**every creature in the bestiary**: **23 of 23 species, 16,234 of 276,524
+vertices (5.9%)** collapsing to the mesh origin (`probes/skinweightblast.mts`).
+Reverted in `ce162a3`; that probe is its regression test — keep it.
 **How it was found is the reusable part**: rigid parts rendered perfectly and
 blended parts collapsed to a point. That split is the fingerprint.
 
 ## Cross-boundary
 
-- **FOR LANE 21 (`Shots.ts`)** — four framings, all `follow:` on the player so
-  the rig re-anchors every frame (absolute framings drift):
-  1. `chocobo_ride` — follow, offset ~`[0, 2.6, -6.4]`, lookOffset `[0, 1.4, 6]`,
-     ridden at 11 m/s across open Duscae. Rider astride, four birds in formation.
-  2. `chocobo_summon` — the 22 m run-in, framed from behind the player at eye
-     height, so the arrival reads as an animal and not a menu.
-  3. `chocobo_post` — Wiz Chocobo Post with birds in the paddock. **Now has
-     something to photograph**: the dye stall and race-board prompts are live.
-  4. `chocobo_portrait` — ~2.5 m, ¾ front, to carry the eye, crest and tack.
-     The head sits **0.62 m forward of the root**; a framing aimed at the root's
-     own xz at head height photographs the shoulder.
-- **FOR LANE 10 (`ControlsScreen.ts`)** — this lane needs a **Chocobo** group:
-  `6` whistle/dismiss, `E` ride, `Shift` sprint. Not landed, because the card
-  already lies about several rows and lane 10 owns fixing them.
-- **FOR LANE 1 / whoever re-attempts task 38:** a Uint8 skin-weight format needs
-  the weights *scaled by 255* on the way in and `new BufferAttribute(arr, size,
-  true)` on the way out. Written into `Sculpt.ts` beside the row.
+- **FOR LANE 21 (`Shots.ts`)** — four framings, all `follow:` on the player:
+  `chocobo_ride` (offset ~`[0, 2.6, -6.4]`, lookOffset `[0, 1.4, 6]`),
+  `chocobo_summon` (the 22 m run-in from behind the player at eye height),
+  `chocobo_post` (Wiz, which now has a gateway, a hay corner and live prompts),
+  `chocobo_portrait` (~2.5 m, ¾ front — the head sits **0.62 m forward of the
+  root**, so a framing aimed at the root's xz photographs the shoulder).
+  Without one of these, `npcdraws` cannot be run with the bird in frame.
+- **FOR LANE 10 (`ControlsScreen.ts`)** — a **Chocobo** group: `6`
+  whistle/dismiss, `E` ride, `Shift` sprint.
+- **FOR `_apron` / `gradePad`'s owner** — see the Alpine section above: a level
+  deck cannot be produced on 59 m of relief and six kits inherit the problem.
+- **FOR LANE 1 / task 38:** a Uint8 skin-weight format needs the weights
+  *scaled by 255* in and `new BufferAttribute(arr, size, true)` out.
 
 ## Instruments this lane built
 
-- `probes/chocoborace.mts` — **the task-71 done-when.** Plays a course.
+- `probes/chocoborace.mts` — the task-71 done-when. **Plays** a course.
+- `probes/chocobolegal.mts` — the refusals, with a dry control and a
+  cold-vs-settled read at every site.
+- `probes/chocobodraws.mts` — the mount's draw cost, with a null ablation.
 - `probes/chocobostage.mts` — six framings of the mount.
-  `--set __MODE=stand|ride|gallop`, `--set __COLOUR=<key>`. The gallop mode
-  drives the bird by wrapping `Input.update`; replacing `input.move` throws,
-  because `Input.update` calls `this.move.set()` every frame.
-- `probes/chocobodiag.mts`, `chocobodiag2.mts` — the skinning ablations.
+  `--set __MODE=stand|ride|gallop`, `--set __COLOUR=<key>`.
 - `probes/skinweightblast.mts` — per-species collapsed-vertex census.
-- `probes/chocobodraws.mts` — refuses to print a draw cost when the control
-  drift swamps the delta. It currently refuses. That is correct.
 
 ## Commits
 
-Lifetime 1: `13b7ff8` the mount · `ce162a3` the cross-lane skinWeight revert ·
-`5070a7f` the art pass · `9c35b9f` the starting whistle.
-Lifetime 2: `5b76207` hubs, dyes, sylkis tiers, three courses · `bb5b420`
-`side_chocobo` off the chapter gate · `ea5eea0` Alpine Stable re-typed ·
-`193c130` Wiz's rows · `52fe779` the two frame-found defects + the race probe.
+Lifetime 1: `13b7ff8` · `ce162a3` · `5070a7f` · `9c35b9f`.
+Lifetime 2: `5b76207` · `bb5b420` · `ea5eea0` · `193c130` · `52fe779`.
+Lifetime 3: `653a0e3` the kit's four frame-found defects · `3dfb43c` the
+gateway and the tarp · `76096bb` `chocobolegal.mts` · `3ac09cb` the prompts
+onto the kit's anchors · `353b843` `chocobodraws`' settle.
