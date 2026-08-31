@@ -83,8 +83,14 @@ export const RACES: RaceCourse[] = [
       { dx: 96, dz: -68, r: 9 },
       { dx: 6, dz: -24, r: 10 },
     ],
-    // 348 m centre-to-centre, ~310 m ridden; measured perfect lap 21.75 s.
-    entry: 100, prizeGil: 900, prizeAp: 4, par: 25, limit: 110,
+    // 348 m centre-to-centre, ~310 m ridden; measured perfect lap **23.67 s**.
+    // It was 21.75 and par was 25 -- a 15% cushion over a perfect line -- until
+    // `ChocoboHub.startLine` moved onto the kit's `gate` anchor, which is the
+    // gap in the paddock fence rather than a world-axis offset from the pin.
+    // That is a longer run to gate 1, so the lap grew by 1.9 s and par grows
+    // with it. **Par is set off the measured perfect lap, never estimated** --
+    // the first guess at this one was out by a factor of two.
+    entry: 100, prizeGil: 900, prizeAp: 4, par: 27, limit: 110,
   },
   {
     id: 'race_weaverwilds', hub: 'wiz', name: 'Weaverwilds Circuit',

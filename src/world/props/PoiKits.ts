@@ -2177,7 +2177,10 @@ export class PoiKits {
       const gb = bag();
       for (const sx of [-1, 1]) {
         gb.wood.push(box(0.34, 3.0, 0.34, { x: sx * HW, y: 1.5, arris: 0.05 }));
-        gb.trim.push(box(0.5, 0.16, 0.5, { x: sx * HW, y: 3.23, arris: 0.04 }));
+        // Capped in the same timber, not in cream: two 0.5 m cream plates on
+        // top of a beam are the two brightest marks on the whole pad at 40 m
+        // and read as objects left on a table.
+        gb.wood.push(box(0.5, 0.16, 0.5, { x: sx * HW, y: 3.23, arris: 0.04 }));
         // The brace touches the post at 1.91 and the header's underside at
         // 2.65, so its centre is the midpoint of those and its projection is
         // `1.05 * cos(45)` = 0.742 either way.
@@ -2277,6 +2280,21 @@ export class PoiKits {
       b.wood.push(xform(box(Math.hypot(2.4, 3.3), 0.16, 0.05), {
         rz: Math.atan2(3.3, 2.4), x: -2.9, y: y0 + 1.98, z: D / 2 + 0.35,
       }));
+      /*
+       * **Stalls behind the doorway.** The opening is 4.4 x 4.0 m with an
+       * `M.interior` backdrop, and at 40 m that is a pure black rectangle
+       * punched in a red wall (`tmp/shots/l22kit4/near.jpg`) -- the one place
+       * on this building the eye goes and the one place with nothing in it.
+       * A post and two rails 0.12 m in FRONT of the backdrop (which sits at
+       * `D/2 - T - 0.06`, so anything behind it is invisible) cost four boxes
+       * and turn the void into a stable.
+       */
+      {
+        const zi = D / 2 - T + 0.06;
+        b.wood.push(box(0.14, 3.5, 0.14, { x: 0.35, y: y0 + 1.75, z: zi }));
+        for (const yy of [1.30, 2.15]) b.wood.push(box(4.1, 0.13, 0.13, { x: 0.15, y: y0 + yy, z: zi }));
+      }
+
       // Loft door and its hoist beam.
       b.dark.push(box(1.9, 1.5, 0.1, { y: y0 + H + 1.25, z: D / 2 - 0.1, sharp: true }));
       b.wood.push(box(0.22, 0.22, 1.5, { y: y0 + H + 2.3, z: D / 2 + 0.6 }));
