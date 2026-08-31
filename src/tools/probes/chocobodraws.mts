@@ -11,20 +11,30 @@
  * trap is about timing loops, and a call count taken from `renderer.info`
  * after a real `frame()` is not subject to it.
  *
- * **FIRST RUN FAILED ITS OWN CONTROL, and the failure is the useful part.**
- * The two `away` arms -- the same scene with the same birds hidden, four
- * frames apart -- read **589 and 489**, a drift of 100 calls, while `present`
- * read 397 twice. A "cost" of MINUS 142 draw calls is not a result, it is a
- * scene that is still changing underneath the ablation: streaming, LOD and
- * vegetation are all resolving on the frames this is sampling, and four frames
- * after a toggle is a transient, which is exactly what `LANDMINES`' "toggling
- * one post pass and settling four frames is not an ablation" says.
+ * **THE FIRST RUN FAILED ITS OWN CONTROL, and that failure is why this probe
+ * is shaped the way it is.** The two `away` arms -- the same scene with the
+ * same birds hidden, four frames apart -- read **589 and 489**, a drift of 100
+ * calls, while `present` read 397 twice. A "cost" of MINUS 142 draw calls is
+ * not a result; it is a scene still changing underneath the ablation.
  *
- * Do not quote a draw cost for the mount from this probe until it settles its
- * own control. What it needs, in order: many more settle frames between the
- * toggle and the read (30+, not 4), several A/B/A repeats with the spread
- * reported rather than a mean of two, and a null ablation -- toggle nothing,
- * measure anyway -- as the noise floor. Only then is a difference meaningful.
+ * Three things were wrong and all three are fixed here:
+ *
+ * 1. **Four frames after a toggle is a transient.** `LANDMINES` says exactly
+ *    this about post passes. Every arm now settles `SETTLE = 30` frames.
+ * 2. **The page had not converged before the ablation started.** The old run
+ *    mounted and measured 36 frames later, while streaming, LOD and vegetation
+ *    were all still resolving along the route the summon had just walked. The
+ *    bird now stands still for `WARM = 240` frames -- four seconds of no input
+ *    -- before anything is read.
+ * 3. **There was no noise floor.** A delta is only meaningful against the
+ *    spread of a measurement that changed nothing, so the probe now runs a
+ *    **null ablation** first: `NULL_N` reads, `SETTLE` frames apart, toggling
+ *    nothing. Its spread is the floor every later difference is judged on, and
+ *    it is reported whether or not the verdict needs it.
+ *
+ * The A/B pairs are then repeated `REPS` times and the spread of each arm is
+ * printed rather than a mean of two, so a drifting scene is visible as a
+ * drifting arm instead of being folded into an average.
  */
 const g = window.GAME;
 const out = [];
@@ -49,27 +59,44 @@ const show = (v) => { for (const r of roots()) r.visible = v; };
 cb.summon();
 for (let i = 0; i < 400 && cb.state === 'arriving'; i++) step();
 cb.mount();
-step(30);
+
+/*
+ * Converge, and then stand still. `settle()` is `shoot.mts`'s own convergence
+ * and it is not enough on its own here: the summon walked the camera 22 m and
+ * left a streaming queue behind it, and the old probe read four frames later.
+ */
 g.settle ? g.settle() : cb.converge();
-step(6);
+const WARM = 240, SETTLE = 30, NULL_N = 6, REPS = 4;
+step(WARM);
 
-// A / B / A, so a drift between the two arms is visible rather than folded in.
-show(false); step(4); const a1 = calls();
-show(true); step(4); const b1 = calls();
-show(false); step(4); const a2 = calls();
-show(true); step(4); const b2 = calls();
+const spread = (xs) => Math.max(...xs) - Math.min(...xs);
+const fmt = (xs) => `${xs.join('/')} (mean ${(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1)}, spread ${spread(xs)})`;
 
-const away = (a1 + a2) / 2, present = (b1 + b2) / 2;
-out.push(`state ${cb.state}, birds in scene ${roots().length}`);
-out.push(`draw calls  away ${a1}/${a2} (mean ${away})   present ${b1}/${b2} (mean ${present})`);
-out.push(`A/B/A drift: away ${Math.abs(a2 - a1)}, present ${Math.abs(b2 - b1)}`);
-const drift = Math.max(Math.abs(a2 - a1), Math.abs(b2 - b1));
-const delta = present - away;
-out.push(`delta ${delta} draw calls for ${roots().length} birds`);
-// A difference smaller than the control's own drift is not a difference.
-out.push(Math.abs(delta) > drift * 2
-  ? `MOUNT + FLOCK COSTS ${delta} DRAW CALLS`
-  : `NO USABLE NUMBER: control drift ${drift} swamps the delta ${delta}. Do not quote this.`);
-out.push(`per bird: ${((present - away) / Math.max(1, roots().length)).toFixed(2)}`);
-out.push(`(budget is 800/shot; the four party rigs cost ~34 draws each)`);
+// The noise floor: change nothing, measure anyway.
+const nul = [];
+for (let i = 0; i < NULL_N; i++) { step(SETTLE); nul.push(calls()); }
+const floor = spread(nul);
+
+const away = [], present = [];
+for (let i = 0; i < REPS; i++) {
+  show(false); step(SETTLE); away.push(calls());
+  show(true); step(SETTLE); present.push(calls());
+}
+show(true);
+
+const delta = present.reduce((a, b) => a + b, 0) / REPS - away.reduce((a, b) => a + b, 0) / REPS;
+const drift = Math.max(spread(away), spread(present));
+out.push(`state ${cb.state}, birds in scene ${roots().length}, warmed ${WARM} frames, ${SETTLE} frames per arm`);
+out.push(`null ablation (nothing toggled): ${fmt(nul)}`);
+out.push(`away    ${fmt(away)}`);
+out.push(`present ${fmt(present)}`);
+out.push(`delta ${delta.toFixed(1)} draw calls for ${roots().length} birds; control drift ${drift}, noise floor ${floor}`);
+// A difference smaller than twice the worst of (arm spread, null spread) is
+// not a difference. The floor is in the test because an arm can be tight by
+// luck on four samples while the scene is drifting under all of them.
+const bar = Math.max(drift, floor) * 2;
+out.push(delta > bar
+  ? `MOUNT + FLOCK COST ${delta.toFixed(1)} DRAW CALLS (${(delta / Math.max(1, roots().length)).toFixed(1)} per bird), against a bar of ${bar}`
+  : `NO USABLE NUMBER: delta ${delta.toFixed(1)} does not clear ${bar} (drift ${drift}, floor ${floor}). Do not quote this.`);
+out.push(`frame with the bird present: ${Math.max(...present)} draw calls (BRIEF budget 800/shot; the four party rigs cost ~34 draws each)`);
 return out.join('\n');
