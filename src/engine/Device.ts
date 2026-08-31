@@ -16,12 +16,23 @@
  *
  * ## Why the auto-detect is a conjunction
  *
- * All three legs must hold. That is deliberately conservative, because there
- * is no in-game way back: a desktop that guessed "phone" would silently get a
- * smaller world and no explanation. Headless Chromium at 1600x900 fails every
- * leg, so the 21-gate suite cannot drift into the demo by accident; a
- * touchscreen laptop fails the size leg; an iPad fails it too, and gets the
- * full game, which is the intent.
+ * All three legs must hold: a touchscreen exists, the *primary* pointer is a
+ * finger, and nothing can hover.
+ *
+ * There is no screen-size leg any more, and that is the point. It used to read
+ * `min(screen) <= 560`, which is a guess about form factors that keeps being
+ * wrong — a foldable open, a browser at 90% zoom, a tablet in a car. `hover:
+ * none` asks the question that actually matters and asks it of the device
+ * rather than of its dimensions.
+ *
+ * A touchscreen laptop reports `pointer: fine` (its mouse is primary) and
+ * `hover: hover`, so it fails two legs without any UA sniffing. Headless
+ * Chromium fails all three, so the gate suite cannot drift into the demo by
+ * accident. An iPad now passes, and *should*: a tablet on cellular downloading
+ * 78 MB is the same bad afternoon a phone has, and it has no keyboard either.
+ *
+ * There is no in-game way back, which is why `?demo=0` exists and is
+ * documented in the handoff.
  *
  * No user-agent sniffing. `navigator.userAgentData.mobile` does not exist in
  * Safari — i.e. on the one platform a UA test would exist to serve — and a UA
@@ -68,17 +79,19 @@ function params(): URLSearchParams {
  * with the URL bar; the screen does not.
  */
 function isPhoneLike(): boolean {
-  if (typeof navigator === 'undefined' || typeof screen === 'undefined') return false;
+  if (typeof navigator === 'undefined' || typeof matchMedia !== 'function') return false;
+  // A touchscreen exists.
   const touch = (navigator.maxTouchPoints || 0) > 0;
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  // 560, not 500. The short edge of a phone in CSS px runs 375 (SE) to 440
-  // (Pro Max / large Android), and a browser in landscape with the chrome
-  // showing reports the *screen*, not the viewport -- but a foldable open, or
-  // a phone reporting a scaled display, can read higher than 500 and would
-  // have been served the desktop build with no controls at all. An iPad mini
-  // is 744 and still gets the full game, which is the intent.
-  const small = Math.min(screen.width, screen.height) <= 560;
-  return touch && coarse && small;
+  // The PRIMARY pointer is a finger. A touchscreen laptop with a mouse
+  // attached reports `pointer: fine` and only `any-pointer: coarse`, so this
+  // one leg already excludes it without any UA sniffing.
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  // And nothing can hover. This is the leg that separates a handset from a
+  // desktop with a touchscreen, and unlike a screen-size test it does not
+  // care about orientation, browser zoom, a foldable being open, or whatever
+  // the next form factor turns out to be.
+  const noHover = matchMedia('(hover: none)').matches;
+  return touch && coarse && noHover;
 }
 
 function resolveDemo(): boolean {
