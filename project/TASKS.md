@@ -829,3 +829,28 @@ have fixed one capture and left the rest.*
   light with it**, so dark trousers on black read exactly like missing legs.
   `lane19`
 
+## Night and the clock: what the task-64 verification found (2026-08-31)
+
+*Task 64 is VERIFIED — 30 game minutes at 23:12, 23.29 km driven after dark,
+`_nightRoadDanger` reached on 70 386 frames, rolled 11x, spawned 6, HUD warned
+6x, banter 6x, pulled over for 6; `daemon_pack` x5 and `ronin_duel` x1.
+Reproduced exactly (11/6/5) on a second run. Day control unmoved at 2.14 km.*
+
+- **`probe.mts` silently drops unknown `--` flags.** One loop that throws on an
+  unrecognised token closes this whole class — and this class produced a
+  confident 30-minute PASS about the wrong time of day tonight. **Not taken
+  because lanes were invoking `probe.mts` live**; take it once the wave is done.
+- **Task 64's "already fighting" guard is really a proximity guard.**
+  `RegaliaSystem.ts:792` uses `enc.enemies.countNear(pos, 90) > 0`, and
+  `Enemies.countNear` (`src/characters/Enemies.ts:341`) counts **every live
+  enemy**, not a fight. Measured: it blocked **5 of 11 rolls**, and nothing else
+  blocked anything. The director's own roll uses 60 m
+  (`EncounterDirector.ts:984`). One-liner in lane 10's file; reported, not taken.
+- **The plan's task-64 done-when should read
+  `--set __PLAY_NIGHT=1 --turbo 10 --ttl 30`, not `--night`.**
+- **`TIMINGS.md:169`'s canonical triple has drifted** to `2.14 km, 3 encounters,
+  18 forage` on tonight's tree — the route is identical, the world changed.
+  Re-baseline after the wave.
+- **At night the headlamps bloom into solid white discs that wash out the road
+  they light.** A look note from the ambush frames, not from a gate.
+
