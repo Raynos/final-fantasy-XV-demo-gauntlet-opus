@@ -15,8 +15,8 @@ Stay out of `src/ui/` and `src/characters/`.
 |---|------|-------|
 | A | the black torus / box placeholder | **LANDED**, verified by eye and by instrument |
 | A' | draw cost of A paid back | **LANDED**, `drawcheck` numbers below |
-| B | checkerboard on rock faces | **diagnosis in progress** — see below |
-| C | rock scatter by slope (`Rocks.ts`) | not started |
+| B | checkerboard on rock faces | **diagnosed and half fixed** — see below |
+| C | rock scatter by slope (`Rocks.ts`) | **LANDED**, censused |
 
 ## A — it was `RoadFurniture._litter`'s tyre. **Verified.**
 
@@ -103,27 +103,103 @@ one sample genuinely can drop two items inside each other) and stays; the probe
 now clusters on a 3 m **plan** grid, because over-merging turns two real props
 into one row while splitting one prop invents a second. Recorded in `cd96f47`.
 
-## B — the checkerboard
+## B — the checkerboard. Diagnosed; the albedo half fixed.
 
-`tmp/round18/pair-39.jpg` panel A, cropped to `tmp/lane-pp/p39-peak.png` and
-`p39-low.png`. It is **not** a repeating-texture checkerboard: it is a regular
-rectilinear **plaid lattice of thin lines** — graph paper — on the smooth,
-steep, sunlit blue-grey faces of the peak, cells roughly 40 px at that framing.
-It does not appear on the shallow or shadowed faces. Next step: `framecheck.mts`
-on the pair-39 framing (it reads the default framebuffer *and* `rtScene`, so it
-separates "a texture failed" from "a material is wrong"), then an ablation of the
-rock detail/normal layer before touching any tiling constant.
+Pairs 38 and 39 are **`vista_noon`** and **`vista_fog`** (matched by
+downsampled-image distance against `tmp/r18/`; both panel A, mse 0).
 
-## C — rock scatter by slope (from another lane, not started)
+**The round-18 corpus predates its own fix by three minutes.**
+`tmp/r18/vista_noon.jpg` was written at 04:33 and `04aacc9` — the commit that
+warped the runnel projection off its three fixed world azimuths — landed at
+04:36. **Re-shoot both before re-judging them.** That does not exonerate the
+warp: the plaid is still visible at HEAD.
 
-`src/world/props/Rocks.ts:2498` `size *= (1 - steep * 0.62)` → ~0.25 on a steep
-face, plus `:2198`'s taper to `(0.72, 0.92)`. Slope `<0.2` gets 1191 rocks at
-mean 4.09 m; slope `>0.70` gets **9 rocks at 2.15 m** — so the silhouette read
-against sky is where the rocks are rarest and smallest. Free in draw calls:
-`Rocks.build` makes 8 `InstancedMesh`es and tiling only bumps `count`. Two
-caveats that lane already paid for: `emit` **silently drops past a cap**, so
-check you are getting what you ask for; and **leave `_genTor`'s 0.30 ban alone**.
-Numbers in `project/TASKS.md`.
+**Attribution, by a sixteen-token ablation sweep on `vista_noon`'s peak face
+(`tmp/lane-pp/sheet-albedo.png`, one contact sheet, read once).** The plaid
+survives `nodry`, `nogully`, `nomacroh`, `nomeso`, `nostoch` and every post
+stage (`nogtao`, `nocontact`, `notaa`, `nocas`, `nobloom`, `nodof`, `nomb`,
+`nograin`) unchanged. It collapses under `gwhite`, so it is in the ground
+albedo. Of the albedo tokens **only `norunnel` visibly cleans the face**.
+
+**Fixed (`5e806be`): a third domain warp at 85 m.** The two existing warps are
+at 230 m and 620 m — a gentle fan across a kilometre of range and *nothing at
+all* across the 150–250 m of one peak face, which is the only scale a judged
+frame shows. 26 m of amplitude at 85 m is a cycle and a half of swing on the
+19 m rake family within one face. **Verified by eye**, `tmp/lane-pp/sheet-warp.png`
+(base / norunnel / this at 3x): the rakes curve and break instead of combing the
+whole face at one pitch. It is a clear improvement and it is **not** a complete
+fix — the face is still more streaked than `norunnel`.
+
+**A negative instrument, recorded so nobody rebuilds it.** An FFT of the crop
+band-limited to 10–40 px returns 36.0 px at 37° and 36.6 px at 114° for *every*
+build and *every* ablation alike, including ones that visibly remove the
+pattern — because those are the lowest frequencies the band admits and a
+broadband rock face puts its most power in the lowest bin available. **It was
+measuring its own cutoff**, and it nearly bought a false attribution (I had
+already written its numbers into a comment before catching it). Grade this by
+eye on a 3x crop.
+
+**Still open, and a different defect.** `vista_fog`'s peak carries a *second*
+lattice — finer, regular, rectilinear — which survives this change and which
+shows faintly on `vista_noon` under `gwhite` too. Surviving `gwhite` means it is
+in the geometry or the normals, not the albedo. The `bedRelief` docblock at
+`TerrainMaterial.ts:~970` describes an earlier lattice of exactly that family
+and its `bedReliefFade` fix, so that fade at long range is the first place to
+look. Not attempted here.
+
+## C — rock scatter by slope. **LANDED.**
+
+The judge's "no boulder or scrub scatter breaking the silhouette" is a slope
+test. `_probe/rockslope.mts` (new) censuses the live field by slope band and
+prints every group's near/far occupancy against its cap, flagged `CAPPED` —
+because `emit` drops silently once a cap fills, which is the trap this change
+could have fallen into. At HEAD on `vista_noon`, **before**:
+
+| slope | n | mean scale | farthest |
+|---|---|---|---|
+| 0.00–0.20 | 2099 | 0.75 | 695 m |
+| 0.46–0.60 | 102 | 0.35 | 589 m |
+| 0.70–1.01 | 40 | 0.20 | 572 m |
+
+Total 2695 live, farthest 695 m — so **nothing is out of range**; the massif was
+getting a twentieth of the stone at a quarter of the size. Far-tier occupancy
+granite 300/760, bedded 448/800, slab 351/620, so there is cap headroom.
+
+Two changes, both right in kind and wrong in degree before:
+`emit`'s `(1 - steep * 0.62)` now applies 0.62 only to the small kinds (a pebble
+scatter on a 40° face genuinely does wash out, and the small kinds fill the near
+field where a wrong seat shows) and **0.25 to the BIG kinds**, which are the
+landmarks a silhouette needs. `_genOutcrop`'s `smoothstep(slope01, 0.58, 0.80)`
+— half gone by a 30° slope, entirely gone by 39° — becomes **(0.72, 0.92)**.
+`_genTor`'s 0.30 ban is deliberately untouched: a 20 m stack on a 30° face has
+metres of seat error.
+
+Free in draw calls: `Rocks.build` makes eight `InstancedMesh`es and streaming
+only bumps `mesh.count`.
+
+**Verified by census and by eye.** After (`0d8e70b`, same shot, same probe):
+
+| slope | n | mean scale before → after |
+|---|---|---|
+| 0.20–0.33 | 268 | 0.55 → **0.57** |
+| 0.33–0.46 | 141 | 0.49 → **0.56** |
+| 0.46–0.60 | 102 | 0.35 → **0.48** (+37 %) |
+| 0.60–0.70 | 45 | 0.31 → **0.48** (+55 %) |
+| 0.70–1.01 | 40 | 0.20 → **0.23** |
+
+No group is `CAPPED` (granite 308/760, bedded 455/800, slab 355/620), and drawn
+counts rose only 318→326 / 462→469 / 364→368. **`tmp/lane-pp/rocks/vista_noon.jpg`
+by eye**: the flank speckle is denser and coarser in the 300–700 m band and
+there are no floaters. Draw calls 435, unchanged from the pre-change capture.
+
+**Honest limit: this did not reach the sky-line itself.** The instance COUNT per
+band is identical before and after (2099/268/141/102/45/40), so the outcrop
+taper widening added nothing on this shot — the > 0.70 band is populated almost
+entirely by small kinds, which keep the 0.62 taper by design. What changed is
+the size of stone on the 25–35° flanks, not the presence of stone on the
+near-vertical crest. If the judge's tell persists on the crest specifically, the
+next lever is the population that is allowed up there at all
+(`_genOutcrop`'s `q`, and `BIG`'s membership), not the taper.
 
 ## Residue for `project/TASKS.md`
 
@@ -142,3 +218,6 @@ Numbers in `project/TASKS.md`.
   `_probe/blackprop.mts`, `_probe/tyrelight.mts`
 - `1a49ac5` litter minimum separation; `_probe/pickat.mts`
 - `cd96f47` `mergeShadow` proxy for the roadkit; `blackprop` clustering corrected
+- `10b1032` this handoff, and the corrected draw numbers in the code comment
+- `5e806be` the 85 m runnel warp, the ablation attribution, the negative FFT
+- `0d8e70b` the rock slope taper and `_probe/rockslope.mts`

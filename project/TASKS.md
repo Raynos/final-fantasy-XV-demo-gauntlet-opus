@@ -1149,3 +1149,36 @@ is landed.
   I watched a whole Sabertusk fight resolve as distant specks behind a
   boulder." That is aggro range and party engagement distance, `src/combat/`
   and `WildTerritories`. `lane12a`
+
+## From the `placeholder-props` lane (2026-08-31)
+
+- **`RoadFurniture._markers` and `_culverts` have the same shape of bug the black
+  tyre had.** A 1.9 m chevron post, a distance plate and a concrete culvert
+  headwall are all built into the `flat` decal builder, so they carry
+  `renderOrder = 1` and cast no shadow — `castShadow` is toggled only over
+  `children[0..castCount)`. Moving them is now nearly free, because `cd96f47`
+  gave the chunk a single `mergeShadow` proxy that would absorb them into the
+  one caster it already draws. Not done here: neither was photographed as a
+  judged defect, and one concern per commit. `placeholder-props`
+- **`vista_fog`'s peak carries a SECOND lattice and it is not the albedo.** The
+  runnel plaid is attributed and half fixed (`5e806be`), but a finer, regular,
+  rectilinear lattice survives it and survives `?post=gwhite` — so it is in the
+  geometry or the normals. `TerrainMaterial.ts`'s `bedRelief` docblock describes
+  an earlier lattice of exactly that family and its `bedReliefFade` fix; that
+  fade at long range is the first place to look. `placeholder-props`
+- **Round 18's pairs 38 and 39 were captured three minutes before their own
+  fix.** `tmp/r18/vista_noon.jpg` 04:33, `04aacc9` 04:36. Re-shoot `vista_noon`
+  and `vista_fog` before re-judging those two. `placeholder-props`
+- **Do not grade a tiling artefact with a band-limited FFT.** Band-limited to
+  10-40 px it returns the same two "families" (36.0 px at 37 deg, 36.6 px at
+  114 deg) for every build and every ablation, including ones that visibly
+  remove the pattern, because those are the lowest frequencies the band admits
+  and a broadband rock face puts its most power in the lowest available bin. It
+  measures its own cutoff. Grade by eye on a 3x crop contact sheet.
+  `placeholder-props`
+- **The rock slope taper reached the flanks, not the crest.** `0d8e70b` raised
+  mean stone scale on 25-35 degree ground by 37-55%, but the per-band instance
+  COUNT is unchanged, so the near-vertical sky-line still carries almost no
+  stone. The next lever is which population is allowed up there at all —
+  `_genOutcrop`'s `q` and `BIG`'s membership — not the size taper.
+  `placeholder-props`
