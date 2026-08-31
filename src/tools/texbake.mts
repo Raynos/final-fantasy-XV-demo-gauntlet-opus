@@ -40,6 +40,8 @@ const DEFERRED_OUT = path.join(BAKE_DIR, 'texd.bin.gz');
 /** Deferred on a phone, boot everywhere else. See `TEX_PHONE_PATH`. */
 const PHONE_OUT = path.join(BAKE_DIR, 'texp.bin.gz');
 const CANVAS_OUT = path.join(BAKE_DIR, 'texc.bin.gz');
+/** The canvas bake's phone tier: face/npc/*. See `TEX_CANVAS_PHONE_PATH`. */
+const CANVAS_PHONE_OUT = path.join(BAKE_DIR, 'texcp.bin.gz');
 const CANVAS_STAMP = path.join(BAKE_DIR, 'texc.json');
 const GEO_OUT = path.join(BAKE_DIR, 'geo.bin.gz');
 const GEO_STAMP = path.join(BAKE_DIR, 'geo.json');
@@ -62,7 +64,10 @@ export async function texSourceHash(): Promise<string> { return hashOf(TEX_SOURC
 
 /** @returns true when the browser-baked artifact matches its sources */
 export async function canvasIsFresh(): Promise<boolean> {
-  if (!existsSync(CANVAS_OUT) || !existsSync(CANVAS_STAMP)) return false;
+  // Both halves, for the same reason `texIsFresh` requires both of its own: a
+  // tree with one and not the other is a half-applied bake, and the symptom --
+  // nine townspeople silently re-painting their faces -- is one nobody notices.
+  if (!existsSync(CANVAS_OUT) || !existsSync(CANVAS_PHONE_OUT) || !existsSync(CANVAS_STAMP)) return false;
   try {
     const stamp = JSON.parse(await readFile(CANVAS_STAMP, 'utf8'));
     return stamp.hash === (await hashOf(CANVAS_SOURCES)) && (await stat(CANVAS_OUT)).size > 1024;
@@ -80,8 +85,9 @@ export async function canvasIsFresh(): Promise<boolean> {
  * @returns true if something was deleted
  */
 export async function pruneStaleCanvasBake(): Promise<boolean> {
-  if (!existsSync(CANVAS_OUT) || await canvasIsFresh()) return false;
+  if ((!existsSync(CANVAS_OUT) && !existsSync(CANVAS_PHONE_OUT)) || await canvasIsFresh()) return false;
   await rm(CANVAS_OUT, { force: true });
+  await rm(CANVAS_PHONE_OUT, { force: true });
   await rm(CANVAS_STAMP, { force: true });
   return true;
 }
@@ -326,8 +332,13 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
 
   // A socket the page can POST to. Port 0 so it never collides with a
   // worktree PORT or its capture daemon on PORT+1.
-  let resolveBody: (b: Buffer) => void = () => {};
-  const bodyPromise = new Promise<Buffer>((r) => { resolveBody = r; });
+  // Two bodies now, keyed on the path the page POSTs to: one recording, two
+  // containers, the same split the Node bake makes.
+  const resolvers = new Map<string, (b: Buffer) => void>();
+  const bodies = new Map<string, Promise<Buffer>>();
+  for (const tier of ['texc', 'texcp']) {
+    bodies.set(tier, new Promise<Buffer>((r) => resolvers.set(tier, r)));
+  }
   const sink = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -337,11 +348,14 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
       }).end();
       return;
     }
+    const which = (req.url || '').replace(/^\//, '') || 'texc';
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
       res.writeHead(204, { 'access-control-allow-origin': '*' }).end();
-      resolveBody(Buffer.concat(chunks));
+      const done = resolvers.get(which);
+      if (done) done(Buffer.concat(chunks));
+      else console.warn('[texbake:canvas] unexpected POST to', which);
     });
   });
   await new Promise<void>((r) => sink.listen(0, '127.0.0.1', () => r()));
@@ -357,15 +371,25 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
     await page.goto(`http://127.0.0.1:${vitePort}/?q=ultra&shoot=1&texbake=canvas`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
-    const posted = await page.evaluate(([url, h]: [string, string]) =>
-      (window as unknown as { TEX_BAKE_POST: (u: string, h: string) => Promise<number> })
-        .TEX_BAKE_POST(url, h),
-    [`http://127.0.0.1:${sinkPort}/texc`, hash] as [string, string]);
-    const gz = await bodyPromise;
+    const post = (tier: 'boot' | 'phone') => page.evaluate(([url, h, t]: [string, string, string]) =>
+      (window as unknown as { TEX_BAKE_POST: (u: string, h: string, t: string) => Promise<number> })
+        .TEX_BAKE_POST(url, h, t),
+    [`http://127.0.0.1:${sinkPort}/${tier === 'phone' ? 'texcp' : 'texc'}`, hash, tier] as [string, string, string]);
+    // Sequential: each call encodes the WHOLE recording and gzips it, and two
+    // of those in flight at once is ~200 MB of transient buffer in a page that
+    // has already recorded 67 MB of texels.
+    const postedBoot = await post('boot');
+    const postedPhone = await post('phone');
+    const gz = await bodies.get('texc')!;
+    const gzPhone = await bodies.get('texcp')!;
     await mkdir(BAKE_DIR, { recursive: true });
     await writeFile(CANVAS_OUT, gz);
-    await writeFile(CANVAS_STAMP, JSON.stringify({ hash, bytes: gz.length, at: new Date().toISOString() }, null, 2));
-    log(`${(gz.length / 1e6).toFixed(1)} MB gz (posted ${(posted / 1e6).toFixed(1)} MB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    await writeFile(CANVAS_PHONE_OUT, gzPhone);
+    await writeFile(CANVAS_STAMP, JSON.stringify({
+      hash, bytes: gz.length, phone: { bytes: gzPhone.length }, at: new Date().toISOString(),
+    }, null, 2));
+    log(`${(gz.length / 1e6).toFixed(1)} MB gz (posted ${(postedBoot / 1e6).toFixed(1)} MB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    log(`  + ${(gzPhone.length / 1e6).toFixed(1)} MB gz phone-deferred (face/npc/*, posted ${(postedPhone / 1e6).toFixed(1)} MB)`);
     return true;
   } finally {
     await leased.release();

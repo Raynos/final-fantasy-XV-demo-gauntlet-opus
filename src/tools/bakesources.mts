@@ -245,6 +245,15 @@ export const ARTIFACTS: BakeArtifact[] = [
     regenerable: false, remedy: 'node src/tools/texbake.mts --canvas --force', bootCostSec: 2.5,
   },
   {
+    // The canvas bake's phone tier, written by the same browser run off the
+    // same source hash: face/npc/*, the nine painted townspeople. A phone
+    // builds them when the deferred town does, so they leave its first frame;
+    // a desktop still fetches this before its own.
+    file: 'texcp.bin.gz', stamp: 'texc.json', sources: CANVAS_SOURCES,
+    what: 'the phone-deferred half of the canvas bake: face/npc/* mip chains',
+    regenerable: false, remedy: 'node src/tools/texbake.mts --canvas --force', bootCostSec: 1.4,
+  },
+  {
     file: 'geo.bin.gz', stamp: 'geo.json', sources: GEO_SOURCES,
     what: 'the POI, megastructure and shore geometry (src/engine/GeoBake.ts)',
     regenerable: false, remedy: 'node src/tools/texbake.mts --geo', bootCostSec: 1.2,

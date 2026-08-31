@@ -56,6 +56,15 @@ export const TEX_BAKE_VERSION = 1;
 export const TEX_BAKE_PATH = 'baked/tex.bin.gz';
 export const TEX_CANVAS_PATH = 'baked/texc.bin.gz';
 /**
+ * The canvas bake's phone tier: `face/npc/*`, 13.76 MB of painted townsfolk.
+ *
+ * The same rule as {@link TEX_PHONE_PATH} and for the same reason — a desktop
+ * builds all nine of Hammerhead's people during `Npcs.init`, a phone builds
+ * them when the deferred town does. `face/hero/*` (6.76 MB, the party) stays
+ * in the boot tier under every condition: they are in the first pixel.
+ */
+export const TEX_CANVAS_PHONE_PATH = 'baked/texcp.bin.gz';
+/**
  * The third file, and the only one the first frame does not wait for.
  *
  * `dgn/*` is 36 entries, 17.3 MB inflated and **6.8 MB on the wire** — a fifth
@@ -97,7 +106,8 @@ export const isDeferredKey = (k: string): boolean => k.startsWith('dgn/');
  */
 export const TEX_PHONE_PATH = 'baked/texp.bin.gz';
 /** Keys that live in {@link TEX_PHONE_PATH}. */
-export const isPhoneDeferredKey = (k: string): boolean => k.startsWith('map/') || k.startsWith('town/');
+export const isPhoneDeferredKey = (k: string): boolean =>
+  k.startsWith('map/') || k.startsWith('town/') || k.startsWith('face/npc/');
 
 /** One texture's bytes in the container. */
 export interface TexEntry {
@@ -218,7 +228,7 @@ export function loadTexBake(): Promise<boolean> {
   // The phone tier is a boot artifact on every page but the demo, where the
   // three consumers that read it have a lazy path and the bytes go after the
   // first frame instead.
-  if (!demoActive()) boot.push(TEX_PHONE_PATH);
+  if (!demoActive()) boot.push(TEX_PHONE_PATH, TEX_CANVAS_PHONE_PATH);
   loading = fetchContainers(boot);
   return loading;
 }
@@ -238,7 +248,7 @@ export function loadTexBake(): Promise<boolean> {
 export function loadDeferredTexBake(): Promise<boolean> {
   if (deferredLoading) return deferredLoading;
   deferredLoading = fetchContainers(demoActive()
-    ? [TEX_DEFERRED_PATH, TEX_PHONE_PATH]
+    ? [TEX_DEFERRED_PATH, TEX_PHONE_PATH, TEX_CANVAS_PHONE_PATH]
     : [TEX_DEFERRED_PATH]);
   return deferredLoading;
 }
@@ -482,8 +492,14 @@ export function bakedNormal(key: string, size: number, height: HeightFn, strengt
  * @param url where the tool is listening
  * @param hash content hash of the generator sources, stamped into the header
  */
-export async function postRecording(url: string, hash: string): Promise<number> {
-  const raw = encodeTexBake(hash);
+export async function postRecording(url: string, hash: string, tier?: string): Promise<number> {
+  // One recording, up to three containers, exactly as the Node bake does it.
+  // The predicate is named rather than passed as a function because this is
+  // called across the `page.evaluate` boundary, where a closure cannot go.
+  const keep = tier === 'phone' ? isPhoneDeferredKey
+    : tier === 'boot' ? (k: string) => !isPhoneDeferredKey(k)
+      : () => true;
+  const raw = encodeTexBake(hash, keep);
   const gz = new Response(new Blob([raw as BlobPart]).stream().pipeThrough(new CompressionStream('gzip')));
   const body = await gz.arrayBuffer();
   // No `content-type`: naming one would put `application/octet-stream` outside
