@@ -733,7 +733,20 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
     place(iron, { pos: [0.435 * s, 1.10, 0.05], rot: [0, Math.PI / 2, 0] });
     tint(iron, BRASS);
     mat(iron, 0.34, 0.85);
-    rig.attach(iron, 'spine');
+    /*
+     * **Bound the same way as the leather it hangs on, which it was not.**
+     *
+     * The strap is `attachBlend('spine', 'chest')` and this was `attach('spine')`
+     * — rigid to one bone against an interpolation between two — so under any
+     * pose the two ends of one object went different ways. Geometrically they
+     * touch (the strap ends at y 1.17 and the ring's top is 1.10 + 0.065 =
+     * 1.165); the 20 cm the look-loop measured between them was the skinning
+     * alone, and at 8 m the strap thinned out of sight and left the ring
+     * reading as a black donut floating beside the bird. It only became
+     * visible when the assembly moved outboard: buried in the flank, a skinning
+     * split has nowhere to show.
+     */
+    rig.attachBlend(iron, 'spine', 'chest', 1.0);
   }
 
   // bridle: a browband, a cheek strap and a noseband, then the reins
