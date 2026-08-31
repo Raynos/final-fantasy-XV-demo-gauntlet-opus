@@ -142,18 +142,45 @@ Wiz a 200 m barn.
 
 ## Where to pick this up (the exact next step)
 
-1. **The bird's sculpt** — two rounds landed this lifetime, the second not yet
-   verified. Round 1 (`0d1a38c`) added hip coverts, bib down and a shoulder
-   pitch falloff; a look-loop found **two of the three had missed, each by a
-   radius**: the coverts were quilled 0.055 from the thigh's *centreline* while
-   its outer surface is at 0.355, so they hung inside the leg, and the shoulder
-   falloff overshot into "a plain smooth yellow blob with essentially no feather
-   read at all". Round 2 (`da354da`) puts the coverts at 0.17, raises the pitch
-   floor to 0.13 with a 0.06 alternating tone step, and — a defect the look-loop
-   found on its own — moves the **stirrup leather and iron from x 0.350 to
-   0.435**, because the barrel's radius there is 0.37 and the iron was reading
-   as "a black C arc painted on the flank" in every side and rear frame.
-   **Re-shoot and check round 2.**
+1. **The bird's sculpt** — two rounds landed and **both look-loops' reads are
+   recorded below**. Round 1 (`0d1a38c`) added hip coverts, bib down and a
+   shoulder pitch falloff, and **two of the three missed, each by a radius**.
+   Round 2 (`da354da`, `18cdb35`) fixed those. What the second look-loop saw,
+   at `tmp/shots/l22c/` (frames are gone by now; the descriptions are the
+   record):
+
+   - **Shoulder shingling: landed.** No bald patch anywhere on the fore-flank;
+     the 0.06 tone step reads as overlapping plates, not stripes.
+   - **Stirrup: half landed, then finished.** The iron is a closed O standing
+     clear of the flank with feathers visible through it — the "black C painted
+     on the flank" is gone. But the leather stopped ~20 cm short of it, because
+     the strap is `attachBlend('spine','chest')` and the iron was
+     `attach('spine')`: rigid against interpolated, so one object's two ends
+     went different ways under every pose. Geometrically they touch (strap ends
+     y 1.17, ring top 1.10 + 0.065 = 1.165) — the gap was skinning alone, and
+     it only became visible once the assembly moved outboard. `18cdb35` binds
+     the iron the same way. **Not re-shot.**
+   - **Hip coverts: still not landed on the FAR thigh.** The near hip reads
+     properly, but the far thigh's visible face is still one unbroken yellow
+     gradient with the coverts fanning out *from behind* it "like a second
+     small tail". So the silhouette is broken and the surface is not — the
+     coverts are radiating outward instead of lying down the leg. **The next
+     move is not another radius**: it is the feather's *orientation*, the
+     `Euler(PI - 0.26, a * 0.7, 0)`, whose `a * 0.7` yaw fans them off the leg.
+     Try a roll toward the leg's own surface instead of a yaw, or lay them with
+     `shingle()` against the thigh axis the way the barrel rows are laid.
+
+   Two further reads worth acting on, both **now the most naked surfaces**:
+
+   - **The bib is near-cream against saturated yellow** — a hard value break
+     that reads as "a separate white plate stitched onto the bird". The down
+     rows fixed the *smoothness* and left the *value*. `col.down` wants to move
+     toward `col.plume`, or the rows want a gradient into it.
+   - **The neck and head are a completely smooth unbroken yellow tube with a
+     peach wedge on the end**, bridle drawn on as black wires. This is now the
+     worst-looking part of the bird — exactly the read the flank work removed
+     from the body, still untouched from the collar up.
+
 2. **The rider's arms: the pose table is exonerated and the cause is named.**
    `POSE_RIDE` is mirror-symmetric (`Skeleton.ts`:154 mirrors bone *translation*
    only) — and a look-loop at close crop reports that **one hand mesh is a
@@ -201,6 +228,17 @@ bearings reads 404-545 calls, also inside budget.
 
 ## Not done / owed
 
+- **The rider has no legs.** A shapeless black blob drapes over the fore-flank
+  and ends at mid-barrel — no knee, no boot, nothing in the stirrup — on all
+  four birds at distance. That plus the two hand meshes and the unheld reins is
+  three separate rider-on-mount defects, none of them `POSE_RIDE`.
+- **`chocobostage`'s `side` and `rear34` framings sit outside the depth-of-field
+  band** — near ground and far background are both blurred and the focal plane
+  is behind a subject at 3.6 m. `b3be4a2` fixed the *motion* blur (3 → 14 frames
+  after a shot cut, which is a camera cut); this is a different problem and a
+  settle count will not fix it. The framings need moving into the band.
+- **`chocobostage`'s party parking does not work in `stand` mode**: a bare
+  forearm and a black head crowd the saddle in `rear34` and reach into `head`.
 - `npcdraws` needs a `Shots.ts` framing with the bird in it and **lane 3/21 owns
   `Shots.ts`** -- the four framings this lane wants are in the cross-boundary
   list below and have not landed. The draw question it would have answered is
@@ -287,4 +325,6 @@ phase fix and its numbers · `0d1a38c` the three sculpt seams (**not yet
 verified by eye**) · `3d8a760` + `9423058` birds in the paddock (**verified**)
 · `da354da` the sculpt again after a look-loop (**not yet verified**) ·
 `529be22` bird spacing and the gateway's blank slab · `08e8f91` the start line
-onto the gateway · `f51ce0b` stalls behind the barn door and par 25 -> 27.
+onto the gateway · `f51ce0b` stalls behind the barn door and par 25 -> 27 ·
+`9217a99` the gateway to head height · `b3be4a2` `chocobostage`'s cut settle ·
+`18cdb35` the stirrup's skinning split.
