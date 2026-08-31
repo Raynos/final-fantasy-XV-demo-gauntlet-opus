@@ -39,6 +39,17 @@ export class Pack implements EnemyPack {
   maxEngaged!: number;
   members!: Enemy[];
   rotate!: number;
+  /**
+   * Which way the engaged ring circles, `+1` or `-1`, for every member at once.
+   *
+   * `EnemyBase._tickStrafe` used to read a per-enemy `_strafeDir` of
+   * `(id % 2) ? 1 : -1`, which meant half of every pack circled one way and
+   * half the other. The even bearings `_reslot` hands out survived about a
+   * second of that. Derived from the pack id rather than random so a pack
+   * circles the same way across a reload, and hashed rather than taken from a
+   * counter so two packs standing near each other do not always mirror.
+   */
+  strafeDir!: number;
   target!: Threat | null;
   /**
    * @param [o] `{ maxEngaged, rotate, id }`
@@ -56,6 +67,9 @@ export class Pack implements EnemyPack {
     /** Seconds a member holds the engage token before it may rotate. */
     this.rotate = o.rotate ?? 3.0;
     this.engaged = [];
+    let h = 0;
+    for (let i = 0; i < this.id.length; i++) h = (h * 31 + this.id.charCodeAt(i)) | 0;
+    this.strafeDir = (h & 1) ? 1 : -1;
     this._t = 0;
     this.target = null;
     this.alerted = false;

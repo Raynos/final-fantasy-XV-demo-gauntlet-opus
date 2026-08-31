@@ -334,6 +334,11 @@ export interface EnemyPack {
    * grazing flag on the whole herd rather than on the one animal that was hit.
    */
   readonly members: readonly Enemy[];
+  /**
+   * Which way the engaged ring circles, `+1` or `-1`, for the **whole** pack.
+   * See `_tickStrafe` and `Pack.strafeDir`.
+   */
+  readonly strafeDir: number;
 }
 
 /** The heightfield an enemy stands on. */
@@ -1884,16 +1889,34 @@ export class Enemy {
       if (bl > 0.35) { this._move(dt, bx / bl, bz / bl, this.speed * 0.9, ctx); return; }
     }
 
-    // Hold the assigned bearing on the ring, and let the whole ring rotate
-    // slowly, so the pressure on the player keeps coming from a new angle.
-    this.slotAngle += this._strafeDir * dt * 0.45;
+    /**
+     * Hold the assigned bearing on the ring, and let **the whole ring** rotate
+     * slowly, so the pressure on the player keeps coming from a new angle.
+     *
+     * That is what this always said and it is not what it did. `_strafeDir` is
+     * `(id % 2) ? 1 : -1`, so half of every pack circled clockwise and half
+     * anticlockwise: the ring did not rotate, it counter-rotated into itself,
+     * and each animal walked straight into the bearing of the one coming the
+     * other way. `Pack._reslot` hands out evenly spread slots and this undid
+     * them within a second or two of the first strafe. A watched midfight
+     * capture of a six-strong sabertusk den is the receipt -- four animals
+     * inside one 40-degree arc with two bodies visibly fused, on a tree where
+     * the slot assignment itself was already fixed.
+     *
+     * A packed member therefore takes its pack's single direction. The 4.5 s
+     * reversal below goes with it: it existed to keep one animal's bearing from
+     * going stale, and a ring that rotates rigidly is never stale -- while
+     * reversing per-member is a second way for the phase to decohere. An enemy
+     * with no pack keeps it, because it has no ring to stay in phase with.
+     */
+    this.slotAngle += (this.pack ? this.pack.strafeDir : this._strafeDir) * dt * 0.45;
     const ring = want * 1.5 + this.radius * this.scale;
     const gx = tp.x + Math.sin(this.slotAngle) * ring;
     const gz = tp.z + Math.cos(this.slotAngle) * ring;
     const dx = gx - this.root.position.x, dz = gz - this.root.position.z;
     const d = Math.hypot(dx, dz);
     if (d > 0.35) this._move(dt, dx / d, dz / d, this.speed * 0.62, ctx);
-    if (this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
+    if (!this.pack && this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
   }
 
   _tickTelegraph(dt: number, ctx: EnemyCtx, tp: THREE.Vector3 | null, _dist: number) {
