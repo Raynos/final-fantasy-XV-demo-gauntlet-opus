@@ -320,12 +320,20 @@ const APRON_R = 30;
  *
  * `off` is `[toward the plaza, to the left of that]`, so a vendor sits at the
  * front of their own stall whatever yaw the town was seeded with.
+ *
+ * **The offsets are measured, not eyeballed.** An anchor is open pavement but
+ * an `off` of a metre or two from one is not: `probes/cityfeet.mts` samples the
+ * five points of each body's footprint against the built geometry and reports
+ * anything solid between its boots and its hips, and the first pass found nine
+ * bodies standing in a stall counter (0.81 m up), a building plinth (0.50 m)
+ * or a wall (1.07 m) — which is what "the crowd is sunk to the knee" was. Move
+ * a row and re-run it; the number to get to is `sink 0.000`.
  */
 export const CITY: RemoteNpc[] = [
   /* ---------------------------------------------------------- Lestallum -- */
   // The three counters, each with the person whose name is on the shop row.
-  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [1.7, 1.6], posture: 'folded', talkRadius: 3.0 },
-  { castKey: 'surgate', at: 'lestallum', anchor: 'stall2', off: [1.6, -1.7], posture: 'folded', talkRadius: 3.0 },
+  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [3.0, 1.0], posture: 'folded', talkRadius: 3.0 },
+  { castKey: 'surgate', at: 'lestallum', anchor: 'stall2', off: [3.0, -1.0], posture: 'folded', talkRadius: 3.0 },
   { castKey: 'randolph', at: 'lestallum', anchor: 'stall4', off: [1.8, 1.5], posture: 'folded', talkRadius: 3.2 },
   // Sania at last, on the square with a specimen jar and no interest in
   // anybody's schedule.
@@ -333,14 +341,14 @@ export const CITY: RemoteNpc[] = [
   // Two of the standing cast who already have scripts, so the square has
   // people to talk to that are not shopkeepers.
   { castKey: 'mechanic', at: 'lestallum', key: 'lest_mech', seed: 11, anchor: 'edge3', off: [1.8, 2.2], posture: 'wrench', task: 'wrench', talkRadius: 2.8 },
-  { castKey: 'kid', at: 'lestallum', key: 'lest_kid', seed: 12, anchor: 'edge4', off: [2.6, 1.4], talkRadius: 2.6 },
+  { castKey: 'kid', at: 'lestallum', key: 'lest_kid', seed: 12, anchor: 'edge4', off: [4.4, 0.4], talkRadius: 2.6 },
   { castKey: 'traveller', at: 'lestallum', key: 'lest_trav', seed: 13, anchor: 'plaza', off: [0, 4.4], posture: 'pockets', talkRadius: 2.8 },
 
   // Eleven ambient. Spread deliberately: half on the square, half out on the
   // apron behind the stalls, so no single framing carries all of them.
-  { castKey: 'trucker', at: 'lestallum', key: 'lest_a', seed: 21, anchor: 'stall1', off: [1.2, -2.0], posture: 'folded' },
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_a', seed: 21, anchor: 'stall1', off: [3.2, -1.1], posture: 'folded' },
   { castKey: 'traveller', at: 'lestallum', key: 'lest_b', seed: 22, anchor: 'stall3', off: [1.4, 1.9], posture: 'pockets' },
-  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [-0.4, -2.6], posture: 'pockets' },
+  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [2.8, -2.2], posture: 'pockets' },
   { castKey: 'kid', at: 'lestallum', key: 'lest_d', seed: 24, anchor: 'plaza', off: [-3.2, -2.6] },
   { castKey: 'trucker', at: 'lestallum', key: 'lest_e', seed: 25, anchor: 'edge2', off: [-2.0, 3.0], posture: 'folded' },
   // Four walkers. A square with nobody crossing it is a diorama.
@@ -350,7 +358,7 @@ export const CITY: RemoteNpc[] = [
   },
   {
     castKey: 'trucker', at: 'lestallum', key: 'lest_w2', seed: 27, anchor: 'edge4',
-    route: [[1.5, 1.0], [8.0, -2.5], [13.0, 1.5]], pause: [1.0, 2.4, 1.4], speed: 1.05,
+    route: [[3.2, 0.6], [8.0, -2.5], [13.0, 1.5]], pause: [1.0, 2.4, 1.4], speed: 1.05,
   },
   {
     castKey: 'mechanic', at: 'lestallum', key: 'lest_w3', seed: 28, anchor: 'stall2',
@@ -368,7 +376,7 @@ export const CITY: RemoteNpc[] = [
   { castKey: 'coctura', at: 'galdin_quay', anchor: 'stall0', off: [1.7, 1.6], posture: 'folded', talkRadius: 3.0 },
   {
     castKey: 'dino', at: 'galdin_quay', key: 'dino_bench', seed: 3, anchor: 'stall3',
-    off: [1.8, -1.5], posture: 'lean', task: 'inspect', talkRadius: 3.0,
+    off: [3.0, -1.2], posture: 'lean', task: 'inspect', talkRadius: 3.0,
   },
   // Navyth on the rail, folded over it, watching water he has been watching
   // for eleven years. `side_legendary_fish` names him and he did not exist.
@@ -384,7 +392,7 @@ export const CITY: RemoteNpc[] = [
   { castKey: 'traveller', at: 'galdin_quay', key: 'gald_trav', seed: 41, anchor: 'edge1', off: [2.2, -1.4], posture: 'pockets', talkRadius: 2.8 },
 
   { castKey: 'trucker', at: 'galdin_quay', key: 'gald_a', seed: 42, anchor: 'stall1', off: [1.3, 1.8], posture: 'folded' },
-  { castKey: 'kid', at: 'galdin_quay', key: 'gald_b', seed: 43, anchor: 'stall2', off: [1.5, -1.6] },
+  { castKey: 'kid', at: 'galdin_quay', key: 'gald_b', seed: 43, anchor: 'stall2', off: [3.0, -1.0] },
   { castKey: 'mechanic', at: 'galdin_quay', key: 'gald_c', seed: 44, anchor: 'edge3', off: [2.0, 2.2], posture: 'pockets' },
   { castKey: 'traveller', at: 'galdin_quay', key: 'gald_d', seed: 45, anchor: 'edge5', off: [2.4, -2.0], posture: 'folded' },
   {
@@ -395,7 +403,7 @@ export const CITY: RemoteNpc[] = [
     castKey: 'traveller', at: 'galdin_quay', key: 'gald_w2', seed: 47, anchor: 'stall5',
     route: [[2.0, 1.5], [6.5, -2.0], [2.0, -6.0]], pause: [1.8, 1.0, 2.2], speed: 1.2,
   },
-  { castKey: 'kid', at: 'galdin_quay', key: 'gald_e', seed: 48, anchor: 'edge5', off: [-12.0, 4.0] },
+  { castKey: 'kid', at: 'galdin_quay', key: 'gald_e', seed: 48, anchor: 'edge5', off: [-8.0, 1.5] },
 ];
 
 /** Where and how one townsperson is placed. */
