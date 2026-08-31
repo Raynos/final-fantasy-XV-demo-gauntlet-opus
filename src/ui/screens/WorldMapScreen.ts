@@ -39,6 +39,28 @@ export interface ScreenHost {
  *   Enter     fast travel, where allowed    wheel / +- zoom about the cursor
  *   drag      pan                           click  select
  *
+ * ### Three states, not two
+ *
+ * A blind playtest cycled 120 points with the arrow keys and every one except
+ * Hammerhead, its layby and the haven at the player's feet read `UNSURVEYED
+ * SITE · UNKNOWN`. The map is this game's design document — 139 places, each
+ * with a `does` line saying what you actually do there — and a first session
+ * read three of them. The fog is deliberate, so the answer is not to reveal
+ * everything; the answer is that "unsurveyed" was doing two jobs at once.
+ *
+ *   **unknown**   the pin is outside surveyed country: not drawn, not listed.
+ *   **charted**   the pin sits inside the road corridor `FogOfWar.revealRoads`
+ *                 inks in at boot. Lucis has road signs: you know a haven is
+ *                 out there and roughly where, because the survey plotted it.
+ *                 The TYPE is drawn, in the type's own colour at a third of
+ *                 the opacity, and the card says how close you have to get.
+ *                 No name, no `does`, no fast travel.
+ *   **surveyed**  you walked inside `p.r`: name, `does`, fast travel.
+ *
+ * That is FFXV's own convention and it closes the loop the old two-state map
+ * left open: a ghost pin that says `HAVEN · walk within 55 m` is a destination,
+ * and `UNSURVEYED SITE · UNKNOWN` is 139 identical grey dots.
+ *
  * No CSS transitions or keyframes: every animated value is written per frame
  * from `dt` and `game.time.now`, so a capture after N fixed steps is
  * reproducible.
@@ -148,6 +170,9 @@ export class WorldMapScreen {
   cardName!: HTMLElement;
   cardRows!: HTMLElement;
   cardType!: HTMLElement;
+  /** Why the last Enter was refused, and when — see `_refuse`. */
+  _refuseMsg!: string;
+  _refuseAt!: number;
   chart!: Chart;
   ctx!: CanvasRenderingContext2D;
   dpr!: number;
@@ -195,6 +220,8 @@ export class WorldMapScreen {
     this.camT = { x: 0, z: 0 };
     this.sel = 0;
     this.hover = null;
+    this._refuseMsg = '';
+    this._refuseAt = -99;
     this._a = 0;
     this._drag = null;
     this._screenPos = new Map();
@@ -368,10 +395,37 @@ export class WorldMapScreen {
     if (p) { this.camT.x = p.x; this.camT.z = p.z; }
   }
 
+  /**
+   * Say no out loud.
+   *
+   * The footer says `Enter — TRAVEL`, and pressing Enter on a pin that cannot
+   * be travelled to used to do **nothing at all: no sound, no message, no
+   * refusal**. A player cannot tell that apart from a broken key, and the
+   * playtest didn't: they pressed it on point after point and concluded fast
+   * travel was not implemented. A refusal that names its own reason is the
+   * cheapest teaching this screen has.
+   */
+  _refuse(msg: string) {
+    this._refuseMsg = msg;
+    this._refuseAt = this.game?.time?.now ?? 0;
+    this.game?.get?.('Audio')?.sfx?.play?.('ui:cancel', null, {});
+  }
+
   /** Fast travel to the selected point, if it allows it. */
   accept() {
     const p = this.list[this.sel];
-    if (!p || !p.travel || !this.map.discovered.has(p.id)) return;
+    if (!p) return;
+    if (!this.map.discovered.has(p.id)) {
+      const def = POI_TYPES[p.type as keyof typeof POI_TYPES];
+      this._refuse(`NOT SURVEYED — WALK WITHIN ${Math.round(p.r)} m OF THIS ${def.label.toUpperCase()} FIRST`);
+      return;
+    }
+    if (!p.travel) {
+      this._refuse(this.canDrive(p)
+        ? 'NO FAST TRAVEL HERE — PRESS I AND LET IGNIS DRIVE YOU'
+        : 'NO FAST TRAVEL HERE — YOU HAVE TO WALK IN');
+      return;
+    }
     const game = this.game;
     const player = game?.get('Player');
     const terrain = game?.get('Terrain');
@@ -545,13 +599,17 @@ export class WorldMapScreen {
     if (this._cardKey !== `${p.id}|${known}|${dead ? 1 : 0}`) {
       this._cardKey = `${p.id}|${known}|${dead ? 1 : 0}`;
       while (this.cardGlyph.firstChild) this.cardGlyph.removeChild(this.cardGlyph.firstChild);
-      this.cardGlyph.appendChild(glyphSvg(known ? POI_GLYPH[p.type as keyof typeof POI_GLYPH] : 'unknown', { size: 26 }));
-      this.cardGlyph.style.color = known ? def.colour : 'rgba(198,214,240,.42)';
-      this.cardName.textContent = (known ? p.name : 'Unsurveyed Site').toUpperCase();
-      this.cardType.textContent = `${known ? def.label : 'Unknown'}  ·  ${zone ? zone.name : 'The Frontier'}`
+      this.cardGlyph.appendChild(glyphSvg(POI_GLYPH[p.type as keyof typeof POI_GLYPH] || 'unknown', { size: 26 }));
+      this.cardGlyph.style.color = known ? def.colour : dim(def.colour, 0.42);
+      this.cardName.textContent = (known ? p.name : `Unsurveyed ${def.label}`).toUpperCase();
+      // The TYPE is known on a charted pin -- that is the whole point of the
+      // middle state. Printing `Unknown` here while the filter rail counted
+      // the same pin under `HAVENS 17` was the map contradicting itself.
+      this.cardType.textContent = `${def.label}  ·  ${zone ? zone.name : 'The Frontier'}`
         + `${region ? `, ${region.name}` : ''}`;
       this.cardDoes.textContent = known ? (p.does || '')
-        : 'Charted from a distance. Walk within sight of it to learn what it is.';
+        : 'Charted from a distance — plotted by the survey, walked by nobody. '
+          + `Get within ${Math.round(p.r)} m of it and it names itself.`;
       this.cardDoes.classList.toggle('dead', !!dead);
       this.cardWarn.textContent = dead || '';
       this.cardWarn.style.display = dead ? '' : 'none';
@@ -581,12 +639,18 @@ export class WorldMapScreen {
       this._rowEls[i][1].textContent = rows[i][1];
     }
     const canDrive = !dead && this.canDrive(p);
-    this.cardFt.textContent = !known ? 'UNDISCOVERED'
-      : dead ? 'UNAVAILABLE IN THIS WORLD'
-        : p.travel && canDrive ? 'ENTER  FAST TRAVEL   ·   I  IGNIS, DRIVE THERE'
-          : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER'
-            : canDrive ? 'I  IGNIS, DRIVE THERE' : 'NO FAST TRAVEL';
-    this.cardFt.className = `wm-ft${dead ? ' dead' : known && p.travel ? ' on' : ''}`;
+    // A refusal owns the footer for two and a half seconds, because the footer
+    // is the line the player was reading when they pressed the key.
+    const since = (this.game?.time?.now ?? 0) - this._refuseAt;
+    const refusing = !!this._refuseMsg && since >= 0 && since < 2.5;
+    const away = Math.hypot(p.x - px, p.z - pz);
+    this.cardFt.textContent = refusing ? this._refuseMsg
+      : !known ? `UNSURVEYED  ·  WALK WITHIN ${Math.round(p.r)} m  ·  YOU ARE ${fmtDist(away)} OFF`
+        : dead ? 'UNAVAILABLE IN THIS WORLD'
+          : p.travel && canDrive ? 'ENTER  FAST TRAVEL   ·   I  IGNIS, DRIVE THERE'
+            : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER'
+              : canDrive ? 'I  IGNIS, DRIVE THERE' : 'NO FAST TRAVEL';
+    this.cardFt.className = `wm-ft${refusing ? ' warn' : dead ? ' dead' : known && p.travel ? ' on' : ''}`;
   }
 
   _draw(game: Game, t: number, rev: number) {
@@ -919,15 +983,19 @@ export class WorldMapScreen {
       const def = POI_TYPES[r.p.type as keyof typeof POI_TYPES];
       const big = r.sel || r.hover;
       const zk = clamp(0.78 + this.zoom * 0.9, 0.78, 1.12);
-      const rad = (!r.known ? 4.6 : r.sel ? 10 : r.hover ? 9 : SETTLED.includes(r.p.type) ? 8.4 : 7.4)
-        * zk * dpr;
+      const rad = (r.sel ? 10 : r.hover ? 9
+        : !r.known ? 6.0 : SETTLED.includes(r.p.type) ? 8.4 : 7.4) * zk * dpr;
       r.rad = rad;
       // A dead pin keeps its own glyph — you must still be able to tell what
       // it was meant to be — and loses its type colour and half its opacity.
-      const alpha = (r.off ? 0.14 : r.dead ? (big ? 0.62 : 0.42) : r.known ? (big ? 1 : 0.9) : 0.3) * rev;
-      const colour = r.dead ? 'rgba(178,190,206,0.95)' : r.known ? def.colour : 'rgba(206,222,246,0.9)';
-      drawGlyph(c, r.known ? (POI_GLYPH[r.p.type as keyof typeof POI_GLYPH] || 'dot') : 'unknown', r.x, r.y, rad, colour,
-        { alpha, weight: 1.3 * dpr });
+      const alpha = (r.off ? 0.14 : r.dead ? (big ? 0.62 : 0.42)
+        : r.known ? (big ? 1 : 0.9) : (big ? 0.62 : 0.34)) * rev;
+      // A charted pin draws its own TYPE, in its own hue, at a third of the
+      // weight. 139 identical grey `unknown` blobs told the player nothing at
+      // all; a faint chocobo, a faint tomb and a faint fishing hook are a map.
+      const colour = r.dead ? 'rgba(178,190,206,0.95)' : def.colour;
+      drawGlyph(c, POI_GLYPH[r.p.type as keyof typeof POI_GLYPH] || 'dot', r.x, r.y, rad, colour,
+        { alpha, weight: (r.known ? 1.3 : 1.1) * dpr });
       // …and carries a strike, because colour alone is not a difference a
       // player reads on a sheet with eleven pin colours already on it.
       if (r.dead && !r.off) {
@@ -953,7 +1021,8 @@ export class WorldMapScreen {
       const named = SETTLED.includes(r.p.type);
       const show = r.sel || r.hover || (r.known && (named || ppm / dpr > 0.33));
       if (!show) continue;
-      const label = (r.known ? r.p.name : 'Unsurveyed site').toUpperCase();
+      const label = (r.known ? r.p.name
+        : POI_TYPES[r.p.type as keyof typeof POI_TYPES].label).toUpperCase();
       const size = named ? 10.5 : 9.5;
       c.font = `${r.sel ? 400 : 300} ${Math.round(size * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
       const sp = 2.2 * dpr;
@@ -1111,6 +1180,26 @@ export class WorldMapScreen {
   }
 }
 
+/** Metres, or kilometres once it stops being a number of paces. */
+function fmtDist(m: number) {
+  return m < 950 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 9500 ? 2 : 1)} km`;
+}
+
+/**
+ * A POI type's colour at a fraction of its opacity.
+ *
+ * A charted pin keeps its type's hue -- that is what tells you a haven from a
+ * tomb at a glance -- and loses two thirds of its presence, so a surveyed pin
+ * still wins the sheet. The table is authored as `#rrggbb`, so this is a hex
+ * parse rather than a colour library.
+ */
+function dim(hex: string, a: number) {
+  const h = hex.trim();
+  if (h[0] !== '#' || h.length !== 7) return `rgba(198,214,240,${a})`;
+  const n = parseInt(h.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
 function fmtTime(sec: number) {
   if (!isFinite(sec)) return '—';
   const m = Math.floor(sec / 60), s = Math.round(sec % 60);
@@ -1195,6 +1284,9 @@ function styleTag() {
 }
 .wm .wm-ft.on { color: var(--gold); }
 .wm .wm-ft.dead { color: rgba(226,184,150,.72); }
+/* A refusal. Louder than the resting footer on purpose -- it is the answer to
+   a key the player just pressed, and the old answer was silence. */
+.wm .wm-ft.warn { color: #f0b268; }
 
 .wm .wm-scalebar { position: absolute; left: 66px; bottom: 118px; }
 .wm .wm-scaleline {

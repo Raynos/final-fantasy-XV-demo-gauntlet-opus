@@ -114,7 +114,11 @@ const FOOT = {
   armiger: [['↑↓', 'Select'], ['Enter', 'Unlock'], ['Bksp', 'Back'], ['Tab', 'Close']],
   shop: [['↑↓', 'Select'], ['←→', 'Shelf'], ['Enter', 'Deal'], ['Bksp', 'Leave']],
   hunts: [['↑↓', 'Select'], ['←→', 'Ledger'], ['Enter', 'Accept'], ['Bksp', 'Leave']],
-  world: [['↑↓←→', 'Navigate'], ['Enter', 'Travel'], ['I', 'Drive'], ['M', 'Close'], ['Tab', 'Close']],
+  // `Navigate` was one word for two different axes, and a playtester read the
+  // whole chart without ever working out that up/down moves the FILTER rail --
+  // they cycled all 139 points one at a time with left/right instead. Name the
+  // axes separately; the footer is the only place either is written down.
+  world: [['←→', 'Place'], ['↑↓', 'Filter'], ['Enter', 'Travel'], ['I', 'Drive'], ['M', 'Close']],
   map_wide: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['Bksp', 'Back'], ['Tab', 'Close']],
   map: [['↑↓', 'Marker'], ['Bksp', 'Back'], ['Tab', 'Close']],
 };
