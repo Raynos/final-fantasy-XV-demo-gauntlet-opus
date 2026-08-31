@@ -794,3 +794,96 @@ eye: it is the mid-face diagonal.** On `l1-cold/hero_portrait.jpg` Noctis has a
 dark slash running from each nose wing down and out across the cheek, plus a
 dark mark under the mouth. At 1568 px it reads as war paint or bruising. That is
 task 6, `Face.ts brushes()`, and it is untouched.
+
+---
+
+## Respawn 4 (2026-08-31) — log
+
+Queue was heavily loaded all session (`harnessstats`: framecam 187 m, shoot 184 m
+of queue time across the window), so this respawn is two landed changes with the
+numeric work done off-harness and the frames read as they came back.
+
+### Landmine found in my own first instrument, and it is worth knowing
+
+**`Face.brushes()` already returns `expandMirrors(b)`** (`Face.ts:540`). Calling
+`expandMirrors` on its result does not no-op — it re-mirrors every `mirror: true`
+entry, so each side ends up in the list **twice** and every mirrored brush is
+applied at double amplitude (99 brushes -> 179). My first decomposition was wrong
+by ~2x on almost every brush before I caught it. Anything that consumes
+`brushes()` must pass it to `applyBrushes` as-is.
+
+### Task 6 — the mid-face diagonal is the ALAR CREASE, and it is measured
+
+**Confirmed it is the sculpt, by eye.** `tmp/shots/l1r4-flat0/noctis_front_flat.jpg`
+is `facefront_flat` — flat albedo, normal map nulled, hair hidden, so anything in
+the frame is geometry. Both diagonals are plainly there, running from each nose
+wing down and out across the cheek toward the mouth corner, with the brow shelf
+and the socket craters as the other loud marks.
+
+**Named which brush, exactly.** `applyBrushes` sums every brush against the
+*original* position, so the sculpted surface is a **linear** function of the
+brush list and the surface Laplacian (a 3 mm stencil; a groove is a positive
+Laplacian and its magnitude is how hard the fold turns) decomposes exactly,
+per brush, with no ablation build required. Swept over the cheek
+(x 18..50, y -24..-58 canonical mm):
+
+```
+  peak 9.00 mm at x=24 y=-39   (beside the nose wing)
+     5.28   alar crease   p=[22.8,-37.0,80.0] r=[8.0,12.0,17.0] amt=-7.6
+     2.91   alar ball     p=[15.5,-36.5,85.5] r=[10.5,11.0,19.5] amt=+12.5
+     0.38   malar plane, 0.33 infraorbital, nothing else over 0.4
+```
+
+Everything else on the face — brow ridge, mouth, nasolabial, malar edge —
+measures **1-4**. The only sharper thing on the head is the nostril opening,
+which is supposed to be a hole. The crease also drops the surface **8.85 mm**
+below the mean of its own shoulders 6 mm either side; a twenty-year-old's alar
+crease is 1-2 mm on a head this size.
+
+**The note it replaces measured the falloff, not the fold.** It argued the
+crease was "half a millimetre of actual groove once the cosine falloff is paid"
+and doubled the amount. -7.6 mm through an 8 mm radius is a 60-degree V.
+
+`c6013aa` takes it to **-3.0 mm through [11.0, 15.5, 21.0]** — shallower and
+mainly *broader*, because hardness is what reads as a drawn line (at 0.55 m the
+face is ~2 px/mm and a 9 mm Laplacian over 3 mm is an abrupt normal flip).
+Re-measured on the edited tree: **peak 9.00 -> 5.09, fold 8.85 -> 5.94 mm**, and
+the alar ball's 2.91 is now the largest single term there. One variable on
+purpose; the ball is the next lever. **Frame verification pending** —
+`tmp/shots/l1r4-flat1` is the after arm of the same `facefront_flat` framing.
+
+### Task 2 — hair self-occlusion, landed as a modulation of the FILL
+
+`829ce9b`. The residue's mechanism, with one deliberate departure.
+
+- **Where the data comes from.** `Hair.ts` `buildHair` now computes, per card
+  *row*, the standoff above the sculpted scalp (`skullOffset`, the quantity
+  `liftOutOfSkull` already needs) and normalises it by **that tuft's own corridor
+  ceiling** (`baseOff + 0.018 + puff*len*t`). The normalisation is the part that
+  matters: raw standoff calls a lock lying flat on a one-layer groom "buried",
+  while the ceiling *is* the authored local thickness of the groom at that point,
+  so the ratio means the same thing under a puff and under a hug.
+- **Where it is carried.** `aMat.y`. Hair writes `B.mat(rough, 0, 1)` everywhere
+  and has never put anything but 0 in that channel, so `patch()` pins
+  `metalnessFactor` to 0 in the hair branch and reads `vMat.y` as depth instead.
+  New `MeshBuilder.metal()` sets the channel alone (`mat()` would reset the other
+  two), and `emitCard` gained an `occAt(t)` callback.
+- **Encoded 0 = exposed, against the residue's note that said 1 = exposed.**
+  Every other emitter in `Hair.ts` — the scalp shell, the halo, the hairline
+  wisps, the brows, the tube path — leaves the channel at 0. With `0 = exposed`
+  a site that forgets to write it renders exactly as it does today; with the
+  other encoding it renders fully occluded. LANDMINES' own rule: a guard's
+  failure mode should be the pass's existing no-op.
+- **What it modulates.** Not the direct light. Against §12.3's plate table only
+  ONE of our six hair numbers (blond's p99.5, 206 against 176) asks for less
+  light; the other five ask for more and the two floors ask for a lot more. The
+  zero in our dark tail comes from `pow(dome, 1.2)` reaching 0 wherever the
+  macro normal points away from the sky — right for a strand buried in the pile,
+  wrong for an exposed one, which still sees sky sideways. So the fill gets a
+  **pedestal** (`mix(0.45, 1.0, pow(dome,1.2))`) and occlusion gates the
+  pedestal: `dome = 1` is untouched, only the dark tail lifts. That *translates*
+  the cluster where raising the flat coefficient *stretched* it.
+
+**Predicted, so it can be falsified:** p5 rises a lot on both heads, p50 rises
+some, p99.5 barely moves. If p99.5 climbs materially the pedestal is too high.
+**Measurement pending** — `tmp/shots/l1r4-occ`, `facecheck --only prompto,noctis`.
