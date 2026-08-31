@@ -175,3 +175,83 @@ fix**, and the six-lane fix wave was still in flight when round 18 was judged.
 Two of its lanes have since landed. The next round is the one that tests the
 wave.
 
+---
+
+# Round 19 — the fix wave lands, and the number does not move. This is the plateau.
+
+Run on a **21/21** build with fresh bake caches, after an eleven-lane fix wave
+built from round 18's ranked tells and the playtest's ranked list. Same method,
+same control plates, directly comparable to 17 and 18.
+
+    MAIN ARM    n=35   identified 35   fooled 0   hesitated 0   ->   0% hesitation
+    CONTROL     n=8                                hesitated 7   ->  88%
+
+           round 17    main 0%    control 62%
+           round 18    main 0%    control 50%
+           round 19    main 0%    control 88%
+
+**§4 defines the stopping condition as "a full fix-wave moves the number by
+nothing (a measured plateau)". That is what happened.** The wave was not
+cosmetic: it closed the judge's own #2 tell (the black placeholder prop), the
+cloud-shadow projection error (patches were a **tenth** the size of the clouds
+casting them), the world-wide `runnel` weave (every massif wearing the same
+tartan at 55 degrees), the Float16 bake bug (**30 of 166 shots** clipped, 11
+pure white), and every top item on the playtest's list. **The judged number is
+identical to three significant figures: zero.**
+
+**The control arm rising to 88% strengthens the reading.** The judge became
+*more* willing to answer "I cannot tell" than in either earlier round, and still
+never once said it about one of our frames. This is not a saturated instrument
+and it is not a judge that always says HIGH.
+
+## What round 19 says the gap is
+
+1. **Sky as discrete sprites** — hard-edged popcorn puffs, visible quad seams,
+   aliased streaks, cloud layers at wrong depths intersecting terrain. *"Single
+   most reliable tell in the round; no shipped frame ever showed a cloud edge."*
+2. **The ground plane** — one stretched tiling texture, no detail meshes, no
+   pebbles, no contact shadow where geometry meets it, characters visually sunk
+   into it. Fourteen pairs.
+3. **Faces and hands** — collapsed intersecting facial planes, uniform plastic
+   skin with no subsurface, no eye wetness, repeated mask heads across a party,
+   hands as dark mittens.
+4. **Light that does not propagate** — emitters with no falloff onto adjacent
+   geometry, wet surfaces reflecting nothing, night lifted to uniform grey,
+   caustics as a pasted decal.
+5. **Untextured or single-tile architecture** — whitebox facades, grid-decal
+   paving, awnings as flat quads, crowds near T-pose. And the inverse tell:
+   *"real signage text and thin anti-aliased power lines never appeared on a
+   fake."*
+
+## What it says is close, which is the useful half
+
+- **The party overhead** was the hardest frame in the round and it lost on its
+  *world*, not its cast: *"the only counterfeit whose characters I could not
+  fault — correct silhouettes, correct costume layering, hands and boots that
+  read as authored assets. I had to call it entirely on the world underneath
+  them… **If the environment work ever catches up to that character work, I lose
+  this pair.**"*
+- **The Lestallum street** could not be separated from shipped work in **two
+  separate pairings** and was answered `?` both times — the single best result
+  any frame in this project has ever produced against a plate.
+- **The pine forest** was cleared three times; its weak points are named
+  precisely (soapy low-frequency boulder normals with no lichen variation, and a
+  bark tile that visibly repeats up the trunk).
+- **Prompto beside the Regalia in fog** — *"articulated glove, layered vest with
+  buckles, hair with real rim translucency."*
+
+## The verdict, stated the way §4 asks
+
+**Polish: plateaued at 0% hesitation against a 30% bar, across three rounds and
+one full fix wave.** The judge's closing sentence is the fair summary and it is
+not softened here:
+
+> *"Whitebox towns, popcorn skies and smeared dirt planes are not 'impressive
+> for WebGL' against a 2016 console release — they are a different medium."*
+
+The character work is now genuinely close in places. **The environment is the
+gap, and it is a content-volume gap — authored architecture, ground-cover
+geometry and cloud form — rather than a shading one.** That is a larger and
+different kind of project than this plan was, and it is the honest thing to hand
+back rather than a fourth round at the same number.
+
