@@ -70,7 +70,9 @@ mechanism.
 | # | change | state |
 |---|---|---|
 | 1 | skin shadow-side fill died past the terminator | **LANDED** `b1e5666`, measured, small |
-| 2 | face relief low-pass + the instrument | **LANDED** `4c24830`, measurement PENDING |
+| 2 | the corrugation instrument | **LANDED** `4c24830` (`_probe/facerelief.mts`) |
+| 3 | low-pass the sculpted POSITIONS | **MEASURED NEGATIVE**, closed, `b590981` -> `972ea2c` |
+| 4 | low-pass the SHADING NORMAL | **LANDED** `972ea2c` + `8ae3b3b`, verified by number and by eye |
 
 ### 1 — `b1e5666`, `rig/Materials.ts`
 
@@ -81,49 +83,68 @@ the lit half of every face and body in the game is bit-identical — and below t
 terminator the fill holds instead of falling to zero.
 
 **Measured and it is a small positive**: the darkest mid-face pixels went
-Y 1–16 -> Y 3–20 (`tmp/shots/w3c-f1/prompto_h5.png` against
-`tmp/shots/w3c-abl-base/`). **Not the fix**, and a calibration sweep says a fill
-cannot be the fix: multiplying `uSssAmt` by 8 (0.16 -> 1.28, which would make
-every face crimson) only takes the deepest pixels to Y ~30 against a §12.1
-target of ~59. Keep it — it is right on its own terms — but the lever is the
-sculpt.
+Y 1–16 -> Y 3–20. **Not the fix**, and a calibration sweep says a fill cannot be
+the fix: multiplying `uSssAmt` by 8 (0.16 -> 1.28, which would make every face
+crimson) only takes the deepest pixels to Y ~30 against a §12.1 target of ~59.
+Keep it — it is right on its own terms.
 
-### 2 — `4c24830`, `rig/Face.ts` `smoothRelief` + `FACE_RELIEF_SMOOTH = 40`
+### 3 — smoothing the POSITIONS is a measured negative, and here are the numbers
 
-`buildHead` now separates the skull base from the brush displacement, low-passes
-the **displacement** in the head's own (u, v) grid, and adds it back. λ = 0.5,
-40 passes, i.e. a gaussian of about 3.2 columns; `u` wraps at the seam, `v`
-clamps at the two poles. `FACE_RELIEF_SMOOTH` is exported so it can be swept, and
-**0 restores the sculpt exactly**.
+`buildHead` now separates the skull base from the brush displacement so either
+can be filtered; `smoothRelief` is three separable box passes per axis on
+running sums (a near-gaussian of σ = sqrt(R(R+1)) at a cost independent of R —
+the first version was 40 Jacobi passes and bought only 15%). `FACE_RELIEF_SMOOTH`
+is a radius in grid columns and is now **0**, i.e. the sculpt is bit-identical
+to what it was. `facecheck --only noctis,prompto`:
 
-Why the displacement and not the positions: smoothing positions is curvature
-flow and shrinks the whole head. Why not scale the brushes down: that costs
-`facecheck`'s `noseLead` and `mouthRelief`, which four previous rounds fought to
-get, whereas a low-pass costs a broad feature almost nothing (the nose spans ~40
-columns of this grid) and destroys corrugation that is 5–8 columns wide.
+```
+  radius        noseLead        mouthRelief
+  0 (baseline)  27.6 - 28.3     6.53 - 6.82
+  1              25.3 / 25.0    2.84 / 2.82
+  4              16.8 / 16.6    0.00 / 0.00   FAIL — "no mouth geometry"
+```
 
-**NOT YET VERIFIED.** The `facerelief` re-measure and the 5 m capture were still
-in the harness queue when this was written. The exact next step is below.
+**The lips and the corrugation are the same spatial scale**, so a position
+filter trades one for the other about 1:1 and there is no radius that buys much
+of the second without most of the first. That closes the sculpt as a lever and
+it is worth knowing before anyone tries it again.
 
-## The exact next step
+### 4 — the SHADING NORMAL is the lever, `972ea2c` + `8ae3b3b`
 
-1. `node src/tools/framecam.mts --probe src/tools/_probe/facerelief.mts --out tmp/shots/x`
-   and compare `keyDark` / `keyDeep` against the baseline table above. **If
-   `keyDark` does not fall below ~0.10, raise `FACE_RELIEF_SMOOTH`**; the
-   constant is a single export in `Face.ts`.
-2. `node src/tools/framecam.mts --probe src/tools/_probe/w3cdist.mts --out tmp/shots/y`
-   then `node src/tools/crop.mts tmp/shots/y/prompto_h5.png out.png 740 400 120 90 8`
-   and **look at it**. The before frame is `tmp/w3c/pr_base.png`: a pale dome with
-   a black band across the brow and a black mass over the nose and mouth.
-3. `node src/tools/facecheck.mts --only noctis,prompto` — the geometry rows must
-   hold: noseLead 27.6–28.3, mouthRelief 6.53–6.82, jawWidthErr 0.0135–0.0450.
-   **A low-pass is expected to cost some of noseLead**; if it falls out of band,
-   drop `FACE_RELIEF_SMOOTH` until it comes back.
-4. Watch the **cold-boot cost**: 40 passes over a 145x121 grid runs for every
-   `buildHead` in the world, not only the four heroes. If `bootprof` regresses,
-   restrict the loop to the face columns (`|u/segU - 0.5| < 0.28`) with the
-   boundary held fixed — cheaper and it also stops the scalp moving under the
-   hair roots, which `skullSampler` samples on the *unsmoothed* path.
+Every `facecheck` geometry row is measured off **positions**, so a shading
+normal cannot move `noseLead`, `mouthRelief`, `transDrop` or `jawWidthErr` at
+all, and the silhouette and the occlusion are equally untouched — but N·L is
+exactly what the playtest saw. So the relief is filtered a second time and much
+harder (`FACE_NORMAL_SMOOTH`, a radius in columns), the surface normal of *that*
+surface is taken by central differences on the same grid, and it is written over
+the shell's own after `B.build()`. Only the shell vertices are rewritten
+(`idx[v][u]` are their builder indices), so lids, lashes, ears and the chin cap
+keep what `smoothNormals` gave them; the two poles have no tangent frame and are
+skipped; the sign is taken against each vertex's own normal, because a brushed
+skull is not star-shaped about its centre.
+
+```
+                       keyDark                    keyDeep
+  baseline    0.2647 0.2454 0.2548 0.2658   0.1247 0.1230 0.1241 0.1227
+  radius 7    0.1930 0.1820 0.1842 0.1945   0.0845 0.0893 0.0871 0.0843
+  radius 14   0.2005 0.1985 0.1969 0.2022   0.0621 0.0654 0.0618 0.0621
+                 (noctis gladio ignis prompto, in that order)
+```
+
+**Radius 14 ships.** `keyDeep` — how far *past* the terminator the surface
+turns — is halved on every hero; `keyDark` ticks back up a little because a wide
+filter puts a lot of near-zero normals just the wrong side of zero, which costs
+nothing visible.
+
+**Verified by eye and it is not subtle.** `tmp/w3c/pr_n14.png` against
+`tmp/w3c/pr_base.png`, the same 120x90 px of Prompto's head at 5 m at 8x.
+**Before**: a pale dome scored by black bands — one across the brow where the
+eyes should be, one over the nose, and a black-to-orange mass covering the mouth
+and jaw; no chin. **After**: a continuous face — lit forehead and brow ridge, a
+lit nose ridge with a graded side, cheeks that carry a value gradient, a mouth
+that reads as a mark rather than a hole, a chin, and **two open blue eyes**.
+The "blindfold" band is gone. Noctis at the same framing (`tmp/w3c/noc_r6.png`
+is the interim arm) goes the same way.
 
 ## Also found at playing distance, not fixed
 
@@ -149,6 +170,20 @@ in the harness queue when this was written. The exact next step is below.
 - **All four heroes wear a black sleeveless top at playing distance.** Noctis a
   bodice, Prompto a vest, Gladiolus a harness over a bare back, Ignis a coat.
   Front-on at 4 m the four silhouettes differ mainly in hair colour.
+
+## Gates run
+
+- `node src/tools/facecheck.mts --only noctis,prompto` on `8ae3b3b`: **PASS**.
+  `noseLead 27.9 / 27.6` (band 27.6–28.3), `mouthRelief 6.56 / 6.53` (band
+  6.53–6.82), `transDrop 4.8 / 4.9`, `jawWidthErr 0.0182 / 0.0150` (band
+  0.0135–0.0450). Every row back inside its band, which is the proof that a
+  shading-normal change cannot touch the geometry gate. Both heads stay VOID on
+  the pixel rows — the same VOIDs lane 1 filed as a human decision, unchanged.
+- `drawcheck`: **PASS**, every one of 36 shots under 800.
+- `nanscan`: **0 of 166 shots carry NaN**, `hits: []`.
+- `pre-commit` (build + both typechecks + 4 cheap gates) passed on all seven
+  commits.
+- Did NOT run `pnpm run check` — the coordinator owns the suite.
 
 ## Files owned / touched
 
