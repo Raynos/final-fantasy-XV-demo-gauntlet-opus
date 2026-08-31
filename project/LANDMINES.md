@@ -2777,3 +2777,49 @@ says not only that a frame is broken but whether the scene or the post chain
 broke it. `sceneMean` read **1 185** on `lest_market_day` against **0.353** on
 the healthy `galdin_beach`, and that one ratio named the bake before anything
 was edited.
+
+## Matching a luminance table is not matching the colour
+
+`ART-DIRECTION` §12.3 is a table of **luminance** percentiles per plate. Four
+passes at the head measured against it, matched it well, and a first-time player
+still reported *"four grey-haired, blank-faced people"* at ordinary walking
+distance. **Chroma was never measured, by anyone, at any point.**
+
+Measured 2026-08-31: Ignis's and Prompto's authored hair albedos are literally
+**warm greys** — 21% and 25% saturation. R-B percentiles p10/p50/p90/p99:
+
+    ignis    before  6/19/29/33   after  21/42/62/76   plate  23/98/126/129
+    prompto  before  8/23/34/39   after  23/46/68/79   plate -22/-9/47/55
+
+Luminance was already close; hue was not in the room. After the fix Ignis reads
+golden ash-brown instead of silver and Prompto sandy blond instead of grey, with
+Y held.
+
+**Two rules:**
+- **When a reference table names a channel, check what it does NOT name.** A
+  table of Y percentiles will happily certify a desaturated frame.
+- **Measure over a mask, not a rect** (`_probe/hairstat.mts`) — the rect trap is
+  recorded above: `facecheck` stabilises the face, not the heading, so a fixed
+  rect samples a different population run to run.
+
+And the diagnostic that ruled out the obvious answers first, worth copying: a
+**constant-head-size distance ladder** — fov narrowed so the head covers the same
+pixels at 1, 3, 5 and 10 m. **1 m and 5 m came back the same image**, which kills
+LOD swap, mip collapse, alpha-test dropout and a stale painted-face cache in one
+capture, without four separate ablations.
+
+## The same "hole" in Gladiolus's back has now fooled three observers
+
+A skin-coloured gap in his shirt at party range has been reported by a blind
+playtest and by two separate lanes, and diagnosed as a garment defect twice.
+**It is his bare arm** — `sleeve u1: 0.40` with no shirt, both authored. Settled
+by ablation at one fixed rear framing: hide the body and the garment is a
+continuous shell shoulders to hips; hide the outfit and the tan mass runs
+deltoid to wrist and ends in a hand.
+
+The reason it keeps winning is measurable: **arm Y is about 150 against a torso
+at Y 15, with no separating shadow.** So it is a real defect and it is a *read*,
+not a hole — the fix is art (ink on the deltoid, or a contact-shadow term), not
+geometry. Recorded because the next person to see it will also think it is a
+hole.
+
