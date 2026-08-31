@@ -206,6 +206,16 @@ let mode = 'foot';
 let legEndF = NIGHT_DRIVE ? 0 : Infinity;
 let driveM = 0, driveFrames = 0, footFrames = 0;
 let depthMin = Infinity, depthMax = -Infinity;
+/**
+ * Set on any frame where the session moves Noctis somewhere he did not walk or
+ * drive: getting into the car (`enter` seats the party wherever the car is),
+ * getting out of it, and the road wrap. **Measured: the first 30-minute run
+ * reported 9.79 km at game minute 3 against 2.43 km at minute 2** — a 7.4 km
+ * "minute" that was one `body.reset`. Odometer readings that include the
+ * teleports back to the car are the same class of lie as the 3.38 km this file
+ * once reported for a character grinding against a hill.
+ */
+let jumped = false;
 let refuels = 0, roadWraps = 0, pulledOver = 0, seenNightSpawns = 0;
 const roadPt = { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
 const retarget = () => {
@@ -220,6 +230,7 @@ const retarget = () => {
     reg.path.at(80, roadPt);
     reg.body.reset(roadPt.x, roadPt.z, Math.atan2(roadPt.tx, roadPt.tz));
     roadWraps++;
+    jumped = true;
   }
   reg.autoDrive.setTargetS(L - 80, 'the far end of the highway');
 };
@@ -230,13 +241,17 @@ const startDrive = (f) => {
   // so this teleports Noctis back to the Regalia rather than making him walk
   // several kilometres to it. That is the one staging convenience in here;
   // everything after it is the car actually being driven down the road.
-  if (!reg.isDriving) reg.enter(true); else reg.setAutoDrive(true);
+  if (!reg.isDriving) { reg.enter(true); jumped = true; }
+  else reg.setAutoDrive(true);
   retarget();
 };
 /** @returns true while the session is on foot (the day session's behaviour). */
 const nightLeg = (f) => {
   if (f >= legEndF) {
-    if (mode === 'drive') { if (reg.isDriving) reg.exit(); mode = 'foot'; legEndF = f + FOOT_MIN * 3600; }
+    if (mode === 'drive') {
+      if (reg.isDriving) { reg.exit(); jumped = true; }
+      mode = 'foot'; legEndF = f + FOOT_MIN * 3600;
+    }
     else startDrive(f);
   }
   if (mode === 'drive') {
@@ -368,7 +383,9 @@ for (let f = 0; f < FRAMES; f++) {
   }
   g.frame(1 / 60);
 
-  const stepM = Math.hypot(player.position.x - last.x, player.position.z - last.z);
+  // A frame that teleported him contributes no distance: see `jumped`.
+  const stepM = jumped ? 0 : Math.hypot(player.position.x - last.x, player.position.z - last.z);
+  jumped = false;
   travelled += stepM;
   if (mode === 'drive') { driveM += stepM; driveFrames++; } else if (mode === 'foot') footFrames++;
   last.copy(player.position);
@@ -379,7 +396,7 @@ for (let f = 0; f < FRAMES; f++) {
   // learns nothing about whether they are fights. A player stops.
   if (NIGHT_DRIVE && mode === 'drive' && nightSpawns > seenNightSpawns) {
     seenNightSpawns = nightSpawns;
-    if (reg.isDriving) reg.exit();
+    if (reg.isDriving) { reg.exit(); jumped = true; }
     mode = 'fight';
     legEndF = f + 45 * 60;
     pulledOver++;
