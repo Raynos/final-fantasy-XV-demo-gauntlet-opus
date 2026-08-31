@@ -1,5 +1,6 @@
 import { N, FAR_N, HYD_N } from './Field.ts';
 import { demoActive } from '../../engine/Device.ts';
+import { readCounted } from '../../engine/BootProgress.ts';
 import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
@@ -235,9 +236,16 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
  * The phone's container ships `ctrl` at N/2 and every consumer — the shader's
  * `DataTexture` and `Field.ctrlAt`'s CPU sampling — indexes it at N. Rather
  * than teach both a second resolution, the expand happens once here, at load,
- * and nothing downstream can tell. Nearest-neighbour on purpose: these are
- * layer *weights*, and interpolating them invents blends the generator never
- * produced.
+ * and nothing downstream can tell.
+ *
+ * **Bilinear, not nearest.** The first version used nearest on the reasoning
+ * that interpolating layer weights invents blends the generator never
+ * produced — which is wrong, and the device frames showed it as a visibly
+ * BLOCKY ground. The shader samples this texture with linear filtering
+ * already, so the generator's own output is interpolated the moment it is
+ * read; freezing 2x2 blocks before that filter does not preserve anything, it
+ * just quantises the boundary. Bilinear is strictly closer to the full-res
+ * texture it stands in for.
  */
 function fitPlanes(sec: BakeSection, n: number): Uint8Array {
   const w = sectionField(sec, 'w'), h = sectionField(sec, 'h'), ch = sectionField(sec, 'ch');
@@ -246,10 +254,16 @@ function fitPlanes(sec: BakeSection, n: number): Uint8Array {
   const out = new Uint8Array(n * n * 4);
   const sx = w / n, sy = h / n;
   for (let y = 0; y < n; y++) {
-    const v = Math.min(h - 1, (y * sy) | 0) * w;
+    const fy = Math.min(h - 1.001, y * sy), y0 = fy | 0, y1 = Math.min(h - 1, y0 + 1), ty = fy - y0;
     for (let x = 0; x < n; x++) {
-      const s = (v + Math.min(w - 1, (x * sx) | 0)) * 4, d = (y * n + x) * 4;
-      out[d] = src[s]; out[d + 1] = src[s + 1]; out[d + 2] = src[s + 2]; out[d + 3] = src[s + 3];
+      const fx = Math.min(w - 1.001, x * sx), x0 = fx | 0, x1 = Math.min(w - 1, x0 + 1), tx = fx - x0;
+      const a = (y0 * w + x0) * 4, b = (y0 * w + x1) * 4, c = (y1 * w + x0) * 4, e = (y1 * w + x1) * 4;
+      const d = (y * n + x) * 4;
+      for (let k = 0; k < 4; k++) {
+        const top = src[a + k] + (src[b + k] - src[a + k]) * tx;
+        const bot = src[c + k] + (src[e + k] - src[c + k]) * tx;
+        out[d + k] = (top + (bot - top) * ty + 0.5) | 0;
+      }
     }
   }
   return out;
@@ -311,8 +325,10 @@ export async function loadBaked(wantLayers = true): Promise<{applyTo: (f: Field)
     // the time we see it — inflating again would abort the stream. Only decode
     // in JS when the transfer was opaque.
     const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
-    const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
-    const buf = new Uint8Array(await new Response(body).arrayBuffer());
+    const counted = await readCounted(res, 'terrain');
+    const buf = encoded ? counted
+      : new Uint8Array(await new Response(
+        new Blob([counted as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
     unpackContainer(buf);            // validates magic and format version
     // The layer container is fetched only when the caller can use it. Its
     // absence is the same as any other cache miss — `buildLayerTextures`

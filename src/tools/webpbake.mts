@@ -147,10 +147,22 @@ export async function webpBake(opts: { force?: boolean, quiet?: boolean } = {}):
         };
 
         /**
-         * Quality by what the map is for. A normal map's three channels are a
-         * unit vector and an artefact there is a dent in the surface; an
-         * albedo's are a colour and nobody has ever seen a q78 artefact at
-         * 256 px on a phone.
+         * Quality by what the map is FOR, and losslessness for the ones that
+         * are not pictures at all.
+         *
+         * `sky/cloud/*` is the case that taught this. Those three are 3D noise
+         * fields sampled by the volumetric cloud march -- `base` is a 64x4096
+         * atlas of slices, `detail` a 48x2304 one. Every texel is
+         * uncorrelated with its neighbour BY CONSTRUCTION, which is the exact
+         * signal a DCT codec destroys: q78 turned the sky into a field of
+         * white speckles, and the first device report on it was "the skybox
+         * looks like dogshit". It was right.
+         *
+         * The rule generalises: lossy is for things a human looks AT, and
+         * lossless is for things a shader reads FROM. A normal map is the
+         * borderline case and gets q92 -- its channels are a unit vector, so
+         * an artefact is a dent in a surface, but it is at least spatially
+         * smooth.
          */
         const qualityFor = (key: string) => {
           const suffix = key.slice(key.lastIndexOf('/') + 1);
@@ -159,25 +171,110 @@ export async function webpBake(opts: { force?: boolean, quiet?: boolean } = {}):
           return 0.78;
         };
 
+        /**
+         * PNG, not WebP, for the textures a shader reads as DATA.
+         *
+         * `toBlob('image/webp', 1)` is **lossy quality 100, not lossless** --
+         * Chrome's canvas exposes no lossless-WebP path at all. On a photograph
+         * that distinction does not matter. On `sky/cloud/*`, which is a 3D
+         * noise field where every texel is uncorrelated with its neighbour by
+         * construction, q100 is still a DCT and still destroys it: the sky came
+         * out as a field of white speckles, and setting quality to 1 changed
+         * nothing because it was never the quality.
+         *
+         * PNG was the next attempt and it did not fix it either, which is the
+         * clue that matters: the problem is not the CODEC, it is the round
+         * trip. Canvas 2D is a lossy pipe for data no matter what comes out
+         * the far end -- premultiplied alpha, 8-bit clamping, colour-space
+         * conversion on `drawImage`. There is no quality setting that makes
+         * `putImageData` -> `toBlob` -> `createImageBitmap` -> `getImageData`
+         * an identity function.
+         *
+         * So these do not go through it at all. `raw` stores the RGBA bytes
+         * verbatim and the decoder memcpy's them. The wire cost is handled a
+         * layer down -- the CDN gzips `m/tex.bin` in transit (measured: 2.8 MB
+         * on disk arrived as 1.9) -- which is exactly the compression these
+         * bytes wanted in the first place, and the same compression they had
+         * before any of this.
+         */
+        const mimeFor = (key: string) => (key.startsWith('sky/') ? 'raw' : 'image/webp');
+
         const cv = document.createElement('canvas');
         const ctx = cv.getContext('2d', { willReadFrequently: true })!;
-        const toBlob = (q: number): Promise<Blob | null> =>
-          new Promise((r) => cv.toBlob(r, 'image/webp', q));
+        const toBlob = (mime: string, q: number): Promise<Blob | null> =>
+          new Promise((r) => cv.toBlob(r, mime, q));
 
-        const entries: Array<{ k: string, w: number, h: number, off: number, len: number }> = [];
+        /**
+         * THE PREMULTIPLIED-ALPHA TRAP, and why a texture with alpha is
+         * written as TWO opaque images instead of one with an alpha channel.
+         *
+         * Canvas 2D stores premultiplied alpha. Put RGBA in with
+         * `putImageData` and read it back and every pixel has been multiplied
+         * by its own alpha and divided again -- lossy where alpha is low, and
+         * TOTAL where alpha is 0, because 0/0 cannot be recovered. For a
+         * texture whose alpha is transparency that is survivable. For one
+         * whose alpha is DATA it is destruction.
+         *
+         * `sky/cloud/base` is a 64x4096 atlas of 3D noise slices with density
+         * in the alpha channel, and the first build of this shipped a sky made
+         * of white speckles because of exactly this. The control that found it:
+         * the same shot at q=low WITHOUT the demo renders perfect clouds.
+         *
+         * So: alpha is forced opaque for the colour image, and the real alpha
+         * goes in a second greyscale image. Neither ever meets a premultiply.
+         * Opaque textures -- most of them -- still write one file.
+         */
+        const entries: Array<{ k: string, w: number, h: number, off: number, len: number, mime: string, aOff?: number, aLen?: number }> = [];
         const files: Uint8Array[] = [];
         let off = 0;
         for (const e of header.entries) {
           const len = e.w * e.h * 4;
           const px = unplane(buf.subarray(planeBody + e.off, planeBody + e.off + len), e.w, e.h, 4);
-          cv.width = e.w; cv.height = e.h;
-          ctx.putImageData(new ImageData(px, e.w, e.h), 0, 0);
-          const blob = await toBlob(qualityFor(e.k));
-          if (!blob) continue;
-          const bytes = new Uint8Array(await blob.arrayBuffer());
-          entries.push({ k: e.k, w: e.w, h: e.h, off, len: bytes.length });
+          const q = qualityFor(e.k);
+          const mime = mimeFor(e.k);
+
+          let hasAlpha = false;   // eslint-disable-line prefer-const
+          for (let i = 3; i < px.length; i += 4) if (px[i] !== 255) { hasAlpha = true; break; }
+
+          let bytes: Uint8Array;
+          if (mime === 'raw') {
+            bytes = new Uint8Array(px.buffer.slice(0));
+            hasAlpha = false;                    // it is all in there already
+          } else {
+            // Colour, always opaque.
+            const rgb = new Uint8ClampedArray(px.length);
+            rgb.set(px);
+            if (hasAlpha) for (let i = 3; i < rgb.length; i += 4) rgb[i] = 255;
+            cv.width = e.w; cv.height = e.h;
+            ctx.putImageData(new ImageData(rgb, e.w, e.h), 0, 0);
+            const blob = await toBlob(mime, q);
+            if (!blob) continue;
+            bytes = new Uint8Array(await blob.arrayBuffer());
+          }
+          const row: { k: string, w: number, h: number, off: number, len: number, mime: string, aOff?: number, aLen?: number } =
+            { k: e.k, w: e.w, h: e.h, off, len: bytes.length, mime };
           files.push(bytes);
           off += bytes.length;
+
+          if (hasAlpha) {
+            // Alpha as its own opaque greyscale PNG -- genuinely lossless,
+            // unlike WebP q1. An alpha channel is a mask or a density field,
+            // and a DCT ring on either is a hole in something.
+            const a = new Uint8ClampedArray(px.length);
+            for (let i = 0; i < px.length; i += 4) {
+              a[i] = a[i + 1] = a[i + 2] = px[i + 3];
+              a[i + 3] = 255;
+            }
+            ctx.putImageData(new ImageData(a, e.w, e.h), 0, 0);
+            const ab = await toBlob('image/png', 1);
+            if (ab) {
+              const abytes = new Uint8Array(await ab.arrayBuffer());
+              row.aOff = off; row.aLen = abytes.length;
+              files.push(abytes);
+              off += abytes.length;
+            }
+          }
+          entries.push(row);
         }
 
         const hdr = enc.encode(JSON.stringify({ version: 1, hash: header.hash, enc: 'webp', entries }));

@@ -345,7 +345,7 @@ export class Game {
 
     for (let i = 0; i < order.length; i++) {
       const { name, boot } = order[i];
-      p(0.05 + 0.8 * (i / order.length), name);
+      p(0.05 + 0.72 * (i / order.length), `${name}  ${i + 1}/${order.length}`);
       // The yield goes AFTER the label is set and BEFORE the work starts, so
       // the phase a person is about to wait for is the one they can read.
       // eslint-disable-next-line no-await-in-loop
@@ -355,10 +355,10 @@ export class Game {
       if (sys.init) await sys.init(this);
     }
 
-    p(0.9, 'Compiling shaders');
+    p(0.77, 'Compiling shaders');
     await yieldToBrowser();
     this.post = new PostFX(this.rnd);
-    this.renderer.compile(this.scene, this.camera);
+    await this._compileWithProgress(p);
     p(1.0, 'Ready');
 
     // one warm frame so lazily-created GPU resources exist before we report ready
@@ -368,6 +368,39 @@ export class Game {
     this.captureBootState();
     this.ready = true;
     window.dispatchEvent(new CustomEvent('game-ready'));
+  }
+
+  /**
+   * Compile every program, reporting **n of N** while the driver links them.
+   *
+   * This phase used to be one blocking call at 0.9, which is why the loading
+   * text raced through twenty-six systems and then sat at ninety per cent for
+   * the longest single stretch of the boot. It looked stuck because there was
+   * nothing to say.
+   *
+   * `WebGLRenderer.compile` hands back the Set of materials it queued, which is
+   * the total, and with `KHR_parallel_shader_compile` the driver links them off
+   * the main thread — so the count is knowable *and* the wait is pollable. That
+   * is exactly the shape a progress bar wants, and it was there all along.
+   *
+   * Without the extension `isReady()` answers true immediately and this costs a
+   * frame; the compile still happened, in `compile`.
+   */
+  async _compileWithProgress(p: (t: number, label: string | null) => void) {
+    const pending = this.renderer.compile(this.scene, this.camera) as Set<THREE.Material> | undefined;
+    const total = pending ? pending.size : 0;
+    if (!total) return;
+    const props = (this.renderer as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
+    const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+    for (let guard = 0; pending!.size && guard < 600; guard++) {
+      for (const m of [...pending!]) {
+        const prog = props.get(m)?.currentProgram;
+        if (!prog || prog.isReady()) pending!.delete(m);
+      }
+      const done = total - pending!.size;
+      p(0.77 + 0.22 * (done / total), `Compiling shaders  ${done}/${total}`);
+      if (pending!.size) await frame();
+    }
   }
 
   /**

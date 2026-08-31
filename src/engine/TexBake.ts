@@ -3,6 +3,7 @@ import { makeTexture, makeDataMap, normalFromHeight, dropTexelsAfterUpload } fro
 import type { TexelFn, ScalarFn, HeightFn, TextureOpts } from '../util/TextureGen.ts';
 import { encodePlanes8, decodePlanes8 } from '../world/terrain/FieldCodec.ts';
 import { demoActive } from './Device.ts';
+import { readCounted } from './BootProgress.ts';
 
 /**
  * Baked procedural textures.
@@ -135,6 +136,14 @@ export interface TexEntry {
   h: number;
   /** Byte offset into the body. */
   off: number;
+  /**
+   * True when the bytes are interleaved RGBA rather than four byte planes.
+   *
+   * The gzip containers are planar and the image containers are interleaved;
+   * `take` reads this to know which. It is not a detail a consumer ever sees —
+   * `take` returns interleaved RGBA either way.
+   */
+  interleaved?: boolean;
 }
 
 interface TexHeader {
@@ -215,8 +224,16 @@ export function encodeTexBake(hash: string, keep: (key: string) => boolean = () 
   return out;
 }
 
-/** One image entry: the index fields, plus where its file sits in the body. */
-interface ImgEntry { k: string; w: number; h: number; off: number; len: number }
+/**
+ * One image entry: the index fields, plus where its file sits in the body.
+ *
+ * `aOff`/`aLen` are a SECOND image holding the alpha channel as greyscale, and
+ * they are present exactly when the texture has any alpha below 255. Canvas 2D
+ * is premultiplied, so a texture whose alpha is data cannot survive a
+ * round-trip through one — see the note in `webpbake.mts`. Both images are
+ * opaque; neither ever meets a premultiply.
+ */
+interface ImgEntry { k: string; w: number; h: number; off: number; len: number; mime?: string; aOff?: number; aLen?: number }
 
 /** Is this an image container rather than a plane container? */
 function isImageContainer(buf: Uint8Array): boolean {
@@ -260,14 +277,32 @@ async function decodeImageBake(buf: Uint8Array): Promise<boolean> {
   let n = 0;
   for (const e of header.entries as ImgEntry[]) {
     try {
-      const bytes = buf.subarray(body + e.off, body + e.off + e.len);
-      const bmp = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/webp' }));
-      cv.width = e.w; cv.height = e.h;
-      ctx.clearRect(0, 0, e.w, e.h);
-      ctx.drawImage(bmp, 0, 0);
-      bmp.close();
-      const px = ctx.getImageData(0, 0, e.w, e.h).data;
-      store.index.set(e.k, { k: e.k, w: e.w, h: e.h, off: 0, buf: new Uint8Array(px.buffer.slice(0)) });
+      const draw = async (off: number, len: number, mime = e.mime || 'image/webp') => {
+        const bmp = await createImageBitmap(new Blob([buf.subarray(off, off + len) as BlobPart], { type: mime }));
+        cv.width = e.w; cv.height = e.h;
+        ctx.clearRect(0, 0, e.w, e.h);
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close();
+        return ctx.getImageData(0, 0, e.w, e.h).data;
+      };
+      // `raw` never went through a canvas, so it comes back out without one.
+      // See the note in `webpbake.mts`: a canvas round trip is lossy for data
+      // regardless of the codec on the far side.
+      if (e.mime === 'raw') {
+        store.index.set(e.k, { k: e.k, w: e.w, h: e.h, off: 0, interleaved: true, buf: buf.slice(body + e.off, body + e.off + e.len) });
+        n++;
+        continue;
+      }
+      const px = new Uint8Array((await draw(body + e.off, e.len)).buffer.slice(0));
+      if (e.aLen) {
+        // The alpha image is greyscale and opaque; its red channel IS the
+        // alpha. Reading any other channel would work equally well and this
+        // one is first.
+        // The alpha sidecar is always PNG, whatever the colour image is.
+        const a = await draw(body + e.aOff!, e.aLen, 'image/png');
+        for (let i = 0; i < px.length; i += 4) px[i + 3] = a[i];
+      }
+      store.index.set(e.k, { k: e.k, w: e.w, h: e.h, off: 0, interleaved: true, buf: px });
       n++;
     } catch { /* one texture regenerates; the container is still worth having */ }
   }
@@ -312,7 +347,11 @@ function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
  * phone rather than broken on one.
  */
 function tierPath(tier: 'tex' | 'texc' | 'texd' | 'texp' | 'texcp'): string {
-  return demoActive() ? `baked/m/${tier}.bin` : `baked/${tier}.bin.gz`;
+  // `?webp=0` forces the plane containers even on the demo. It is the A/B that
+  // tells a texture bug from an ENCODING bug in one reload, which is a question
+  // this pipeline made expensive to answer any other way.
+  const off = typeof location !== 'undefined' && new URLSearchParams(location.search).get('webp') === '0';
+  return demoActive() && !off ? `baked/m/${tier}.bin` : `baked/${tier}.bin.gz`;
 }
 
 export function loadTexBake(): Promise<boolean> {
@@ -377,10 +416,16 @@ async function fetchContainers(paths: string[]): Promise<boolean> {
       // An image container is already compressed and is not gzipped on disk,
       // so it is read straight through. The magic decides, not the filename.
       if (path.endsWith('.bin')) {
-        return await decodeImageBake(new Uint8Array(await res.arrayBuffer()));
+        return await decodeImageBake(await readCounted(res, path));
       }
       const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
-      const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
+      // Counted on the COMPRESSED side when the browser is inflating for us,
+      // because `Content-Length` describes the wire and the loading bar is
+      // reporting a download. Where we inflate ourselves the counted stream is
+      // the wire too.
+      if (encoded) return decodeTexBake(await readCounted(res, path), null);
+      const counted = await readCounted(res, path);
+      const body = new Blob([counted as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
       return decodeTexBake(new Uint8Array(await new Response(body).arrayBuffer()), null);
     } catch {
       return false;
@@ -447,7 +492,7 @@ export function compactTexBake(): number {
     if (e.off === 0 && e.buf.length === len) { held += len; continue; }
     // `slice`, not `subarray`: a view would keep the container alive, which is
     // the entire bug being fixed here.
-    store.index.set(k, { k: e.k, w: e.w, h: e.h, off: 0, buf: e.buf.slice(e.off, e.off + len) });
+    store.index.set(k, { k: e.k, w: e.w, h: e.h, off: 0, interleaved: e.interleaved, buf: e.buf.slice(e.off, e.off + len) });
     held += len;
   }
   if (!store.index.size) store = null;
@@ -504,7 +549,21 @@ function take(key: string, w: number, h: number): Uint8Array | null {
   const hit = store && store.index.get(key);
   if (!hit || hit.w !== w || hit.h !== h) return null;
   store!.index.delete(key);
-  return decodePlanes8(hit.buf.subarray(hit.off, hit.off + w * h * 4), w, h, 4);
+  const bytes = hit.buf.subarray(hit.off, hit.off + w * h * 4);
+  // **Two container formats, two layouts, and this is where they meet.**
+  //
+  // The gzip containers store four separate byte PLANES, because interleaved
+  // RGBA noise defeats gzip's window and per-channel planes of the same noise
+  // do not. The image containers store INTERLEAVED RGBA, because that is what
+  // an image is.
+  //
+  // This line used to call `decodePlanes8` unconditionally, so every texture
+  // that came from an image container had its channels de-planarised as if it
+  // were planar -- a total scramble. Rock still looked like rock afterwards,
+  // which is why it survived a review; the sky did not, because a 3D cloud
+  // noise field scrambled is white speckle, and that is exactly what the
+  // device showed.
+  return hit.interleaved ? bytes.slice() : decodePlanes8(bytes, w, h, 4);
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Game } from './game/Game.ts';
 import { installBootProfile } from './engine/BootProfile.ts';
 import { touchActive } from './engine/Device.ts';
+import { bytes, human } from './engine/BootProgress.ts';
 
 // These five live in `src/index.html` and neither the loading screen nor the
 // game can run without them, so an assertion here is the honest reading -- a
@@ -14,7 +15,15 @@ const game = new Game({
   uiRoot: document.getElementById('ui')!,
   onProgress: (t: number, text: string | null) => {
     bar.style.right = `${Math.max(0, 100 - t * 100).toFixed(1)}%`;
-    if (text) label.textContent = text;
+    if (!text) return;
+    // While containers are in flight the download IS the wait, so say so in
+    // bytes. On a phone this is the only number that matters: a person
+    // watching one climb knows the difference between slow and stuck, which a
+    // spinner cannot tell them.
+    const b = bytes();
+    label.textContent = b.pending && b.total
+      ? `${text}   ${human(b.loaded)} / ${human(b.total)}`
+      : text;
   },
 });
 
