@@ -8,10 +8,13 @@ import type { VirtualPad } from './VirtualPad.ts';
  * circle is: the origin is wherever the finger first touched inside the zone,
  * and the knob is drawn relative to that.
  *
- * There is still a **resting hint** at the thumb's natural corner, because the
- * first build drew nothing at all until a finger landed — so a player who has
- * never held this game had no way to learn there was a stick there, which is
- * exactly what the device frames showed.
+ * The **left** stick draws a base at the thumb's corner, because the first
+ * build drew nothing at all until a finger landed — so a player who had never
+ * held this game had no way to learn there was a stick there.
+ *
+ * The **right** one draws nothing. It is not a stick with a home, it is "drag
+ * anywhere on this side to look", and giving it a base put a second joystick
+ * under the ATTACK button, which read exactly as confusing as it sounds.
  *
  * Writes a pair of `axes` on the shared {@link VirtualPad}. The left stick
  * writes `[0]`/`[1]` (locomotion — `Input.update` negates `[1]`, so forward is
@@ -45,13 +48,20 @@ export class Stick {
   ox: number;
   oy: number;
   _rim: boolean;
+  /** Whether a base is drawn at rest. See the constructor. */
+  showRest: boolean;
 
   /**
    * @param side which half of the screen the zone occupies
    * @param axis index of the X axis this stick writes; Y is `axis + 1`
    * @param rimPad pad index to press at full deflection, or -1
+   * @param showRest draw a base at the thumb's corner. **Left only.**
+   *   The right side is not a stick with a home, it is "drag anywhere to look"
+   *   — and a drawn base there put a second joystick under the ATTACK button,
+   *   which is exactly as confusing as it sounds. The floating ring still
+   *   appears wherever the finger lands.
    */
-  constructor(pad: VirtualPad, side: 'left' | 'right', axis: number, rimPad = -1) {
+  constructor(pad: VirtualPad, side: 'left' | 'right', axis: number, rimPad = -1, showRest = true) {
     this.pad = pad;
     this.ax = axis;
     this.ay = axis + 1;
@@ -65,7 +75,8 @@ export class Stick {
     this.rest = el(`div.tc-rest.tc-rest-${side}`);
     this.ring = el('div.tc-ring');
     this.knob = el('div.tc-knob');
-    this.root.appendChild(this.rest);
+    if (showRest) this.root.appendChild(this.rest);
+    this.showRest = showRest;
     this.root.appendChild(this.ring);
     this.root.appendChild(this.knob);
     this._hide();

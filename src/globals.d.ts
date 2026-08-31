@@ -35,6 +35,11 @@ declare global {
      * poking at sticks and buttons.
      */
     TOUCH?: TouchControls;
+    /**
+     * The resident texture-bake index, for probes only. See `TexBake.ts`.
+     * Absent until a container has decoded.
+     */
+    __TEXSTORE?: { index: Map<string, { k: string, w: number, h: number, off: number, buf: Uint8Array }> } | null;
     /** Safari still ships the prefixed constructor. */
     webkitAudioContext?: typeof AudioContext;
     webkitOfflineAudioContext?: typeof OfflineAudioContext;

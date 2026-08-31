@@ -63,7 +63,13 @@ export class TouchControls {
     // `ChocoboSystem` both read pad 10, so one gesture sprints on foot and
     // mounted, and no screen is spent on a pill the left thumb could not
     // reach without letting go of the stick.
-    this.sticks = [new Stick(this.pad, 'left', 0, PAD.l3), new Stick(this.pad, 'right', 2)];
+    // Only the LEFT stick draws a base. The right side is drag-anywhere to
+    // look, and drawing a home for it put a second joystick under the ATTACK
+    // button — the fan is the only thing that should be visible over there.
+    this.sticks = [
+      new Stick(this.pad, 'left', 0, PAD.l3, true),
+      new Stick(this.pad, 'right', 2, -1, false),
+    ];
     for (const s of this.sticks) this.root.appendChild(s.root);
 
     const clusters: Record<string, HTMLElement> = {};

@@ -40,7 +40,9 @@ const CSS = `
   pointer-events: auto;
 }
 .tc-zone-left  { left: 0;  width: 42%; }
-.tc-zone-right { right: 0; width: 42%; }
+/* Stops short of the bottom-right corner: that block is the fan, and a look
+   drag that begins on a button is a drag the player did not mean. */
+.tc-zone-right { right: 0; width: 42%; bottom: 200px; }
 .tc-zone[hidden] { display: none; }
 
 /* The stick at rest, DRAWN -- not a hint, the thing itself.

@@ -302,6 +302,13 @@ async function fetchContainers(paths: string[]): Promise<boolean> {
 /** True once a usable cache is resident. */
 export function texBakeReady(): boolean { return store !== null; }
 
+// A probe door onto the resident index. Read-only, and only ever read by
+// `src/tools/_probe/`; the alternative was a probe that re-fetched and
+// re-inflated 40 MB to ask a question the page can already answer.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, '__TEXSTORE', { get: () => store, configurable: true });
+}
+
 /**
  * Copy the unserved entries out of the shared containers and drop the containers.
  *
