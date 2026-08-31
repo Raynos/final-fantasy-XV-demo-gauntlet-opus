@@ -359,7 +359,20 @@ fight. Every call that *was* tuned by hand passes its own (`VFX.impact` 2.4/0.7,
 Fix: the **defaults** move to 1.35 / 0.6. **Verified by eye** on the ablation's
 fifth arm (`g-e-warpland-tuned.png`), which is that exact call at those exact
 values: a pale blue-white ring with the badlands texture readable through it.
-A confirming re-run of all four arms at `e1b5523` is in flight.
+**Confirmed at `e1b5523`**, all four arms re-shot against a fresh clean plate:
+
+```
+             before (3.2/1.0)              after (1.35/0.6)
+stagger      mean 5.96  max 250  12.5%     mean 4.63  max 203  10.6%
+warp land    mean 8.76  max 255  17.7%     mean 6.38  max 242  15.8%
+parry        mean 9.91  max 255  21.8%     mean 7.07  max 250  17.7%
+```
+
+No arm clips a whole pixel to 255 any more. **Looked at**
+(`tmp/shots/bloom2/g-d-parry.png`, the worst of the three): a translucent
+blue-white band travelling over the badlands with the cracked-earth texture
+readable straight through it, and a hot crest that is still hot. It is an
+effect on the ground rather than a hole in the frame.
 
 ## (superseded) the original 34/35 note
 
