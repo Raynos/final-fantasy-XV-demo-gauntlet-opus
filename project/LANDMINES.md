@@ -2536,7 +2536,10 @@ inside `Sky.setTimeOfDay`. `DayCycle.syncFromSky` is true and `driveSky` is
 false (`src/game/rpg/DayCycle.ts:167-168`), so `rpg.day` *follows* the sky and
 neither of them advances on its own. **A thirty-minute probe session is thirty
 minutes of one single hour** — whatever the last `applyShot` left in the sky,
-which for `hud_field` is noon. So it is not merely that `--night` was ignored:
+which for `longplay`'s `hud_field` is **14:00** (`Shots.ts:317`, `time: 14.0`),
+not the noon the sky boots at — and `DayCycle` reads 09:00 from its own
+constructor until its first `update` catches it up, so asking the clock before
+the first frame lies about it too. So it is not merely that `--night` was ignored:
 there was no way for any long-running probe to reach night at all, and nothing
 in any of their output ever said which hour it played.
 
