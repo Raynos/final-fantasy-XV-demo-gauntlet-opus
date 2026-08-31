@@ -3022,3 +3022,48 @@ drives streaming, which changes `drawnHeightAt`, which changes where feet land.
 Quote the **paired** sweep instead. An instrument whose subject moves when the
 instrument moves needs a paired design.
 
+## "Receiving no light" is a read, not a mechanism
+
+A blind judge said the black placeholder props were *"receiving no light and
+casting no contact shadow"*, and that phrasing points at a lighting bug. It was
+not one. A purpose-built probe swept the albedo and read the framebuffer back
+through an ablation-derived mask:
+
+    0x25262a (shipped) -> 50, 42, 40
+    0x4a4c54           -> 56, 47, 52
+    white              -> 131,129,137
+
+**The light path was alive the whole time.** The albedo was simply **4-5x darker
+than the ground it sat on**, so the object read as unlit. The "no contact shadow"
+half *was* real and had its own cause: the object was in the **decal builder**
+(skid-marks, `renderOrder = 1`, past `castCount`) rather than the caster
+builder.
+
+Three phrases of one sentence, three different mechanisms, only one of them the
+obvious one. **Measure what a perceptual complaint actually is before adopting
+its implied cause.**
+
+## The corpus for judge round 18 was captured three minutes before its own fix
+
+`tmp/r18/vista_noon.jpg` was written at 04:33; the commit that fixed the tiling
+artefact in it landed at 04:36. So round 18's tell about *"an outright
+checkerboard artefact across the peak face"* was judged on a frame that was
+**already repaired in the tree**.
+
+On a trunk moving this fast, **a judged round is a snapshot of a sha, not of the
+project** — record the sha the corpus was captured at, alongside the verdict, and
+re-shoot before re-judging anything that a lane has touched since. Two rounds
+tonight were partly measuring builds that no longer existed.
+
+## Do not grade a tiling artefact with a band-limited FFT
+
+Band-limited to 10-40 px, the analysis returned **36.0 px at 37 degrees and
+36.6 px at 114 degrees for every build and every ablation** — including ablations
+that visibly removed the pattern. It was measuring **its own cutoff**, not the
+image, and it nearly bought a false attribution.
+
+Same family as `weavestat` reading 0.12 before and 0.11 after a fix that visibly
+works: **an instrument with a band, a window or a mask has a null it will return
+regardless of the subject.** Prove it responds to the effect — with a positive
+control that fires — before you trust the null.
+
