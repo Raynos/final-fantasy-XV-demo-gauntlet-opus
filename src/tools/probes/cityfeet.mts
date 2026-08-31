@@ -13,6 +13,7 @@ const props = g.get('Props');
 const npcs = g.get('Npcs');
 const wm = (await import('/world/map/WorldMap.ts')).worldMap;
 const kits = props && props.poiKits;
+const col = g.get('Collision');
 const V3 = g.camera.position.constructor;
 
 const step = (n = 1) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
@@ -101,14 +102,28 @@ for (const id of ['lestallum', 'galdin_quay']) {
   const near = npcs.list.filter((n) => Math.hypot(n.pos.x - plaza.x, n.pos.z - plaza.z) < 30);
   out.push(`  ${near.length} bodies within 30 m of the square`);
   for (const n of near.sort((a, b) => a.id.localeCompare(b.id))) {
-    const d = surfaceUnder(n.pos.x, n.pos.z, n.pos.y + 1.5);
+    // Five samples over the footprint, not one: a plinth edge that runs
+    // between a person's boots is the case that reads worst in a frame and the
+    // one a single centre sample misses. `+0.9` is the ceiling, so a bench top
+    // or an awning above somebody's head is not reported as their ground.
+    let d = { y: -1e9, who: '' };
+    for (const [ox, oz] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) {
+      const q = surfaceUnder(n.pos.x + ox, n.pos.z + oz, n.pos.y + 0.9);
+      if (q.y > d.y) d = q;
+    }
     const gy = npcs._groundAt(n.pos.x, n.pos.z);
     const bones = n.body.rig && n.body.rig.byName;
     let foot = null;
     if (bones && bones.footL) { bones.footL.updateMatrixWorld(true); foot = bones.footL.matrixWorld.elements[13]; }
+    // What `CollisionWorld` -- the thing `_clearSpot` asks, and the thing the
+    // player stands on -- believes is under the same boots. If the mesh says a
+    // bench top and this says pavement, the props are not in the collision
+    // world and no placement-time query can find them.
+    const cg = col && col.ready && col.groundDisc
+      ? col.groundDisc(n.pos.x, n.pos.z, n.pos.y, 0.34, 1.1, 2.0) : null;
     const dr = Math.hypot(n.pos.x - plaza.x, n.pos.z - plaza.z);
     const zone = dr <= 11 ? 'disc ' : dr <= 11.9 ? 'FLARE' : 'off  ';
-    out.push(`  ${n.id.padEnd(16)} r ${dr.toFixed(2).padStart(5)} ${zone} pos.y ${n.pos.y.toFixed(3)}  groundY ${n.groundY.toFixed(3)}  _groundAt ${gy.toFixed(3)}  root ${n.body.root.position.y.toFixed(3)}  footL ${foot === null ? '  --  ' : foot.toFixed(3)}  deck ${d.y > -1e8 ? d.y.toFixed(3) : ' none '}  sink ${d.y > -1e8 ? (d.y - n.pos.y).toFixed(3) : '--'}  (${d.who})`);
+    out.push(`  ${n.id.padEnd(16)} r ${dr.toFixed(2).padStart(5)} ${zone} pos.y ${n.pos.y.toFixed(3)}  groundY ${n.groundY.toFixed(3)}  _groundAt ${gy.toFixed(3)}  root ${n.body.root.position.y.toFixed(3)}  footL ${foot === null ? '  --  ' : foot.toFixed(3)}  deck ${d.y > -1e8 ? d.y.toFixed(3) : ' none '}  sink ${d.y > -1e8 ? (d.y - n.pos.y).toFixed(3) : '--'}  col ${cg ? `${cg.y.toFixed(3)} onProp ${cg.onProp ? 'Y' : 'n'}` : 'not ready'}  (${d.who})`);
   }
 }
 
