@@ -233,6 +233,18 @@ const GATES: Gate[] = [
   // mouth by 1 of 255. So this one renders the face at 0.55 m and asks the
   // image whether there is a mouth on it. NOT pixelBlind, obviously.
   { name: 'facecheck', gate: true, script: 'facecheck.mts', expect: 'a mouth and a nose read in the frame', kind: 'browser', cost: 30 },
+  // Is every shot a *picture*? On 2026-08-31 eleven of them were pure white
+  // rectangles and thirty more carried a white veil, and this suite was 20/20
+  // through all of it: a blown frame is not a page error, does not move a draw
+  // count, and against a baseline blown the same way is not even a pixel diff.
+  // The same hole let a GLSL link failure blank every capture in the repo for
+  // forty minutes, and a `GradePass` that would not compile turn every frame
+  // black before that. Three occurrences, one missing gate. Reads the default
+  // framebuffer for what a reader would see and `rtScene` for the radiance that
+  // produced it, so it also says whether the scene or the post chain is at
+  // fault. Subsumes `probes/nanscan.mts` at no extra read. NOT pixelBlind --
+  // it is the one gate here whose entire subject is the pixels.
+  { name: 'framecheck', gate: true, script: 'framecheck.mts', expect: '166 shots, none blown or blank', kind: 'browser', cost: 200 },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
   { name: 'reachcheck', pixelBlind: true, script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
