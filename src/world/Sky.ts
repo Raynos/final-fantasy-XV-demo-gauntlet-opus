@@ -943,11 +943,24 @@ export class Sky {
 
   /**
    * Drive the whole lighting rig from a clock hour.
+   *
    * @param hours 0..24
+   * @param force rebuild the environment probe unconditionally. **Default
+   *   true, which is what every scripted caller wants** — a shot, a chapter
+   *   start, a cutscene or the dev time slider jumps hours at a stroke and the
+   *   ambient has to land on the same frame as the sun.
+   *
+   *   `DayCycle` passes `false`, because it is the one caller that arrives
+   *   continuously rather than in jumps. `_updateEnv` renders a PMREM cubemap
+   *   and re-derives the diffuse probe; at the clock's push rate a forced
+   *   apply would do that ~1.6 times a second forever. With `force` off, the
+   *   0.08-hour threshold below takes over and the ambient rebakes about every
+   *   twelve seconds of wall clock — under two in-game minutes of sun travel,
+   *   which is below the point at which shade stops matching its own sky.
    */
-  setTimeOfDay(hours: number) {
+  setTimeOfDay(hours: number, force = true) {
     this.hours = ((hours % 24) + 24) % 24;
-    this._applyTimeOfDay(true);
+    this._applyTimeOfDay(force);
   }
 
   setWeather(name: 'clear' | 'storm' | 'fog' | 'overcast') {

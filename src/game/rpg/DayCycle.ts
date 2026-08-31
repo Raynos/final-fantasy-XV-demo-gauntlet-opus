@@ -29,6 +29,16 @@ export const PHASES = [
   { id: 'deepnight',name: 'Deep Night',  from: 21,   to: 24,   daemons: true },
 ];
 
+/**
+ * How far the clock has to have moved before it is worth telling the sky.
+ *
+ * 0.004 h is 14 in-game seconds — 0.6 s of wall clock at the rate below — and
+ * moves the sun by 0.055 degrees, which is nothing. What it buys is that
+ * `Sky._applyTimeOfDay` (a sky-view LUT bake, a CSM refit and a handful of
+ * allocations) runs at ~1.6 Hz instead of 60 Hz.
+ */
+const PUSH_EPS = 0.004;
+
 /** Hour at which daemons start and stop spawning. */
 export const DAEMON_START = 19;
 export const DAEMON_END = 5;
@@ -152,20 +162,57 @@ export class DayCycle {
   minutesPerSecond!: number;
   running!: boolean;
   syncFromSky!: boolean;
+  /** The sky hour we last observed, so a scripted set is distinguishable. */
+  _skyWritten!: number | null;
+  /** True when this instance came out of a save file — see `update`. */
+  _restored!: boolean;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     /** Current hour, 0..24. */
     this.hour = 9.0;
     /** Days elapsed since leaving Insomnia. */
     this.day = 1;
-    /** In-game minutes per real second. 60 => one in-game hour per real minute. */
-    this.minutesPerSecond = 20;
+    /**
+     * In-game minutes per real second — **0.4, one full day per real hour.**
+     *
+     * The old value was 20, which is a whole day every 72 seconds, and it was
+     * never once observed because nothing called this branch: `syncFromSky`
+     * was true and `driveSky` false, so the clock followed a sky that never
+     * moved and the rate was dead code. Picking a real one:
+     *
+     * - `BRIEF.md` makes golden hour the signature look and night the second
+     *   one. A rate has to put both inside one sitting, or the player who
+     *   plays once never sees half the art direction.
+     * - A blind playtester played for **thirty minutes** and wrote *"the sun
+     *   never moved"*. Thirty minutes is therefore the unit to design against,
+     *   not a full day: half a day per session is the target.
+     * - 0.4 min/s is 24 game-hours per real hour, so a 30-minute session
+     *   crosses **twelve** game hours. From the 12:00 the world boots at that
+     *   is midday -> afternoon -> five real minutes of golden hour -> dusk ->
+     *   the starfield night the same playtest called its favourite frame.
+     * - It is also FFXV's own ratio (a day there is about an hour of wall
+     *   clock), and it is slow enough that the sun does not visibly crawl:
+     *   at this rate it moves 0.09 degrees of azimuth per real second.
+     *
+     * Faster and dusk is a strobe you cannot photograph; slower and the
+     * complaint that produced this comment is still true.
+     */
+    this.minutesPerSecond = 0.4;
     /** Set false during cutscenes and menus. */
     this.running = true;
-    /** Follow an external Sky system rather than owning the clock. */
+    /** Adopt an hour some other system pushed into the Sky (see `update`). */
     this.syncFromSky = true;
-    /** Push our hour into the Sky system (only if nothing else drives it). */
-    this.driveSky = false;
+    /**
+     * Push our hour into the Sky system.
+     *
+     * **True, and that is the fix for the frozen clock.** These two flags used
+     * to be `sync=true, drive=false`, which reads as "the Sky owns the hour" —
+     * except `Sky.hours` only ever changes inside `setTimeOfDay`, so nothing
+     * owned it and neither system errored. Two systems politely deferring to
+     * each other over one number is a clock that never moves. See `update`
+     * for how a scripted `setTimeOfDay` still wins.
+     */
+    this.driveSky = true;
 
     /** @type {Record<string, {discovered:boolean}>} */
     this.havenState = {};
@@ -174,6 +221,8 @@ export class DayCycle {
     this._phase = this.phase.id;
     this._lastHourInt = Math.floor(this.hour);
     this._daemonsUp = this.isNight;
+    this._skyWritten = null;
+    this._restored = false;
     /** Absolute hour count — buff timers use this so they survive midnight. */
     this.absoluteHour = (this.day - 1) * 24 + this.hour;
   }
@@ -208,26 +257,88 @@ export class DayCycle {
    * @param [game] optional Game handle for Sky sync
    */
   update(dt: number, game: Game | null = null) {
-    // Prefer an authoritative Sky if it has one and we're set to follow.
-    const sky = this.syncFromSky && game?.get ? game.get('Sky') : null;
-    const skyHour = typeof sky?.hours === 'number' ? sky.hours : null;
-    if (skyHour != null) {
-      // Follow the sky by *delta* so midnight wrap still advances the day and
-      // absolute-hour buff timers never run backwards.
-      let delta = skyHour - this.hour;
-      if (delta < -12) delta += 24;
-      if (delta > 0) this.advance(delta);
-      // A scripted jump backwards (the shot harness, a cutscene) is not a
-      // rewind of the calendar — snap to it so the clock never contradicts the
-      // light the player is standing in.
-      else if (delta < -0.001) this.setHour(skyHour);
-    } else if (this.running) {
-      this.advance((dt * this.minutesPerSecond) / 60);
+    const sky = game?.get ? game.get('Sky') : null;
+    const skyHour = this.syncFromSky && typeof sky?.hours === 'number' ? sky.hours : null;
+
+    // 1. Did somebody else move the sky since our last write? `applyShot`, a
+    //    chapter start, a cutscene, `Dungeons._restoreWorldLighting`, the
+    //    `?debug` time slider and `Warmup` all call `Sky.setTimeOfDay`, which
+    //    is the documented cross-system API (`BRIEF.md`) and must keep winning.
+    //    Comparing against what *we* last saw the sky holding — rather than
+    //    against our own hour — is what tells a scripted set apart from our own
+    //    push, so the two never fight.
+    if (skyHour != null && (this._skyWritten == null || Math.abs(skyHour - this._skyWritten) > 1e-9)) {
+      if (this._skyWritten == null && this._restored) {
+        // A save owns its hour: a session loaded at 21:40 must not be dragged
+        // back to whatever the sky booted at. Push, do not adopt.
+      } else {
+        // Follow by *delta* so a midnight wrap still advances the day and
+        // absolute-hour buff timers never run backwards.
+        let delta = skyHour - this.hour;
+        if (delta < -12) delta += 24;
+        if (delta > 0) this.advance(delta);
+        // A scripted jump backwards (the shot harness, a cutscene) is not a
+        // rewind of the calendar — snap to it so the clock never contradicts
+        // the light the player is standing in.
+        else if (delta < -0.001) this.setHour(skyHour);
+      }
     }
-    if (this.driveSky && game?.get) {
-      const s = game.get('Sky');
-      if (s?.setTimeOfDay) s.setTimeOfDay(this.hour);
+
+    // 2. Our own hour advances.
+    if (this.flowing(game)) this.advance((dt * this.minutesPerSecond) / 60);
+
+    // 3. Push it back into the sky, but only past a threshold — see PUSH_EPS.
+    if (this.driveSky && sky?.setTimeOfDay && this.drivesSky(game)
+        && Math.abs(sky.hours - this.hour) > PUSH_EPS) {
+      // `force = false`: the second argument exists for exactly this caller.
+      // A forced apply rebuilds the PMREM environment probe unconditionally,
+      // which is right for a scripted jump and ruinous 1.6 times a second.
+      // Sky's own 0.08-hour threshold then rebakes the ambient every ~12 s.
+      sky.setTimeOfDay(this.hour, false);
     }
+    this._skyWritten = typeof sky?.hours === 'number' ? sky.hours : null;
+  }
+
+  /**
+   * Is the clock allowed to advance right now?
+   *
+   * **A posed shot pins it.** `Shots.ts` authors a `time` per shot and
+   * `Game.applyShot` pushes it into the sky; a clock that kept running would
+   * make all 166 corpus frames depend on how many settle steps they were
+   * given, which is the one thing `resetClock` exists to prevent. `currentShot`
+   * is the flag for "a capture owns this frame", and `Director.play()` — the
+   * documented posed -> live edge — clears it, so ordinary play and every
+   * probe that goes live are unaffected.
+   *
+   * **The title screen pins it too.** `TitleScreen.show` sets 18.55 and the
+   * comment above it says *"Golden hour, always. The title screen is the one
+   * frame every player sees"*. A player who reads the menu for four minutes
+   * should not arrive at dusk.
+   */
+  flowing(game: Game | null): boolean {
+    if (!this.running) return false;
+    if (game?.currentShot) return false;
+    const title = game?.get ? (game.get('Story') as { title?: { shown?: boolean } } | null)?.title : null;
+    if (title?.shown) return false;
+    return true;
+  }
+
+  /**
+   * Is the clock allowed to *drive the sky* right now?
+   *
+   * Underground it is not. `Dungeons._saveWorldLighting` parks the world's
+   * `scene.environmentIntensity` and `probe.light.intensity` and installs the
+   * dungeon's own, and `Sky._updateEnv` overwrites both from the sky — so a
+   * clock ticking the sky past its 0.08-hour env threshold while the player is
+   * inside would silently relight the dungeon from the sky outside it. Time
+   * still *passes* inside (the party is not in stasis); only the light waits,
+   * and it catches up in one step on the way out, which is exactly the jump
+   * `_restoreWorldLighting`'s own `setTimeOfDay` is already built to absorb.
+   */
+  drivesSky(game: Game | null): boolean {
+    if (game?.currentShot) return false;
+    const dungeons = game?.get ? (game.get('Dungeons') as { isInside?: boolean } | null) : null;
+    return !dungeons?.isInside;
   }
 
   /**
@@ -421,6 +532,7 @@ export class DayCycle {
     d._phase = d.phase.id;
     d._lastHourInt = Math.floor(d.hour);
     d._daemonsUp = d.isNight;
+    d._restored = true;
     return d;
   }
 }
