@@ -1039,10 +1039,30 @@ const SHOT_TABLE = {
   // anchor's height. Derive a Galdin camera from `anchorAt`, never from
   // `Terrain.heightAt`, and check it in `shoot.mts` rather than `framecam.mts`.
   // Same 12 m of open radius as Lestallum; stalls on a r 8 ring, bulbs 4.4 m up.
+  // **This camera stands ON THE SEA, 137 m offshore, and that is not a mistake.**
+  // `Sky._sunAngles` ties azimuth to elevation -- az = 90 + 180f, elev =
+  // 62 sin(pi f) over a 06:00-19:00 day -- so a sun near the horizon is always
+  // due east (dawn) or due west (dusk) and never anywhere between. Galdin's
+  // water lies on bearings 0-170 deg (east through south) and on NONE of
+  // 180-270. So from any stand on the beach the sea and the golden light are on
+  // different bearings: aim west and you photograph a dune with the sea behind
+  // the ridge, aim seaward and the sun is behind you and the water is cold
+  // slate. Nine shore framings were captured and read before that was believed.
+  // The only stand that holds both is out on the water looking BACK west: sea in
+  // the foreground, the shore and the jetty as the silhouette band, the sun
+  // setting behind them and its specular column running down the middle of the
+  // frame to the lens -- which is the composition of the plate this row is
+  // judged against (`golden-hour-water-02.jpg`).
+  // The jetty is the `fishing_poi_*` cluster at (2470.3, 2565.9), deck top y
+  // -2.1 over a -6.5 sea; the stand is 130 m back along the sun bearing and 49 m
+  // south of it, which is also where the sea bed drops away. That last part
+  // matters: north of this line the bottom is shallow and lit and the water
+  // renders as a gold-and-black stipple that reads as a wet sand flat, not sea.
+  // Derived in `tmp/l21/pier6.mts`; 44 candidates read, this is `KJ`.
   galdin_pier_sunset: {
-    doc: 'Galdin Quay at golden hour: the square full, warm rim light down the boards',
-    time: 18.2, weather: 'clear',
-    pos: [2324, 15.9, 2371], target: [2340, 15.4, 2386], fov: 44,
+    doc: 'Galdin Quay from the shoals at last light: the jetty in silhouette, the sun path running to the lens',
+    time: 18.75, weather: 'clear',
+    pos: [2603, 0.5, 2607.4], target: [1704.7, -62.4, 2661.7], fov: 40,
   },
   galdin_angelgard: {
     // The sea is NOT in sight of Galdin's square: the ground under the plaza
