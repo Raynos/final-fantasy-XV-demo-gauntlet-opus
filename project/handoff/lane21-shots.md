@@ -838,3 +838,55 @@ worse.
 - Also: leaf cards detach from canopies and float free in `PS0sw`/`PS1sw`/`PS2sw`;
   small blue pickup glint sprites are visible in `PS1o`/`PS2w`/`PS2sw`; the sun
   blows to a featureless white field with no disc on every west-facing aim.
+
+---
+
+# Third agent, 2026-08-31 (final content pass)
+
+## Why `galdin_pier_sunset` could not be fixed by yawing: the sky model, MEASURED
+
+`src/world/Sky.ts:924-937` couples the sun's azimuth to its elevation and there
+is no free parameter between them:
+
+```
+SUNRISE 6.0  SUNSET 19.0  SUN_MAX_ELEV 62
+f = (h - 6) / 13        az = 90 + 180 f        elev = 62 sin(pi f)
+```
+
+Read out of the live `Sky` (`tmp/l21/pier2.mts`):
+
+```
+t17.5  elev 22.0  az 249.2   t18.6  elev  6.0  az 264.5
+t18.0  elev 14.8  az 256.2   t18.8  elev  3.0  az 267.2
+t18.3  elev 10.4  az 260.3   t18.95 elev  0.7  az 269.3
+```
+
+**A low sun is only ever due east (dawn) or due west (dusk).** There is no
+low sun in the south-east, so "swing the sun round over the sea" is not a lever
+this sky has.
+
+And the sea is not west. A 36-bearing march of `Terrain.heightAt` from the shore
+stand `PS2 (2499, 2478)`, sea level −6.5, threshold −4 (deg 0 = +X east, 90 = +Z
+south, 180 = −X west):
+
+```
+0:30m/74%  40:30/100  90:55/77  130:155/47  170:405/3
+180..270: NO WATER AT ALL on any of ten bearings
+```
+
+**Water occupies bearings 0–170 (east through south); the setting sun sits at
+264–269 (west). From any stand on the beach the two cannot share a frame** —
+which is exactly what the predecessor's nine frames showed, and the reason its
+`w` aims were dunes and its `o` aims were cold.
+
+The resolution is to **stand out on the water and look back west**: then the sea
+is the foreground, the shore and the jetty are the silhouette band, and the sun
+sets behind them with its specular path running across the water to the lens.
+Offshore ground: `(2620,2500) = −10.1`, `(2760,2520) = −45.7`, both well under
+the −6.5 surface. Looking west from 120 m out there is ~100 m of water before
+the beach; from 260 m out, ~240 m.
+
+**The jetty is real geometry and it is at `(2470.3, 2565.9)`** — the
+`fishing_poi_plank / _roof / _lamp / _void` cluster, deck top y −2.1, feet y
+−8.4, so 4.4 m of it stands above the sea. It runs roughly north–south, ~80 m
+long, and presents side-on to a westward lens.
