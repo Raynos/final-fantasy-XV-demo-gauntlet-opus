@@ -761,4 +761,33 @@ measured negative with two instruments agreeing. All of the below is
   the step-fracture relief chops the ribbon every 7 m. Needs
   `Rocks.rockGeometry` to return the step index as an attribute — a shared file.
   **Not a tuning change**; do not re-tune radiance instead. `lane20`
-
+- **Lane 1 — the alar BALL is the last third of the mid-face diagonal, and it
+  costs the nostril.** `c6013aa` softened the alar crease (peak surface
+  Laplacian on the cheek 9.00 -> 5.09 mm, fold 8.85 -> 5.94 mm) and the ball at
+  `p [15.5,-36.5,85.5] amt +12.5` is now the largest single term there (2.91 of
+  5.09). Widening it to `r [13.0,13.5,21.0]` with the amount held takes the peak
+  to **3.53** and leaves the ball's own projection *higher* (10.35 -> 10.51 mm),
+  but the two brushes overlap and the nostril opening loses **27%** of its depth
+  (-8.34 -> -6.08 mm). Measured, not landed. `lane1`
+- **Lane 1 — the eye crescent is a 1.5-2 mm band under the lower lid margin and
+  here are the millimetres.** Marching the sculpted skull against the globe's own
+  silhouette (`FACE.eye` 33.5/-6.0/64.6, R 10.70; lower lid margin peaks at
+  -0.712 rad = y -13.0 mm; globe runs to y -16.7): at y = -13 the globe stands
+  **1-6 mm** in front of the skull across x 26-41, at y = -14 **1-3 mm**, and by
+  y = -15 the skull covers it. Two candidate fixes, neither landed: a ledge brush
+  at (33.5, -13.5) r ~[13,7,20] amt +4 mm (anatomically the lower lid roll, but
+  4 mm through a 7 mm y-radius is a *rail* and a rail is what left the last dark
+  slash under the eye), or sinking `FACE.eye`'s z 0.0646 -> ~0.0616, which moves
+  the globe *and its lids together* so only globe-to-skull changes. The second
+  is smaller and better targeted. Judge either on `facefront_flat`. `lane1`
+- **Lane 1 — at 3x the hair is a pile of flat cardboard strips.** Hard
+  rectangular card ends, visible flat facets down each card, and near-black gaps
+  between them (`tmp/shots/l1r4-occ/prompto_facecheck.png`, rect 704,18 288x180
+  at 3x). The gaps are where the hair's p5 lives, which is why no amount of fill
+  reaches §12.3's floor of 20-22. Card geometry and the cutout, not shading.
+  `lane1`
+- **Lane 1 — the fill is a fifth of the hair pixel, and that is the budget.**
+  Measured this session: a +21% change to the sky fill's level moved Prompto's
+  hair median +5% and a +19% change to its albedo weight moved Noctis' +17%.
+  Anyone planning another hair value change should size it against those two
+  numbers rather than against the fill's own coefficient. `lane1`
