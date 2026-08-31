@@ -920,6 +920,75 @@ export const thetaWarp = warpAxis((t) => 1 + 3.0 * Math.exp(-Math.pow((t - 0.5) 
 export const phiWarp = warpAxis((t) => 1 + 2.2 * Math.exp(-Math.pow(Math.abs(t - 0.665) / 0.26, 6)));
 
 /**
+ * Heat-equation passes run over the brush displacement before it is added back
+ * to the skull. See `smoothRelief`. Zero restores the sculpt exactly.
+ */
+export const FACE_RELIEF_SMOOTH = 40;
+
+/**
+ * Low-pass the sculpted relief, in the head's own (u, v) grid.
+ *
+ * **This is the fix for the playtest's "his face is a smear".** Judged at the
+ * distance the player judges from — native fov 50 at 5 m, so the head covers
+ * 42 px — lit skin lands at Y 180-210 and large parts of the mid-face land at
+ * **Y 0-20**, a lit:shadow ratio of 10-30x where `ART-DIRECTION` §12.1 measures
+ * FFXV at 2.0-3.2x and never more. At 26-42 px of head those near-black marks
+ * merge, and merged they are the report's "dark horizontal band" across the
+ * eyes, its "orange blotch" where the mouth and jaw are, and its "blindfold".
+ *
+ * It is not paint and it is not the lighting. A flat albedo, flat vertex
+ * colours and a null normal map each move the face by under 0.75/255;
+ * `castShadow = false` on the whole character moves it by nothing; a 2x
+ * supersampled capture box-filtered back down is the same image, so it is not
+ * undersampling either. A debug pass that writes N·L into the frame reads
+ * **exactly 0** on every dark pixel, and rendered as an image that pass is a
+ * hard black-and-white zebra: the face is *corrugated*. `_probe/facerelief.mts`
+ * puts a number on it — against a canonical front-and-above key, **26% of the
+ * visible face has its normal turned past 90 degrees from it** and 12% past
+ * 107, uniformly across all four heroes because they share one sculpt.
+ *
+ * `applyBrushes` is a linear sum of ~45 cosine lobes, several of them a few
+ * millimetres across on a 150 mm head, so their sum has spatial frequencies far
+ * above anything a face has. Scaling the brushes down is not the answer — that
+ * costs `facecheck`'s `noseLead` and `mouthRelief`, which are the features we
+ * fought to get. Low-passing the *displacement* costs a broad feature almost
+ * nothing (a nose spans ~40 columns here) while destroying the corrugation,
+ * which is 5-8 columns wide.
+ *
+ * Done in grid space, not in world space, because the grid IS the parameterised
+ * surface: `thetaWarp`/`phiWarp` already concentrate columns on the face, so one
+ * pass is a smaller distance there than at the occiput, which is the weighting
+ * you want. `u` wraps at the seam (`thetaWarp` fixes u = 0 and u = 1 on the
+ * same point, so the neighbours of column 0 are `segU-1` and 1); `v` clamps,
+ * because the crown and the underside of the jaw are poles.
+ *
+ * λ = 0.5, so each pass is the mean of the point and its four neighbours. After
+ * `iters` passes the kernel is a gaussian of σ ≈ sqrt(iters·λ/2) columns.
+ */
+function smoothRelief(rel: Float64Array<ArrayBuffer>, segU: number, segV: number, iters: number) {
+  if (iters <= 0) return;
+  const W = segU + 1, H = segV + 1, lambda = 0.5;
+  let a: Float64Array<ArrayBuffer> = rel, b: Float64Array<ArrayBuffer> = new Float64Array(rel.length);
+  for (let it = 0; it < iters; it++) {
+    for (let v = 0; v < H; v++) {
+      const vm = (v > 0 ? v - 1 : 0) * W, vp = (v < H - 1 ? v + 1 : H - 1) * W, vv = v * W;
+      for (let u = 0; u < W; u++) {
+        const um = (vv + (u > 0 ? u - 1 : segU - 1)) * 3;
+        const up = (vv + (u < segU ? u + 1 : 1)) * 3;
+        const dn = (vm + u) * 3, ds = (vp + u) * 3;
+        const o = (vv + u) * 3;
+        for (let c = 0; c < 3; c++) {
+          const m = (a[um + c] + a[up + c] + a[dn + c] + a[ds + c]) * 0.25;
+          b[o + c] = a[o + c] + lambda * (m - a[o + c]);
+        }
+      }
+    }
+    const t = a; a = b; b = t;
+  }
+  if (a !== rel) rel.set(a);
+}
+
+/**
  * Build the head mesh (skull + lids + ears) in character space.
  */
 export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): HeadBuild {
@@ -940,16 +1009,29 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
   const hw = look.headWidth ?? 1;
   const rr = [HR[0] * hw, HR[1], HR[2]];
 
-  const grid: THREE.Vector3[][] = [];
+  const W = segU + 1;
+  const base = new Float64Array(W * (segV + 1) * 3);
+  const rel = new Float64Array(W * (segV + 1) * 3);
   for (let v = 0; v <= segV; v++) {
     const phi = phiWarp(v / segV) * Math.PI;
-    const row: THREE.Vector3[] = [];
     for (let u = 0; u <= segU; u++) {
       // seam at the back of the skull; the warp is periodic and fixes u=0 and 1
       const th = Math.PI + thetaWarp(u / segU) * Math.PI * 2;
       const { p, n } = skullPoint(th, phi, rr);
+      const k = (v * W + u) * 3;
+      base[k] = p.x; base[k + 1] = p.y; base[k + 2] = p.z;
       applyBrushes(p, n, brs);
-      row.push(p);
+      rel[k] = p.x - base[k]; rel[k + 1] = p.y - base[k + 1]; rel[k + 2] = p.z - base[k + 2];
+    }
+  }
+  smoothRelief(rel, segU, segV, FACE_RELIEF_SMOOTH);
+
+  const grid: THREE.Vector3[][] = [];
+  for (let v = 0; v <= segV; v++) {
+    const row: THREE.Vector3[] = [];
+    for (let u = 0; u <= segU; u++) {
+      const k = (v * W + u) * 3;
+      row.push(new THREE.Vector3(base[k] + rel[k], base[k + 1] + rel[k + 1], base[k + 2] + rel[k + 2]));
     }
     grid.push(row);
   }
