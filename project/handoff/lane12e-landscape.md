@@ -157,14 +157,67 @@ hold. **The next version wants the spread of `deg` over many separated boxes on
 unrelated faces, not the peak inside one.** A low pair here is not evidence of
 absence, and that warning is at the top of the file.
 
-## 4. Not done
+## 4. The bare silhouette — investigated, priced, NOT landed (not this lane's file)
 
-- **The massif silhouette carries no boulder or scrub scatter at all** — the
-  outline is a bare heightfield curve with a handful of tree billboards on it.
-  Confirmed by eye on `vista_noon`. This is the other half of tell #2b and the
-  same thing as the filed tier-C deficit. Investigated, not attempted: the
-  budget is `drawcheck` 745/800 with 55 of headroom and scatter is exactly what
-  spends it. See "residue".
+**It is a slope test, not a range test, and it costs ZERO draw calls.** That is
+the surprise: the budget was never the obstacle.
+
+Probed on `vista_noon` (`tmp/probes/massifrock.mts`): **1381 rock instances
+live, farthest 1150 m**, so nothing is out of range. By slope band:
+
+| slope | instances | mean height |
+|---|---|---|
+| `< 0.20` | 1191 | **4.09 m** |
+| `0.46-0.60` | 33 | 2.92 m |
+| `0.60-0.70` | 15 | 2.36 m |
+| `> 0.70` | 9 | 2.15 m |
+
+The massif carries **4 % of the stone field at 60 % of the size**, and nothing
+on it exceeds 9.6 m against 23.4 m on the flat. `Ecology.rockScatter` has **no
+slope reject at all** — it asks for rock out there and `rockSuit` returns
+0.9-1.0 on the face. The shrinking happens downstream, in
+`src/world/props/Rocks.ts:2498`: `size *= (1 - steep * 0.62)`, which is 0.38x
+at slope 0.56. `:2198`'s outcrop taper `smoothstep(slope, 0.58, 0.8)` is second.
+
+**The price is zero draw calls.** `Rocks.build` (`:2604-2620`) makes exactly
+**8 `InstancedMesh`es, one per kind, both LOD tiers sharing one mesh** — a
+deliberate past decision — and streaming tiles `emit` into those same eight,
+bumping `mesh.count` only. Live caps have headroom: granite 318/890, bedded
+462/940, slab 364/730, spire 141/570, worn 30/650.
+
+**Proposal, ready to apply:** `Rocks.ts:2498` `0.62` -> ~`0.25` for BIG kinds,
+and `:2198`'s taper to `(0.72, 0.92)`. 4-7 m blocks where 2 m ones are, inside
+batches that already draw.
+
+**Not landed: `src/world/props/` is not in this lane's ownership list.** Filed
+in `project/TASKS.md` with the file:line and the numbers. Two caveats from the
+same probe, and they matter: `emit` **silently drops** instances once a group
+cap fills, so watch granite/bedded; and **leave `_genTor`'s 0.30 slope ban
+alone** — a 20 m stack on a 30-degree face has metres of seat error and that
+ban is load-bearing.
+
+## 4b. The untextured cones: a measured negative
+
+`?post=nostructfade`, `e123436`. Everything in the detail block is gated on
+`structSlope` crossing 0.295-0.34, and past 2200 m `structSlope` hands back to
+`length(N.xz)` off a normal `tf_surfNormal` has deliberately low-passed — which
+flattens a distant face toward zero. The comment above the `mix()` names that
+exact mechanism as the reason the raw grid is read at all. So: remove the
+hand-back, and the strata and runnels should come back on the cones.
+
+**They do not.** `zone_callaegh`, one build, the token against shipped:
+**imgdiff mean 0.260/255 against that shot's own measured noise floor of 2.00**,
+0.083 % of pixels past 8/255. Closed.
+
+The remaining candidate is **`tf_lodW`**, which retires each relief octave by
+its own screen footprint — contributing at 4 px wide, gone by 2 px — and will
+have retired all three long before 2.2 km. Different fade, different argument,
+not priced. The conical *shape* is `Field.ts` and belongs to nobody here.
+Whatever turns the detail back on out there is traded against the horizon hatch
+the fade exists to stop, and **that hatch is a crawl: a still frame cannot
+clear it.**
+
+## 4c. Not done
 - **No perf number was taken.** Nothing landed changes a loop count, a fetch
   count or a resolution: two uniform values, four preset constants, and two
   extra `tf_snoise` inside a branch that only runs on ground steeper than 17
@@ -262,3 +315,6 @@ Written out ready to paste:
 | `04aacc9` | runnel albedo de-plaided; `?post=norunnel` / `?post=runnelflat` |
 | `57eb5d4` | `src/tools/weavestat.mts` and the negative it returned |
 | `da050d2` | shadow bake back on its documented every-fourth-frame stride |
+| `11e67c0` | `?post=nostructfade`, so the untextured-cone hypothesis could be priced |
+| `e123436` | ...and the measured negative it returned |
+| `914d2a3` | `project/TASKS.md` residue, including the zero-draw-call scatter item |
