@@ -104,3 +104,74 @@ fix wave automatically, and the loop stops at the bar **or at a measured
 plateau** — a full fix wave that moves the number by nothing. **One wave has
 now run; this is the second.** Neither number is published as a pass, and
 neither is hidden.
+
+---
+
+# Round 18 — the same number, on a repaired build
+
+Run immediately after `e848801` fixed the Float16 bake bug, same method, same
+control plates, so it is directly comparable to round 17.
+
+    MAIN ARM    n=35   identified 35   fooled 0   hesitated 0   ->   0% hesitation
+    CONTROL     n=8                                hesitated 4   ->  50%
+
+**Identical to round 17 on the main arm.** Repairing a bug that rendered **11
+shots as pure white and 30 of 166 at >= 45% clipped** moved the judged number by
+**exactly nothing.**
+
+That is worth stating plainly rather than explaining away. The blowout was
+catastrophic, real, and worth fixing on its own terms — the corpus is a corpus
+again — but **it was never what the judge was deciding on.** Its verdicts came
+from material response and asset finish, and those did not change.
+
+## Round 18's ranked tells, which are sharper than round 17's
+
+1. **The sky is a single tiling cloud sheet, and it seams** — the same puff
+   pattern at identical scale across the whole dome, with rectangular repeat
+   boundaries visible where tiles abut, "most blatantly a hard edge cutting
+   straight through the sun's glare". Its single most frequent and most fatal
+   tell.
+2. **Placeholder props left in shot** — untextured pure-black **torus and box
+   primitives**, receiving no light, casting no contact shadow. *"Wherever one
+   appeared, the panel was decided in under a second."* **Three independent
+   observers have now reported this object**: this judge, a lane measuring the
+   party at playing distance, and the blind playtester ("a big untextured black
+   tyre... the first object in the frame").
+3. **Faces and hands fail before anything else** — face texture stretched off
+   the UV, eyes at two different depths, a neck cylinder that does not meet the
+   collar, paddle hands with fused fingers, skin reading as painted vinyl.
+4. **Terrain is one high-frequency texture on a smooth heightfield** — no
+   displacement, no material transitions, a visible blend seam where grass meets
+   dirt, and in the worst cases **a literal visible checkerboard on the rock**.
+5. **Water and vegetation modelled as flat planes rather than as media** — a
+   mirror surface whose ripple never diminishes with distance and does not
+   interact with the shoreline; leaf cards with hard alpha-test edges against
+   bright sky and no light penetrating the canopy.
+
+## What the judge said was close, which is the first time this has been asked
+
+- **The stormy lake with the lightning strike** — "the strongest non-obvious
+  frame in the round": layered fog banks with real depth separation, a reflection
+  that grades correctly with distance and carries ripple distortion, stratified
+  foreground rock with moss in the crevices, "a restrained green-grey storm grade
+  that reads as art direction rather than a filter". Its only weakness is that
+  the bolt casts no light.
+- **The forest clearing** — "genuinely good bark: real normal detail with root
+  flare, and a believable understory". *"It is let down by its rocks, not its
+  trees."*
+- **The HUD reconstructions** — "accurate enough in typography, layout and
+  iconography that for a beat I read them as real captures. **The HUD is not the
+  problem; the world behind it is.**"
+- And the observation that matters most for where effort should go next:
+  *"the composition and camera choices across the weaker panels are good —
+  framing, horizon placement, where the character sits in the frame. **What
+  fails is never the shot, it is material response and asset finish.**"*
+
+## Honesty about what this round is and is not
+
+It is **not** a measured plateau in §4's sense. §4 defines that as *a full fix
+wave* moving the number by nothing; what ran between 17 and 18 was **one bug
+fix**, and the six-lane fix wave was still in flight when round 18 was judged.
+Two of its lanes have since landed. The next round is the one that tests the
+wave.
+
