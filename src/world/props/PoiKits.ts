@@ -2363,6 +2363,13 @@ export class PoiKits {
       ['board', 11.8, 10.4],
       ['gate', Math.cos(gateA) * R * Math.cos(GATE_HALF), Math.sin(gateA) * R * Math.cos(GATE_HALF)],
       ['yard', 5, 5],
+      // Three standing places for the paddock's own birds, checked against
+      // every other part: `bird0` is 4.0 m clear of the trough, `bird1` 2.4 m,
+      // and the barn's roof envelope stops at (0.25, -0.8), which is 7.5 m from
+      // the nearest of them. All three are inside `R` with 7 m to spare.
+      ['bird0', 2.5, 8.5],
+      ['bird1', 9.5, 1.0],
+      ['bird2', 1.0, 12.0],
     ] as Array<[string, number, number]>) {
       const v = new THREE.Vector3(lx, 0, lz).applyMatrix4(world);
       A[name] = [v.x, v.y, v.z];

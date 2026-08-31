@@ -63,7 +63,7 @@ const _n = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
 /** One bird in the world: its scene node, its skeleton and its animator. */
-interface Bird {
+export interface Bird {
   root: THREE.Group;
   /** The node the bounce and the body pitch are written onto. */
   visual: THREE.Group;
@@ -414,7 +414,7 @@ export class ChocoboSystem {
     // The stables are furniture: they exist whether or not a bird has ever
     // been whistled for, and their prompts must be there the first time a
     // player walks into Wiz's yard.
-    this.hub.update();
+    this.hub.update(dt);
     this.races.update(dt);
     if (!this.enabled || !this.bird) {
       if (this.enabled && game.input.keyDown(KEY_WHISTLE) && !this._blocked()) this.summon();

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CHOCOBO_COLOURS } from '../../characters/chocobo/ChocoboRig.ts';
 import { RACES } from './Races.ts';
 import type { Game } from '../Game.ts';
-import type { ChocoboSystem } from './ChocoboSystem.ts';
+import type { Bird, ChocoboSystem } from './ChocoboSystem.ts';
 import type { InteractableHandle } from '../interaction/Interactables.ts';
 import type { DialogueChoice, DialogueScript } from '../interaction/Dialogue.ts';
 import { worldMap } from '../../world/map/WorldMap.ts';
@@ -90,6 +90,16 @@ export const CHOCOBO_HUBS: HubDef[] = [
  * dye is an easy yes, the black bird is a decision, and buying the set is a
  * genuine sink for the mid-game economy.
  */
+/**
+ * How near the player has to be before a hub's paddock is populated, and how
+ * far before it is emptied. The gap is hysteresis: one threshold rebuilds the
+ * pen every time the player walks back and forth across it.
+ *
+ * 150 m is inside `PoiKits`' own build radius, so the fence the birds stand in
+ * is always already there when they arrive.
+ */
+const PADDOCK_NEAR = 150, PADDOCK_FAR = 210;
+
 export const DYE_PRICE: Record<string, number> = {
   yellow: 0, green: 2500, red: 3500, blue: 5000, white: 7000, black: 12000,
 };
@@ -131,6 +141,8 @@ export class ChocoboHub {
   /** Hubs whose prompts have been moved onto the kit's anchors. See {@link _reanchor}. */
   _anchored!: Set<string>;
   _tick!: number;
+  /** Birds standing in each hub's paddock, while the player is near it. */
+  _pen!: Map<string, Bird[]>;
   game!: Game;
   system!: ChocoboSystem;
   constructor(system: ChocoboSystem) {
@@ -139,6 +151,7 @@ export class ChocoboHub {
     this._placed = false;
     this._anchored = new Set();
     this._tick = 0;
+    this._pen = new Map();
   }
 
   init(game: Game) { this.game = game; }
@@ -152,9 +165,9 @@ export class ChocoboHub {
    * — four of those is not a budget line, whereas a register/dispose churn as
    * the player crosses a radius is four allocations a frame at the boundary.
    */
-  update() {
+  update(dt = 1 / 60) {
     if (!this.game) return;
-    if (this._placed) { this._reanchor(); return; }
+    if (this._placed) { this._reanchor(); this._paddock(dt); return; }
     const interaction = this.game.get('Interaction');
     const terrain = this.game.get('Terrain');
     if (!interaction || !terrain) return;
@@ -194,7 +207,78 @@ export class ChocoboHub {
     this._placed = false;
     this._anchored.clear();
     this._tick = 0;
+    for (const key of [...this._pen.keys()]) this._empty(key);
   }
+
+  /* ------------------------------------------------------------ the birds */
+
+  /**
+   * Put birds in the paddock while the player is near enough to see one.
+   *
+   * **A stable yard with no animals in it is not a stable yard.** The frames of
+   * Wiz Chocobo Post read as a farm — barn, silo, fence, gateway, hay corner —
+   * and then the thing the whole place exists for was missing from every one of
+   * them. This is the cheapest possible fix for it: the mount's own prototype
+   * is already built and memoised per colour, so three more are three
+   * `cloneSkinned` calls sharing one geometry and one material set, and the
+   * lane's own ablation measured a bird at **2.7 draw calls**
+   * (`probes/chocobodraws.mts`: four birds cost 10.7 against a null-ablation
+   * floor of 1.6). Three birds is eight draws against a budget of 800.
+   *
+   * All three are yellow **on purpose**: `_prototype` memoises per colour and a
+   * second colour is a second whole rig built the moment the player crests the
+   * hill, which is a hitch at exactly the wrong time. Variety here is not worth
+   * a stall.
+   *
+   * Built at `NEAR` and dropped at `FAR`, with the gap between them the
+   * hysteresis — one threshold would rebuild the pen every time the player
+   * walked back and forth across it. Their standing places are anchors the kit
+   * publishes (`bird0..2`), so they are post-yaw and cannot land on the barn.
+   */
+  _paddock(dt: number) {
+    const player = this.game.get('Player');
+    const kits = this.game.get('Props')?.poiKits;
+    if (!player) return;
+    for (const hub of CHOCOBO_HUBS) {
+      const poi = worldMap.poiById(hub.poi);
+      if (!poi) continue;
+      const d = Math.hypot(poi.x - player.position.x, poi.z - player.position.z);
+      const pen = this._pen.get(hub.key);
+      if (pen) {
+        if (d > PADDOCK_FAR) { this._empty(hub.key); continue; }
+        // Standing, not statues: `ChocoboAnim` keeps its own phase moving below
+        // 0.15 m/s, so a speed of zero is an idle rather than a freeze.
+        for (const b of pen) b.anim.update(dt, { speed: 0, turnRate: 0, effort: 0, ridden: false });
+        continue;
+      }
+      if (d > PADDOCK_NEAR || !kits) continue;
+      const spots = [0, 1, 2].map((i) => kits.anchorAt(hub.poi, `bird${i}`));
+      if (spots.some((v) => !v)) continue;
+      const made: Bird[] = [];
+      for (let i = 0; i < spots.length; i++) {
+        const at = spots[i]!;
+        const b = this.system._makeBird('yellow');
+        b.root.position.copy(at);
+        // Facing: away from the yard's middle by a different amount each, so
+        // three birds on one pad do not read as three copies of one bird.
+        b.heading = Math.atan2(at.x - poi.x, at.z - poi.z) + i * 1.9;
+        b.root.rotation.y = b.heading;
+        b.root.visible = true;
+        b.speed = 0;
+        b.anim.converge();
+        made.push(b);
+      }
+      this._pen.set(hub.key, made);
+    }
+  }
+
+  _empty(key: string) {
+    const pen = this._pen.get(key);
+    if (!pen) return;
+    for (const b of pen) this.game.scene.remove(b.root);
+    this._pen.delete(key);
+  }
+
 
   /**
    * Move the prompts onto the kit's own published anchors, once each hub's
