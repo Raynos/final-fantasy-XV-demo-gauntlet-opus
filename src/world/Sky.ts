@@ -1445,8 +1445,28 @@ export class Sky {
     // patchiness is `uShadowTile`'s business, not this one's. See
     // `SkyPreset.shadowScale`: every preset is 1.0 because 1.0 is the only
     // value at which a cloud's shadow is the size of the cloud.
-    u.uShadowFieldScale.value = p.shadowScale;
-    this._shadowDirty = true;
+    // ONLY on a change, and that `if` is worth four times the cost of the most
+    // expensive thing in the sky.
+    //
+    // `Clouds.ts` documents the ground-shadow bake as landing "on one frame in
+    // four as a spike rather than as a cost" — 512^2 texels, four laterally
+    // offset columns of twelve `cloudDensity` samples each, 12.6 M volume
+    // evaluations. `lateUpdate` honours that with `(frame & 3) === 0 ||
+    // this._shadowDirty`. But this function runs from `update()` on **every**
+    // frame and used to set the flag unconditionally, so the stride never
+    // applied and the bake ran every frame. Measured, not inferred:
+    // `renderShadow` called **60 times in 60 frames** against the documented
+    // 15 (`tmp/probes/bakecount.mts`, one line of monkey-patching).
+    //
+    // The flag exists to force an *immediate* rebake when something
+    // discontinuous happens, which is a weather change; the four-frame stride
+    // already covers wind advection and the sun. With every preset now at
+    // shadowScale 1.0 this fires only during a cross-fade, which is exactly
+    // when a caller wants it.
+    if (u.uShadowFieldScale.value !== p.shadowScale) {
+      u.uShadowFieldScale.value = p.shadowScale;
+      this._shadowDirty = true;
+    }
     u.uFogDensity.value = p.fogDensity;
     u.uFogHeight.value = p.fogHeight;
     u.uHazeBase.value = p.haze;
