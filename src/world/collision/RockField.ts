@@ -243,7 +243,12 @@ export class RockField {
     const ay1 = pos.y + height;
     const skipTop = pos.y + stepUp;
     let total = 0;
-    // The disc is re-read each proxy because `pos` moves as we push.
+    // The bucket range is fixed from `pos` as it was on entry, and `pos` moves
+    // underneath it as proxies push. That is deliberate and matches the wall
+    // soup: `CollisionWorld.resolve` runs this pass up to three times and stops
+    // when a pass moves less than 0.1 mm, so a correction that carries the
+    // capsule into a new bucket is picked up by the next pass rather than by a
+    // re-query inside this one.
     this._near(pos.x, pos.z, radius + PAD, (d, o) => {
       const cy = d[o + 1];
       if (cy + d[o + 16] <= skipTop) return;            // steppable: a kerb
