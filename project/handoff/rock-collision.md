@@ -79,6 +79,60 @@ Cost: **593 proxies cached over 160 cell builds, 0.10 ms for the slowest build**
 across a 560 m sweep plus eight walks. (The first cut read 2620 builds for the
 same 137 distinct cells — see `34d5b26`: both streams hashed to one cache key.)
 
+## Gates
+
+Taken behind an **unpiped** `daemon.mts --wait quiet` whose exit code was
+actually tested — the first attempt piped it into `tail`, and although the wait
+itself succeeded the run came back **VOID (noise floor 1.22 ms = 26% of a 4.7 ms
+frame, `RULER_VALID: false`)** because a co-agent was capturing through it. That
+VOID run is discarded, as `project/LANDMINES.md` requires. The quoted run below
+waited 0.8 s and the box was quiet.
+
+- **`gameplay --build HEAD`: PASS**, `RULER_VALID: true`, every segment ≥ 60 fps.
+  Worst segment `streaming-traverse` **114.9 fps** (8.7 ms), against the
+  certified baseline's 10.85 ms for the same segment — comfortably inside the
+  ratchet. 1 hitch, 34.9 ms, **at frame 0**, which is boot and is explained: the
+  daemon reports `texc.bin.gz` and `geo.bin.gz` both missing, so every boot in
+  the repo right now is paying ~3.7 s of cache rebuild. Somebody ran
+  `pnpm run build`; it wants `build:full` and `texbake.mts --geo`.
+- **`combatloop --build HEAD`: 35/35 mechanics verified.** The dungeon round is
+  unbroken — the Magitek Commander still arms on approach at 10.0 m and dies to
+  the real damage path.
+- **`fightshape`, paired, 6 rounds each way on the same build** (`--set
+  rockPush=1` / `=0`; the probe is deterministic within a build — the ON run
+  reproduced an earlier run digit for digit, so the two columns differ by the
+  ablation and by the routes it causes, not by run-to-run noise):
+
+  |                    | rockPush ON (shipped)         | OFF (before tonight)          |
+  |--------------------|-------------------------------|-------------------------------|
+  | duration, median   | **21.6 s PASS** (22.4 20.7 26.0 14.4) | 16.4 s **FAIL** (23.4 17.8 15.0 13.7) |
+  | HP paid, median    | 10.5% **FAIL** (17.5 33.3 3.4 2.2)    | **23.1% PASS** (40.3 40.4 5.9 4.0)    |
+
+  **This is a real effect and not a lottery artefact: HP paid is lower in all
+  four fights**, by 40-56%, and duration is longer in three of four. The
+  mechanism is the obvious one — an enemy that must walk *around* a tor spends
+  more of the fight closing and less of it hitting you, and the player can now
+  break line by putting a rock between himself and the pack. So boulder
+  collision **trades danger for duration**, and it moves both bars across their
+  thresholds in opposite directions: neither build passes both.
+
+  Two things worth the coordinator's attention. First, **the duration bar was
+  already failing on this tree before this lane** — 16.4 s with the push off,
+  against the 23.8 s recorded when the bar was declared met — so the drift is
+  not all mine. Second, the danger bar is now a **balance decision, not a
+  defect**: the fix is aggro range and enemy pursuit speed (`src/combat/`,
+  `WildTerritories`), which is the playtest's *second* complaint and already
+  filed. **Escalated rather than tuned by this lane**, because tuning combat to
+  compensate for a collision change is how a fix gets blamed for a balance pass.
+- **`fightcam --set rounds=4`: 4772 combat frames, `Noctis himself in a rock`
+  0.00%, lens inside a solid 0.00%, clearance mean 3.07 m / min 1.17 m** — and
+  `collision world ready yes (56883 wall tris, **102 rock proxies**)`, the field
+  that read 0 for the entire life of the stub. It is **not** proof: three of the
+  four dens reported `proxies<=0`, i.e. no boulder within an arm at all, which is
+  the same null result lane 12a got at `91e2a4f` and the same den lottery its
+  handoff warns about. `rockwalk`'s pairing is the evidence; this says the open
+  field is unregressed and nothing more.
+
 ## What the frames showed — looked at, not inferred
 
 `tmp/shots/rockcol/b/`, each pair the same frame index of the same approach,
@@ -142,13 +196,48 @@ one `CC_ALLOW_POLL=1` background loop, because none of the sanctioned waits
 
 ## Next step
 
-1. `fightcam` for the end-to-end number, with its own caveat stated — its
-   absolutes are not quotable, `rockwalk`'s pairing is.
+1. **The danger bar is a decision, not a task.** Boulder collision costs 23.1% ->
+   10.5% median HP paid and buys 16.4 s -> 21.6 s median duration. Somebody has
+   to say which bar wins; the lever is aggro range and pursuit speed in
+   `src/combat/` and `WildTerritories`, not anything in `RockField`.
 2. Rock **tops as ground support** (`groundAt`), so a character can stand on a
    boulder rather than only beside one. Deliberately out of this commit: it is
    the change that would let the Regalia climb boulders, and it wants
    `roadcheck` as well as `gameplay`.
 3. Player-mesh fade at a short arm — see above.
+
+## Residue, ready to paste into `project/TASKS.md`
+
+- **Rock tops as ground support.** `RockField` pushes characters out of boulders
+  but does not let them stand on one: `CollisionWorld.groundAt` is untouched, so
+  a boulder is a wall and never a floor. Doing it is ~20 lines (the vertical
+  line through an ellipsoid is a quadratic), and the reason it is not done is
+  `VehicleBody`, which reaches collision only through `groundAt` with
+  `stepUp = 1.2` — offering rock tops there starts the Regalia climbing
+  boulders. Wants `roadcheck` as well as `gameplay`.
+- **The chocobo now collides with boulders** (`ChocoboBody` is a
+  `CharacterController`). The whistle tutorial promises "she climbs what you
+  cannot". Run `probes/chocoborace.mts` / `chocobolegal.mts`; if it bites, the
+  fix is a per-controller opt-out, not a global one.
+- **Player-mesh fade at a short camera arm.** Measured negative here: it needs
+  per-character material clones or a shader-side dither, and the materials are
+  authored in `Cast.ts` / `rig/Materials.ts`. `tmp/shots/rockcol/b/rw-s1-on.jpg`
+  is the frame that wants it.
+- **`CameraOccluders` and `RockField` derive the same ellipsoid twice.** Both
+  read `placedScale` and both pack an inverse rotation; they differ only in min
+  size, in windowing and in what they do with a hit. A shared
+  `rockProxy(instance)` builder would remove the duplicate arithmetic. Not done
+  tonight because `CameraOccluders` belongs to lane 12a.
+- **For the human, or `HUMAN_REVIEW.md`:** boulder collision moves both
+  `fightshape` bars in opposite directions across their thresholds — duration
+  16.4 s -> 21.6 s (FAIL -> PASS), HP paid 23.1% -> 10.5% (PASS -> FAIL), measured
+  paired on one build. Fights got longer and safer because enemies now walk
+  round tors instead of through them. Which bar matters more is a design call.
+- **For the human, not a lane:** the daemon reports `src/public/baked/texc.bin.gz`
+  and `geo.bin.gz` both missing, so every boot in the repo is paying ~3.7 s of
+  cache rebuild and every `gameplay` run shows it as a frame-0 hitch. Someone ran
+  `pnpm run build` rather than `build:full`. Fix with `pnpm run build:full` and
+  `node src/tools/texbake.mts --geo`.
 
 ## Files
 
