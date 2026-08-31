@@ -739,3 +739,49 @@ west into the setting sun, south-west along the shallows, and out to sea.
    not a framing — see the refusal table above and the residue list. The moment
    `PoiKits._landmark`'s generic tail gets a material, five rows can be landed
    from framings that are already measured (`tmp/shots/l21-arc/_resolved.json`).
+
+## The shin fix — VERIFIED IN THE CORPUS, and three new defects it uncovered
+
+`shoot.mts lest_market_day lest_street_night lest_plaza_walk --out
+tmp/shots/l21-city2`, all three read.
+
+**The fix is real and it is not partial.** In `lest_market_day` eleven figures,
+and every one whose lower half is not occluded by a stall or a crate now
+terminates in **modelled shoes with a contact shadow on the flags** — the near
+white-shirt figure has a hard-edged cast shadow running off his soles. Four
+figures in `lest_street_night` and four in `lest_plaza_walk` read the same. The
+paving reads as laid flags with a receding joint grid rather than a plane. **The
+predecessor's worst standing defect is closed.**
+
+Three things the fix uncovered, none of them this lane's:
+
+1. **The broken idle is still there and is now the first thing you see** — both
+   arms raised, palms out, legs straight. In all three frames, and apparently the
+   same black-tank character asset each time, so it is likely one animation state
+   rather than three. Near-lens and centre-right in `lest_plaza_walk`;
+   near-lens in `lest_street_night`.
+2. **The crowd is bunched at the frame edges near the lens with an empty middle**
+   — the coordinator's warning is confirmed. In `lest_market_day` about 40% of
+   the image is square with two lone walkers in it while the bodies sit in two
+   clumps at the left and right edges. It reads as extras parked at the wings.
+3. **Near-lens NPCs render as unlit black silhouettes** in `lest_street_night` —
+   no rim light, no material, no read at all — and one of them is in the broken
+   idle. Also: `lest_plaza_walk`'s left third is a **flat untextured red awning
+   slab**, the largest and brightest object in the plate, and its two nearest
+   bodies are cropped at the shin **by the frame edge**, which a blind judge
+   cannot distinguish from the bug that was just fixed.
+
+**Verdicts on the three judged rows as they stand:** `lest_market_day`
+shippable once the idle and a stray unlit white cylinder prop are gone;
+`lest_street_night` **not shippable** (two black cutouts, one scarecrow-posed,
+and a starfield that reads as falling snow); `lest_plaza_walk` **not shippable**
+(the red slab, and the cropped near bodies). All three are framing-independent —
+re-framing fixes none of them.
+
+## Chocobos — nothing to do
+
+The coordinator's instruction not to add lane 22's four framings to the corpus:
+**none was ever added.** `src/game/Shots.ts` has no chocobo entry and this lane
+added none. Agreed with the reasoning — a corpus row is permanent, and a rider
+with no legs, nothing in the stirrup and a sword through the bird's neck would
+ride into round 17 and every round after it.
