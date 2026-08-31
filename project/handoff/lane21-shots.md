@@ -372,3 +372,27 @@ not a duplicate is ~0.42-0.43, against 0.09 today — a 4.7x improvement, and
 `daemon --health`: sweep depth 29 (21 prewarm, 5 drawcheck), fix depth 5. Three
 of this lane's jobs are in it. Every harness line is being checked against
 `git rev-parse HEAD` per LANDMINES.
+
+## HARNESS STALL, 2026-08-31 02:05 — FOR THE COORDINATOR
+
+`daemon.mts --health`, read three times over eleven minutes:
+
+```
+workers  {busy: 0, total: 4}
+exclusive: perf     leases: [{holder: 'perf', secLeft: 409, cpu: 0}]
+idleSec: 501
+queue: fix depth 9 · sweep depth 29 (21 prewarm, 5 drawcheck, 2 texbake, 1 sheet)
+totals: exclusiveWaitSec 1025, exclusiveHeldSec 1321, queuedSec 54023 vs ranSec 11099
+```
+
+**Four idle workers and thirty-eight queued jobs.** `node src/tools/perf.mts
+--build cf163cb` (pid 14993, alive 10:59) holds the exclusive lease with **zero
+CPU for 501 s**. An exclusive lease blocks every lane, so nothing on the box is
+moving; `queuedSec` is now **83% of all harness time tonight**, up from the 60%
+lane 18 recorded. This lane's three jobs have been queued ~30 min without
+starting.
+
+Not killed: it is another lane's job and its TTL frees it in ~7 min. But a perf
+run that goes to zero CPU while holding the exclusive lease is a harness fault
+worth a `LANDMINES` row if it recurs — it is indistinguishable, from every other
+lane's side, from "the daemon is fine, your job is just slow".
