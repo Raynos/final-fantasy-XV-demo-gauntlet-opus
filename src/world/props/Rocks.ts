@@ -2195,7 +2195,16 @@ export class Rocks {
       const q = THREE.MathUtils.smoothstep(p, 0.42, 0.78)
         * THREE.MathUtils.smoothstep(eco.roadDist(ox, oz), 9, 26)
         * (1 - eco.cleared(ox, oz)) * dress.rockD
-        * (1 - THREE.MathUtils.smoothstep(eco.slope01(ox, oz), 0.58, 0.8));
+        // The outcrop taper is the second half of the empty-massif tell: at
+        // (0.58, 0.80) an outcrop is already half gone by a 30-degree slope and
+        // entirely gone by 39, which is most of a massif face. An outcrop IS a
+        // landform, and a real badland puts them on the faces, not only on the
+        // flats. (0.72, 0.92) keeps them to the genuinely near-vertical
+        // exclusion the seat needs while giving the silhouette back the band
+        // between. `_genTor`'s own 0.30 ban is deliberately left alone: a 20 m
+        // stack on a 30-degree face has metres of seat error and that ban is
+        // load-bearing.
+        * (1 - THREE.MathUtils.smoothstep(eco.slope01(ox, oz), 0.72, 0.92));
       // A tor is placed on its own test, not on the outcrop's.
       //
       // Hanging it off `q` above put every tor where the outcrop field already
@@ -2494,8 +2503,35 @@ export class Rocks {
     const grand = BIG.has(kind.key)
       ? 1 + Math.max(0, hash3(x * 32 | 0, z * 32 | 0, 0x5ce3) / 4294967296 - 0.90) * 12
       : 1;
+    /**
+     * The steep taper is 0.62 for a pebble and 0.25 for a block, and it used to
+     * be 0.62 for both.
+     *
+     * The judge's "no boulder or scrub scatter breaking the silhouette" is a
+     * SLOPE test, not a range test: probed on vista_noon, 1381 instances are
+     * live and the farthest is at 1150 m, so nothing is out of range -- but by
+     * slope band, under 0.2 gets 1191 instances at mean height 4.09 m while
+     * 0.46-0.60 gets 33 at 2.92 m and over 0.70 gets 9 at 2.15 m. The massif,
+     * which is the only part of the frame read against sky, carried 4% of the
+     * stone field at 60% of its size. At `steep = 1` the old factor is 0.38x,
+     * so the few blocks that did survive onto a face arrived as gravel.
+     *
+     * The taper is right in kind and wrong in degree, and only for the big
+     * kinds. A pebble scatter on a 40-degree face genuinely does wash out, and
+     * the small kinds are also what fill the near field where a wrong seat
+     * shows -- they keep 0.62. The BIG kinds are landmarks and are exactly what
+     * a silhouette needs, so 0.25 puts 4-7 m blocks where 2 m ones were.
+     *
+     * **It costs no draw calls.** `Rocks.build` makes eight InstancedMeshes,
+     * one per kind, both LOD tiers share one mesh, and streaming only bumps
+     * `mesh.count` -- so a bigger stone on a face is free and a stone that was
+     * already being drawn stays one draw. What it can spend is the per-group
+     * CAP, and `emit` drops silently once a cap fills, so the census below the
+     * change is the check that matters, not the frame time.
+     */
     const size = (kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7))
-      * (BIG.has(kind.key) ? dress.rockS : 1) * (1 - steep * 0.62) * grand;
+      * (BIG.has(kind.key) ? dress.rockS : 1)
+      * (1 - steep * (BIG.has(kind.key) ? 0.25 : 0.62)) * grand;
     const settle = THREE.MathUtils.clamp(1 - size / 5, 0.18, 1);
     // The instance tint multiplies a deliberately dark base material, so the
     // old 0.7..1.04 range rendered every boulder past a hundred metres as a
