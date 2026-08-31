@@ -27,35 +27,50 @@ const NO_GROUND: Ground = {
 };
 
 /**
- * Astride: thighs up and splayed round the barrel, shins swept back into the
- * stirrups, a forward lean off the hips, and both hands closed on the reins.
+ * Astride: knees forward over the shoulder of the barrel, shins outside the
+ * flank and the boots in the irons, a real forward lean off the hips, and both
+ * hands closed on the reins over the withers.
+ *
+ * **The old table put the whole leg inside the bird.** Measured, not guessed
+ * (`probes/seatfit.mts` CPU-skins the live bird and reduces it to a half-width
+ * per slab): the thigh was 0.362 m inside the barrel, the shin 0.056 m and the
+ * boot 0.089 m — so the rider's leg simply did not exist in the frame, which is
+ * the filed "a black blob over the fore-flank ending at mid-barrel, nothing in
+ * the stirrup". The thigh's abduction has gone from 0.30 to 0.68 rad and the
+ * shin is broken back and out, which puts the knee at 0.42 m of lateral, the
+ * ankle at 0.43 and the toe at 0.49 against a barrel that is 0.37–0.45 m wide.
+ * The boot lands within 0.02 m of the stirrup iron `ChocoboRig.ts` hangs at
+ * (±0.435, 1.10, 0.05), so the leg ends where a leg is supposed to end.
+ *
+ * **And the arms were at full extension**, which is what "three crucifixes on
+ * birds" was: the hands were 0.86 m apart and 0.43 m above the hips, and no
+ * amount of shoulder roll fixes an arm whose elbow is straight. The upper arms
+ * now hang (they read as +0.51 of X only because the torso beneath them is
+ * pitched 0.33 rad forward) and the elbows carry 73 degrees of flex, which
+ * brings the hands to 0.32 m apart just above the pommel — where the reins now
+ * run to meet them (`ChocoboRig.ts`).
  *
  * Everything above the collarbones is deliberately absent so the animator keeps
  * the head — a rider whose skull is nailed to a pose table stops looking at the
  * world, and looking at the world is most of what makes a passenger read as
  * alive (`Occupants` learned this the same way).
  */
-const POSE_RIDE: Record<string, number[]> = {
-  hips: [-0.12, 0, 0],
-  spine01: [-0.08, 0, 0], spine02: [-0.07, 0, 0], spine03: [-0.04, 0, 0],
-  thighL: [-1.08, 0.34, 0.30], thighR: [-1.08, -0.34, -0.30],
-  shinL: [1.32, 0, 0], shinR: [1.32, 0, 0],
-  footL: [0.22, 0, 0.08], footR: [0.22, 0, -0.08],
-  toeL: [0, 0, 0], toeR: [0, 0, 0],
+export const POSE_RIDE: Record<string, number[]> = {
+  hips: [-0.24, 0, 0],
+  spine01: [-0.14, 0, 0], spine02: [-0.12, 0, 0], spine03: [-0.07, 0, 0],
+  thighL: [-0.81, 0.22, 0.68], thighR: [-0.81, -0.22, -0.68],
+  shinL: [1.35, -0.08, 0.04], shinR: [1.35, 0.08, -0.04],
+  footL: [-0.26, -0.28, -0.23], footR: [-0.26, 0.28, 0.23],
+  toeL: [0.10, 0, 0], toeR: [0.10, 0, 0],
   clavicleL: [-0.12, 0, -0.06], clavicleR: [-0.12, 0, 0.06],
-  // **Elbows in.** These started life as `POSE_DRIVER`'s numbers (`z` +/-0.60,
-  // `y` +/-0.30) with the abduction trimmed a little, and that was the wrong
-  // parent: a wheel is held at arm's width and a rein is held at hip's width.
-  // At +/-0.40 of roll the arms photographed flung out from the body on the
-  // ridden rear-three-quarter — read as the *left* arm, because that was the
-  // one the framing showed, but it was both. Halving the roll and the yaw
-  // closes them onto the ribs where a rider's arms actually are; the forearm
-  // and the wrist keep their reach forward so the hands still meet over the
-  // bird's neck.
-  upperArmL: [-0.80, 0.12, 0.19], lowerArmL: [-0.72, 0.16, 0.08], handL: [0.14, 0, 0.42],
-  upperArmR: [-0.80, -0.12, -0.19], lowerArmR: [-0.72, -0.16, -0.08], handR: [0.14, 0, -0.42],
-  fingersL: [-1.00, 0, 0], fingersR: [-1.00, 0, 0],
-  thumbL: [-0.45, 0, 0], thumbR: [-0.45, 0, 0],
+  upperArmL: [0.51, -0.01, -0.09], lowerArmL: [-1.28, -0.03, -0.07], handL: [0.10, 0, 0.24],
+  upperArmR: [0.51, 0.01, 0.09], lowerArmR: [-1.28, 0.03, 0.07], handR: [0.10, 0, -0.24],
+  // Both fists closed, and closed by the same amount. Nothing held the reins
+  // before, and the two hand meshes differ (a closed glove against a bare open
+  // hand), so an open finger chain rendered the asymmetry at full strength.
+  fingersL: [-1.15, 0, 0], fingersR: [-1.15, 0, 0],
+  fingerTipL: [-1.32, 0, 0], fingerTipR: [-1.32, 0, 0],
+  thumbL: [-0.60, 0.45, 0], thumbR: [-0.60, -0.45, 0],
 };
 
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');

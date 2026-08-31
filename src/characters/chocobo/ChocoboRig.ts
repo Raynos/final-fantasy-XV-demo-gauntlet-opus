@@ -775,10 +775,21 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   mat(noseband, LEATHER, 0);
   rig.attach(noseband, 'beak');
 
+  /*
+   * **The reins end in the rider's fists, not on the pommel.**
+   *
+   * They used to run bit -> neck -> `(0.055, 1.840, 0.290)`, which is the
+   * pommel: a rein tied to the saddle in front of a rider whose hands were
+   * somewhere else entirely. `Saddle.POSE_RIDE` now brings both hands to
+   * `(+/-0.162, 1.952, 0.177)` with the fists closed, so the last two control
+   * points come back over the withers to meet them. This is the other half of
+   * the filed "nothing holds the reins": the pose reaches for them and the
+   * leather now reaches back.
+   */
   for (const s of [-1, 1]) {
     const rein = tube([
-      P(0.095 * s, 2.100, 0.770), P(0.140 * s, 1.980, 0.660), P(0.150 * s, 1.830, 0.520),
-      P(0.130 * s, 1.860, 0.370), P(0.055 * s, 1.840, 0.290),
+      P(0.095 * s, 2.100, 0.770), P(0.140 * s, 1.980, 0.660), P(0.150 * s, 1.870, 0.500),
+      P(0.158 * s, 1.880, 0.350), P(0.162 * s, 1.945, 0.180),
     ], [[0.011, 0.007], [0.011, 0.007], [0.011, 0.007], [0.011, 0.007], [0.010, 0.006]], { radialSeg: 6 });
     tint(rein, mixc(TAN_DARK, 0x000000, 0.2).getHex(), 0.02);
     mat(rein, LEATHER, 0);

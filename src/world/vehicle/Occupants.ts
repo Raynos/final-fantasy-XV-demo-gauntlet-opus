@@ -35,14 +35,14 @@ const NO_GROUND = {
   normalAt: (_x: number, _z: number, out?: THREE.Vector3) => (out || new THREE.Vector3()).set(0, 1, 0),
 };
 
-const SCALE = 1.14;              // the Regalia body scale, from Regalia.ts
-const WHEEL_R = 0.4765;
+export const SCALE = 1.14;              // the Regalia body scale, from Regalia.ts
+export const WHEEL_R = 0.4765;
 
 /**
  * Seat anchors, authored in the car mesh's own frame (+X forward, +Y up,
  * +Z toward the car's left) and converted to the chassis frame below.
  */
-const SEATS = [
+export const SEATS = [
   { id: 'driver', mx: -0.40, mz: 0.44, my: 0.925 },
   { id: 'front', mx: -0.40, mz: -0.44, my: 0.925 },
   { id: 'rearL', mx: -1.24, mz: 0.44, my: 0.925 },
@@ -62,31 +62,59 @@ const BASE_SIT = {
   toeL: [0, 0, 0], toeR: [0, 0, 0],
 };
 
-/** Hands on the wheel: elbows out, forearms up, wrists rolled over the rim. */
+/**
+ * Hands on the wheel — and the wheel is where `Regalia.ts` actually put it.
+ *
+ * The rim is a 0.194 m circle centred 0.43 m in front of the H-point and 0.28 m
+ * above it, so the hands belong at ten and two: **0.33 m apart, inboard of the
+ * shoulders**, with the upper arms hanging and the elbows doing the reaching.
+ * The old numbers abducted both upper arms 34 degrees and pushed the forearms
+ * forward, which put the hands 0.63 m apart astride a 0.39 m wheel and the
+ * right fingertip **0.30 m outboard of the door card** — the bare arm the
+ * second playtest saw lying out over the bodywork all the way down Route 1.
+ * Solved against the rim by `_probe/w3afk.mts`; both hands are within 3 mm of
+ * it and nothing on the rig leaves the cabin.
+ */
 const POSE_DRIVER = {
   ...BASE_SIT,
   spine01: [-0.10, 0, 0], spine02: [-0.10, 0, 0], spine03: [-0.06, 0, 0],
   clavicleL: [-0.10, 0, -0.06], clavicleR: [-0.10, 0, 0.06],
-  upperArmL: [-1.02, 0.30, 0.60], lowerArmL: [-0.72, 0.22, 0.12], handL: [0.10, 0, 0.55],
-  upperArmR: [-1.02, -0.30, -0.60], lowerArmR: [-0.72, -0.22, -0.12], handR: [0.10, 0, -0.55],
-  fingersL: [-0.85, 0, 0], fingersR: [-0.85, 0, 0],
-  thumbL: [-0.4, 0, 0], thumbR: [-0.4, 0, 0],
+  upperArmL: [-0.45, -0.04, -0.07], lowerArmL: [-1.21, -0.03, -0.05], handL: [0.12, 0, 0.30],
+  upperArmR: [-0.45, 0.04, 0.07], lowerArmR: [-1.21, 0.03, 0.05], handR: [0.12, 0, -0.30],
+  fingersL: [-1.15, 0, 0], fingersR: [-1.15, 0, 0],
+  fingerTipL: [-1.30, 0, 0], fingerTipR: [-1.30, 0, 0],
+  thumbL: [-0.55, 0.42, 0], thumbR: [-0.55, -0.42, 0],
 };
 
-/** Riding shotgun: one elbow on the sill, the other hand on a knee. */
+/**
+ * Riding shotgun: outboard hand on the door cap, inboard hand on the knee.
+ *
+ * It used to say "one elbow on the sill", and an elbow on this sill is not
+ * possible: the door top is 1.106 m off the road and a seated shoulder is
+ * 1.49 m, so the upper arm would have to be 0.39 m long to reach it and it is
+ * 0.305 m. Reaching anyway is what put the whole forearm out over the
+ * bodywork. The **hand** can reach the cap, which is the same read and is
+ * inside the car — 0.88 m of lateral against a 0.952 m door card.
+ */
 const POSE_FRONT = {
   ...BASE_SIT,
   spine03: [-0.02, -0.10, 0],
   clavicleL: [-0.04, 0, -0.02], clavicleR: [-0.12, 0, 0.10],
-  upperArmL: [-0.42, 0.16, 0.34], lowerArmL: [-0.95, 0.30, 0.10], handL: [0.2, 0, 0.3],
-  upperArmR: [-0.30, -0.34, -0.72], lowerArmR: [-0.55, -0.20, -0.10], handR: [0.1, 0, -0.2],
-  fingersL: [-0.5, 0, 0], fingersR: [-0.35, 0, 0],
+  upperArmL: [0.63, 0.02, 0.17], lowerArmL: [-1.60, 0.10, 0.11], handL: [0.15, 0, 0.20],
+  upperArmR: [-0.45, 0.02, 0.09], lowerArmR: [0.02, 0, 0.03], handR: [0.10, 0, -0.12],
+  fingersL: [-0.55, 0, 0], fingersR: [-0.40, 0, 0],
+  fingerTipL: [-0.60, 0, 0], fingerTipR: [-0.45, 0, 0],
 };
 
 /**
- * Back seat, one arm along the bench top and the other on a knee — Gladio.
- * The upper arms go *back and slightly out*, and the elbows do the work; an
- * arm rotated out on Z alone gives a scarecrow, not a man taking up room.
+ * Back seat, outboard arm along the bench top and the other on a knee — Gladio.
+ *
+ * The old version put *both* upper arms back and out at 26 degrees of roll,
+ * which is symmetric and therefore not a sprawl: it is a man being arrested.
+ * Worse, the outboard fingertip finished 0.22 m past the door card. Now one
+ * arm goes back over the seat squab — the hand lands 0.27 m behind and 0.32 m
+ * outboard of the hips, on the rear deck, and 0.82 m of lateral leaves 0.13 m
+ * of door — and the other simply rests on the knee. Asymmetry is the sprawl.
  */
 const POSE_REAR_SPRAWL = {
   ...BASE_SIT,
@@ -94,33 +122,44 @@ const POSE_REAR_SPRAWL = {
   spine01: [0.05, 0, 0], spine02: [0.05, 0, 0], spine03: [0.03, -0.06, 0],
   thighL: [-1.30, 0.16, 0.22], thighR: [-1.30, -0.16, -0.22],
   clavicleL: [-0.12, 0, -0.08], clavicleR: [-0.12, 0, 0.08],
-  upperArmL: [0.55, 0.20, 0.46], lowerArmL: [-1.55, 0.75, 0.25],
-  upperArmR: [0.55, -0.20, -0.46], lowerArmR: [-1.55, -0.75, -0.25],
-  handL: [0, 0, 0.15], handR: [0, 0, -0.15],
-  fingersL: [-0.35, 0, 0], fingersR: [-0.35, 0, 0],
+  upperArmL: [-0.32, -0.01, -0.02], lowerArmL: [-0.55, 0, -0.01],
+  upperArmR: [1.43, 0.07, -0.15], lowerArmR: [-1.18, -0.05, -0.10],
+  handL: [0.10, 0, 0.12], handR: [0, 0, -0.18],
+  fingersL: [-0.45, 0, 0], fingersR: [-0.30, 0, 0],
+  fingerTipL: [-0.50, 0, 0], fingerTipR: [-0.35, 0, 0],
 };
 
-/** Back seat, camera to the eye — Prompto, permanently mid-shot. */
+/**
+ * Back seat, camera to the eye — Prompto, permanently mid-shot.
+ *
+ * The elbows come *down* rather than out. A photographer's elbows do lift, but
+ * this car's cabin is 0.45 m from a rear passenger's shoulder to the door card
+ * and an arm abducted 17 degrees already spends most of it — the old pose had
+ * a fingertip 0.11 m outside the car. Hands still meet at the face.
+ */
 const POSE_REAR_CAMERA = {
   ...BASE_SIT,
   spine02: [-0.12, 0.05, 0], spine03: [-0.12, 0.08, 0],
   clavicleL: [-0.20, 0, -0.12], clavicleR: [-0.20, 0, 0.12],
-  upperArmL: [-1.05, 0.20, 0.30], lowerArmL: [-1.85, 0.55, 0.10], handL: [0.25, 0, 0.30],
-  upperArmR: [-1.05, -0.20, -0.30], lowerArmR: [-1.85, -0.55, -0.10], handR: [0.25, 0, -0.30],
-  fingersL: [-1.05, 0, 0], fingersR: [-1.05, 0, 0],
+  upperArmL: [-0.18, -0.10, -0.10], lowerArmL: [-2.19, -0.08, -0.22], handL: [0.20, 0, 0.22],
+  upperArmR: [-0.24, 0.08, 0.08], lowerArmR: [-2.25, 0.07, 0.19], handR: [0.20, 0, -0.22],
+  fingersL: [-1.15, 0, 0], fingersR: [-1.15, 0, 0],
+  fingerTipL: [-1.30, 0, 0], fingerTipR: [-1.30, 0, 0],
+  thumbL: [-0.55, 0.42, 0], thumbR: [-0.55, -0.42, 0],
 };
 
-/** Back seat, arms folded, slouched — Noctis riding along. */
+/** Back seat, arms folded across the chest, slouched — Noctis riding along. */
 const POSE_REAR_SLOUCH = {
   ...BASE_SIT,
   hips: [0.14, 0, 0],
   spine01: [0.06, 0, 0], spine02: [0.06, 0, 0], spine03: [0.02, 0, 0],
-  upperArmL: [-0.55, 0.30, 0.60], lowerArmL: [-1.55, 0.55, 0.25], handL: [0.2, 0, 0.3],
-  upperArmR: [-0.55, -0.30, -0.60], lowerArmR: [-1.55, -0.55, -0.25], handR: [0.2, 0, -0.3],
-  fingersL: [-0.6, 0, 0], fingersR: [-0.6, 0, 0],
+  upperArmL: [-0.02, -0.30, -0.40], lowerArmL: [-1.84, -0.27, -0.35], handL: [0.15, 0, 0.25],
+  upperArmR: [-0.06, 0.28, 0.43], lowerArmR: [-1.63, 0.24, 0.35], handR: [0.15, 0, -0.25],
+  fingersL: [-0.70, 0, 0], fingersR: [-0.70, 0, 0],
+  fingerTipL: [-0.80, 0, 0], fingerTipR: [-0.80, 0, 0],
 };
 
-const POSES = {
+export const POSES = {
   driver: POSE_DRIVER,
   front: POSE_FRONT,
   rearSprawl: POSE_REAR_SPRAWL,
