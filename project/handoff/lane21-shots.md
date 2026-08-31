@@ -672,3 +672,45 @@ Everything here was seen in a frame this session; the frame is named.
     is a `framecam` preview fault, not a corpus one.
 12. **A placeholder pale-grey marker post stands inside the Threshold Stones
     site.** `tmp/shots/l21-lm/threshold_stones.jpg`, bottom centre-right.
+
+## nanscan — PASS
+
+`node src/tools/probe.mts src/tools/probes/nanscan.mts` (the plan's command line
+for it is wrong repo-wide; this is the right one):
+
+```
+[nanscan] 0 of 166 shots carry NaN
+{ "shots": 166, "hits": [] }
+```
+
+166, not 163: this lane's three new shots plus other lanes'. **Verified.**
+
+Note for a successor: the probe's own `[page:log]` line arrives *after* several
+thousand `THREE.WebGLTextures: Trying to use 16 texture units` warnings, and the
+`[harness] ... ran 17.6 s` line prints when the **lease** is taken, not when the
+probe finishes — so a `tail` a few seconds after that line shows an empty result
+and looks like a silent failure. It is not. Wait for the process, not the line.
+
+## Galdin: the coordinator is right that the square cannot see the sea, and the shoreline is nearer than reported
+
+`tmp/l21/pier.mts` marches `Terrain.heightAt` out from the plaza pin on 24
+bearings and reports the first sample below −4 (sea level is −6.5):
+
+```
+sea reached on 12/24 bearings; nearest k0 d220m at(2550,2380)
+  k1 d220m at(2543,2437)  k2 d220m at(2521,2490)  k3 d220m at(2486,2536)
+```
+
+**220 m due east, not 712 m at 46°.** Both can be true — lane 19's number is
+presumably to a *water body object* and this one is to terrain below sea level —
+but 220 m is the distance that decides where a camera stands, so it is the one
+recorded here. The bearing agrees: east through south-east, 12 of 24.
+
+`galdin_angelgard` was **already** off the plaza before this session — its
+committed pos is `(2452, 3.4, 2536)`, on that shoreline, with Angelgard at
+`(2960, 3060)` — and its frame has water, the island and the jetty in it. So of
+the coordinator's two shots only **`galdin_pier_sunset`** was on the deck, at
+`(2324, 15.9, 2371)`, which is the plaza centre.
+
+Nine candidates from three shore stands (`tmp/shots/l21-pier/`), three aims each:
+west into the setting sun, south-west along the shallows, and out to sea.
