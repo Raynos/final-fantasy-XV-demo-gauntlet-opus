@@ -376,8 +376,11 @@ export const CITY: RemoteNpc[] = [
   // stood on the `gald_ferrybell` anchor, and a `Talk` is priority 3 against a
   // `Read` at 0 — so the bell was the one unreachable interactable in the whole
   // `integration` sweep (1/65, `gald_ferrybell->npc_navyth`). Two verbs on one
-  // spot is one verb.
-  { castKey: 'navyth', at: 'galdin_quay', anchor: 'edge0', off: [-1.0, 5.0], posture: 'folded', talkRadius: 3.2 },
+  // spot is one verb. The `-1.0` that went with it put him 11.7 m out, on the
+  // *batter* of the plaza plinth rather than on the deck — a 0.9 m slope no
+  // pad model gets right and nobody should be standing on. `+0.6` brings him
+  // to r 10.2, still five metres of rail from the bell.
+  { castKey: 'navyth', at: 'galdin_quay', anchor: 'edge0', off: [0.6, 4.6], posture: 'folded', talkRadius: 3.2 },
   { castKey: 'traveller', at: 'galdin_quay', key: 'gald_trav', seed: 41, anchor: 'edge1', off: [2.2, -1.4], posture: 'pockets', talkRadius: 2.8 },
 
   { castKey: 'trucker', at: 'galdin_quay', key: 'gald_a', seed: 42, anchor: 'stall1', off: [1.3, 1.8], posture: 'folded' },
@@ -591,7 +594,15 @@ export class Npcs {
     const pos = route ? route[0].clone() : at(off[0], off[1]);
     pos.x += r.dx || 0;
     pos.z += r.dz || 0;
+    // Out of the furniture first, then clear of the neighbours: a spot freed
+    // of a bench is no use if it puts two people inside each other, and
+    // `_separate` moves by whole metres.
+    this._clearSpot(game, pos);
     this._separate(pos);
+    this._clearSpot(game, pos);
+    // A walker's nodes are placements too, and a route that runs through a
+    // bench is a person wading through it at every lap.
+    if (route) { for (const p of route) this._clearSpot(game, p); route[0].copy(pos); }
     // An anchored body faces the middle of the square unless it says otherwise
     // — a market vendor with their back to the market is the single thing that
     // most makes a crowd read as scenery.
@@ -605,6 +616,56 @@ export class Npcs {
     if (!npc) return null;
     this._registerTalkFor(game, npc);
     return npc;
+  }
+
+  /**
+   * Slide a placement out of the furniture, using the game's own collision.
+   *
+   * The anchors are open pavement — `probes/cityanchors.mts` proved that, with
+   * eight compass approaches at 1.6 m — but an `off` is authored two metres
+   * from one and `_separate` may push it two more, and Lestallum's street grid
+   * leans into its own square. Measured with `probes/cityfeet.mts` at the
+   * fixed pads: six of eighteen Lestallum bodies stood with a solid surface
+   * **between their boots and their hips** — a bench top 0.81 m up, a building
+   * plinth 0.50 m up — which in a frame is a person sunk to the knee in the
+   * pavement. It is what lane 18 read as a sink and what lane 21 photographed
+   * twenty-one times, and it is not a constant anywhere: it is where the
+   * person is standing.
+   *
+   * `CollisionWorld.groundDisc` is the right instrument and already exists:
+   * it is what the player stands on, it knows every prop the streamer has
+   * built, and asking it costs five grid lookups **once, at placement**. This
+   * file deliberately does not re-model `_town`'s benches to find them.
+   *
+   * Sixteen bearings at three radii, nearest ring first, and the original spot
+   * wins if nothing is better — a body that cannot be freed is left where it
+   * was authored rather than teleported across the square.
+   *
+   * @param game the game
+   * @param pos the intended spot, moved in place
+   * @returns whether the spot is now clear
+   */
+  _clearSpot(game: Game, pos: THREE.Vector3) {
+    const col = game.get('Collision');
+    // No collision yet is not "the spot is fine": it is "nobody can say". The
+    // row stays where it was authored, which is the behaviour before this.
+    if (!col || !col.ready || !col.groundDisc) return true;
+    const occupied = (x: number, z: number) => {
+      const y = this._groundAt(x, z);
+      // 1.1 m of reach up: a hip, not a head, so an awning overhead is not a
+      // reason to move and a counter at the waist is.
+      const g = col.groundDisc(x, z, y, 0.34, 1.1, 2.0);
+      return !!g.onProp && g.y > y + 0.12;
+    };
+    if (!occupied(pos.x, pos.z)) return true;
+    for (const rad of [0.8, 1.6, 2.4]) {
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        const x = pos.x + Math.cos(a) * rad, z = pos.z + Math.sin(a) * rad;
+        if (!occupied(x, z)) { pos.x = x; pos.z = z; return true; }
+      }
+    }
+    return false;
   }
 
   /**
