@@ -999,3 +999,28 @@ again.
   ragged black cloud blobs with vertical comb artefacts over fat white star
   sprites, the fissures read as flat cyan patches painted on facets rather than
   glowing cracks, and one unattenuated white light panel sits at x 0.77.
+
+## nanscan over the final corpus — PASS
+
+```
+[nanscan] 0 of 166 shots carry NaN
+{ "shots": 166, "hits": [] }
+```
+
+`node src/tools/probe.mts src/tools/probes/nanscan.mts` at `1bd40c28bf53`. The
+probe takes well over two minutes and its `[page:log]` line arrives after several
+thousand `THREE.WebGLTextures: Trying to use 16 texture units` warnings — wait
+for the process, not for the harness's `ran` line, which prints when the lease is
+taken.
+
+## Where this lane stands
+
+**Both of the coordinator's two tasks are done and verified.** The corpus is 166
+shots. The remaining nine arc subjects are still out, still on content fixes and
+not on framings — the measured framings for all of them are in
+`tmp/shots/l21-arc/_resolved.json` and `tmp/shots/l21-arc2/`, ready to land the
+moment `PoiKits._landmark`'s generic tail gets a material.
+
+**Do not re-frame any of the five judged rows without re-measuring its floor** —
+`project/noise-floors.json` now carries a real number for each, and a floor is
+only valid against the framing it was taken with.
