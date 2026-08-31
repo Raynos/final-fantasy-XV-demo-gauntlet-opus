@@ -356,6 +356,22 @@ probe.mts src/tools/probes/cityfeet.mts
 - `gald_eye` — six bodies, all with boots on the pavement, nobody clipped.
 - `lest_eye`, `gald_feet` — same read, no new defect.
 
+### Gates run at `7059133` (individually — the coordinator owns the suite)
+
+```
+cityfeet     Lestallum 18 bodies, Galdin 11, every one sink 0.000
+citydraws    lest_market_day 720 calls / 59 npc colour / 11 bodies   (budget 800 / 60 / 12)
+             galdin_festoon_night 482 / 59 / 11 — unchanged by this work
+integration  26 pass · 0 wired-but-unproven · 1 not integrated
+             the one FAIL is `tomb_tomb_rogue->nothing`, a royal tomb from
+             lane 18's `Tombs.ts`, not a city row. 1/86 unreachable; every city
+             interactable including `gald_ferrybell` is reachable.
+citysight    see the residue below
+```
+
+The tree was **not** quiet — eight lanes capturing — so these are draw counts
+and pass/fail, never timings.
+
 ### Left
 
 1. **EXINERIS steam and awning variance** — the last third of item 67, not
