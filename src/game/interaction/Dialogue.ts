@@ -308,7 +308,21 @@ export class Dialogue {
     const choosing = hasChoices && this._lineDone && this._lineIdx >= this._lines.length - 1;
     for (let i = 0; i < (this.chNodes || []).length; i++) {
       const c = this.chNodes[i];
-      const t = easeOut(clamp((this.a - 0.2 - i * 0.05) / 0.5, 0, 1)) * (choosing ? 1 : 0.24);
+      /**
+       * The preview dim, and it is most of playtest complaint #7's fifth
+       * clause -- "the meal options are dark grey text on sunlit sandstone and
+       * nearly unreadable".
+       *
+       * A choice list is shown, greyed, while the speaker is still talking, and
+       * it only comes up to full when `choosing`. 0.24 of an already
+       * translucent `--ink-3` over a rock in full sun is not "greyed", it is
+       * gone -- and a player looking at Ignis's cooking menu is looking at
+       * exactly that state, because the cook node has two lines and the choices
+       * are previewed under both of them. The row plate this file's CSS now
+       * draws makes the dim state legible on its own, and 0.45 keeps it clearly
+       * subordinate to the line being spoken without erasing it.
+       */
+      const t = easeOut(clamp((this.a - 0.2 - i * 0.05) / 0.5, 0, 1)) * (choosing ? 1 : 0.45);
       c.row.style.opacity = t.toFixed(3);
       c.row.style.transform = `translateX(${((1 - t) * -18).toFixed(2)}px)`;
       const on = choosing && i === this._sel;
