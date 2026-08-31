@@ -7,12 +7,26 @@ through the bird's neck.
 
 ## Status: all four halves landed and verified by eye. Gates green.
 
+    seatfit  CAR worst outboard 0.000 m PASS  ·  BIRD legs outside the barrel PASS
+             CAR weapons 0 seated / 4 after getting out PASS
+             BIRD weapons 0 mounted (hand group false) / 4 after dismount PASS
+    creaturecheck  207 poses across 23 species, 0 failures
+    gameplay       every segment >= 60 fps, worst streaming-traverse 111.1 fps,
+                   1 hitch, ruler validated
+    drawcheck      PASS, worst 747 (lest_street_night), headroom 53 — unchanged
+    silhouette     PASS, no new collapsed silhouettes across 42 meshes
+    combatloop     35/35 mechanics verified
+
+`pnpm run check` NOT run — the coordinator owns the suite.
+
 | sha | what |
 |---|---|
 | `4715027` | The three instruments, and every seated/mounted pose re-solved |
 | `dae18d3` | Companions' stowed weapons put away for the drive and the ride |
 | `1229655` | The stirrup iron raised to a height a leg can reach |
 | `cdcc727` | Noctis' sword — the literal "through the bird's neck" — put away |
+| `c6043de` | An assertion that everybody gets their weapons back |
+| `784436a` | The four pieces of residue, into `project/TASKS.md` |
 
 ## The headline finding — **the poses were applied; they were just wrong**
 
