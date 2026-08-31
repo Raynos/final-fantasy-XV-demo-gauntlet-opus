@@ -2551,3 +2551,34 @@ places an attribute quietly stops existing between where you write it and where
 the shader reads it. Three separate instances of this shape are recorded in this
 file tonight.
 
+## A pool `reset()` that restores some scaled fields and not others compounds forever
+
+`EnemyBase.reset()` restored `maxHp` from `baseMaxHp` and `damage` from
+`type.stats.damage`, then wrote `this.poise = this.maxPoise` **without ever
+restoring `maxPoise`** — which is assigned in exactly one place,
+`Bestiary.make()`, on the fresh path only. `Enemies.spawn`'s level scale is
+**multiplicative**, so a den-lifted animal carried its scaled poise back into the
+pool and was scaled again on every reuse.
+
+**It is a live gameplay bug, not a test artifact:** territories respawn on a
+90-360 s timer, so animals got closer to unstaggerable the longer a player
+stayed in one area — a difficulty drift nobody would report as a bug because it
+feels like the game getting harder.
+
+**The arithmetic is what identified it, and it is the transferable part.**
+Species poise is 42; one level-24 scale gives 70, level-25 gives 74. The gate
+reported **71**, which is not any single scale of 42 — only two rounded scales
+stacked. *When a measured value is not reachable by one application of the
+transform you suspect, look for two.*
+
+Two further lessons from the same diagnosis:
+- **The coordinator's hypothesis was wrong and was checked rather than taken.**
+  It blamed level scaling reaching the fixture; `spawnAhead` is
+  `enemies.spawn(key, {pos, heading})`, and `Enemies.spawn` applies `levelScale`
+  only when the requested level *differs* from the species level. Task 34 did not
+  cause the failure — it put a level on enough spawns to make an existing leak
+  fire.
+- **The fix went to the leak, not to the expectation and not to the constant.**
+  Both the gate and the scaling were right; only the reset was wrong. Widening
+  the gate would have hidden a shipping bug.
+
