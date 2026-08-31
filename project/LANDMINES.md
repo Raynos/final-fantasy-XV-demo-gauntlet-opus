@@ -2713,3 +2713,67 @@ phase. Two lessons past the first:
   every hub in a table gets the kit: the Alpine Stable sits on a `parking` POI
   that publishes no anchors at all, so it has to be settled at registration.
 
+
+## A `Float16BufferAttribute` is a `Uint16Array`, and the bake threw away the only bit that said otherwise
+
+Found 2026-08-31, and it is the largest visual defect this project has shipped.
+Eleven shots rendered as **pure white rectangles** and thirty more carried a
+white veil; two of the eleven were judged PAIRING rows blind-compared against
+shipped FFXV plates, and the critic flagged them unprompted.
+
+`AttrPack` re-packs an over-bright vertex `color` as
+`THREE.Float16BufferAttribute`. `GeoBake` recorded `arr.constructor.name` and
+`normalized` and rebuilt everything as a plain `BufferAttribute` — and those two
+fields **cannot tell the two apart**: a half attribute and a plain `Uint16` one
+are the same typed array with the same `normalized` flag, differing only in the
+`gpuType` three uploads. So the restored attribute went up as `UNSIGNED_SHORT`,
+unnormalised, and the shader read the raw half-float *bits*: 1.0 arrives as
+15 360. A whole city radiated four thousand times over and bloom smeared it
+across every pixel.
+
+Three general shapes, all of which this file already predicts and none of which
+caught it:
+
+1. **A serialiser that records a typed array's constructor is recording less
+   than the attribute's type.** Anything the GPU is *told* about a buffer that
+   is not implied by its bytes has to be written down. Check `normalized`,
+   `gpuType`, and the attribute subclass, every time.
+2. **The instrument lied in the way this file's "measurement trap" section
+   says instruments lie.** `geometry.attributes.color.array` on a half
+   attribute holds **bits, not values**, so a first read of "max 15879" was
+   equally true of the nine *healthy* meshes. The number does not separate
+   them. `isFloat16BufferAttribute` does.
+3. **A sub-rectangle of a buffer is not the buffer.** A per-pass probe that
+   read `readRenderTargetPixels(rt, 0, 0, 400, 225, …)` on a 1600x900 target
+   reported bloom's input as max 0.47 when it was 11 944, and pointed the
+   diagnosis at the composite for two turns. It reads the **bottom-left
+   corner**, and the bottom-left corner of that shot is pavement.
+
+**A `--build <sha>` before `e848801` re-bakes a version-1 `geo.bin.gz` over the
+repaired one and every lane's frames go white again**, per the "Every
+`--build <sha>` re-bakes the SHARED artifacts" section above. `GEO_BAKE_VERSION`
+is 2 so a stale cache is a clean miss rather than a silent wrong answer, but the
+re-bake still has to be re-run: `node src/tools/texbake.mts --geo`.
+
+The gate that would have caught it in a second, and did not exist:
+`src/tools/framecheck.mts`.
+
+## A white frame passes every gate in this repo — it did, three times
+
+`nanscan` 0 of 166. `drawcheck` PASS, on 7 853 662 drawn triangles.
+`perf` certifying 166/166 shots. `check` 20/20. All of that on a corpus with
+eleven pure-white frames in it. A blown frame is not a page error, does not move
+a draw count, and **against a baseline that is blown the same way it is not even
+a pixel diff** — the identical argument this file already makes for a NaN hole.
+
+The same hole has now cost this project three separate windows: the `GradePass`
+that would not compile and made every frame black; the `uNear`/`uFar` link
+failure that blanked every capture for forty minutes; and this. Each time the
+diagnosis started from a byte size somebody happened to notice.
+
+`framecheck` closes it: one boot, every shot, the **default framebuffer** for
+what a reader would see and `rtScene` for the radiance that produced it, so it
+says not only that a frame is broken but whether the scene or the post chain
+broke it. `sceneMean` read **1 185** on `lest_market_day` against **0.353** on
+the healthy `galdin_beach`, and that one ratio named the bake before anything
+was edited.
