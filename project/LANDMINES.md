@@ -3128,3 +3128,35 @@ the near-camera cull **hides** rather than fades. Worth knowing before writing
 any distance fade: fade an alpha uniform the material already declares, or
 accept a pop.
 
+## Fixing one thing can move two bars in opposite directions
+
+Boulder collision took Noctis's chest-inside-a-rock from **41.92% to 0.00%** —
+an unambiguous fix to the worst complaint in the playtest. It also moved
+`fightshape`'s two Definition-of-Done bars **across their thresholds in opposite
+directions**, measured paired on one build:
+
+    duration median   16.4 s FAIL  ->  21.6 s PASS
+    HP paid median    23.1% PASS   ->  10.5% FAIL
+
+The mechanism is not subtle once seen: **enemies that can no longer walk through
+a tor spend the fight closing, and the player can break line.** More time, less
+danger.
+
+Two things to carry. **A fix that is obviously correct can still fail a bar**,
+and the honest move is to escalate the trade rather than quietly tune the other
+lever until both look green. And **a bar declared met stays met only while
+someone watches it** — duration had already drifted 23.8 s -> 16.4 s before this
+lane touched anything, across a wave in which nobody re-ran the number.
+
+## An escape solved along the surface normal is not solved
+
+Pushing a character out of a boulder along the proxy's normal walks them
+*up* the surface and drops them back in on the next frame. Solving it
+**horizontally** — gradient picks the direction, ray-to-surface gives the
+distance — is what makes the number 0.00% rather than "mostly".
+
+Related and deliberately not done: **rock tops as ground support**. `VehicleBody`
+reaches collision only through `groundAt`, so making boulders standable would let
+the Regalia drive up them. Filed rather than landed, and it wants `roadcheck`
+if anyone takes it.
+
