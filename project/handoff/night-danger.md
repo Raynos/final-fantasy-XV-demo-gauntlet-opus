@@ -75,27 +75,62 @@ min wall, 0.28 wall-min per game-min):
   and every line that read the hour was reading 06:30 the next day rather than
   the session. The clock is now snapshotted the instant the loop ends.
 
-**30 game minutes, `5307577`, tree `0ff2a4d6f265`** — in flight at the time of
-writing; through game minute 12 it had **4 rolls and 2 spawns**, so the feature
-does fire. That run's kilometre figures are inflated: `enter()`/`exit()` and the
-road wrap teleport Noctis, and all three were landing in `travelled` (9.79 km at
-minute 3 against 2.43 at minute 2 — a 7.4 km "minute" that was one
-`body.reset`). Fixed in `10ab910`; the roll/spawn telemetry is unaffected.
+**30 game minutes, `5307577`, tree `0ff2a4d6f265`, `--turbo 10`** — 6.4 min wall,
+50.88 km travelled (inflated: see below), 29 encounters, 212 kills, 0 page errors.
+**The feature works.**
 
-## The finding to watch (not yet a conclusion — n=1 so far)
+    --- time of day: 23:12, nightDepth 0.84, nightDanger() 0.84
+        (held 0.84..0.84 across the session) ---
+      drove 48.94 km over 19.6 game min in the car, 6.0 min on foot,
+        1 refuel, 4 road wraps
+      _nightRoadDanger: reached on 70537 frames, rolled 11x, spawned 6,
+        HUD warned 6x, banter fired 6x, pulled over for 6
+      what it put on the road: daemon_pack x5, ronin_duel x1
+      of 11 rolls: 6 landed; blocked by 0 depth<=0.5, 0 suppressRoamers,
+        0 boss, 5 a live enemy within 90 m, 0 unexplained
+
+  All eight night assertions green. Two of the thirteen standing checks went
+  red — `fights end` (director state "combat") and `the party is still with him`
+  (168m 32m 161m) — and **neither is a dead end**: the last ambush landed at game
+  minute 29.3 of 30 and the session stopped in the middle of the fight it had
+  itself started. Fixed in `3d0617a`: the last fight is now played out (up to two
+  game-minutes, eight times the longest fight this probe has ever recorded) and
+  the party given three seconds to close up, before either check is asked. A
+  confirming run is in flight.
+
+  That run's kilometre figures were inflated — `enter()`/`exit()` and the road
+  wrap teleport Noctis and all three landed in `travelled` (9.79 km at minute 3
+  against 2.43 at minute 2, one `body.reset`). Fixed in `10ab910`; the roll and
+  spawn telemetry is unaffected.
+
+**Day control, 6 game minutes, `11e4f51`** — `PASS`, and **2.14 km**, which is
+`TIMINGS.md`'s recorded figure for this probe's minute 6 to the metre: night mode
+did not move the day route. (3 encounters / 18 forage against TIMINGS' 4 / 19 —
+drift from tonight's other lanes, not from this change; the route is identical.)
+It also exposed that the day session runs at **14:00**, not noon: `applyShot`
+pushes `SHOTS[name].time` into the sky and `hud_field.time` is 14.0.
+
+## The finding: the "already fighting" guard is a proximity guard
 
 `RegaliaSystem.ts:792` — `if (enc.enemies && enc.enemies.countNear(pos, 90) > 0) return;`
-The doc above it says *"never on top of a fight already happening — 90 m"*, but
-`Enemies.countNear` (`src/characters/Enemies.ts:341`) counts **every live enemy**,
-alerted or not, fighting or not. At depth 0.84 the director streams territories
-within 170 m of the player against a 28-creature budget, so a car on the
-highway at deep night very often has a daemon inside 90 m — which is exactly
-the condition the feature exists for. The director's own roamer roll uses 60 m
-(`EncounterDirector.ts:984`).
 
-If the 30-minute run shows most rolls blocked this way, the fix is one line in
-lane 10's file (a radius, or `e.inCombat`/`pack.alerted` rather than `!e.dead`)
-and is reported rather than taken.
+The doc above it says *"never on top of a fight already happening — 90 m"*, but
+`Enemies.countNear` (`src/characters/Enemies.ts:341`) counts **every live enemy**
+— grazing, unaware, asleep in a den 89 m off the road — not enemies in a fight.
+
+**Measured, 11 rolls over 19.6 game minutes of night driving: 5 of the 11 were
+blocked this way, and nothing else blocked anything.** Depth, `suppressRoamers`
+and `boss` never blocked a single roll. So the guard is the only thing standing
+between the player and roughly twice as much night road, and it is firing on a
+condition that is not the one it is documented to test — at depth 0.84 the
+director streams territories within 170 m against a 28-creature budget, so there
+is very often something alive within 90 m of a car on the highway.
+
+Not a bug that breaks the feature — it fired six times in thirty minutes, which
+is a good rate — but the *intent* and the *instrument* differ. The director's own
+roamer roll uses 60 m (`EncounterDirector.ts:984`). Candidate one-liners: drop
+to 60 m for parity, or count `e.inCombat` / `pack.alerted` rather than `!e.dead`.
+**Lane 10's file — reported, not taken.**
 
 ## Not done / residue
 
