@@ -1054,3 +1054,48 @@ and a 3x mid-face crop of it, `l1r4-flat0/noctis_front_flat.jpg` + 3x mid-face
 crop, `l1r4-flat1/noctis_front_flat.jpg` + the same crop, `l1r4-occ` Noctis hair
 at 2x, `l1r4-occ` Prompto's hair rect at 3x, `l1r4-cam/noctis_face.jpg`,
 `l1r4-fin3/noctis_facecheck.png` head at 2x.
+
+### Task 6 on the SHIPPED frame — partial, verified, and the residue is named
+
+`shoot.mts hero_portrait --cold` before (`tmp/shots/l1-cold`) and after
+(`tmp/shots/l1r4-cold`), same framing, mid-face cropped at 4x.
+
+**Before**: on each cheek a hard, narrow, near-black line with a lit edge above
+it — war paint. **After**: both marks are still there and still read at portrait
+range, but they are **broader and browner rather than black lines**. A real
+improvement and not a closure. Judge it on `/tmp/cc0.png` vs `/tmp/cc1.png` or
+re-crop `660 330 260 200 4` from the two cold portraits.
+
+**And there are TWO diagonals, not one.** The one I closed half of runs from the
+nose *wing* out and down (alar crease + alar ball). The other runs down the
+*side of the nose* from the inner canthus. Decomposed at a broad (8 mm) stencil
+at (11, -26):
+
+```
+  total 20.87 mm
+     7.67   nose dorsum lower   p=[0,-31.3,95.0]  amt +13.0
+     4.02   lateral nasal wall  p=[14.0,-24.5,86.5] r=[8.0,17.5,19.5] amt -5.8
+     3.75   alar ball
+     3.01   nose dorsum upper   p=[0,-11.7,89.0]  amt +10.0
+```
+
+**Measured negative, and it closes that half of the item:** softening the
+lateral nasal wall the same way the alar crease was softened barely moves it —
+-5.8 -> -3.4 through a wider brush takes the broad Laplacian only 20.87 -> 17.72
+(-15%) and costs the wall two thirds of its depth. The term that dominates is
+the **dorsum's own +13.0**, i.e. the nose standing 10.7 mm proud of the cheek 20
+mm out. That is a nose having a sidewall, which is what four previous rounds
+fought to give it. **The second diagonal is not a defect and should not be cut.**
+
+So what is left of task 6 is the alar BALL (2.91 of the remaining 5.09 at the
+tight stencil), and its lever costs 27% of the nostril depth — filed to
+`project/TASKS.md`.
+
+### Gates, final
+
+- `nanscan`: **0 of 163 shots carry NaN**, `hits: []`.
+- **Cold link proof** (`shoot.mts hero_portrait --cold`, tree `db08b395`):
+  clean, 7 313 496 tris / **460 calls**, no page errors, no fallback material —
+  the rewritten sky fill (pedestal, exposure, flattened albedo weight) and the
+  `<metalnessmap_fragment>` branch all compile and link on a cold page.
+- `facecheck --only prompto,noctis`: PASS on the geometry rows every run.
