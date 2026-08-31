@@ -25,12 +25,24 @@ import type { Game } from './Game.ts';
  * number; it is filed as residue. The camera needs an answer tonight and needs
  * it only within one arm's length, so it gets its own, much smaller one.
  *
- * **Why spheres.** `rockGeometry` normalises every hull to bounding radius 1,
- * so `s * max(jx, jy, jz)` — read through `placedScale`, the same function
- * `Rocks.update` composes its matrices through — is a true bounding sphere of
- * the placed hull. A sphere sweeps against a ray in nine multiplies with no
- * rotation to invert, and being slightly loose is the *right* error for a
- * camera: the lens should stop short of a rock face, never graze it.
+ * **Why ellipsoids, and not spheres.** A sphere is the cheap proxy and it was
+ * the first one here, radius `s * max(jx, jy, jz)`, which is a true bounding
+ * sphere because `rockGeometry` normalises every hull to bounding radius 1. It
+ * is far too fat to reason with. `hullExtents` measures the per-axis half-
+ * extents and they run **0.447 (`slab`) to 0.988 (`spire`)** in the vertical
+ * alone, so the bounding sphere of a slab is 2.2x its own thickness: a lens
+ * standing beside a flat rock reads as inside it, the arm pushes in for nothing,
+ * and — worse — the *measurement* of how often the lens is buried is inflated
+ * by the same factor. An instrument that cannot be trusted about the size of
+ * the defect cannot be trusted about the size of the fix.
+ *
+ * So a proxy is the placed hull's own ellipsoid: semi-axes
+ * `s * j{x,y,z} * ext[0..2]` in the instance's own rotated frame, read through
+ * `placedScale` — the same function `Rocks.update` composes its matrices
+ * through, so the proxy is the hull the game draws and not the recipe it was
+ * drawn from. Ray-against-ellipsoid is ray-against-unit-sphere after an affine
+ * change of frame, and `t` survives the change unaltered because the change is
+ * affine, so it costs one 3x3 rotate of the origin and the direction.
  *
  * **Cost.** The window is rebuilt only when the focus moves more than
  * `MOVE` metres or `PERIOD` seconds pass, and it walks only the 56 m stream
@@ -38,7 +50,11 @@ import type { Game } from './Game.ts';
  * two of them at an arm's length. `probes/camcost.mts` prices it.
  */
 export class CameraOccluders {
-  /** Packed `x, y, z, r` per proxy. */
+  /**
+   * Packed proxies, {@link STRIDE} floats each: centre (3), semi-axes (3), and
+   * the *inverse* rotation as a 3x3 in row-major order (9). The inverse of a
+   * rotation is its transpose, so this is stored rather than derived.
+   */
   data: Float32Array;
   /** How many proxies `data` holds. */
   count = 0;
@@ -52,9 +68,7 @@ export class CameraOccluders {
    * recovery is 3.2/s — deliberately slow, so a camera that has been crowded by
    * a hillside eases back out instead of snapping. That rate is exactly wrong
    * here: the arm is trying to leave a rock, and half a second of easing is
-   * thirty frames of the inside of one. Measured: without this, the far-face
-   * branch still left 4.39% of combat frames inside a rock, in 52 separate runs
-   * on one fight — an oscillation, not a burial.
+   * thirty frames of the inside of one.
    */
   exiting = false;
   /** Rebuilds since `init`, and the last rebuild's wall clock in ms. */
@@ -63,13 +77,12 @@ export class CameraOccluders {
   _at = new THREE.Vector3(NaN, NaN, NaN);
   _t = -1e9;
   _rocks: Rocks | null = null;
-
   /** Ceiling on proxies kept; the window has never come near it. */
   max: number;
 
   constructor(max = 128) {
     this.max = max;
-    this.data = new Float32Array(max * 4);
+    this.data = new Float32Array(max * STRIDE);
   }
 
   /**
@@ -96,7 +109,6 @@ export class CameraOccluders {
     const t0 = performance.now();
     const d = this.data;
     let n = 0, scanned = 0;
-    const r2max = radius * radius;
     const streams: [Map<number, unknown[]>, number][] = [
       [rocks.stream.live as Map<number, unknown[]>, rocks.stream.cell],
       [rocks.outcrops.live as Map<number, unknown[]>, rocks.outcrops.cell],
@@ -111,21 +123,31 @@ export class CameraOccluders {
           for (let i = 0; i < arr.length; i++) {
             const it = arr[i] as RockLike;
             scanned++;
-            // Cheap XZ reject before any of the placement arithmetic.
+            // Cheap XZ reject on the bounding radius, before any placement
+            // arithmetic: `s` IS the bounding radius, the hull being normalised.
             const dx = it.x - focus.x, dz = it.z - focus.z;
-            if (dx * dx + dz * dz > r2max + it.s * it.s * 4) continue;
+            const reach = radius + it.s;
+            if (dx * dx + dz * dz > reach * reach) continue;
             const ex = rocks.ext.get(it.k) ?? UNIT;
             const ps = placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury);
-            const rad = it.s * Math.max(ps.jx, ps.jy, ps.jz);
-            if (rad < MIN_R) continue;
+            const ax = it.s * ps.jx * ex[0], ay = it.s * ps.jy * ex[1], az = it.s * ps.jz * ex[2];
+            if (Math.max(ax, ay, az) < MIN_R) continue;
             const px = it.x - it.nx * ps.sink;
             const py = it.y - it.ny * ps.sink;
             const pz = it.z - it.nz * ps.sink;
             const ddx = px - focus.x, ddy = py - focus.y, ddz = pz - focus.z;
-            const dist = Math.hypot(ddx, ddy, ddz) - rad;
-            if (dist > radius) continue;
+            if (Math.hypot(ddx, ddy, ddz) - it.s > radius) continue;
             if (n >= this.max) continue;
-            d[n * 4] = px; d[n * 4 + 1] = py; d[n * 4 + 2] = pz; d[n * 4 + 3] = rad;
+            _e.set(it.pitch, it.yaw, it.roll);
+            _m.makeRotationFromEuler(_e);
+            const o = n * STRIDE, e = _m.elements;
+            d[o] = px; d[o + 1] = py; d[o + 2] = pz;
+            d[o + 3] = ax; d[o + 4] = ay; d[o + 5] = az;
+            // `elements` is column-major, so reading it in this order IS the
+            // transpose, which for a rotation is the inverse.
+            d[o + 6] = e[0]; d[o + 7] = e[1]; d[o + 8] = e[2];
+            d[o + 9] = e[4]; d[o + 10] = e[5]; d[o + 11] = e[6];
+            d[o + 12] = e[8]; d[o + 13] = e[9]; d[o + 14] = e[10];
             n++;
           }
         }
@@ -138,56 +160,47 @@ export class CameraOccluders {
   }
 
   /**
-   * Sweep a sphere of radius `probe` from `o` along the unit `dir` and return
-   * the first distance at which it touches a proxy, or `len` if it never does.
-   *
-   * An origin already inside a proxy returns 0 — the caller's own minimum-arm
-   * clamp then decides what to do about it, exactly as the terrain sweep does.
+   * Put a world point into proxy `i`'s frame, scaled so the proxy is the unit
+   * sphere. Writes `_u`; `probe` inflates each semi-axis.
    */
-  sweep(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number, probe: number) {
-    const d = this.data;
-    let best = len;
-    for (let i = 0; i < this.count; i++) {
-      const cx = d[i * 4], cy = d[i * 4 + 1], cz = d[i * 4 + 2], r = d[i * 4 + 3] + probe;
-      const mx = ox - cx, my = oy - cy, mz = oz - cz;
-      const c = mx * mx + my * my + mz * mz - r * r;
-      if (c <= 0) return 0;                              // origin inside
-      const b = mx * dx + my * dy + mz * dz;
-      if (b > 0) continue;                               // pointing away
-      const disc = b * b - c;
-      if (disc < 0) continue;
-      const t = -b - Math.sqrt(disc);
-      if (t >= 0 && t < best) best = t;
-    }
-    return best;
+  _local(i: number, x: number, y: number, z: number, probe: number, dir: boolean) {
+    const d = this.data, o = i * STRIDE;
+    const mx = dir ? x : x - d[o], my = dir ? y : y - d[o + 1], mz = dir ? z : z - d[o + 2];
+    // inverse rotation, stored row-major
+    const lx = d[o + 6] * mx + d[o + 7] * my + d[o + 8] * mz;
+    const ly = d[o + 9] * mx + d[o + 10] * my + d[o + 11] * mz;
+    const lz = d[o + 12] * mx + d[o + 13] * my + d[o + 14] * mz;
+    _u.set(lx / (d[o + 3] + probe), ly / (d[o + 4] + probe), lz / (d[o + 5] + probe));
+    return _u;
   }
 
   /**
-   * Push a point out of every proxy it is inside, along the radial direction.
-   * @returns metres moved
+   * Sweep a sphere of radius `probe` from `o` along the unit `dir` and return
+   * the first distance at which it touches a proxy, or `len` if it never does.
+   *
+   * An origin already inside a proxy returns 0 — {@link CameraOccluders.arm}
+   * is what decides what to do about that.
    */
-  push(p: THREE.Vector3, probe: number) {
-    const d = this.data;
-    let moved = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      let worst = -1, wi = -1;
-      for (let i = 0; i < this.count; i++) {
-        const r = d[i * 4 + 3] + probe;
-        const mx = p.x - d[i * 4], my = p.y - d[i * 4 + 1], mz = p.z - d[i * 4 + 2];
-        const pen = r - Math.hypot(mx, my, mz);
-        if (pen > worst) { worst = pen; wi = i; }
-      }
-      if (wi < 0 || worst <= 0) break;
-      const r = d[wi * 4 + 3] + probe;
-      let mx = p.x - d[wi * 4], my = p.y - d[wi * 4 + 1], mz = p.z - d[wi * 4 + 2];
-      let l = Math.hypot(mx, my, mz);
-      // Dead centre: any direction is as good as another, so take up.
-      if (l < 1e-4) { mx = 0; my = 1; mz = 0; l = 1; }
-      const k = r / l;
-      p.set(d[wi * 4] + mx * k, d[wi * 4 + 1] + my * k, d[wi * 4 + 2] + mz * k);
-      moved += worst;
+  sweep(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number, probe: number) {
+    let best = len;
+    for (let i = 0; i < this.count; i++) {
+      const p = this._local(i, ox, oy, oz, probe, false);
+      const px = p.x, py = p.y, pz = p.z;
+      const c = px * px + py * py + pz * pz - 1;
+      if (c <= 0) return 0;                              // origin inside
+      const q = this._local(i, dx, dy, dz, probe, true);
+      // `dir` is a unit vector in WORLD space and is not one here, so the
+      // quadratic keeps its leading coefficient. `t` is unchanged by the
+      // change of frame because the change is affine.
+      const a = q.x * q.x + q.y * q.y + q.z * q.z;
+      const b = px * q.x + py * q.y + pz * q.z;
+      if (b > 0) continue;                               // pointing away
+      const disc = b * b - a * c;
+      if (disc < 0) continue;
+      const t = (-b - Math.sqrt(disc)) / a;
+      if (t >= 0 && t < best) best = t;
     }
-    return moved;
+    return best;
   }
 
   /**
@@ -200,14 +213,13 @@ export class CameraOccluders {
    *
    * But **Noctis can be standing inside the rock**: `Harvest.collectRockProxies`
    * returns `[]`, so characters have no boulder collision either, and
-   * `probes/fightcam.mts` measures him inside one on 31.5% of combat frames
-   * across four real den fights (64% and 58% in the two that were fought in a
-   * tor). The first version of this shortened the arm to 0.4 m there, which
+   * `probes/fightcam.mts` measures him inside one on a third to all of the
+   * combat frames of a fight that happens in a tor. Shortening the arm there
    * keeps the lens inside the rock with him and measured *worse* than no
-   * push-out at all — 55.4% against 30.6% on one round. When the focus is
-   * inside, the right answer is the opposite: run the arm OUT through the far
-   * face and stand the camera beyond it, which is the only place in that
-   * direction from which the fight is visible at all.
+   * push-out at all. When the focus is inside, the right answer is the
+   * opposite: run the arm OUT through the far face and stand the camera beyond
+   * it, which is the only place in that direction from which the fight is
+   * visible at all.
    *
    * @param terrainD what the terrain sweep already allows
    * @returns metres along `dir`
@@ -237,24 +249,62 @@ export class CameraOccluders {
     return Math.min(wanted, exit + Math.min(0.35, after));
   }
 
+  /**
+   * Push a point out of every proxy it is inside, along the local radial.
+   * @returns metres moved
+   */
+  push(p: THREE.Vector3, probe: number) {
+    const d = this.data;
+    let moved = 0;
+    for (let pass = 0; pass < 2; pass++) {
+      let worst = 0, wi = -1;
+      for (let i = 0; i < this.count; i++) {
+        const l = this._local(i, p.x, p.y, p.z, probe, false).length();
+        // Depth in the normalised frame: 1 is the surface, 0 the centre.
+        const pen = 1 - l;
+        if (pen > worst) { worst = pen; wi = i; }
+      }
+      if (wi < 0) break;
+      const u = this._local(wi, p.x, p.y, p.z, probe, false);
+      let l = u.length();
+      // Dead centre: any direction is as good as another, so take up.
+      if (l < 1e-4) { u.set(0, 1, 0); l = 1; }
+      u.multiplyScalar(1.0001 / l);
+      const o = wi * STRIDE;
+      // back to world: scale up, then rotate by the forward rotation, which is
+      // the transpose of what is stored
+      const sx = u.x * (d[o + 3] + probe), sy = u.y * (d[o + 4] + probe), sz = u.z * (d[o + 5] + probe);
+      const wx = d[o + 6] * sx + d[o + 9] * sy + d[o + 12] * sz;
+      const wy = d[o + 7] * sx + d[o + 10] * sy + d[o + 13] * sz;
+      const wz = d[o + 8] * sx + d[o + 11] * sy + d[o + 14] * sz;
+      const nx = d[o] + wx, ny = d[o + 1] + wy, nz = d[o + 2] + wz;
+      moved += Math.hypot(nx - p.x, ny - p.y, nz - p.z);
+      p.set(nx, ny, nz);
+    }
+    return moved;
+  }
+
   /** Is a sphere of radius `probe` at this point inside a proxy? */
   inside(x: number, y: number, z: number, probe: number) {
-    const d = this.data;
     for (let i = 0; i < this.count; i++) {
-      const r = d[i * 4 + 3] + probe;
-      const mx = x - d[i * 4], my = y - d[i * 4 + 1], mz = z - d[i * 4 + 2];
-      if (mx * mx + my * my + mz * mz < r * r) return true;
+      if (this._local(i, x, y, z, probe, false).lengthSq() < 1) return true;
     }
     return false;
   }
 }
+
+/** Floats per packed proxy. */
+const STRIDE = 16;
+const _e = new THREE.Euler();
+const _m = new THREE.Matrix4();
+const _u = new THREE.Vector3();
 
 /** Metres the focus may move before the window is rebuilt. */
 const MOVE = 2.0;
 /** Seconds between rebuilds when the focus is standing still. */
 const PERIOD = 0.5;
 /**
- * Smallest proxy worth keeping, metres.
+ * Smallest proxy worth keeping — its LARGEST semi-axis, metres.
  *
  * Pebbles and scree are ankle-high and the lens never reaches them; colliding
  * with one would only make the arm twitch. This is the same idea as
@@ -271,5 +321,6 @@ interface RockLike {
   x: number; y: number; z: number;
   nx: number; ny: number; nz: number;
   s: number; sx: number; sy: number; sz: number;
+  yaw: number; pitch: number; roll: number;
   bury: number;
 }
