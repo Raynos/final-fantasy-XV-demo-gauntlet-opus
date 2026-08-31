@@ -232,8 +232,29 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   //    zero on lit skin, so it cannot push the highlight further into the clip
   //    it is already in. Tinted by uSssColor it also keeps R > G > B in shadow,
   //    which §12.1 measures in every plate including the cool-key ones.
+  //
+  //    ...and the wrap it was written with DIES 38 degrees past the
+  //    terminator, which is where the playtest's "his face is a smear" lives.
+  //    Measured at the distance the player judges from — fov 50, 5 m, head 42
+  //    px — lit skin lands at Y 180-210 and the sculpted face creases at
+  //    Y 0-20: a lit:shadow ratio of 10-30x against §12.1's 2.0-3.2x. At
+  //    26-42 px of head those near-black lines merge into one mark, and that
+  //    mark is the report's "dark horizontal band", "orange blotch" and
+  //    "blindfold". Four ablations at that framing say it is nothing else: a
+  //    flat albedo, flat vertex colours and a null normal map each change the
+  //    face by under 0.75/255; castShadow = false on the whole character
+  //    changes it by nothing; and a debug pass writing N·L into the frame
+  //    reads exactly 0 on every dark pixel. wrapN reaching zero at
+  //    ndl = -0.62 is the entire mechanism.
+  //
+  //    WRAP_FLOOR is wrapN evaluated at ndl = 0, so the max() is a no-op for
+  //    every ndl >= 0 — the lit half of every face and body in the game is
+  //    bit-identical — and below the terminator the fill holds at the value it
+  //    already had AT the terminator instead of falling to zero. One constant,
+  //    and by construction it cannot push the highlight the paragraph above was
+  //    written to protect.
   float wrapN = clamp( ( ndl + 0.62 ) / 1.62, 0.0, 1.0 );
-  float lift = max( 0.0, wrapN - max( ndl, 0.0 ) );
+  float lift = max( 0.0, max( wrapN, 0.3827 ) - max( ndl, 0.0 ) );
   float wrapT = clamp( ndl * 0.5 + 0.5, 0.0, 1.0 );
   vec3 sss = uSssColor * uSunColor * uSssAmt * (
       term * 1.35
