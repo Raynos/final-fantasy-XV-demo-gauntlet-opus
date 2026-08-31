@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { demoDensity } from '../engine/Device.ts';
+import { demoActive, demoDensity } from '../engine/Device.ts';
 import type { EcoSite } from './props/EcoSites.ts';
 import { Ecology } from './veg/Ecology.ts';
 import { Rocks } from './props/Rocks.ts';
@@ -89,10 +89,19 @@ export class Props {
       this.landmarks.build();
     });
 
-    bootPhase('Props.mega', () => {
-      this.mega = new Megastructures(this.ecology, game.scene);
-      this.mega.build();
-    });
+    // 624 ms of skyline that is 800 m away and cannot be walked to. On the
+    // phone it is built AFTER the first frame instead, from the same
+    // `game-ready` beat the deferred containers use, so it costs the boot
+    // nothing and appears on the horizon a moment later — which, at that
+    // distance, is not a moment anybody can catch.
+    this.mega = new Megastructures(this.ecology, game.scene);
+    if (demoActive()) {
+      addEventListener('game-ready', () => {
+        requestAnimationFrame(() => setTimeout(() => this.mega.build(), 0));
+      }, { once: true });
+    } else {
+      bootPhase('Props.mega', () => this.mega.build());
+    }
 
     bootPhase('Props.outposts', () => {
       this.outposts = new Outposts(this.ecology, game.scene);
@@ -130,7 +139,11 @@ export class Props {
     // The eight kits that cannot be built inside a frame — see
     // `PoiKits.prebuildHeavy`. Its own boot phase, because half a second is
     // worth seeing in `bootprof` rather than hiding inside `Props.poiKits`.
-    bootPhase('Props.poiPrebuild', () => this.poiKits.prebuildHeavy(game));
+    // 1172 ms building the eight heavy compounds up front so that arriving at
+    // one never costs a frame. On the phone that trade inverts: nothing here is
+    // within 1500 m of the spawn, `PoiKits.update` streams one per frame
+    // anyway, and 1172 ms is a fifth of the boot a person is staring at.
+    if (!demoActive()) bootPhase('Props.poiPrebuild', () => this.poiKits.prebuildHeavy(game));
 
     bootPhase('Props.regalia', () => this._buildRegalia(game));
     /*

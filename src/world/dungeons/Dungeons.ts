@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoActive } from '../../engine/Device.ts';
 import { SHOTS } from '../../game/Shots.ts';
 import type { Shot } from '../../game/Shots.ts';
 import { Dungeon } from './kit/Dungeon.ts';
@@ -213,6 +214,38 @@ export class Dungeons {
     // accident of the boot order.
     await bootPhase('Dungeons.texbake', () => loadTexBake());
 
+    // 1061 ms of dungeon MOUTHS -- the doorways in the hillside, not the
+    // interiors, which have always been built on first `enter()`. On the phone
+    // the nearest one is 1464 m from the spawn and this is the single largest
+    // boot phase there was, so it is built after the first frame instead, off
+    // the same `game-ready` beat the deferred containers use.
+    //
+    // Nothing downstream needs it sooner: `_wireInteraction` registers against
+    // `this.entrances`, and an entrance you cannot see from 1464 m away is an
+    // entrance you cannot walk into either.
+    if (demoActive()) {
+      addEventListener('game-ready', () => {
+        requestAnimationFrame(() => setTimeout(() => {
+          this._buildEntrances(game);
+          // `_initTail`'s pack ran before these existed, so they pack their own.
+          for (const e of this.entrances) packSubtree(e.group);
+        }, 0));
+      }, { once: true });
+    } else {
+      this._buildEntrances(game);
+    }
+
+    this._wireInteraction(game);
+
+    // `Dungeons` is the last system in `Game.init`'s boot order, so every
+    // boot-path consumer of the texture bake has run by here.
+    const held = compactTexBake();
+    if (game.debug) console.log(`[Dungeons] texbake compacted, ${(held / 1e6).toFixed(1)} MB still held`);
+    return this._initTail(game);
+  }
+
+  /** The doorways in the hillside. Deferred past the first frame on the phone. */
+  _buildEntrances(game: Game) {
     const builders = { bunker: buildBunkerEntrance, mine: buildMineHead, cave: buildCaveMouth };
     let calls = 0, tris = 0;
     for (const def of this.defs.values()) {
@@ -234,18 +267,10 @@ export class Dungeons {
     this.stats.outsideCalls = calls;
     this.stats.outsideTris = tris;
     if (game.debug) console.log('[Dungeons] entrances', JSON.stringify(this.stats));
+  }
 
-    this._wireInteraction(game);
-
-    // `Dungeons` is the last system in `Game.init`'s boot order, so every
-    // boot-path consumer of the texture bake has run by here. Compaction gives
-    // the entries nobody asked for — the `dgn/*` interiors, which are built on
-    // first `enter()` — their own buffers and lets the two inflated containers
-    // go. It is not `releaseGeoBake()`'s trade: nothing is dropped, so this
-    // cannot cause a cache miss no matter where it is called, and the interiors
-    // still read from the bake.
-    const held = compactTexBake();
-    if (game.debug) console.log(`[Dungeons] texbake compacted, ${(held / 1e6).toFixed(1)} MB still held`);
+  /** Everything after the entrances, unchanged. */
+  _initTail(game: Game) {
 
     // Same reason this is here and not in `Props`: it wants the *finished*
     // scene, and this is the last `init()` in `Game`'s boot order. It has to
@@ -253,6 +278,7 @@ export class Dungeons {
     // system the only correct place for it short of `Game.init` itself.
     const packed = packSubtree(game.scene);
     if (game.debug) console.log('[Dungeons] attributes packed', JSON.stringify(packed));
+    return this;
   }
 
   /**
