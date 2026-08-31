@@ -893,4 +893,19 @@ until tonight.*
 - **`Shots.ts` owes four chocobo framings**, and without one `npcdraws` cannot be
   run with the bird in frame. `ControlsScreen.ts` owes a Chocobo group (`6`
   whistle/dismiss, `E` ride, `Shift` sprint). `lane22`
+- **Galdin's sea and its golden light are on different bearings**, measured over
+  nine shore frames: west into the sun is the best light of the nine and contains
+  **no water at all** (the sea is behind the dune ridge); seaward has 22-25% water
+  and no warmth. Only south-west along the shallows has both, and it is the only
+  aim containing the jetty. Structural, not a framing preference. `lane21`
+- **A hard horizontal seam at the sea horizon**, with the far band dropping to
+  near-black, and **shore foam drawn as flat white axis-aligned rectangles.**
+  Both visible on every seaward Galdin stand. `lane7`/`lane21`
+- **An animal stands on top of an untextured mesa island out at sea** — a spawn
+  on ground it could not have walked to. **A judge would flag it instantly.**
+  `lane11`/`lane18`
+- **The "WHERE YOU ARE" HUD card composites over `framecam` previews only** —
+  confirmed `framecam`-only, since all five `shoot.mts` captures in the same
+  session were clean. A preview fault, not a corpus one; closes an open question
+  from an earlier pass. `lane21`
 
