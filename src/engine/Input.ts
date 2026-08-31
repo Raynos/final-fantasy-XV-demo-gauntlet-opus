@@ -32,6 +32,25 @@ export interface MouseState {
   wheel: number;
 }
 
+/**
+ * The part of a `Gamepad` this engine actually reads.
+ *
+ * Eight files outside `Input` reach into `input.gamepad` directly rather than
+ * going through `gpButton`/`gpDown` — `Menus`, `RegaliaSystem`, `Cinematics`,
+ * `Fishing`, `Interactables`, `Dialogue`, `TitleScreen` — so the touch layer
+ * cannot serve them by faking the two helpers. It has to be pad-*shaped*.
+ *
+ * Nothing in `src/` reads `id`, `index`, `mapping`, `connected`, `timestamp`
+ * or the haptics, so widening the field to this is enough. A real `Gamepad`
+ * structurally satisfies it, which means every existing call site typechecks
+ * unchanged and no cast is needed anywhere — `anycheck`'s ceiling is 0 and
+ * stays there.
+ */
+export interface PadLike {
+  buttons: ReadonlyArray<{ pressed: boolean, value: number }>;
+  axes: ReadonlyArray<number>;
+}
+
 export class Input {
   _onKeyDown!: (e: KeyboardEvent) => void;
   /** `KeyboardEvent.code` of everything currently held. */
@@ -48,7 +67,23 @@ export class Input {
   _onWheel!: (e: WheelEvent) => void;
   dom!: HTMLCanvasElement;
   enabled!: boolean;
-  gamepad!: Gamepad | null;
+  gamepad!: PadLike | null;
+  /**
+   * Lets a touch overlay supply a pad. Given the real one, returns the pad the
+   * frame should read — the touch layer merges rather than replaces, so a
+   * phone with a Bluetooth controller attached works both ways at once.
+   */
+  padSource!: ((real: PadLike | null) => PadLike | null) | null;
+  /**
+   * True once an on-screen control layer is installed.
+   *
+   * Guards the mouse path, which is a dead end on a handset: pointer lock does
+   * not exist there, and mobile browsers synthesise a compatibility `mousedown`
+   * on the canvas after any tap that was not `preventDefault`ed. Unguarded,
+   * every tap on bare canvas would call `attack()` and request a lock that can
+   * never be granted.
+   */
+  touchMode!: boolean;
   invertY!: boolean;
   lockLost!: boolean;
   look!: THREE.Vector2;
@@ -79,6 +114,8 @@ export class Input {
     this.invertY = false;
     /** Mouse look sensitivity multiplier, 0.25..3. */
     this.lookScale = 1;
+    this.padSource = null;
+    this.touchMode = false;
 
     this._onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
@@ -95,6 +132,10 @@ export class Input {
       this.look.y += e.movementY * this.lookScale * (this.invertY ? -1 : 1);
     };
     this._onMouseDown = (e: MouseEvent) => {
+      // On a handset the browser synthesises a compatibility `mousedown` on
+      // the canvas after any tap that reached it, and there is no pointer lock
+      // to be had. Unguarded, every tap on bare canvas swings a sword.
+      if (this.touchMode) return;
       // A click that landed on a UI element is the UI's, not the world's: it
       // must neither swing a sword nor grab the pointer.
       if (!this.pointerLocked && e.target !== this.dom) return;
@@ -150,6 +191,7 @@ export class Input {
 
   /** Take the pointer, if gameplay is allowed to hold it. Safe to spam. */
   requestPointerLock() {
+    if (this.touchMode) return false;
     if (this.pointerLocked || !this.pointerLockAllowed) return false;
     if (!this.dom || !this.dom.requestPointerLock) return false;
     try {
@@ -178,7 +220,10 @@ export class Input {
 
   /** Gamepad + keyboard fused action state. */
   update() {
-    const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null;
+    const real: PadLike | null = navigator.getGamepads ? navigator.getGamepads()[0] : null;
+    // The touch overlay merges its virtual pad with whatever hardware is
+    // attached, so a phone with a Bluetooth controller works both ways at once.
+    const gp = this.padSource ? this.padSource(real) : real;
     let mx = 0, my = 0;
     if (this.key('KeyD') || this.key('ArrowRight')) mx += 1;
     if (this.key('KeyA') || this.key('ArrowLeft')) mx -= 1;

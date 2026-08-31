@@ -42,14 +42,20 @@ import type { QualityTier } from './Renderer.ts';
  */
 const TIERS: readonly QualityTier[] = ['low', 'medium', 'high', 'ultra'];
 
-/** The demo's playable disc, centred on the player's spawn at the origin. */
-export const POCKET = { x: 0, z: 0, r: 1200 };
-
-/** Is a world position inside the demo pocket? */
-export function inPocket(x: number, z: number): boolean {
-  const dx = x - POCKET.x, dz = z - POCKET.z;
-  return dx * dx + dz * dz <= POCKET.r * POCKET.r;
-}
+/**
+ * How far past a POI kit the player must get before the demo throws it away.
+ *
+ * This is the whole world on a phone, not a slice of it — the size of Eos was
+ * the best thing the demo had, and fencing it off to save memory would have
+ * spent the wrong thing. What bounds memory instead is eviction: `PoiKits`
+ * already streams a kit in one-per-frame inside its build radius, and this is
+ * the missing bookend.
+ *
+ * Comfortably outside `PoiKits.BUILD_R` (1500 m) so the two never fight: a kit
+ * that keeps crossing a single threshold would rebuild every few seconds, and
+ * a rebuild is the expensive direction.
+ */
+export const KEEP_R = 2600;
 
 function params(): URLSearchParams {
   return typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
@@ -92,6 +98,29 @@ const DEMO = resolveDemo();
 
 /** Is the phone demo active? Resolved once, at module load. */
 export function demoActive(): boolean { return DEMO; }
+
+function resolveTouch(): boolean {
+  const p = params();
+  const asked = p.get('touch');
+  if (asked === '0') return false;
+  // Explicit-on is NOT gated on `?shoot`, unlike `?demo`: the touch layer is
+  // DOM and input only, it renders nothing into the world, and `touchcheck`
+  // needs a way in. Every other gate's URL simply never carries the flag.
+  if (asked === '1') return true;
+  return DEMO;
+}
+
+const TOUCH = resolveTouch();
+
+/**
+ * Should the on-screen control layer be installed?
+ *
+ * Follows the demo by default, so the one detection decides both, and is
+ * separable by hand in both directions: `?touch=1` on a desktop is how the
+ * layout gets looked at without a phone, and `?touch=0` on a phone is the way
+ * out for someone who has paired a controller.
+ */
+export function touchActive(): boolean { return TOUCH; }
 
 /**
  * The render tier this page should use.

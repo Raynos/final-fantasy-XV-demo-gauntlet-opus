@@ -1,5 +1,6 @@
 import { Game } from './game/Game.ts';
 import { installBootProfile } from './engine/BootProfile.ts';
+import { touchActive } from './engine/Device.ts';
 
 // These five live in `src/index.html` and neither the loading screen nor the
 // game can run without them, so an assertion here is the honest reading -- a
@@ -28,6 +29,16 @@ game.init().then(() => {
   // exposure integrator and enemy AI by a nondeterministic amount.
   const qs = new URLSearchParams(location.search);
   if (!qs.has('shoot')) game.start();
+
+  // On-screen controls. A dynamic import so a desktop bundle never parses the
+  // layer, and `orphans.mts` counts a dynamic import as reachable. It is
+  // installed after `start()` on purpose: it takes over `input.padSource` and
+  // there is no reason for that hook to exist before the game is running.
+  if (touchActive()) {
+    import('./ui/touch/TouchControls.ts')
+      .then((m) => m.installTouchControls(game))
+      .catch((err) => console.error('[touch] controls failed to load', err));
+  }
 
   // In-game developer / review suite. A dynamic import keeps it in its own
   // async chunk, so it ships in the production build (one build, no drift --

@@ -12,6 +12,7 @@ import type { CombatEvents } from './combat/CombatEvents.ts';
 import type { DamageEvent } from './ui/CombatHUD.ts';
 import type { Game } from './game/Game.ts';
 import type { DevSuite } from './dev/DevSuite.ts';
+import type { TouchControls } from './ui/touch/TouchControls.ts';
 
 declare global {
   interface Window {
@@ -28,6 +29,12 @@ declare global {
     BOOT_PROFILE?: BootProfile;
     /** `?debug` -- the in-page dev suite. Absent without the flag. */
     DEV?: DevSuite;
+    /**
+     * The on-screen control layer. Present only on a phone or under `?touch=1`,
+     * which is exactly the condition `touchcheck.mts` waits on before it starts
+     * poking at sticks and buttons.
+     */
+    TOUCH?: TouchControls;
     /** Safari still ships the prefixed constructor. */
     webkitAudioContext?: typeof AudioContext;
     webkitOfflineAudioContext?: typeof OfflineAudioContext;
