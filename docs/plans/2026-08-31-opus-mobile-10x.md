@@ -10,6 +10,41 @@ Status: **APPROVED — all four rulings taken, building.**
 >    silhouette, pay 1 draw instead of 18.
 > 4. **The whole programme**, all five steps.
 
+## Results so far — measured, deployed
+
+| | before | now | note |
+|---|---|---|---|
+| **first frame** | 44.1 MB | **15.3 MB** | **2.9×** |
+| `tex` + `texc` | 25.8 | **2.9** | WebP, 8.9× |
+| `terrain` | 17.2 | **10.5** | half-splat |
+| bundle | 1.1 | 1.1 | not yet split |
+| draws | 540 | **249** | the `Sky` shadow bug, then range cuts |
+| triangles | 6 400 667 | **2 525 636** | same |
+
+**Two measurements changed the plan and are worth carrying forward.**
+
+*WebP wins on textures by 12.3× overall* — better than the 7.5× the sample
+predicted, because `texc`/`texcp` (painted faces, large flat regions) hit 56–58×.
+
+*WebP LOSES on terrain.* Lossless over every section is **23.7 MB against
+gzip's 17.2** — a delta-coded height's low byte is noise and an image codec has
+nothing to find in it. Lossy q90 reaches 9.2 but moves the ground. Coarser
+quantisation is also a dud: 9.85 mm → 4 cm buys only 5.59 → 4.48 MB against a
+5 cm drift budget. So the terrain win came from halving `ctrl` (splat weights,
+not geometry) instead: 8.34 → 2.17 MB, invisible to `heightcheck`.
+
+**Where the remaining gap is.** `h` is 5.59 MB of irreducible lossless
+heightfield at 2048², and `far` another 1.64. Best lossless predictor tried
+(2D average + byte-split planes) gets `h` to 4.63 — 17%, not enough to justify
+a container-format change and the geo re-bake it forces.
+
+**So ~10 MB is the floor for a whole-world 4 km² heightfield shipped as one
+file, and 10× on download needs the terrain streamed by clipmap tile rather
+than fetched whole.** That is the honest next step and it is a real piece of
+work, not a tweak.
+
+---
+
 The ask: **10× less to download, 10× faster to load, 10× the frame rate**, with
 two builds and two URLs on the table if that is what it takes.
 

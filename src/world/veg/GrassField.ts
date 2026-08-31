@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoVegRange } from '../../engine/Device.ts';
 import { Rng } from '../../util/Rng.ts';
 import { hash3 } from './Ecology.ts';
 import type { VegWindOpts } from './VegMaterial.ts';
@@ -41,11 +42,30 @@ import type { Ecology } from './Ecology.ts';
 // rectangles. Ending the ring where the cards are still several pixels across
 // and handing the rest to the terrain's own grass tint reads far better than
 // stamping geometry the alpha test cannot resolve.
+/**
+ * The three rings, with their distances scaled by {@link demoVegRange} — 1
+ * everywhere but the phone, 0.55 there.
+ *
+ * The blade ring is the single largest item in the whole scene after the party:
+ * 0.542 M triangles across 30 meshes, measured. Its `max` was already thinned
+ * by `quality`, but thinning is not the same as shortening — the ring still
+ * covered the same 26 m disc, so it still needed the same number of TILES, and
+ * a tile is a draw call whether it holds twenty blades or two thousand. 26 m
+ * becomes 14.3 m on the phone, which quarters the area.
+ *
+ * At a 0.55 Mpx backing store an individual blade at 15 m is already under a
+ * pixel, and the clump ring starts at 6 m and covers everything behind it.
+ */
+const LOD_RANGE = demoVegRange();
 const LODS = [
   { name: 'blade', tile: 12, far: 26, spacing: 0.27, max: 240000, hMul: 1.0 },
   { name: 'clump', tile: 24, near: 6, far: 84, spacing: 0.40, max: 105000, hMul: 1.05 },
   { name: 'far', tile: 48, near: 20, far: 155, spacing: 1.35, max: 44000, hMul: 1.45 },
-];
+].map((l) => (LOD_RANGE === 1 ? l : {
+  ...l,
+  far: Math.round(l.far * LOD_RANGE),
+  ...(l.near === undefined ? {} : { near: Math.round(l.near * LOD_RANGE) }),
+}));
 // `near` used to read 21 and 78 and it never meant that. The tile test it feeds
 // was `dist < near - T * 0.75` against the tile CENTRE, so the distance a ring's
 // instances actually started at was `near - 1.25 * T`: -9 m for the clump ring
