@@ -224,7 +224,45 @@ ring is never stale, and reversing per member is a second way for the phase to
 decohere. A **packless** enemy keeps both: it has no ring to stay in phase with.
 
 By construction this moves bearings around the target and not distances to it,
-so nothing should move in `fightshape`. Re-measured anyway.
+so nothing should move in `fightshape`. Re-measured and re-looked anyway.
+
+**VERIFIED by number** at `7fec437`: `combatloop` **35/35**, and `fightshape`
+over two finished fights (both `wiped`, none dropped)
+
+```
+duration   21.8 25.8  ->  MEDIAN 23.8 s   [18-30]   PASS
+hp paid %  27.5 49.1  ->  MEDIAN 38.3 %   [>=15]    PASS
+enemy atk/s 1.15 1.01 ->  median 1.08
+```
+
+Round 1 is a controlled comparison: **the same den** (Sabertusk x5, lv 32,
+16 935 hp) as round 1 of the `ca90950` run. 24.4 s / 23.6 % before, 21.8 s /
+27.5 % after — inside round-to-round variance on duration, and the danger drift
+is the point of the change rather than a surprise, since a ring that actually
+encircles keeps more of the pack inside reach.
+
+**VERIFIED by eye**, and this is the one that matters
+(`tmp/shots/lane11d/f-midfight.jpg`, same den, same beat as
+`tmp/shots/lane11c/f-midfight.jpg`):
+
+- **before** — five sabertusks jammed into one ~50-60 degree wedge on the
+  player's right, one body drawn through another's chest, a third across a
+  fourth's back, nothing behind or on the far side.
+- **after** — four animals on four distinct bearings spread right across the
+  frame with daylight between them, none fused, one closing from the left flank
+  through a bush while two hold the right. It reads as a hunt.
+
+Not fixed by this and still true in the same frame: two `SABERTUSK` nameplates
+overprint each other, and the two right-hand animals stand close enough to
+touch. The wedge is gone; the HUD is not.
+
+**Note for whoever tunes difficulty next.** Danger is now 27.5-49.1 % of Noctis'
+max HP for one field den, against a 15 % bar. That is a deliberate stack —
+`INCOMING_SCALE` 0.55 -> 1.0, `PARTY_LIFT` 0.8 -> 1.0, `LEVEL_LIFT` 1.0 -> 1.25,
+counts two deeper, four engage tokens, and now a ring that keeps the whole pack
+in reach. Every one of those is measured and defensible on its own; the *stack*
+has never been felt by a person. It wants a human at the controls before ship,
+not another probe.
 
 ## I looked at the frames — and they were not good
 
