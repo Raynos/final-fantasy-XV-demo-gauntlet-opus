@@ -623,3 +623,52 @@ recording because the predecessor's hard lesson was that they often do not.
   18's "reads as cut by someone" — the *carving* landed, the *material* did not.
   Also in frame: four rock chunks floating in mid-air at the right, and a
   pale-grey placeholder post at bottom-centre-right.
+
+## Residue for `project/TASKS.md` — ready to paste
+
+Everything here was seen in a frame this session; the frame is named.
+
+1. **`PoiKits._landmark`'s generic tail is one greybox used five times.**
+   `washes_lookout`, `saxham`, `peak_overlook`, `saltgrass_flats` and
+   `mencemoor_obelisks` all fall through to it. In frame the stele is a flat
+   untextured beige box, the cairn is stacked grey cubes, and the five sites are
+   indistinguishable. **Five corpus rows are waiting on this one material pass.**
+   `tmp/shots/l21-arc/{WL_2,WL_5,SX_4,PK_6,SF_2,MO_10}.jpg`.
+2. **The Threshold Stones' shafts have no material.** Carving landed (collar
+   bands, chevrons); the surface is flat untextured tan with no grain, no wear
+   and no dirt at the foot, so at 21 m they read as moulded clay.
+   `tmp/shots/l21-lm/threshold_stones.jpg`.
+3. **Northwatch Garrison's four lamp housings are flat untextured cream quads**
+   with no fixture behind them, and are the highest value in the plate after the
+   storm break. `tmp/shots/l21-lm/northwatch_ruin.jpg`.
+4. **`pilgrims_rest`'s shop is a blockout**: a plain white-grey box, no door, no
+   windows, and a **blank white sign board** on a post.
+   `tmp/shots/l21-arc/PR_9.jpg`.
+5. **`southwatch_haven`'s camp is a grey slab pad** — no fire, no tent, no read
+   at 6–7% of frame height from any bearing. `tmp/shots/l21-arc/SW_3.jpg`.
+6. **Star sprites render in front of near foreground geometry** — white points
+   sit on the carapace shell metres from camera. `tmp/shots/l21-arc2/GN48b.jpg`,
+   also on terrain in `GN48`/`GN66`. Stars are also large and visibly square.
+7. **Floating detached geometry**, seen at five separate sites: rock chunks in
+   mid-air at mesa height (`l21-lm/threshold_stones.jpg`, four of them, right of
+   frame), a flat tan LOD slab in open air left of the Meteor
+   (`l21-met/landmark_meteor.jpg`), rocks against the cliff
+   (`l21-arc/MO_10.jpg`), a boulder over the ridge (`l21-arc/WL_5.jpg`), rock
+   decals hovering off a gully wall (`l21-sr2/RCh.jpg`).
+8. **A pale untextured parallelogram floats against the mountain** at Northwatch
+   on two bearings — right edge in `l21-arc/NW_8.jpg`, near centre in
+   `l21-arc2/NW48b.jpg`. Same defect class, relocated.
+9. **Texture corruption on a `capital_mega` tower face** — a black-and-white
+   checker/moiré block. `tmp/shots/l21-arc2/GY48b.jpg`, top-left.
+10. **Cloud sprites have hard stippled/dithered rectangular fringes** and
+    vertical comb/rake striping. Present in almost every day frame this session;
+    clearest in `tmp/shots/l21-sr/south_road_dawn.jpg` and `l21-arc2/TH34.jpg`.
+    At night they are flat hard-edged grey smears (`l21-arc2/GN34.jpg`).
+11. **The location title card and the tutorial toast are baked into `framecam`
+    captures** — "LONGWYTHE / LEIDE / KINGDOM OF LUCIS" and "THINGS YOU CAN USE".
+    `tmp/shots/l21-arc2/{GY34,GY48,GY66}.jpg`, `l21-arc/{TH_6,TH_1}.jpg`. The
+    predecessor filed the tutorial-card half; the title card is new. **Not in
+    `shoot.mts` output** — both corpus captures this session are clean — so this
+    is a `framecam` preview fault, not a corpus one.
+12. **A placeholder pale-grey marker post stands inside the Threshold Stones
+    site.** `tmp/shots/l21-lm/threshold_stones.jpg`, bottom centre-right.
