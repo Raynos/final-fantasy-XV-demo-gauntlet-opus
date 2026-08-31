@@ -225,15 +225,49 @@ Commits: `e601f77`, `f1d0e87`, `a18c26a`, `82b82e6` (LANDMINES), `c644248`.
 
 ## Residue, ready to paste into `project/TASKS.md`
 
-- **The haven awning (playtest case four) is not fixed.** `HavenCamp` never
-  touches the camera, so the letterbox is the ordinary gameplay arm walking into
-  a kit mesh — my case, not a shot. The blocker is structural and is now in
-  `project/LANDMINES.md`: `PartBuilder` emits **one merged mesh per material**,
-  so a whole haven is twelve meshes and a per-mesh bounding box is the entire
-  camp. Doing it means triangles — a per-site triangle grid built on first sight
-  and swept within an arm's length, cached against `BuiltSite.group` identity the
-  way `RockField` caches against a stream cell. `CameraOccluders._dynamic` is
-  where it would hang.
+- **The haven awning (playtest case four): reproduced and fully diagnosed, not
+  fixed.** Everything below is verified in a live page and one of the frames was
+  read by eye, so the next lane should not have to re-derive any of it.
+  - **It is not `PoiKits._haven`.** At `longwythe_haven` (962, -712) — the haven
+    `Shots.poi_haven` frames — there is no awning at all and the letterbox is
+    impossible. The canopy belongs to a *second* system: `Landmarks._haven`
+    (`src/world/props/Landmarks.ts:177`), the hero camp, an 8.0 x 6.6 m cloth
+    canopy on four 3.5 m poles (`Landmarks.ts:288-322`).
+  - **`Shots.ts:59` records that camp at (-99.6, -59.7) and that note is stale**
+    — there is nothing there but terrain. It actually stands at `spawn_haven`
+    "Redlyn Haven" **(-31, -20)**, 37 m from the party spawn, which is also the
+    first haven anybody camps at.
+  - Standing on that deck (player y 8.05, terrain 6.16, lift 1.88 m) at the
+    resting pitch, `tmp/shots/w3b/hav5-p022-h06.jpg` **is the playtest's
+    sentence**: the top ~28% of the frame is one solid orange-brown plank across
+    the full width, a second band crosses the bottom ~12%, and the camp, the
+    party and the horizon are the slit between them. Looked at, not inferred.
+  - The mesh is **`landmark_ef56`, `Landmarks.mats.cloth`** = `canvasClothMaterial(0x6d6350)`,
+    `side: THREE.DoubleSide` (`PropMaterials.ts:346`) — world box 14.6 x 4.0 x
+    11.6 m, y 7.7..11.7 against a deck top of ~7.8, nearest approach **1.08 m**
+    from the lens. Its steel frame `landmark_b2b7` is the second offender at
+    0.80 m. The orange is the camp fire's `PointLight(0xff7a26, 9, 46)`
+    (`Landmarks.ts:330`), not the cloth's tint.
+  - **The arm is 5.60 m — full rest length, uncrushed, at all twelve yaws.** The
+    arm never notices the awning at all, exactly as `CameraRig.ts:113` says:
+    *"`CameraRig` has never collided with a prop"*. The lens sits ~2.7-3.0 m over
+    the deck, i.e. **inside** the canopy volume (eave at deck+3.33, apex
+    deck+4.0), and `DoubleSide` then draws the cloth from below *and* from above:
+    one band at the top of frame, one at the bottom.
+  - **The fix is not the arm and is probably not a proxy.** Being under an awning
+    is the shot; being *inside the cloth* is not. Either drop the lens below the
+    eave line while the focus is under a canopy, or hide the canopy meshes while
+    the lens is inside their box — the `creatureAt` precedent, and it wants the
+    same restore-at-the-top-of-`lateUpdate` so a posed corpus shot never loses
+    the awning. Not started, because it is a new line of work and this lane is at
+    its stop.
+  - Note for whoever takes it: `PartBuilder` emits **one merged mesh per
+    material** (now in `project/LANDMINES.md`), so per-*part* boxes do not exist
+    — but this defect does not need them. Two named merged meshes are the whole
+    of it.
+  - Reproduce with `node src/tools/probe.mts src/tools/_probe/w3bhaven.mts --ttl
+    25 --jpeg --set __HX=-31 --set __HZ=-20 --set __PITCH=0.22 --set __YAWS=12
+    --shot tmp/shots/w3b/hav5.jpg`.
 - **Player-mesh fade at a short arm.** Still open, and the earlier lanes' reason
   still stands: the materials are shared with the companions and are authored in
   another lane's `Cast.ts` / `rig/Materials.ts`. Two things changed tonight and
