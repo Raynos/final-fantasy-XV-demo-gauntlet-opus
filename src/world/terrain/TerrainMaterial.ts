@@ -697,9 +697,21 @@ void tf_shade() {
   // which flattens a distant face toward zero and switches the whole detail
   // block off. The comment above already names that mechanism and mitigates it
   // out to 2.2 km; beyond that it is unmitigated, and beyond that is where the
-  // cones are. This token is how to price extending the fade, and the cost it
-  // is being weighed against is the horizon hatch the fade exists to stop --
-  // which is a CRAWL, so a still frame is not enough to clear it.
+  // cones are.
+  //
+  // MEASURED NEGATIVE, and it closes the hypothesis. zone_callaegh, one build,
+  // this token against shipped: imgdiff mean **0.260/255 against that shot's
+  // own measured noise floor of 2.00**, with 0.083 % of pixels past 8/255. The
+  // hand-back is not why a distant cone is smooth. Whatever is, it is upstream
+  // of structSlope -- the heightfield itself, or tf_lodW retiring every relief
+  // octave by screen footprint long before 2.2 km, which is a *different*
+  // mechanism from this one and has its own fade. Kept as a token because the
+  // next agent will have the same idea, and because a negative that has to be
+  // re-derived is not a negative.
+  //
+  // Anything that DOES turn the detail back on out there is traded against the
+  // horizon hatch this fade exists to stop, and that hatch is a CRAWL: a still
+  // frame cannot clear it.
   ${ABLATE.has('nostructfade') ? 'structSlope = clamp(max(length(rawN), length(N.xz)), 0.0, 1.0);' : ''}
 
   // ---- analytic relief, in metres, at every distance -----------------------
