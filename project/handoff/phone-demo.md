@@ -1,110 +1,91 @@
 # Phone demo — handoff
 
-**DONE and DEPLOYED.** https://dist-three-rho-86.vercel.app/?demo=1&touch=1
+**Live, shipped and green: https://dist-three-rho-86.vercel.app**
 
-That URL is the one to hand a person. Auto-detection covers a real phone
-(`maxTouchPoints` && `pointer: coarse` && `min(screen) <= 500`), but the
-explicit flags mean it cannot be wrong on a device that fails one leg.
-`?demo=0` / `?touch=0` are the way back out of either half.
+One build, **no query parameters**. A desktop gets the full game; a phone or
+tablet is detected and gets the demo. That is the link to hand a person.
+
+`pnpm run check` is **23/23**. Baseline recorded at 290 s.
+
+---
 
 ## What it is
 
-The **whole world**, at `?q=low`, with on-screen controls and 34.1 MB moved off
-the first frame. Not a slice — an earlier plan fenced the demo into a 1200 m
-disc, and that was dropped once the two things turned out to be orthogonal:
-every byte came from container deferral and the disc only bought ~2.8 s of
-init. What the disc really gave was a memory bound, and POI-kit eviction gives
-that without fencing anything off.
+The **whole world** on a phone, not a slice — `?q=low`, touch controls, and the
+far half of the map evicted behind you. An earlier plan fenced the demo into a
+1200 m disc; that was dropped once the two things turned out to be orthogonal.
+Every byte came from container deferral and the disc only bought ~2.8 s of init.
 
-## Measured (after the 10x programme, 2026-08-31)
-
-| | start | now | |
-|---|---|---|---|
-| download, first frame | 44.1 MB | **15.3 MB** | 2.9x |
-| boot (`GAME.ready`) | 7.19 s | **4.56 s** | 1.6x |
-| draw calls | 540 | **208** | 2.6x |
-| triangles | 6 400 667 | **2 239 089** | 2.9x |
-
-The full account is `docs/plans/2026-08-31-opus-mobile-10x.md` (archived when
-DONE). Three things from it that a future agent needs and will not guess:
-
-- **WebP beats gzip 3x on textures and LOSES on terrain.** Textures are
-  pictures; a delta-coded heightfield's low byte is noise. Lossless WebP over
-  the terrain container is 23.7 MB against gzip's 17.2. Do not retry it.
-- **`?q=low` had shadows on for the project's whole life** — `Sky.init`
-  overwrote `Renderer._applyTier`. That one conditional was worth more than
-  every deliberate optimisation next to it.
-- **~10 MB is the floor** for a whole-world heightfield shipped as one file.
-  10x needs tiled terrain streaming, which nothing here does.
-
-## Measured (original phone-demo lane)
-
-| | before | after |
+| | session start | now |
 |---|---|---|
-| first frame, `?demo=1` (local prod) | 78.1 MB / 5 req | **44.0 MB / 5 req** |
-| first frame, live origin | — | **44.1 MB / 5 req**, first frame 16.9 s |
-| first frame, default page | 78.1 MB / 5 req | **78.1 MB / 6 req** — flat to the byte |
+| download, first frame | 78.1 MB | **15.3 MB** |
+| boot (`GAME.ready`) | 25.8 s | **4.6 s** |
+| draw calls | 540 | **208** |
+| triangles | 6 400 667 | **2 239 089** |
 
-`pnpm run check` 22/22 (incl. the new `touchcheck`), `bakecheck` 8/8.
+The full account is `project/archive/plans/2026-08-31-opus-mobile-10x.md`.
 
-## The container tiers, because this is the part to understand first
+---
 
-Five texture/terrain containers now, in three classes:
+## The five things a fresh agent will otherwise get wrong
 
-- **boot, everybody** — `tex`, `texc`, `terrain`
-- **deferred, everybody** — `texd` (`dgn/*`; nothing reads it until a cave)
-- **deferred on `?demo=1`, boot elsewhere** — `texp` (`map/*`, `town/*`),
-  `texcp` (`face/npc/*`)
-- **fetched only above `?q=low`** — `terrainl` (the six PBR layers)
+1. **The two container formats have DIFFERENT BYTE LAYOUTS.** `baked/*.bin.gz`
+   is four byte planes; `baked/m/*.bin` is interleaved RGBA. `TexEntry.interleaved`
+   is the flag and `compactTexBake` must carry it. This cost an afternoon and
+   four wrong diagnoses. `LANDMINES.md` has it.
+2. **WebP beats gzip 3x on textures and LOSES on terrain** (23.7 vs 17.2 MB
+   lossless). Textures are pictures; a delta-coded heightfield's low byte is
+   noise. `_probe/terrsize.mts` reproduces it.
+3. **A canvas round trip is lossy for DATA at every quality setting** —
+   premultiplied alpha, and `toBlob('image/webp', 1)` is lossy q100 because
+   Chrome exposes no lossless-WebP path. Data textures go `raw`.
+4. **`drawcheck` parses its budget out of BRIEF.md rule 3 by regex.** Reword
+   that line and the gate goes VOID rather than passing. I did this and misread
+   the VOID as machine contention twice.
+5. **The `#hud` offsets in `touch.css.ts` are ZOOMED units**, not screen px —
+   `#hud` carries `zoom: uiScale()`. Two attempts in a row parked the party bars
+   on top of the minimap because of this.
 
-The third class is the idea worth keeping: a tier is a claim about *when a
-given page needs the bytes*, not about what they are. Folding `texp` into
-`texd` would have put 6.8 MB of dungeon back in front of the desktop's first
-frame.
+## Controls, briefly
 
-`terrainl` was pure waste rather than a trade — `Terrain.init` picks a 256
-layer size at low and the bake is 512, so a low page has always decoded those
-texels, found them the wrong size and thrown them away.
+`src/ui/touch/` drives everything through a synthetic `PadLike` folded into
+`Input.padSource`, plus synthesised keys for the two verbs with no pad binding
+(`Digit6` chocobo, `KeyF`/`Digit7` car). No gameplay system knows it exists.
 
-## Landmines this work stepped on
+- Left stick drawn, right side is drag-anywhere to look. Sprint is the left
+  stick's rim.
+- CHOCOBO and CAR are four-state and read live. **The Regalia can be summoned
+  now** (`RegaliaSystem.summon()`, `Digit7` on desktop) — it was the one thing
+  in the world you had to walk back to.
+- Portrait gets a rotate gate with a "play anyway" escape, because rotation lock
+  is common and a web page can neither read nor change it.
+- `touchcheck` (20 rows) drives it all through real pointer events.
 
-- **`Hammerhead` allocates `anchors = {}` at the top of its own init**, long
-  before `_build` fills it, so `!town.anchors` cannot distinguish "no town"
-  from "town not built yet". `Npcs` populated at boot anyway and repainted nine
-  1024 faces from scratch. Check `town._deferred` first.
-- **A built `PoiSite` is a different object from its queue entry.** `_make`
-  spreads it into a new record. Eviction has to clear `group` on the *queue*
-  entry or the kit never comes back; `BuiltSite.site` is the back-reference.
-- **`setPointerCapture` throws `NotFoundError` on a synthetic pointer id**
-  rather than no-opping, and the throw lands before the press reaches the pad.
-  Every touch button was inert under the gate while looking correct.
-- **`Input.gpDown` is `pressed && !_gpPrev`, and `_gpPrev` is refreshed in
-  `endFrame`.** So (a) an edge is invisible from outside `game.frame()` — count
-  them by wrapping `endFrame`; and (b) auto-repeat must publish a real one-frame
-  *release*, because a button that never reads low can never produce a second
-  rising edge however often it re-latches.
-- **`--extra` was in `HARNESS_FLAGS` but not `HARNESS_VALUE_FLAGS`**, so a tool
-  with its own parser ate both words as arguments. Fixed.
-- **`compactTexBake` had only ever run at boot**, before any deferred container
-  existed. It now runs when they land, and skips entries that already own their
-  buffer.
+## Open, in the order I would take them
 
-## What is not done
+1. **Nobody has played it on a handset except the human, briefly.** Every bug
+   that mattered this session — the camera drag sliver, the quality
+   overcorrection, the channel scramble — reached a real phone before any of 23
+   gates or any desktop capture saw it. This is the biggest gap and no
+   instrument here closes it.
+2. **Draw calls on real hardware.** "208 draws is CPU-bound on a mobile driver"
+   is an inference, not a measurement. The next round of optimisation targets
+   the wrong thing if it is wrong.
+3. **Tiled terrain streaming.** The only remaining download lever: `h` is
+   5.59 MB of irreducible lossless heightfield and ~10 MB is the floor for a
+   whole-world 4 km² field shipped as one file. Getting past it means sixteen
+   512² tiles, a tile fetcher, and `Field.heightAt` surviving a missing tile
+   without a hole in the ground. Real work, not a tweak.
+4. **The party-wipe root cause.** A watchdog ships and the cause does not
+   reproduce — `_probe/wipe.mts` resolves it in six frames. If the watchdog's
+   console line ever fires in a real session, that is the reproduction nobody
+   has. See `HUMAN_REVIEW.md`.
 
-- **Menu rows are not tappable.** The d-pad drives them, which is the path
-  `uxcheck` already covers. Tagging rows `data-i` (one line per screen) plus
-  ~20 lines of delegated `pointerdown` on `Menus.root` is the follow-up.
-  `WorldMapScreen._bindPointer` already uses real pointer events — confirm
-  rather than build.
-- **Pinch-zoom.** Camera distance is `mouse.wheel` and has no touch equivalent.
-- **Fishing tilt** is `KeyA`/`KeyD` only — you can cast and reel but not steer.
-- **The party wipe's root cause.** See `HUMAN_REVIEW.md`; a watchdog ships, the
-  cause does not reproduce.
-- **Nobody has played it on a real handset.** Every number here is a headless
-  Chromium at 844x390 or a desktop on a fast line.
+## Escape hatches worth knowing
 
-## Files
+`?demo=0` full game on a phone · `?demo=1` demo on a desktop · `?touch=0/1`
+controls · `?webp=0` plane containers · `?nobake=1` generators ·
+`?rs= ?dens= ?veg= ?fps=` one knob each.
 
-`src/engine/Device.ts` · `src/ui/touch/{TouchControls,VirtualPad,Stick,TouchButton,layouts,touch.css}.ts`
-· `src/tools/touchcheck.mts` · `src/tools/_probe/{tiercheck,uiscale,demoboot,evict,ctxloss,wipe,wipewatch}.mts`
-· four `ui-shoot` scenes named `touch_*`.
+Four theories about the speckled sky died to `?webp=0` rendering it perfectly in
+one reload. Reach for a control before a hypothesis.
