@@ -393,7 +393,14 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 7, k = 17,
     // `k` is spacings-per-band: at the equator of a 400 m mass the spacing is
     // about 315 m, so k = 26 is a band about 24 m across -- ten pixels at
     // Lestallum's 2.18 m/px, which is the width floor the whole lane turns on.
-    const t0 = Math.max(0, 1 - d * k);
+    // **Flat-topped, with steep shoulders.** A bare `1 - d*k` is a triangular
+    // profile: it is at full strength on exactly one line and falls off from
+    // there, so every other term in the product -- the up-face damping, the
+    // heat modulation, the squaring below -- pinches the ribbon toward nothing
+    // and what survives is a chain of pockmarks. Overdriving it by 1.7 and
+    // clamping gives a plateau across the middle 40% of the band with hard
+    // edges either side, which is what a crack has: a floor and two walls.
+    const t0 = Math.min(1, Math.max(0, 1 - d * k) * 1.7);
     // A crack is not equally hot along its length. This fades each vein in and
     // out over a few hundred metres so it reads as fissure rather than as a
     // painted stripe, and it never quite reaches zero.
