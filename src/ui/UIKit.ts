@@ -102,12 +102,14 @@ export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b
  *
  * The design box is the second half. A phone at the honest 0.433 is legible in
  * the sense that it fits and unreadable in the sense that matters, so the demo
- * authors against a smaller box: 844x390 against 1100x620 gives 0.629, a 1.45x
- * larger UI. That number is a **tuning value read off `ui-shoot` at a phone
+ * authors against a smaller box: 844x390 against 1280x720 gives 0.542, a 1.25x
+ * larger UI. It started at 1100x620 (0.629) and came down after the first look
+ * at the touch layer: the thumb arc needs the corners more than the party bars
+ * need the extra 15%. That number is a **tuning value read off `ui-shoot` at a phone
  * viewport**, not a derivation — change it by looking, not by arithmetic.
  */
 const DESIGN = { w: 1600, h: 900 };
-const DESIGN_PHONE = { w: 1100, h: 620 };
+const DESIGN_PHONE = { w: 1280, h: 720 };
 const SCALE_FLOOR = 0.72;
 const SCALE_CEIL = 1.5;
 

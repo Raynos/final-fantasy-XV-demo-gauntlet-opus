@@ -82,7 +82,12 @@ export interface HarnessArgs {
  * shared flag breaks every hand-rolled parser unless they can all ask what the
  * shared ones are.
  */
-export const HARNESS_VALUE_FLAGS = ['build', 'lane', 'agent', 'deadline', 'q', 'post', 'ablate', 'wait-lease'];
+// `extra` belongs here as much as in `HARNESS_FLAGS`: the two lists serve the
+// two halves of the same contract -- what `harnessArgs` consumes, and what a
+// tool's own parser must therefore skip. It was in the first and not the
+// second, so `ui-shoot --extra touch=1` swallowed both words as scene names
+// and printed `unknown scene --extra`.
+export const HARNESS_VALUE_FLAGS = ['build', 'lane', 'agent', 'deadline', 'q', 'post', 'ablate', 'wait-lease', 'extra'];
 export const HARNESS_SWITCHES = ['dirty', 'cold', 'nobake', 'prod'];
 
 /** True if `argv[i]` is a shared flag; the caller skips it and its value. */

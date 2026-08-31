@@ -61,7 +61,7 @@ export class TouchControls {
     for (const s of this.sticks) this.root.appendChild(s.root);
 
     const clusters: Record<string, HTMLElement> = {};
-    for (const name of ['right', 'left', 'top', 'side']) {
+    for (const name of ['right', 'left', 'top']) {
       const c = el(`div.tc-cluster.tc-${name}`);
       clusters[name] = c;
       this.root.appendChild(c);
@@ -94,6 +94,10 @@ export class TouchControls {
     }
 
     game.uiRoot.appendChild(this.root);
+    // The HUD has to give up the bottom-right corner and the key legend; the
+    // rules live in `touch.css.ts` behind this class so the touch layer owns
+    // its own layout consequences instead of editing six HUD modules.
+    document.documentElement.classList.add('has-touch');
 
     // Take over input. `touchMode` kills the mouse path — a handset synthesises
     // a compatibility mousedown on the canvas after any tap, and there is no
@@ -124,6 +128,9 @@ export class TouchControls {
   /** Which control set the live game state calls for. */
   _pickMode(): TouchMode {
     const g = this.game;
+    // A live cutscene outranks everything, including a menu it just closed.
+    const cine = g.get('Cinematics');
+    if (cine && cine.playing) return 'cine';
     const menus = g.get('Menus');
     const story = g.get('Story');
     if ((menus && menus.open) || (story && story.title && story.title.shown)) return 'ui';
@@ -139,8 +146,10 @@ export class TouchControls {
   update() {
     const g = this.game;
 
-    // A cutscene owns the screen; leaving live controls over it is the one way
-    // a touch layer can ruin a shot.
+    // `currentShot` is set only by `Game.applyShot`, i.e. by the capture
+    // harness. The whole layer comes off so no posed frame can ever contain
+    // it. A *played* cutscene is a different thing and keeps one button — see
+    // the `cine` mode.
     const hidden = !!g.currentShot;
     if (hidden !== this.root.hidden) {
       this.root.hidden = hidden;
@@ -158,7 +167,7 @@ export class TouchControls {
     // In `ui` the sticks come off entirely: `Input.update` already zeroes
     // `move`/`look` when `enabled` is false, but an invisible catcher over a
     // menu still eats taps meant for the screen behind it.
-    const wantSticks = mode !== 'ui';
+    const wantSticks = mode !== 'ui' && mode !== 'cine';
     for (const s of this.sticks) {
       if (s.root.hidden === wantSticks) { s.root.hidden = !wantSticks; if (!wantSticks) s.reset(); }
     }
@@ -254,6 +263,7 @@ export class TouchControls {
     document.removeEventListener('visibilitychange', this._onVis);
     this.game.input.padSource = null;
     this.game.input.touchMode = false;
+    document.documentElement.classList.remove('has-touch');
     this.root.remove();
   }
 }

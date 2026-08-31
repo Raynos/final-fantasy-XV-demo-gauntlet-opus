@@ -90,6 +90,7 @@ export class TouchButton {
     if (text === this._label) return;
     this._label = text;
     this.labelNode.textContent = text;
+    this.node.classList.toggle('is-long', text.length > 6);
   }
 
   /** 0..1 fills the progress ring; a negative number hides it. */

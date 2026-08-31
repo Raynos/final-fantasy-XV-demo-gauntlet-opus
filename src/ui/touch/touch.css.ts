@@ -59,32 +59,46 @@ const CSS = `
 .tc-cluster {
   position: absolute; pointer-events: none;
 }
+/* Contrast is the whole job here. These sit over a bright desert sky as often
+   as over rock, so the ground is dark and opaque enough to read against both,
+   and the stroke is the HUD's hot hairline rather than its quiet one — the
+   first pass used the quiet one and every button read as a smudge. */
 .tc-btn {
   position: absolute;
   pointer-events: auto;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  border: 1px solid var(--hair);
-  background: rgba(10, 17, 29, 0.42);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-  color: var(--ink-2);
+  border: 1px solid var(--hair-hot);
+  background: rgba(8, 14, 24, 0.66);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  color: var(--ink);
   text-align: center;
 }
-.tc-btn.is-down { background: rgba(182, 214, 248, 0.26); border-color: var(--hair-hot); color: var(--ink); }
+.tc-btn.is-down { background: rgba(182, 214, 248, 0.34); border-color: var(--ink); color: #fff; }
 .tc-btn.is-on   { border-color: var(--gold); color: var(--gold); }
-.tc-btn.is-off  { opacity: 0.28; pointer-events: none; }
+/* A disabled button must still be findable -- the thumb needs to know the slot
+   exists before the verb becomes available. 0.30 vanished entirely against
+   bright desert; this reads as "there, not yet". */
+.tc-btn.is-off  { opacity: 0.44; pointer-events: none; }
 
 .tc-btn-label {
-  font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase;
-  line-height: 1.05; padding: 0 4px;
-  text-shadow: var(--sh-text);
+  font-size: 10px; letter-spacing: 0.11em; text-transform: uppercase;
+  line-height: 1.05; padding: 0 3px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 .tc-lg { width: 84px; height: 84px; }
 .tc-lg .tc-btn-label { font-size: 12px; }
 .tc-md { width: 64px; height: 64px; }
 .tc-sm { width: 54px; height: 54px; }
 .tc-sm .tc-btn-label { font-size: 9px; letter-spacing: 0.1em; }
+/* A word longer than the circle. HANDBRAKE and INTERACT both overran the
+   84 px button at the authored size; the label steps down rather than the
+   button growing, because the geometry is the thing that must not move. */
+.tc-btn.is-long .tc-btn-label { font-size: 8.5px; letter-spacing: 0.04em; }
+.tc-lg.is-long .tc-btn-label { font-size: 10px; letter-spacing: 0.05em; }
 
 /* The chocobo summon ring. A conic gradient means the per-frame write is one
    custom property, not a path rewrite. */
@@ -102,13 +116,33 @@ const CSS = `
    Buttons sit in a fixed arc off the bottom-right and NEVER move between
    field / ride / swim / drive: only labels and enabled-ness change, so muscle
    memory survives a mode change. Offsets are px, plus the safe area. */
-.tc-right { right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); width: 250px; height: 230px; }
+.tc-right { right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); width: 250px; height: 290px; }
 .tc-left  { left:  calc(14px + env(safe-area-inset-left));  bottom: calc(14px + env(safe-area-inset-bottom)); width: 170px; height: 170px; }
-.tc-top   { right: calc(14px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); width: 150px; height: 60px; }
-/* The two dedicated context buttons ride above the combat arc, on the right
-   edge where the thumb reaches without leaving the look stick. */
-.tc-side  { right: calc(14px + env(safe-area-inset-right)); bottom: calc(240px + env(safe-area-inset-bottom)); width: 190px; height: 88px; }
+/* Top-LEFT, which is the one corner the HUD leaves empty at a phone viewport:
+   the clock, the gil readout and the quest tracker are all top-right. */
+.tc-top   { left:  calc(14px + env(safe-area-inset-left));  top: calc(10px + env(safe-area-inset-top)); width: 150px; height: 60px; }
 .tc-btn[hidden] { display: none; }
+
+/* ---------- what the HUD gives up ------------------------------------
+   844x390 is not big enough for a minimap and a thumb arc in the same corner,
+   and the two claims are both bottom-right. The map moves to the dead ground
+   between the two thumb zones, which is otherwise the one part of a landscape
+   phone screen nothing uses.
+
+   The bottom-centre key legend goes entirely: every glyph on it names a
+   keyboard key that does not exist on this device, and the buttons that
+   replaced them are labelled with the verb rather than the key. */
+html.has-touch .hud-corner.bc { display: none !important; }
+html.has-touch #minimap {
+  right: auto; top: auto;
+  left: 50%; bottom: 0;
+  /* Half size. The map is authored for a 1600 px screen where it is a glance;
+     dropped into the middle of a 390 px-tall one at full size it becomes the
+     subject of the frame. */
+  transform: translateX(-50%) scale(0.52);
+  transform-origin: bottom center;
+}
+html.has-touch #minimap .mm-caption, html.has-touch #minimap .mm-names { display: none; }
 `;
 
 let injected = false;

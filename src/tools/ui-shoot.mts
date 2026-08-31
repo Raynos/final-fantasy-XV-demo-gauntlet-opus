@@ -110,6 +110,62 @@ const SCENES: Record<string, Scene> = {
    * These two scenes reach past the mute and `_present` a card directly, which
    * is what a player gets when they press H on their first minute.
    */
+  /**
+   * THE ON-SCREEN CONTROLS, at a phone viewport.
+   *
+   *   node src/tools/ui-shoot.mts touch_field touch_drive touch_chocobo \
+   *     --extra touch=1 -w 844 -h 390 --out tmp/shots/touch
+   *
+   * Every scene drops `currentShot` before it settles. `TouchControls.update`
+   * takes the whole layer off screen while a shot is applied — that is what
+   * keeps the overlay out of all 166 corpus frames — so a scene that left the
+   * shot in place would capture an empty screen and prove nothing.
+   */
+  touch_field: {
+    shot: 'hud_field', settle: 40,
+    after: `g.currentShot = null; g.settle(4); window.TOUCH && window.TOUCH.update();`,
+    then: 20,
+  },
+  touch_interact: {
+    shot: 'hud_field', settle: 30,
+    after: `
+      g.currentShot = null;
+      // Stand at the Regalia so CAR reads DRIVE and INTERACT names a verb.
+      var rg=g.get('Regalia'), pl=g.get('Player'), terr=g.get('Terrain');
+      var x=rg.body.pos.x+3, z=rg.body.pos.z;
+      pl.root.position.set(x, terr.heightAt(x,z), z);
+      g.settle(20);
+      window.TOUCH && window.TOUCH.update();
+    `,
+    then: 20,
+  },
+  touch_drive: {
+    shot: 'hud_field', settle: 30,
+    after: `
+      g.currentShot = null;
+      var rg=g.get('Regalia'), pl=g.get('Player'), terr=g.get('Terrain');
+      var x=rg.body.pos.x+3, z=rg.body.pos.z;
+      pl.root.position.set(x, terr.heightAt(x,z), z);
+      g.settle(10);
+      rg.enter(false);
+      g.settle(30);
+      window.TOUCH && window.TOUCH.update();
+    `,
+    then: 20,
+  },
+  touch_chocobo: {
+    shot: 'hud_field', settle: 30,
+    after: `
+      g.currentShot = null;
+      var cho=g.get('Chocobo');
+      cho.summon();
+      // Let the bird run most of the way in, so the ring is a real reading
+      // rather than a full circle or an empty one.
+      for (var i=0;i<240 && cho.state==='arriving';i++) g.frame(1/60);
+      window.TOUCH && window.TOUCH.update();
+    `,
+    then: 8,
+  },
   hint_over_menu: {
     shot: 'menu_main', settle: 20,
     after: `

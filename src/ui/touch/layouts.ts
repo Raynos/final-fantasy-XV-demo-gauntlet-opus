@@ -19,11 +19,11 @@ export const PAD = {
 } as const;
 
 /** Which control set is on screen. Chosen per frame from live game state. */
-export type TouchMode = 'field' | 'ride' | 'swim' | 'drive' | 'ui';
+export type TouchMode = 'field' | 'ride' | 'swim' | 'drive' | 'ui' | 'cine';
 
 export interface SlotDef {
   id: string;
-  cluster: 'right' | 'left' | 'top' | 'side';
+  cluster: 'right' | 'left' | 'top';
   cls: 'tc-lg' | 'tc-md' | 'tc-sm';
   left: number;
   top: number;
@@ -43,17 +43,24 @@ export interface SlotDef {
  * through a synthesised key (`Digit6`, `KeyF`).
  */
 export const SLOTS: SlotDef[] = [
-  { id: 'interact', cluster: 'right', cls: 'tc-lg', left: 158, top: 132, pad: PAD.a, label: 'INTERACT' },
-  { id: 'attack', cluster: 'right', cls: 'tc-md', left: 82, top: 156, pad: PAD.x, label: 'ATTACK' },
-  { id: 'dodge', cluster: 'right', cls: 'tc-md', left: 100, top: 74, pad: PAD.b, label: 'DODGE' },
-  { id: 'warp', cluster: 'right', cls: 'tc-sm', left: 178, top: 60, pad: PAD.y, label: 'WARP' },
-  { id: 'lock', cluster: 'right', cls: 'tc-sm', left: 20, top: 92, pad: PAD.rb, label: 'LOCK' },
-  { id: 'armiger', cluster: 'right', cls: 'tc-sm', left: 104, top: 6, pad: PAD.lb, label: 'ARMIGER' },
-  { id: 'chocobo', cluster: 'side', cls: 'tc-lg', left: 100, top: 0, key: 'Digit6', label: 'CHOCOBO' },
-  { id: 'car', cluster: 'side', cls: 'tc-lg', left: 2, top: 0, key: 'KeyF', label: 'CAR' },
-  { id: 'sprint', cluster: 'left', cls: 'tc-md', left: 0, top: 84, pad: PAD.l3, toggle: true, label: 'SPRINT' },
-  { id: 'menu', cluster: 'top', cls: 'tc-sm', left: 92, top: 0, pad: PAD.start, label: 'MENU' },
-  { id: 'map', cluster: 'top', cls: 'tc-sm', left: 30, top: 0, key: 'KeyM', label: 'MAP' },
+  // The two context buttons take the top row: they are the two things in this
+  // world worth a permanent thumb of their own, and neither has a pad binding
+  // to borrow -- both go through a synthesised key (`Digit6`, `KeyF`).
+  { id: 'car', cluster: 'right', cls: 'tc-lg', left: 62, top: 0, key: 'KeyF', label: 'CAR' },
+  { id: 'chocobo', cluster: 'right', cls: 'tc-lg', left: 166, top: 0, key: 'Digit6', label: 'CHOCOBO' },
+  // Then the combat arc, INTERACT nearest the corner where the thumb rests.
+  { id: 'armiger', cluster: 'right', cls: 'tc-sm', left: 0, top: 42, pad: PAD.lb, label: 'ARMIGER' },
+  { id: 'warp', cluster: 'right', cls: 'tc-sm', left: 196, top: 122, pad: PAD.y, label: 'WARP' },
+  { id: 'dodge', cluster: 'right', cls: 'tc-md', left: 100, top: 132, pad: PAD.b, label: 'DODGE' },
+  { id: 'lock', cluster: 'right', cls: 'tc-sm', left: 14, top: 148, pad: PAD.rb, label: 'LOCK' },
+  { id: 'attack', cluster: 'right', cls: 'tc-md', left: 82, top: 212, pad: PAD.x, label: 'ATTACK' },
+  { id: 'interact', cluster: 'right', cls: 'tc-lg', left: 162, top: 206, pad: PAD.a, label: 'INTERACT' },
+  // Left thumb: the stick zone is invisible and floating, so the only drawn
+  // control on this side is the sprint latch -- clear of the party bars, which
+  // own the bottom-left corner at every viewport.
+  { id: 'sprint', cluster: 'left', cls: 'tc-md', left: 0, top: 8, pad: PAD.l3, toggle: true, label: 'SPRINT' },
+  { id: 'map', cluster: 'top', cls: 'tc-sm', left: 0, top: 0, key: 'KeyM', label: 'MAP' },
+  { id: 'menu', cluster: 'top', cls: 'tc-sm', left: 62, top: 0, pad: PAD.start, label: 'MENU' },
 ];
 
 /** What a slot becomes in a given mode. `off` dims it and eats its presses. */
@@ -105,6 +112,24 @@ export const MODES: Record<TouchMode, Record<string, SlotState>> = {
     sprint: { off: true },
     chocobo: { off: true },
     car: { label: 'EXIT' },
+  },
+  /**
+   * A cutscene owns the screen. One button, and it is the one the scene
+   * already answers: `Cinematics.update` skips on `gp(1)`, which is the DODGE
+   * slot. Without it a phone player watches every cutscene to the end.
+   */
+  cine: {
+    dodge: { label: 'SKIP', pad: PAD.b },
+    interact: { off: true },
+    attack: { off: true },
+    warp: { off: true },
+    lock: { off: true },
+    armiger: { off: true },
+    sprint: { off: true },
+    chocobo: { off: true },
+    car: { off: true },
+    menu: { off: true },
+    map: { off: true },
   },
   ui: {
     // Sticks unmount and `Input.update` zeroes `move`/`look` anyway; what is
