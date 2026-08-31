@@ -391,6 +391,59 @@ with the respawned lane, not backlog, and are deliberately not listed here.*
   LANDMINES entry. `lane5`
 
 
+## From lane 12e (the judge's landscape tells), 2026-08-31
+
+*Two tells, three fixes and two measured negatives. The cloud-shadow projection
+error and the massif weave are closed; what is below is what they left.*
+
+- **THE BIGGEST READY-TO-APPLY ITEM IN THIS FILE, and it is a cross-lane one.**
+  The massif silhouette carries no boulder or scrub scatter — the judge's tell
+  #2b, "no boulder or scrub scatter breaking the silhouette" — and it is a
+  **slope test, not a range test, and it costs ZERO draw calls.** `Rocks.build`
+  makes exactly 8 `InstancedMesh`es, one per kind, both LOD tiers sharing one
+  mesh, and streaming tiles only bump `mesh.count`; live caps have headroom
+  (granite 318/890, bedded 462/940, slab 364/730). Probed on `vista_noon`:
+  1381 rock instances live, farthest 1150 m, so nothing is out of range —
+  but by slope band, `<0.2` gets 1191 instances at mean height **4.09 m**
+  while `0.46-0.60` gets **33 at 2.92 m** and `>0.70` gets **9 at 2.15 m**.
+  The massif carries 4 % of the stone field at 60 % of the size. The offender
+  is `src/world/props/Rocks.ts:2498`, `size *= (1 - steep * 0.62)` — 0.38x at
+  slope 0.56 — with `:2198`'s outcrop taper `smoothstep(slope, 0.58, 0.8)`
+  second. Proposal: `0.62` -> ~`0.25` for BIG kinds and the taper to
+  `(0.72, 0.92)`, putting 4-7 m blocks where 2 m ones are, inside batches that
+  already draw. **Not landed: `src/world/props/` is not lane 12e's to edit.**
+  Two caveats from the same probe: `emit` silently drops instances once a group
+  cap fills, so watch granite/bedded; and **leave `_genTor`'s 0.30 slope ban
+  alone** — a 20 m stack on a 30-degree face has metres of seat error and the
+  ban is load-bearing. `lane12e`
+- **The cloud-shadow scale error is fixed and the shadows still land on only a
+  quarter of the ground.** `shadowScale` is 1.0 in every preset and
+  `uShadowTile` is 27000, so a patch is now the size of its cloud (was 199 m
+  under an 1844 m field). 25.3 % of the clear tile is below transmittance 0.8,
+  which is right for fair weather, so most compositions correctly sit in sun:
+  **two of twelve** landscape shots gained a readable cast shadow
+  (`zone_callaegh`, `vista_noon`). Making more frames show one is a **coverage
+  or framing** question. Do not reach for strength: this file already forbids
+  deepening `cloudShadow` and lane 5 measured that weakening it is physically
+  wrong. `lane12e`
+- **`weavestat` cannot see a GLOBAL repeat, only a local one.** It is calibrated
+  (synthetic plaid n2 0.19, stripe 0.00, noise 0.00, VOID otherwise) and it read
+  **0.12 -> 0.11** across a fix that visibly removes a plaid, because the defect
+  is coherence between distant faces and the statistic is per-ROI. The next
+  version wants the spread of `deg` over many separated boxes on unrelated
+  faces, not the peak inside one. **A low `n2` is not evidence of absence** and a
+  lane grading a global-repeat fix on that column will file a false null.
+  `lane12e`
+- **`tf_lodW` is the remaining candidate for "distant mountains rendered as
+  untextured cones".** The obvious one is closed: `?post=nostructfade` removes
+  the hand-back to the filtered normal past 2.2 km, which should switch the
+  strata and runnels back on out there, and on `zone_callaegh` it moves
+  **0.260/255 against that shot's own noise floor of 2.00**. `tf_lodW` retires
+  each relief octave by screen footprint — contributing at 4 px wide, gone by
+  2 px — and will have retired all three long before 2.2 km. Different fade,
+  different argument, not yet priced. The conical *shape* is `Field.ts`, which
+  is a separate question again. `lane12e`
+
 ## From lane 16 (gates), 2026-08-31
 
 - **The `prewarm` queue is not superseding, and it is why nothing gets a page
