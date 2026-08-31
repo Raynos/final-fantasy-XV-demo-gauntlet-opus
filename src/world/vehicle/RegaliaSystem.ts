@@ -156,6 +156,10 @@ export class RegaliaSystem {
   banter!: Banter;
   body!: VehicleBody;
   built!: RegaliaBuild;
+  /** The `scene.environment` the car's materials currently point at. */
+  _envMap!: THREE.Texture | null;
+  /** The `scene.environmentIntensity` those materials are trimmed against. */
+  _envK!: number;
   cabinLight!: THREE.PointLight;
   destinations!: Destination[];
   driveCam!: DriveCamera;
@@ -221,8 +225,11 @@ export class RegaliaSystem {
 
     // ---- mesh ------------------------------------------------------------
     const props = game.get('Props');
-    const env = game.scene.environment || null;
-    const built = buildRegalia({ envMap: env, drivable: true });
+    // No `envMap` here on purpose -- see `_syncEnv`. The drivable car used to
+    // copy `game.scene.environment` into six materials at boot and never look
+    // again, and that one line is why the Regalia rendered as a flat black
+    // silhouette in full midday sun.
+    const built = buildRegalia({ drivable: true });
     this.built = built;
     this.lights = built.lights;
     this.lampMat = built.lamp;
@@ -432,8 +439,64 @@ export class RegaliaSystem {
 
   /* --------------------------------------------------------------- update */
 
+  /**
+   * Keep the car's environment map pointed at the live one.
+   *
+   * **The bug this exists to kill.** `RegaliaSystem.init` used to do
+   * `buildRegalia({ envMap: game.scene.environment })`, which pins the texture
+   * of `Sky`'s PMREM render target into `paint`, `chrome`, `glass`, `lamp`,
+   * `trim` and `hide`. `Sky._updateEnv` rebuilds that target and **disposes
+   * the previous one** on every time-of-day change (`Sky.ts:1350`) -- and
+   * three.js does not fail loudly on a disposed render-target texture:
+   * `setTexture2D`'s re-upload path is guarded by
+   * `texture.isRenderTargetTexture === false`, so a PMREM output falls through
+   * to `bindTexture(TEXTURE_2D, undefined)` and lands on `emptyTextures`, a
+   * 1x1 RGBA(0,0,0,0). No warning, no error, no red gate.
+   *
+   * `setTimeOfDay` runs on the title screen, on every chapter start, in every
+   * story scene and on every posed shot with a `time` -- which is all six
+   * Regalia shots -- so in practice the car's env map was one black pixel from
+   * the first frame anybody ever photographed. `chrome` is `metalness 1.0` and
+   * therefore has **no diffuse term at all**: its only light is
+   * `getIBLRadiance() * envMapIntensity`, so every mirror, bumper blade, grille
+   * slat, rim and spoke went pure black. The near-black clearcoat paint reads
+   * lacquer only because it reflects the sky, so the body went with it, and
+   * the near-black shut lines stopped reading because they had nothing lighter
+   * to be a line against. That is the whole of "the Regalia has no material...
+   * two black hooks for mirrors".
+   *
+   * Every other consumer in the tree (weapons, towns, dungeons, characters,
+   * and the *static* roadside Regalia via `Props._fallbackEnv`, which returns
+   * null once Sky is up) leaves `envMap` null and lets three resolve
+   * `material.envMap || scene.environment` per frame. The car cannot simply do
+   * that, because three overwrites `envMapIntensity` with
+   * `scene.environmentIntensity` for any lit material whose own `envMap` is
+   * null -- which would throw away the authored 0.3 / 1.15 / 2.2 trim that
+   * makes glass read as glass. So it holds its own pointer and re-points it,
+   * multiplying the authored intensity by the scene's own env trim so the car
+   * still dims with the sky after dark.
+   *
+   * A texture-to-texture swap does not change a program's cache key, so this
+   * costs nothing but the comparison, and the comparison is six materials on
+   * the frames where anything changed at all.
+   */
+  _syncEnv(game: Game) {
+    if (!this.built) return;
+    const env = game.scene.environment || null;
+    const k = game.scene.environmentIntensity ?? 1;
+    if (env === this._envMap && k === this._envK) return;
+    this._envMap = env;
+    this._envK = k;
+    for (const m of this.built.envMats) {
+      m.envMap = env;
+      const base = m.userData.baseEnvI;
+      m.envMapIntensity = (base == null ? 1 : base) * k;
+    }
+  }
+
   update(dt: number, game: Game) {
     if (!this.enabled) return;
+    this._syncEnv(game);
     if (this._enterCooldown > 0) this._enterCooldown -= dt;
 
     this._shotStaging(game);

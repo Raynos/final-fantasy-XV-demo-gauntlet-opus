@@ -210,6 +210,21 @@ export interface RegaliaBuild {
   lamp: THREE.MeshStandardMaterial;
   tail: THREE.MeshStandardMaterial;
   wheels: RegaliaWheel[] | null;
+  /**
+   * Every material that wants an environment map, with its authored
+   * `envMapIntensity` parked in `userData.baseEnvI`.
+   *
+   * The caller needs this because `scene.environment` is **not** a stable
+   * handle: `Sky._updateEnv` disposes the previous PMREM render target every
+   * time the time of day moves (`Sky.ts:1350`), and three.js silently rebinds
+   * a disposed render-target texture to its 1x1 all-zero fallback with no
+   * warning -- `setTexture2D`'s re-upload guard excludes render-target
+   * textures, so it falls through to `bindTexture(..., undefined)` and
+   * `emptyTextures[TEXTURE_2D]`. Anything that copied the texture into
+   * `material.envMap` at boot is reflecting one black pixel from the first
+   * sunset onward. See `RegaliaSystem._syncEnv`.
+   */
+  envMats: THREE.MeshStandardMaterial[];
   /** The painted contact pool. A moving car re-lays it every frame. */
   shadow: THREE.Mesh;
   scale: number;
@@ -225,15 +240,37 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   car.scale.setScalar(SCALE);
   group.add(car);
 
+  // Two-layer lacquer: a near-black base coat that carries the colour, and a
+  // clear coat that carries the sky. The base was `0x0a0b0e` at
+  // `envMapIntensity: 0.3`, which is a hole rather than paint -- 0.35% diffuse
+  // response and a third of the sky. On a car whose only ambient specular is
+  // the environment map that is indistinguishable from no material at all,
+  // which is exactly what a playtester reported. `0x11141b` is still black on
+  // any grey card; it just has enough blue in it to separate the shadowed
+  // flanks from the tyres, and a full-strength clear coat so the body reads
+  // the sky gradient the way lacquer does.
   const paint = new THREE.MeshPhysicalMaterial({
-    color: 0x0a0b0e, metalness: 0.0, roughness: 0.3,
-    clearcoat: 0.85, clearcoatRoughness: 0.07, envMapIntensity: 0.3,
+    color: 0x11141b, metalness: 0.0, roughness: 0.28,
+    clearcoat: 1.0, clearcoatRoughness: 0.07, envMapIntensity: 0.8,
   });
   paint.name = 'paint';
+  // `metalness: 1.0` means chrome has NO diffuse term: the environment map is
+  // its entire light. Every bumper blade, grille slat, mirror, rim and spoke
+  // on this car is this material, so it is the first thing to go black and the
+  // loudest thing to come back.
   const chrome = new THREE.MeshStandardMaterial({
-    color: 0xb4b9c0, metalness: 1.0, roughness: 0.14, envMapIntensity: 0.9,
+    color: 0xb4b9c0, metalness: 1.0, roughness: 0.14, envMapIntensity: 0.95,
   });
   chrome.name = 'chrome';
+  // Brightwork, not a mirror. The chrome spear and the rocker sill are long
+  // bands lifted off the flank, so at any grazing angle they hand the camera a
+  // full-length reflection of the sun and the car reads as a chrome bar with a
+  // wheel at each end. Same alloy, brushed: it still separates from the paint,
+  // it just does not smear.
+  const satin = new THREE.MeshStandardMaterial({
+    color: 0xa8adb4, metalness: 1.0, roughness: 0.36, envMapIntensity: 0.8,
+  });
+  satin.name = 'satin';
   // Real glass: you see the cabin through it, and the sky on it.
   const glass = new THREE.MeshPhysicalMaterial({
     color: 0x7f97ab, metalness: 0.0, roughness: 0.035,
@@ -261,7 +298,11 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   const hide = new THREE.MeshStandardMaterial({ color: 0x4a3b30, roughness: 0.68, metalness: 0.02 });
   hide.name = 'hide';
 
-  if (envMap) for (const m of [paint, chrome, glass, lamp, trim, hide]) m.envMap = envMap;
+  const envMats: THREE.MeshStandardMaterial[] = [paint, chrome, satin, glass, lamp, trim, hide];
+  for (const m of envMats) {
+    m.userData.baseEnvI = m.envMapIntensity;
+    if (envMap) m.envMap = envMap;
+  }
 
   const B = new PartBuilder();
   const hull = hullSections();
@@ -327,11 +368,11 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   const flank = hull.slice(3, 37);
   const sill = hull.slice(6, 34);
   for (const [jA, jB] of [[8, 9], [19, 20]]) {
-    B.add(chrome, loftBand(flank, jA, jB, 0.017));
+    B.add(satin, loftBand(flank, jA, jB, 0.017));
     B.add(seam, loftBand(flank, jA + 1, jB + 1, 0.007));
   }
   for (const [jA, jB] of [[2, 4], [24, 26]]) {
-    B.add(chrome, loftBand(sill, jA, jB, 0.013));
+    B.add(satin, loftBand(sill, jA, jB, 0.013));
   }
 
   // --- panel gaps ---------------------------------------------------------
@@ -589,5 +630,5 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   sh.name = 'regalia_contact';
   group.add(sh);
 
-  return { group, car, lights, lamp, tail, wheels, shadow: sh, scale: SCALE, wheelY: WY * SCALE };
+  return { group, car, lights, lamp, tail, wheels, envMats, shadow: sh, scale: SCALE, wheelY: WY * SCALE };
 }
