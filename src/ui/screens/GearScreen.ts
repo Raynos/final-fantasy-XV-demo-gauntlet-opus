@@ -150,7 +150,7 @@ export class GearScreen {
       const techs = r ? r.party.techniquesFor(p.id).slice(0, 3) : [];
       const card = el('div.gcard.plate', {}, [
         el('div.gc-h', {}, [
-          el('div.pfw', {}, [portrait(p.hue, 0.55)]),
+          el('div.pfw', {}, [portrait(p.hue, 0.55, p.id)]),
           el('div', {}, [el('div.gc-nm', { text: p.name }), el('div.gc-lv', { text: `Level ${p.level}` })]),
         ]),
         el('div.rule', { style: 'margin-top:16px' }),

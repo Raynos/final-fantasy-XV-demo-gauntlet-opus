@@ -1,4 +1,5 @@
 import { svg } from './UIKit.ts';
+import { registerPortraitSlot } from './PortraitStore.ts';
 
 /**
  * Procedural inline-SVG icon set.
@@ -137,14 +138,21 @@ export function dpad(dir = 'up', size = 18) {
 let _pfId = 0;
 
 /**
- * Procedural bust portrait for a party plate — a lit silhouette on a tinted
- * gradient with a raking highlight. Stylised rather than literal, which reads
- * cleanly at 38px and still holds up at 110px in the menu.
+ * A party plate: the character's baked head on a tinted gradient card.
+ *
+ * The card — gradient, raking light streak, vignette, hairline border — is the
+ * art direction and stays. What sits in it used to be a procedural bust
+ * silhouette, and four of those side by side in the HUD read as four identical
+ * "no avatar" blanks, which is exactly what a playtester called them. So the
+ * bust is now only the *fallback*, drawn until `Portraits.ts` has rendered the
+ * real head; pass `id` and the plate swaps itself the moment the bake lands.
+ *
  * @param seedHue base hue for the character
  * @param [tone] 0..1 backing lightness
+ * @param [id] roster id (`noctis`, `gladio`, ...) — omit for a generic plate
  */
-export function portrait(seedHue: number, tone: number = 0.5) {
-  const id = `pf${_pfId++}`;
+export function portrait(seedHue: number, tone: number = 0.5, id: string | null = null) {
+  const pid = `pf${_pfId++}`;
   const root = svg('svg', {
     class: 'pf', viewBox: '0 0 48 56', preserveAspectRatio: 'xMidYMid slice', 'aria-hidden': 'true',
   });
@@ -152,7 +160,7 @@ export function portrait(seedHue: number, tone: number = 0.5) {
     + 'M19.7 26.6h8.6v4.7c0 1.1 1.3 1.7 3.6 2.4C38.6 35.6 43.4 40.6 44.6 56H3.4c1.2-15.4 6-20.4 12.7-22.3'
     + 'c2.3-.7 3.6-1.3 3.6-2.4Z';
   root.appendChild(svg('defs', {}, [
-    svg('linearGradient', { id: `${id}b`, x1: 0.1, y1: 0, x2: 0.9, y2: 1 }, [
+    svg('linearGradient', { id: `${pid}b`, x1: 0.1, y1: 0, x2: 0.9, y2: 1 }, [
       // Near-monochrome on purpose. At HUD size these are 38 px chips, but the
       // pause menu blows them up to 112x132 and at 26-30% saturation the four
       // of them read as an orange/purple/olive colour swatch strip — nothing
@@ -162,29 +170,40 @@ export function portrait(seedHue: number, tone: number = 0.5) {
       svg('stop', { offset: 0.55, 'stop-color': `hsl(${seedHue + 8} 9% ${13 + tone * 7}%)` }),
       svg('stop', { offset: 1, 'stop-color': `hsl(${seedHue + 18} 8% 6%)` }),
     ]),
-    svg('linearGradient', { id: `${id}f`, x1: 0.15, y1: 0, x2: 0.95, y2: 0.9 }, [
+    svg('linearGradient', { id: `${pid}f`, x1: 0.15, y1: 0, x2: 0.95, y2: 0.9 }, [
       svg('stop', { offset: 0, 'stop-color': 'rgba(16,22,34,.30)' }),
       svg('stop', { offset: 0.45, 'stop-color': 'rgba(8,12,20,.86)' }),
       svg('stop', { offset: 1, 'stop-color': 'rgba(4,7,12,.96)' }),
     ]),
     // rim light falls off fast so only the lit edge catches — a full outline
     // would read as a placeholder avatar glyph
-    svg('linearGradient', { id: `${id}r`, x1: 0.05, y1: 0, x2: 0.62, y2: 0.55 }, [
+    svg('linearGradient', { id: `${pid}r`, x1: 0.05, y1: 0, x2: 0.62, y2: 0.55 }, [
       svg('stop', { offset: 0, 'stop-color': 'rgba(232,244,255,.95)' }),
       svg('stop', { offset: 0.26, 'stop-color': 'rgba(168,200,240,.34)' }),
       svg('stop', { offset: 0.52, 'stop-color': 'rgba(120,150,196,0)' }),
     ]),
   ]));
-  root.appendChild(svg('rect', { width: 48, height: 56, fill: `url(#${id}b)` }));
+  root.appendChild(svg('rect', { width: 48, height: 56, fill: `url(#${pid}b)` }));
   root.appendChild(svg('path', { d: 'M-10 56 26 -6 40 -6 4 56Z', fill: 'rgba(198,226,255,.10)' }));
   // the bust is over-scaled and pushed right so the frame crops it like art
   const g = svg('g', { transform: 'translate(-5 -7) scale(1.45)' });
-  g.appendChild(svg('path', { d: bust, fill: `url(#${id}f)` }));
-  g.appendChild(svg('path', { d: bust, fill: 'none', stroke: `url(#${id}r)`, 'stroke-width': 1.3 }));
+  g.appendChild(svg('path', { d: bust, fill: `url(#${pid}f)` }));
+  g.appendChild(svg('path', { d: bust, fill: 'none', stroke: `url(#${pid}r)`, 'stroke-width': 1.3 }));
   root.appendChild(g);
-  root.appendChild(svg('rect', { width: 48, height: 20, y: 36, fill: `url(#${id}v)` }));
+  // The baked head rides above the fallback bust and below the vignette, so
+  // the card's grade applies to a render exactly as it did to the silhouette.
+  // `slice` on a 48x56 viewBox crops the 288x336 plate without letterboxing.
+  if (id) {
+    const im = svg('image', {
+      x: 0, y: 0, width: 48, height: 56, opacity: 0,
+      preserveAspectRatio: 'xMidYMid slice',
+    });
+    root.appendChild(im);
+    registerPortraitSlot(id, im, g);
+  }
+  root.appendChild(svg('rect', { width: 48, height: 20, y: 36, fill: `url(#${pid}v)` }));
   root.appendChild(svg('rect', { width: 48, height: 56, fill: 'none', stroke: 'rgba(190,214,248,.24)', 'stroke-width': 1.2 }));
-  root.querySelector('defs')!.appendChild(svg('linearGradient', { id: `${id}v`, x1: 0, y1: 0, x2: 0, y2: 1 }, [
+  root.querySelector('defs')!.appendChild(svg('linearGradient', { id: `${pid}v`, x1: 0, y1: 0, x2: 0, y2: 1 }, [
     svg('stop', { offset: 0, 'stop-color': 'rgba(3,6,11,0)' }),
     svg('stop', { offset: 1, 'stop-color': 'rgba(3,6,11,.72)' }),
   ]));

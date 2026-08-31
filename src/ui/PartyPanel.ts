@@ -88,7 +88,7 @@ export class PartyPanel {
     for (const idx of order) {
       const p = party[idx];
       const lead = idx === 0;
-      const pfPlate = el('div.pf-plate', {}, [portrait(p.hue, lead ? 0.62 : 0.4)]);
+      const pfPlate = el('div.pf-plate', {}, [portrait(p.hue, lead ? 0.62 : 0.4, p.id)]);
       const nm = el('span.nm', { text: p.name });
       const lv = el('span.lv', {}, [el('span', { text: 'LV ' }), el('b', { text: String(p.level) })]);
       const sts = el('div.sts');

@@ -14,6 +14,7 @@ import { Hints } from './Hints.ts';
 import { HudBridge } from './HudBridge.ts';
 import { SHOTS } from '../game/Shots.ts';
 import { BANTER } from './GameData.ts';
+import { tickPortraits } from './Portraits.ts';
 import type { Game } from '../game/Game.ts';
 import type { Enemy } from '../characters/enemies/EnemyBase.ts';
 
@@ -59,6 +60,8 @@ export class HUD {
   menuOpen!: boolean;
   mode!: string;
   party!: PartyPanel;
+  /** Still-bakeable portraits; false once all four heads are rendered. */
+  _portraits: boolean = true;
   prompts!: Prompts;
   root!: HTMLElement;
   subtitles!: Subtitles;
@@ -178,6 +181,12 @@ export class HUD {
 
   /** @param dt @param game */
   lateUpdate(dt: number, game: Game) {
+    // Party portraits are rendered off the real heads a few frames into the
+    // session and then never again — see `Portraits.ts`. It runs here rather
+    // than in `PartyPanel` because the pause menu and the Gear screen want the
+    // same four plates and neither is built while the HUD is hidden.
+    if (this._portraits) this._portraits = tickPortraits(game);
+
     // First-run hints run outside the HUD's own visibility, because the one
     // about closing a menu has to show while the HUD itself is faded out.
     this.hints.muted = !!game.currentShot;

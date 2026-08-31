@@ -141,7 +141,7 @@ export class MainScreen {
       const bar = new Bar({ cls: 'slim' });
       const hp = el('div.lv');
       const card = el('div.mp-card', {}, [
-        el('div.pfw', {}, [portrait(p.hue, 0.55)]),
+        el('div.pfw', {}, [portrait(p.hue, 0.55, p.id)]),
         el('div.nm', { text: p.name }),
         hp, bar.node,
       ]);
