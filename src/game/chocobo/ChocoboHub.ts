@@ -236,13 +236,20 @@ export class ChocoboHub {
    * publishes (`bird0..2`), so they are post-yaw and cannot land on the barn.
    */
   _paddock(dt: number) {
-    const player = this.game.get('Player');
+    /*
+     * **The camera, not the player.** `PoiKits._make` builds a site on camera
+     * distance, so gating the birds on the player would let a free camera --
+     * `dresscam.mts`, and every framing in `Shots.ts` that is not `follow:` --
+     * photograph a fully built stable yard with an empty pen. They are the same
+     * point in ordinary play and different in every capture.
+     */
+    const eye = this.game.camera?.position || this.game.get('Player')?.position;
     const kits = this.game.get('Props')?.poiKits;
-    if (!player) return;
+    if (!eye) return;
     for (const hub of CHOCOBO_HUBS) {
       const poi = worldMap.poiById(hub.poi);
       if (!poi) continue;
-      const d = Math.hypot(poi.x - player.position.x, poi.z - player.position.z);
+      const d = Math.hypot(poi.x - eye.x, poi.z - eye.z);
       const pen = this._pen.get(hub.key);
       if (pen) {
         if (d > PADDOCK_FAR) { this._empty(hub.key); continue; }
