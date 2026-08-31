@@ -2506,3 +2506,27 @@ the tails.** This is the same lesson as the heavy-tailed-field entry above, in
 the opposite direction: there, one extreme value was noise; here, the extremes
 are the whole judgement.
 
+## A done-when can name a flag that does not exist, and the run will pass anyway
+
+Plan task 64's exit was *"`longplay --night`"*. **`longplay` has no night mode.**
+It reads only `window.__PLAY_MINUTES`; `probe.mts` parses its own flags
+(`--shot`, `--ttl`, `--turbo`, `--set`, `--cpu`) and forwards nothing else. So
+`--night` was accepted by the shell, ignored by everything downstream, and the
+run returned a confident **PASS — 30 minutes of continuous play, nothing
+wedged**.
+
+That PASS is true and it is about the wrong thing: it was a **daytime** session,
+and `RegaliaSystem._nightRoadDanger` — the entire feature the exit exists to
+verify — was never reached. Nothing in 30 minutes of output mentions night,
+because nothing about the run was night.
+
+This is the same family as the unread-flag entry above, but worse in one way:
+there the tool crashed or returned nothing, which is at least visible. **Here an
+unrelated green was produced and could have been reported as the exit.** The
+plan's own `nanscan` command line has the identical defect (`probes/nanscan.mts`
+is a probe body and needs `probe.mts`), so this is a habit of the briefs and not
+one accident.
+
+**Before quoting an exit, run its command and confirm the output mentions the
+thing being tested.** A PASS that never names your subject has not tested it.
+
