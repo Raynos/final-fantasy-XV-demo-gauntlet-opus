@@ -120,6 +120,22 @@ export class CameraRig {
    * only honest A/B on a world this deterministic.
    */
   occluderPush!: boolean;
+  /**
+   * Ablation knob for the slope lift — `probes/camview.mts --set
+   * __CV_ABLATE=slopeLift` prices it against itself over the same poses.
+   */
+  slopeLift!: boolean;
+  /**
+   * Ablation knob for the focus-out-of-the-hillside clamp — `probes/camsteep.mts`
+   * sprints the same slope twice with it off and on. It is the one that carries
+   * the playtest's frame; see the block in `lateUpdate`.
+   */
+  focusClear!: boolean;
+  /**
+   * Radians of pitch the slope lift is currently adding, damped. Read-only
+   * from outside; `_liftFor` computes where it is heading.
+   */
+  _lift!: number;
   restDistance!: number;
   rotDamp!: number;
   sensitivity!: number;
@@ -158,6 +174,9 @@ export class CameraRig {
     this.groundClearance = 0.74;
     this.occluders = new CameraOccluders();
     this.occluderPush = true;
+    this.slopeLift = true;
+    this.focusClear = true;
+    this._lift = 0;
     this.height = 1.62;
     this.shoulder = 0.55;
 
@@ -335,6 +354,66 @@ export class CameraRig {
   }
 
   /**
+   * The arm length at one candidate orbit, with no side effects the caller
+   * has to unpick. `_liftFor` calls it up to six times a frame.
+   */
+  _armAt(game: Game, focus: THREE.Vector3, yaw: number, pitch: number, wanted: number) {
+    const cp = Math.cos(pitch);
+    _dirP.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp).normalize();
+    return this._armDistance(game, focus, _dirP, wanted);
+  }
+
+  /**
+   * Radians of extra pitch that would let the arm out again — the fix for the
+   * playtest's worst frame.
+   *
+   * **What it is for.** "Sprinting uphill: at 40 s the camera was 2.1 m behind
+   * Noctis; by 60 s and still at 80 s the entire screen was a featureless wall
+   * of brown dirt. Measured: camera distance collapsed 5.2 m -> 1.4 m as I
+   * climbed." Both halves of that are one geometry. Behind a player on a
+   * 30-degree slope the ground rises 0.58 m per metre and a 0.22 rad arm rises
+   * 0.22, so the arm runs into the hillside at 2.5 m and there is no arm length
+   * that fixes it: the lens is standing in the slope, and everything in front
+   * of it is the slope. `probes/camview.mts` measures it as **10.59% of steep
+   * poses with the arm crushed below 2.5 m and 9.15% of them WALLED**, no part
+   * of the frame reaching the horizon at all.
+   *
+   * The arm is not the only degree of freedom. Pitch is the other one, and it
+   * is the one the geometry is asking for: at 0.6 rad the same slope stops
+   * blocking the same arm entirely, and a camera 34 degrees above a hillside is
+   * a normal third-person shot that shows the hill, the way around it, and the
+   * horizon past it. This is why the ground floor already exists — it is the
+   * same instinct applied to the lens rather than to the orbit, and it lifts
+   * the lens 0.74 m, which on a slope is nothing.
+   *
+   * Deliberately NOT a push: `probes/camlook.mts` photographed a radial push-out
+   * turning a legible frame into a wall of rock, and the reason it gave is the
+   * reason this is on the orbit — the shot cares about pitch and does not care
+   * about a direction picked by an ellipsoid's gradient. The player's own pitch
+   * is untouched, so this decays back to whatever they were holding.
+   *
+   * Pure in `_lift`: the search is run from the *player's* pitch, never from
+   * the lifted one, so the applied lift cannot feed back into the lift it asks
+   * for. The damping in `lateUpdate` is what makes it a glide.
+   */
+  _liftFor(game: Game, focus: THREE.Vector3, yaw: number, pitch: number, wanted: number) {
+    if (!this.slopeLift) return 0;
+    const want = wanted * LIFT_OK;
+    let best = this._armAt(game, focus, yaw, pitch, wanted);
+    if (best >= want) return 0;
+    let bestLift = 0;
+    for (let i = 1; i <= LIFT_STEPS; i++) {
+      const lift = (i / LIFT_STEPS) * LIFT_MAX;
+      const d = this._armAt(game, focus, yaw, Math.min(this.pitchMax, pitch + lift), wanted);
+      // A tenth of a metre of arm is not worth a degree of pitch; without the
+      // margin the lift creeps up on flat ground for rounding.
+      if (d > best + 0.10) { best = d; bestLift = lift; }
+      if (d >= want) return lift;
+    }
+    return bestLift;
+  }
+
+  /**
    * Where the lens ends up for a given focus, orbit and wanted arm length —
    * the whole placement rule, with no damping and no handheld, in one call.
    *
@@ -347,9 +426,13 @@ export class CameraRig {
    * @returns the arm length actually used
    */
   _solveLens(game: Game, focus: THREE.Vector3, yaw: number, pitch: number, wanted: number, out: THREE.Vector3) {
-    const cp = Math.cos(pitch);
-    const dir = this._tmp.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp).normalize();
     this.occluders.update(game, focus, this.maxDistance + 4, this._t);
+    // The lift first, then the real sweep at the lifted orbit: `_armDistance`
+    // leaves `occluders.exiting` behind it, and the value that must survive is
+    // the one from the arm actually used.
+    const lifted = Math.min(this.pitchMax, pitch + this._liftFor(game, focus, yaw, pitch, wanted));
+    const cp = Math.cos(lifted);
+    const dir = this._tmp.set(Math.sin(yaw) * cp, Math.sin(lifted), Math.cos(yaw) * cp).normalize();
     const d = this._armDistance(game, focus, dir, wanted);
     out.copy(focus).addScaledVector(dir, d);
     const terrain = game.get('Terrain');
@@ -549,7 +632,10 @@ export class CameraRig {
       this._focus.x += (vel.x / speed) * la;
       this._focus.z += (vel.z / speed) * la;
     }
-    // shoulder offset, in camera space
+    // shoulder offset, in camera space. The lift below does not belong here:
+    // `right` is `dir x UP` normalised, which is `(-cos yaw, 0, sin yaw)` for
+    // every pitch, so the shoulder is a yaw-only quantity and the arm can be
+    // re-aimed after the focus is damped, where the focus is current.
     const cp = Math.cos(this.pitch);
     this._dir.set(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp).normalize();
     const right = this._tmp.copy(this._dir).cross(UP).normalize();
@@ -565,6 +651,42 @@ export class CameraRig {
       this.distance / Math.max(0.5, this.restDistance), 0.3, 1);
     this._focus.addScaledVector(right, -this.shoulder * shoulderFit);
 
+    // ---- and keep that focus point out of the hillside -------------------
+    // **This is the whole of the playtest's worst frame**, and it is not the
+    // arm. `probes/camsteep.mts` sprints at a steep face and reads, at the
+    // frame in the picture: `focus (-302.3, 44.0, -266.8)  ground under focus
+    // 46.2` — the point the camera is trying to orbit is **2.2 m inside the
+    // hill**, because the look-ahead has walked it up to `lookAheadMax` = 2.2 m
+    // in the direction of travel and the direction of travel is into a slope
+    // that climbs 6 m over that distance. The shoulder offset adds another
+    // 0.55 m of the same.
+    //
+    // Everything downstream follows from that one fact. `_armDistance` sweeps
+    // outward from a buried origin, so its first step is already underground
+    // and it returns `minDistance` — at EVERY orientation. The same probe
+    // prints the sweep: `armAt +0.00:1.10 +0.11:1.10 +0.22:1.10 +0.33:1.10
+    // +0.44:1.10 +0.55:1.10`. No arm length and no pitch can escape a hill the
+    // orbit is centred inside, which is why the slope lift measured 10.59% ->
+    // 1.68% on `camview`'s standing poses and did nothing whatsoever live:
+    // `camview` grades a standing focus and has no look-ahead in it.
+    //
+    // So the look-ahead is halved until the point it produces has air around
+    // it. Halving rather than clamping to the ground: raising the focus would
+    // float it over Noctis' head, and the offset is the thing that is wrong,
+    // not its height. Four halvings reach a sixteenth of the offset and the
+    // player's own chest is clear by construction, so this terminates.
+    const focusT = this.focusClear ? game.get('Terrain') : null;
+    if (focusT && focusT.heightAt) {
+      let ox = this._focus.x - player.position.x;
+      let oz = this._focus.z - player.position.z;
+      const need = this._focus.y - FOCUS_CLEAR;
+      for (let k = 0; k < 4 && focusT.heightAt(player.position.x + ox, player.position.z + oz) > need; k++) {
+        ox *= 0.5; oz *= 0.5;
+      }
+      this._focus.x = player.position.x + ox;
+      this._focus.z = player.position.z + oz;
+    }
+
     if (this._first) this._focusSmooth.copy(this._focus);
     else {
       this._focusSmooth.x = THREE.MathUtils.damp(this._focusSmooth.x, this._focus.x, this.lookDamp, dt);
@@ -579,6 +701,23 @@ export class CameraRig {
     // lens can still be trailing behind it.
     this.occluders.update(game, this._focusSmooth, this.maxDistance + 4, this._t);
     const wanted = this.restDistance;
+
+    // ---- slope lift: climb over the hillside rather than into it ---------
+    // See `_liftFor`. It runs here, after the focus is damped, because it
+    // sweeps the arm up to six times and every sweep is against this focus.
+    const wantLift = this._liftFor(game, this._focusSmooth, this.yaw, this.pitch, wanted);
+    // Asymmetric, and both rates are the arm's own argument. Up fast: the arm
+    // is collapsing NOW and a slow rise is another second of the inside of a
+    // hill. Down slow: a player running along a contour crosses the threshold
+    // several times a second, and a symmetric rate turns that into a pump.
+    this._lift = THREE.MathUtils.damp(this._lift, wantLift,
+      wantLift > this._lift ? LIFT_UP : LIFT_DOWN, dt);
+    if (this._lift > 1e-3) {
+      const ap = Math.min(this.pitchMax, this.pitch + this._lift);
+      const acp = Math.cos(ap);
+      this._dir.set(Math.sin(this.yaw) * acp, Math.sin(ap), Math.cos(this.yaw) * acp).normalize();
+    }
+
     const clear = this._armDistance(game, this._focusSmooth, this._dir, wanted);
     if (clear < this.distance) this.distance = clear;                       // push in now
     // ...and out now, when the arm is climbing out through the far face of a
@@ -713,6 +852,33 @@ const LOCK_DAMP = 6.0;
  * Deliberately far below `minDistance`: see `_armDistance`.
  */
 const SOLID_MIN = 0.4;
+/**
+ * Slope-lift constants. See `CameraRig._liftFor`.
+ *
+ * `LIFT_MAX` is 0.55 rad, 31 degrees, which is what a 30-degree slope needs to
+ * stop blocking a 5.3 m arm — the geometry it was chosen from, not a taste.
+ * Beyond about that the shot is a map view and the player has lost the horizon
+ * a different way.
+ */
+const LIFT_MAX = 0.55;
+/** Candidate lifts tried, evenly spaced up to `LIFT_MAX`. */
+const LIFT_STEPS = 5;
+/** Fraction of the wanted arm that counts as "the arm got out". */
+const LIFT_OK = 0.85;
+/** Damping rate while the lift is rising, per second. */
+const LIFT_UP = 3.5;
+/** ...and while it decays back to the player's own pitch. */
+const LIFT_DOWN = 1.1;
+/**
+ * Metres of air the focus point keeps above the ground under it.
+ *
+ * The focus sits `height` = 1.62 m over the feet, so this is how much of that
+ * the look-ahead and the shoulder are allowed to spend walking into a rise.
+ * 0.9 m leaves the orbit centred on Noctis' waist at worst.
+ */
+const FOCUS_CLEAR = 0.9;
+/** Scratch direction for `_armAt`, which is called inside `_solveLens`. */
+const _dirP = new THREE.Vector3();
 
 /** Shortest-arc difference between two angles, in `(-pi, pi]`. */
 function shortestAngle(d: number) {
