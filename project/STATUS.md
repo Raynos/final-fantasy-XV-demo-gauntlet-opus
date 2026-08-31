@@ -1,130 +1,94 @@
-# Status — 2026-08-31, mid-build
+# Status — 2026-08-31, after the overnight build
 
 > **A snapshot, REPLACED in place, never appended to.** Dated bullets belong in
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`. One plan, LOCKED and being built: `docs/plans/2026-08-30-fable-to-nine.md`.**
-The overnight autonomous build is running now, coordinated from
-`project/handoff/2026-08-30-coordinator.md` — read that first for the six human
-decisions taken at dispatch. MEGA BUILD MODE: no judging until every lane lands.
+**`main`. `docs/plans/2026-08-30-fable-to-nine.md` is BUILT** — all 20 lanes
+closed across 35 agent-lifetimes. It archives once the human rules on the five
+decisions in `HUMAN_REVIEW.md`. Read `project/handoff/2026-08-30-coordinator.md`
+first (the six decisions taken at dispatch, the endgame sequence) and
+`project/journal/2026-08-31-round17-and-playtest.md` for every judged number.
 
-## What is live
+## Where the gates stand
 
-Ten lanes at a time on the shared trunk. **Closed:** 3 (near-field), 4 (clouds),
-5+6 (light in shadow, hue), 7 (water and weather), 10 (input truth), 13 (memory
-and boot), 15 (postfx), 17 (spine and dungeons), 19 (city hubs). **Live:** 1, 2,
-11, 14, 16, 18, 20, 21, 22, 23. **Held by design:** 12, which is the playtest's
-own queue and cannot be staffed until R2 reports.
+`pnpm run check` **21/21** — the suite gained two gates tonight, **`bakecheck`**
+(nothing had ever looked at `src/public/baked/`) and **`framecheck`** (nothing
+had ever asked whether a frame was a *picture*). `perf` and `gameplay` both
+certify on a quiet tree, `RULER_VALID: true`, **166/166 shots** over 60 fps,
+**0 hitches**. Draw peak **747/800**. `nanscan` **0 of 166**.
 
-Per-lane state is in `project/handoff/<lane>.md`; the directory length is the
-live headcount.
+Content: `mainchain` ch1→ch5 with its self-grant shim deleted · **8/8 royal arms
+claimable** · `combatloop` **35/35** with a dungeon round · median den **23.8 s**
+at **25.2% HP** · `longplay` clean 30 min **day and night** · chocobo at
+**11.00 m/s** with a race won end-to-end · Alstor swum at **0.06% floor-walk**
+and dived with a working breath limit.
 
-## The gate that was red, and what it turned out to be
+## The judged number, and what it means
 
-**`driftcheck` is green, and the diagnosis is worth more than the fix.** It was
-never drift: the before and after probes were identical (`mean 0.000, worst
-0.000 over 36 864 texels`). What failed was a *static* disagreement between the
-rendered ground and `Terrain.heightAt()` — and the error histogram is
-**symmetric**, `1 38 493 2836 5838 2809 499 28 2`, which is tessellation chord
-error shown rather than argued, and is what an offset provably cannot produce.
+**Three rounds, 0% hesitation, 0 fooled, 35 pairs each** — against a bar of ≥30%
+with ≥2 fooled. Controls ran 62%, 50%, **88%**, so the instrument separates and
+is not saturated. **Round 19 followed an eleven-lane fix wave built from round
+18's own ranked tells and the number did not move at all**: that is §4's
+measured plateau, and polish is closed on it.
 
-The gate now tests **both** the flat tolerance **and** each texel against its own
-local sag bound, and it is **falsified**: `--inject 'tfH += 3.0;'` moves
-12 544 of 12 544 texels into violation against 0 at baseline, with the control's
-histogram being the baseline's shifted by exactly +3.0 in every bin. `--sag-k 0`
-restores the old flat predicate in one flag.
+The judge's own summary is the actionable part: *"what fails is never the shot,
+it is material response and asset finish."* It rated composition, framing and
+horizon placement good throughout, and **could not separate the Lestallum street
+from shipped work in two separate pairings**. The remaining gap is whitebox
+facades, cloud sprites with visible seams, and one stretched texture where a
+ground plane wants detail meshes — **content volume, not shading.**
 
-**And the gate was partly reading a stale bake.** On fresh caches the worst error
-moved −0.520 → −0.397 — which at the old predicate would have passed by 12%. So
-the instrument that first reported the problem had itself been bitten by the
-shared-bake trap below. That is the argument *for* the repair, not against it:
-the gate was one gully lip from red either way.
+**Playable is NOT plateaued: 4 → 3 broken-feels** against a bar of fewer than
+three. A third playtest was in flight when this session wound down.
 
-Everything else was green at dispatch (19/19) and `nanscan` reads 0 of 142.
-Draw calls 436–616 against a budget of 800.
+## What the playtests were worth
 
-## The two harness faults that cost the most
+Every top item a blind player reported was something twenty-one green gates
+could not see, and several had been sitting in our own output unread:
 
-**The prewarm queue was unbounded.** `daemon.mts`'s `prewarm()` docstring
-promised "newest sha wins — a second commit supersedes the first rather than
-queueing two boots"; the code only ever rejected a duplicate of the *same* sha.
-Ten lanes plus a `post-commit` hook per commit outran four workers: **62% of all
-harness time was queue**, p50 prewarm wait 8.4 min, worst 33.1, daemon RSS
-10.2 GB. It presented as unrelated failures everywhere — 300 s `preparePage`
-timeouts, ablations timing out, three lanes reporting a `check` that never
-returned. Fixed; the daemon was restarted to discard 62 stale prewarms.
+- **Characters walked through boulders** — Noctis's chest inside a rock on
+  **41.92%** of combat frames, now **0.00%**. That was the literal truth behind
+  "fights happen inside a hill".
+- **The camera's orbit point was inside the hillside.** The velocity look-ahead
+  walks the focus 2.2 m; into a 40° slope that is 6 m of rise, so every arm
+  sweep began underground and returned `minDistance` at *every* orientation.
+  Three lanes had fixed real camera defects without touching the cause.
+- **The clock never moved.** `Sky.hours` only advances inside `setTimeOfDay`, so
+  every session ever played was 30 minutes of 14:00 — and **an entire tier of
+  night-gated content had never been reachable.** Time now runs at one in-game
+  day per real hour.
+- **`longplay` had been printing the slope defect all night** — "gave up on 6
+  unreachable spot(s)" — and nobody read it as a defect.
 
-**`--build <sha>` is not a bisect here.** `src/public/baked/` is one directory
-symlinked into every materialised tree, so a `--build` run re-bakes those shared
-artifacts from that sha's sources — every lane captures against whichever sha was
-materialised last. `bakecheck` caught three different shas in one capture. This
-retroactively explains two builds returning bit-identical numbers, one sha
-giving PASS then FAIL, and a lane's "big win" that was another lane's in-flight
-edit.
+## The premises that were wrong
 
-**`texc.bin.gz` and `geo.bin.gz` cannot stay fresh while lanes commit** — any
-`pre-commit` `vite build` deletes them. MISSING is the safe state (regenerated
-at runtime, ~3.7 s slower); **STALE is the dangerous one**, silently rendering
-faces a version behind their sculpt. Rebake immediately before any judged or
-certified number, with commits held.
+Roughly half of what closed was a corrected premise, not a landed feature:
 
-## No number taken tonight is a baseline
-
-Eight lanes each running the 19-gate suite put **36% of all harness time into a
-queue rather than into work** — 25 concurrent `check.mts` against a daemon
-worker budget of 4. The full suite now belongs to the coordinator alone and the
-lanes run only the gates they own. Every perf and memory arm printed `CONTENDED
-throughout`; the same build read 1 211 and 1 280 MB five minutes apart.
-`geo.bin.gz` and `texc.bin.gz` were absent for hours, pruned repeatedly by
-co-agents' `pre-commit` `vite build`. **Re-measure everything on a quiet tree
-with the caches rebuilt before believing it.**
-
-## What has actually moved
-
-- **The winding was wrong at the root, and it is fixed and proved.** Not
-  per-mesh: `Geo.ts`'s ring frame is right-handed while the ring runs clockwise
-  in it, so every `sweepTube`, both dome caps, `sweepShell`, `blob`,
-  `roundedBox`, both eye globes and the hair scalp were inward. Skin is
-  `FrontSide`, so what drew was the *far* side with mirrored normals. All four
-  heroes now read positive signed volume on every primitive.
-- **Clouds gained a stop of internal range** — cStops 1.49 → 1.95, clip 19.2% →
-  6.6%, the top-edge crossing 8 → 6 px, coverage cells 10 → 51.
-- **Sky fill in shadow landed**: `zone_vannath`'s shadowed foreground p50 luma
-  7 → 22, the plan's gate box 35 → 61 against a bar of 30.
-- **The controls card no longer lies** — 5 wrong combat rows, 3 bad pairs in
-  `Prompts.ts`, and a pad column where 17 of 44 rows had no binding at all.
-- **A gate now asserts which way the car turns**, and falsifies itself against
-  the shipped bug.
-
-## The premises that were wrong again
-
-Five more this session, which is the running theme of this project:
-
-- **Lane 13's exit was priced against the wrong number.** The tab is 1 382 MB,
-  not the plan's 1 246, and everything tasks 38–41 name is worth ~15 MB against
-  a 582 MB gap. The lane landed ~33 MB across CPU and GPU and closed with a
-  measured negative. The real levers are in `TASKS.md`.
-- **`aClip` is a position attribute wearing a shading attribute's name** — it is
-  the clipmap's LOD morph alpha, spent directly on vertex height.
-- **A post-hoc attribute re-pack deleted an NPC's shadow**, silently, because
-  `MIN_VERTS` guards the wrong axis for a character.
-- **`uxcheck` exempted the Regalia under a claim that was not true of the code**,
-  and `Math.abs` in `regaliadrive` was an exemption wearing a tolerance's
-  clothes. Between them a mirrored car shipped.
-- **Task 6 was never a `brushes()` job**, and `Props.landmarks` → `bakedParts`
-  was never "a five-line addition" — a cache hit ships havens with no fire.
+- **The Disc's crater was 70–90 m underground** since it was built, so a funded
+  art round's two engineering levers had returned honest measured negatives
+  against a subject that was not there. Its judged shot also clears **0.09** of
+  its own subject.
+- **The faces were corrugated** — 26% of each visible face turns past 90° from
+  the key. Two earlier notes blamed painted brow/lash shadows; the complaint
+  survived *every* albedo, texture and shadow ablation.
+- **§12.3 is a table of luminance percentiles**, so four passes matched it while
+  the authored hair albedos were literally warm greys at 21% saturation.
+- **A Float16 attribute did not survive the geo bake**, uploading as raw uint16:
+  1.0 arriving as 15 360, 30 of 166 shots ≥45% clipped, 11 pure white — and a
+  white frame passed `nanscan`, `drawcheck`, `perf` and a green suite.
+- **`Harvest.collectRockProxies` returned `[]`**, and `CameraRig`'s prop sweep
+  was a `||` chain over three properties `Props` has never had.
 
 ## Knowingly unfinished
 
-- **`facecheck` still prints 2 VOID and PASSes.** Plan task 47 makes that a
-  failure and is deliberately held until both heads clear, so the shared trunk
-  never goes red for seven lanes. Noctis's VOID is a hair-shadow edge, i.e.
-  task 4.
-- **The eyes read googly on all four heroes** — a defect the winding fix
-  *exposed*, because no lane has ever seen the real sclera before tonight. It is
-  the loudest thing on a closeup, and the head is the judge's #1 tell.
-- **`SKIN_CLEARANCE = 0.030` inflates every garment by 30 mm**, absorbing a
-  `drape()` bug rather than fixing it. In `HUMAN_REVIEW.md`.
-- **The public-URL deploy is descoped** by human decision; it is the human's,
-  not a lane's.
+- **The public-URL deploy** — descoped by the human; theirs, not a lane's.
+- **Plan task 47**, held unlanded on purpose: `facecheck` may be measuring
+  Noctis's art direction rather than a defect, and landing it would red the
+  trunk on an unsettled question.
+- **Ignis's glasses are 0.7 px wide at 5 m**, which is most of why a player
+  could not tell him from Prompto; **Noctis's costume reads as a sleeveless
+  bodice** rather than a layered jacket. Both filed with file:line.
+- **`texc.bin.gz` cannot stay fresh while lanes commit** — any `pre-commit`
+  `vite build` deletes it. `bakecheck` now catches it; rebake before any judged
+  or certified number.
