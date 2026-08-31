@@ -890,3 +890,112 @@ the beach; from 260 m out, ~240 m.
 `fishing_poi_plank / _roof / _lamp / _void` cluster, deck top y −2.1, feet y
 −8.4, so 4.4 m of it stands above the sea. It runs roughly north–south, ~80 m
 long, and presents side-on to a westward lens.
+
+## `galdin_pier_sunset` — LANDED (`8bfc32e`), verified by eye in the CORPUS
+
+44 candidate framings in five `framecam` batches (`tmp/l21/pier{3,4,5,6,7}.mts`,
+frames in `tmp/shots/l21-{pf,pg,ph,pk,pl}`), every one read as a JPEG, then the
+landed one re-captured through `shoot.mts` (`tmp/shots/l21-pfinal`, 305 draws,
+5.3 M tris) and read again. **Preview and corpus agree** — no repeat of the
+under-the-deck divergence.
+
+```
+galdin_pier_sunset  time 18.75  weather clear
+pos [2603, 0.5, 2607.4]  target [1704.7, -62.4, 2661.7]  fov 40
+```
+
+That is 137 m out **on the water**, looking back west past the jetty into the
+sun. Frame read: **58% water**, horizon at 0.42, deep navy holding ripple and
+gold glitter rather than crushing to black, **one unbroken specular column from a
+visible sun disc down the centre to the bottom edge**, the jetty's deck, pilings
+and dark hut legible at x 0.68–0.82 with the surf line running away behind it, a
+pale bay and blue mountains left, warm altocumulus above. Against
+`golden-hour-water-02.jpg` — the plate `compare.mts` judges this row against —
+the proportions match: that plate is 55% water, horizon 0.53, one specular column
+from a low sun, a dark silhouette in one third.
+
+### The three levers, and which one actually mattered
+
+The coordinator's three named changes were right about the *symptoms* and the
+cause was one level down.
+
+1. **Yaw west** — impossible from the beach: there is no water west of it. The
+   fix was to move the stand onto the sea, not to yaw.
+2. **Push past t 18.2** — done, 18.75 (sun elev 3.7 deg). Beyond ~18.9 the disc
+   is gone behind the ridge and only afterglow is left; before ~18.5 it blows to
+   a featureless white lobe. **18.75 is the width of that window.**
+3. **Drop the eye / move seaward** — done, and it turned out to carry a fact
+   nobody had: **the water north of this line is shallow, the sea bed is lit
+   through it, and it renders as a gold-and-black stipple that reads as a wet
+   sand flat rather than sea.** Sixteen of the first twenty-two candidates failed
+   on that alone. South and seaward of about `z 2590` the bottom drops away and
+   the water reads as water. That is the single most useful number here.
+
+### Defects in the landed frame, none of them this lane's
+
+- A small **cyan pickup-glint sprite** floats over the beach at x 0.93, y 0.37.
+  Same defect class the predecessor logged in `PS1o`/`PS2w`/`PS2sw`.
+- The near-bottom water is dark — it keeps ripple and glitter, but a judge
+  comparing it to the plate's pale reflective near water will see navy-black.
+  That is the water shader's, not the framing's: every one of 44 candidates that
+  stood in deep water had it, and the only alternative the shader offers is the
+  shallow stipple.
+- Shore foam still renders as a bright continuous white band, slab-like in the
+  frames that stood closer.
+
+## Noise floors for the five judged rows — MEASURED (`84194da`)
+
+Two `--cold` captures of `1bd40c28bf53` into **a fresh pair of directory names**
+(`tmp/nf-l21-final/{one,two}` — the predecessor's `tmp/nf-l21a/` was discarded
+unread, because it predates the pier re-frame and a floor taken against a stale
+framing is worse than no floor), then `imgdiff --calibrate`.
+
+```
+galdin_angelgard    mean 0.108  max 32  >8/255 0.010%  -> floor 0.162
+galdin_pier_sunset  mean 0.117  max 33  >8/255 0.016%  -> floor 0.176
+lest_market_day     mean 0.285  max 92  >8/255 0.228%  -> floor 0.428
+lest_overlook_disc  mean 0.179  max 28  >8/255 0.021%  -> floor 0.269
+lest_street_night   mean 0.149  max 39  >8/255 0.128%  -> floor 0.223
+worst mean delta 0.285/255 over 5 image(s);  calibrated 5 shot(s)
+```
+
+**All five are far under the 2.0 `DEFAULT_LIMIT` they had been falling back to**,
+so this is a real ratchet: a 0.5/255 regression in `galdin_angelgard` now fails
+where it used to pass by a factor of four. `lest_market_day` is the noisiest
+because it carries eleven animated bodies; its max of 92 is one moving figure,
+not a global shift.
+
+**Diffed afterwards: exactly five rows were added and none of the twenty-three
+existing rows changed.** Do this check every time — `--calibrate` merges what it
+finds and says nothing about what it did not.
+
+**`--calibrate` also overwrites the file's own `note`** with a two-line stub,
+which throws away the stale-directory warning the file exists to carry. Restored
+and extended in the same commit. A successor who re-calibrates must restore it
+again.
+
+## The three Lestallum judged rows at HEAD — re-shot and READ
+
+`shoot.mts ... --out tmp/shots/l21-city3`, all three read at `1bd40c28bf53`.
+
+- **`lest_market_day`** — eleven figures, every one terminating in shoes with a
+  cast shadow on the flags; awnings left and right, crates, festoon bulbs, pink
+  and slate building faces, blue sky. **The shin fix holds.** Still: the crowd is
+  bunched at the two edges with ~30% of the frame bare paving and one lone
+  walker in it; the festoon bulbs are large matte tan spheres that read as
+  balloons in daylight; the building faces are flat untextured colour blocks; a
+  small white cylinder prop stands on the ground at centre-bottom; the paving
+  reads as a regular tiled floor with very dark joints rather than laid flags.
+- **`lest_street_night`** — nine figures, starfield, warm bulbs on the catenary,
+  a lit cream building. **Still not shippable, and not for a framing reason:**
+  the two near-lens bodies at centre-right are **unlit black cutouts** with no
+  material at all and one of them is in the arms-raised broken idle; the
+  starfield reads as falling snow. Deliberately NOT re-framed — the floor was
+  just measured against this framing, and no yaw removes a black cutout.
+- **`lest_overlook_disc`** — the Meteor's mass with its blue fissures, the
+  dreadnought crossing it, Lestallum's roofs and the EXINERIS stack lower right,
+  a treed slope, starfield. **Lane 20's exposure has settled — this is no longer
+  the white ellipse the predecessor saw.** Defects: the upper-left quadrant is
+  ragged black cloud blobs with vertical comb artefacts over fat white star
+  sprites, the fissures read as flat cyan patches painted on facets rather than
+  glowing cracks, and one unattenuated white light panel sits at x 0.77.
