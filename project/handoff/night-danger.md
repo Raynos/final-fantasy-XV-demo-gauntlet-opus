@@ -140,3 +140,40 @@ to 60 m for parity, or count `e.inCombat` / `pack.alerted` rather than `!e.dead`
   `project/TASKS.md`.
 - The plan's done-when text still says `longplay --night`; the real command is
   `--set __PLAY_NIGHT=1`.
+
+## What the frames showed
+
+`tmp/shots/night/ambush-ambush-1.jpg` (30-min night run, `3d0617a`) — **verified
+by eye.** The Regalia from behind at 86 km/h on the highway under a full star
+field with dark cloud banks; the headlights carve a hard white cone down the
+road and **two daemon silhouettes are standing in it**, dead ahead, with red
+contacts on the minimap and OSTIUM GORGE / LEIDE named on the compass. Party
+bars full, the in-car control strip (W accelerate / S brake / Space handbrake /
+I Ignis drives / V camera / F get out) along the bottom. It reads as the thing
+task 64 was written to produce. Two notes for whoever owns the look: the ground
+under the beam is a fairly flat desaturated grey rather than deep night, and the
+`encounter:warn` banner is not in this frame (the counter says it fired).
+
+## Next step for whoever picks this up
+
+1. Nothing is half-done. Night mode is landed, committed and green.
+2. If the `countNear` finding above is taken up, re-run
+   `node src/tools/probe.mts src/tools/probes/longplay.mts --set __PLAY_NIGHT=1
+   --turbo 10 --ttl 30` and compare the roll table's "blocked by a live enemy
+   within 90 m" line — that is the instrument for it.
+3. `project/TIMINGS.md:169` records the canonical day triple as
+   `2.14 km, 4 encounters, 19 forage`. On tonight's tree it is
+   `2.14 km, 3 encounters, 18 forage` — **the route is identical to the metre**,
+   so this is the world changing under the probe (EncounterDirector was live all
+   night), not the probe. Worth re-baselining after the wave.
+
+`tmp/shots/night/ambush-ambush-2.jpg` — **verified by eye.** The second ambush,
+head-on from behind the car at ALSTOR SLOUGH / DUSCAE: `STAGGER! POISE BROKEN ·
+x1.9 DAMAGE` across the frame, a hobgoblin nameplate at the left edge, red
+contacts sitting on top of the player arrow on the minimap, Ignis down to
+2,286/2,991 — the fight is real and the party is taking damage in it. **One look
+note that is not mine to fix:** the two headlamps bloom into solid white discs
+that dominate the frame and wash out exactly the piece of road the player needs
+to read. It is the strongest thing in the picture and it is hiding the daemons.
+Worth a look from whoever owns post-fx / the drive camera. The hobgoblin
+nameplate also collides with the left-hand ability list.
