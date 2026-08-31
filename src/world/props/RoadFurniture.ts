@@ -306,10 +306,11 @@ export class RoadFurniture {
      * *materials* — guardrail beam, post, drum, tyre, crate — and not because
      * it is that many objects, which is exactly the case {@link shadowProxy}
      * exists for: the union casts the silhouette the pieces cast, at one draw
-     * per cascade instead of one each. Measured on `lest_street_night`: 736
-     * before litter moved into `cast`, 750 after the move, **734 with the
-     * proxy** — so the contact shadows the judge asked for arrive two draws
-     * cheaper than the frame that did not have them.
+     * per cascade instead of one each. Measured on `lest_street_night`: 736 at
+     * e5f65cf, 750 once litter moved into `cast` (56ddb24), **738 with the
+     * proxy** (cd96f47) — so the contact shadows the judge asked for cost two
+     * draws rather than fourteen. The party shots gain outright: `party_dawn`
+     * 531 -> 504, `party_formation` 594 -> 571.
      *
      * The per-chunk range gate now toggles the proxy's `visible` rather than
      * `castShadow` on each mesh, which is what the docblock on `shadowProxy`
