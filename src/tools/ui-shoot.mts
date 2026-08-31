@@ -97,6 +97,71 @@ const SCENES: Record<string, Scene> = {
     `,
     then: 60,
   },
+  /**
+   * THE TUTORIAL CARD OVER A FULL-SCREEN SCREEN, AND OVER A LIVE PROMPT.
+   *
+   * `HUD.update` writes `hints.muted = !!game.currentShot` every frame and
+   * `Hints._poll` returns early on `currentShot` as well, so the first-run
+   * hint card is invisible to every scene in the corpus and to every scene
+   * here. That is why six full-screen screens shipped with a 500 px card
+   * parked across their column headers and nobody saw it in a capture: the
+   * only instrument that could have caught it had the subject switched off.
+   *
+   * These two scenes reach past the mute and `_present` a card directly, which
+   * is what a player gets when they press H on their first minute.
+   */
+  hint_over_menu: {
+    shot: 'menu_main', settle: 20,
+    after: `
+      g.get('Menus').setScreen('controls');
+      var h=g.get('HUD').hints; h.reset(); h.muted=false;
+      h._present({ id:'boot', title:'Where you are',
+        text:'Hammerhead — reach the garage. It is tracked on the compass, top right. H shows every control; Tab opens the menu; M opens the map.',
+        keys:['H','Tab','M'], ico:'quests' });
+      h.a = 1;
+    `,
+    then: 80,
+  },
+  hint_over_prompt: {
+    shot: 'hud_field', settle: 30,
+    after: `
+      var h=g.get('HUD').hints; h.reset(); h.muted=false;
+      h._present({ id:'interact', title:'Things you can use',
+        text:'When a prompt floats over something — a counter, a board, a pump, a person — press E to use it. The prompt always names the key.',
+        keys:['E'], ico:'items' });
+      h.a = 1;
+      g.get('HUD').areaTitle('Hammerhead', 'Cid Sophiar, Mechanic', 'Leide');
+      g.get('HUD').callOut('Coeurl!', 'A hunt has found you');
+    `,
+    then: 45,
+  },
+  /**
+   * THE TRAVERSAL NOTE, on a face that genuinely refuses.
+   *
+   * (-2320, -2438) is one of the six hillsides `probes/slopewalk.mts` measured
+   * as DEAD-SILENT before this lane: 60.4 deg, ten seconds of sprint gaining
+   * -5.4 m along the wish direction with nothing said. Noctis is put at its
+   * foot, pointed uphill, and W is held for two seconds — 0.35 s for the
+   * controller to decide the ground is refusing rather than merely faceted,
+   * plus 0.55 s before the note speaks.
+   */
+  slip_note: {
+    shot: 'hud_field', settle: 24,
+    after: `
+      var pl=g.get('Player'), terr=g.get('Terrain'), rig=g.get('CameraRig');
+      var x=-2320, z=-2438, y=terr.heightAt(x,z);
+      var n=terr.normalAt(x,z);
+      var dl=Math.hypot(n.x,n.z)||1, ux=-n.x/dl, uz=-n.z/dl;
+      pl.root.position.set(x,y,z);
+      pl.body.vy=0; pl.body.grounded=true;
+      var yaw=Math.atan2(-ux,-uz);
+      g.get('Camera').clearShot && g.get('Camera').clearShot();
+      if (rig) { rig.clearShot && rig.clearShot(); rig.yaw=yaw; rig.yawTarget=yaw; }
+      g.input.pointerLocked = true;
+      g.input.keys.clear(); g.input.keys.add('KeyW'); g.input.keys.add('ShiftLeft');
+    `,
+    then: 140,
+  },
   low_hp: {
     shot: 'combat_wide', settle: 40,
     after: `var p=g.get('Player');p.stats.hp=Math.round(p.stats.maxHp*0.14);p.stats.mp=18;g.get('HUD').hit(0.5);g.get('HUD').callOut('Parry!','Perfect guard  ·  counter ready')`,

@@ -12,6 +12,7 @@ import { Subtitles } from './Subtitles.ts';
 import { Toasts } from './Toasts.ts';
 import { Hints } from './Hints.ts';
 import { HudBridge } from './HudBridge.ts';
+import { bands, PRIORITY } from './Layers.ts';
 import { SHOTS } from '../game/Shots.ts';
 import { BANTER } from './GameData.ts';
 import { tickPortraits } from './Portraits.ts';
@@ -123,8 +124,32 @@ export class HUD {
   /** @param v show/hide the field HUD */
   setVisible(v: boolean) { this.visible = !!v; }
 
-  /** Menus dim and suppress the HUD while open. @param v */
-  setMenuOpen(v: boolean) { this.menuOpen = !!v; }
+  /**
+   * Is the traversal note ("too steep") on screen?
+   *
+   * Published so `probes/slopewalk.mts` can score the half of complaint #3 that
+   * is not physics: whether a hillside that refuses input ever SAYS so. A probe
+   * that measured the controller's `slip` flag alone would go green on a game
+   * that still told the player nothing.
+   */
+  slipHintVisible(): boolean { return this.prompts.slipA > 0.5; }
+
+  /**
+   * Menus dim and suppress the HUD while open.
+   *
+   * This is also the single signal that a **full-screen reading surface** is
+   * up: `Menus.update` sets it for a screen, and `Interactables` sets it for a
+   * conversation — which is why the camp meal menu is covered by the same
+   * claim as the Gear screen without knowing anything about it. So it is the
+   * right place to take the reading band, and the wrong place to reason about
+   * *which* surface it is.
+   * @param v
+   */
+  setMenuOpen(v: boolean) {
+    this.menuOpen = !!v;
+    if (this.menuOpen) bands.claim('reading', 'screen', PRIORITY.screen);
+    else bands.release('reading', 'screen');
+  }
 
   // ---- forwarded API --------------------------------------------------
   /** @param ev see class docs */
@@ -189,6 +214,12 @@ export class HUD {
 
     // First-run hints run outside the HUD's own visibility, because the one
     // about closing a menu has to show while the HUD itself is faded out.
+    // Re-asserted here rather than trusted from `setMenuOpen`: the claim has
+    // to be true on the frame `Hints` reads it, and the two callers that set
+    // `menuOpen` are in two different systems whose update order this class
+    // does not get to choose.
+    if (this.menuOpen) bands.claim('reading', 'screen', PRIORITY.screen);
+    else bands.release('reading', 'screen');
     this.hints.muted = !!game.currentShot;
     this.hints.update(dt, game);
 

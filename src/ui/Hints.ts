@@ -1,6 +1,7 @@
 import { el, clamp, easeOut, easeOutQuint } from './UIKit.ts';
 import { button, icon } from './Icons.ts';
 import { readQuest } from './GameData.ts';
+import { bands, hits, PRIORITY } from './Layers.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -16,6 +17,28 @@ import type { Game } from '../game/Game.ts';
  * The card lives in its own layer above the menus so the menu hint is visible
  * over a full-screen screen, and everything animates from `game.time` — no CSS
  * transitions, so a capture is reproducible.
+ *
+ * ### Suspension, which is the whole of the 2026-08-31 fix
+ *
+ * Being on top is permission to be *seen*, not permission to be *anywhere*.
+ * Having won the z-fight on purpose, this card then had nothing stopping it
+ * landing on the content underneath, and a blind playtest found it six for
+ * six: over the COMBAT and DRIVING column headers on Controls, over the
+ * selected item's name and the KEY ITEMS tab on Items, over the quest title and
+ * its first line on Quests, over Gladiolus's name and the whole of Ignis's
+ * header and portrait on Gear, and over the Map and the camp meal menu. Lane 11
+ * separately found it hiding a live `Claim` prompt outright in both tomb
+ * frames. Its own capture harness could never have caught any of it —
+ * `HUD.update` writes `hints.muted = !!game.currentShot` every frame, so the
+ * card is switched off in every shot this project has ever taken.
+ *
+ * So the card now **suspends** rather than covers. While a full-screen screen
+ * or a conversation owns the reading band (`Layers.ts`), or while a live
+ * interact prompt would be underneath it, the card fades out and **its hold
+ * timer stops**. Nothing is lost and nothing is covered: the hint comes back,
+ * with its full nine seconds, the moment the way is clear. One mechanism for
+ * both cases, because the losing behaviour is the same in both — this is
+ * teaching, and teaching can wait.
  */
 
 /** How long a hint stays up once it has appeared, in seconds. */
@@ -47,6 +70,10 @@ export class Hints {
   root!: HTMLElement;
   /** Ids already shown once; a hint never repeats. */
   seen!: Set<string>;
+  /** True while the card is yielding to something with a better claim. */
+  suspended!: boolean;
+  /** `#interact .ix-body`, looked up lazily — it is built by another system. */
+  _ixBody!: HTMLElement | null;
   ttl!: HTMLElement;
   txt!: HTMLElement;
   /** @param parent usually `game.uiRoot` */
@@ -76,6 +103,8 @@ export class Hints {
     this.root.style.display = 'none';
     /** Suppressed entirely during a capture. */
     this.muted = false;
+    this.suspended = false;
+    this._ixBody = null;
   }
 
   /**
@@ -111,7 +140,41 @@ export class Hints {
   dismiss() { if (this.cur) this.age = Math.max(this.age, HOLD); }
 
   /** Forget everything, so the harness and a fresh game start clean. */
-  reset() { this.seen.clear(); this.queue.length = 0; this.cur = null; this.a = 0; this.age = 0; }
+  reset() {
+    this.seen.clear(); this.queue.length = 0; this.cur = null; this.a = 0; this.age = 0;
+    this.suspended = false;
+    bands.release('notice', 'hint');
+  }
+
+  /**
+   * Is something with a better claim in the way?
+   *
+   * Two questions, and they are different in kind. The reading band is a
+   * *claim*: a full-screen screen or a conversation says it owns 150..812 and
+   * this card is simply not allowed in there, whatever it happens to measure.
+   * The interact prompt is a *rect*: it is world-anchored, so where it lands is
+   * not knowable in advance and the only honest test is whether the two boxes
+   * actually touch this frame. `getBoundingClientRect` bakes in the `zoom` both
+   * layers carry, which is what makes the comparison valid across two roots.
+   */
+  _blocked(): boolean {
+    if (!bands.free('reading', 'hint')) return true;
+    if (!this._ixBody) this._ixBody = document.querySelector('#interact .ix-body');
+    const ix = this._ixBody;
+    if (!ix) return false;
+    const root = ix.closest('#interact') as HTMLElement | null;
+    if (!root || root.style.display === 'none') return false;
+    const r = ix.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const c = this.card.getBoundingClientRect();
+    // A card that is not laid out cannot be measured, and answering "false" to
+    // that would unsuspend it, lay it out, and suspend it again next frame —
+    // a 30 Hz strobe over the prompt it was supposed to be getting out of the
+    // way of. `update` keeps the root displayed whenever a hint is current
+    // precisely so this branch is not taken; the latch is the belt.
+    if (c.width < 2) return this.suspended;
+    return hits(c, r, 12);
+  }
 
   /**
    * Work out which hint, if any, this frame has earned.
@@ -167,19 +230,36 @@ export class Hints {
       const next = this.queue.shift();
       if (next) this._present(next);
     }
-    if (!this.cur && this.a <= 0.001) { this.root.style.display = 'none'; return; }
-    this.age += dt;
+    if (!this.cur && this.a <= 0.001) {
+      this.root.style.display = 'none';
+      this.suspended = false;
+      bands.release('notice', 'hint');
+      return;
+    }
+    // The claim is made before the block test and kept while the card is
+    // suspended: the card has not gone away, it is waiting, and a claim it
+    // dropped every time it yielded would let a second teaching card take the
+    // band out from under it.
+    bands.claim('notice', 'hint', PRIORITY.hint);
+    this.suspended = this._blocked();
+    // **The timer stops.** A hint that burnt its nine seconds behind a menu
+    // would be a hint the player never got, which is the same defect as
+    // covering the menu, one step further along.
+    if (!this.suspended) this.age += dt;
     if (this.cur && this.age > HOLD) this.cur = null;
 
-    const target = this.cur ? 1 : 0;
+    const target = this.cur && !this.suspended ? 1 : 0;
     const rate = dt / 0.4;
     this.a = clamp(this.a + (target > this.a ? rate : -rate), 0, 1);
-    this.root.style.display = this.a > 0.001 ? '' : 'none';
-    if (this.a <= 0.001) return;
+    // Displayed whenever a hint is CURRENT, not whenever it is visible. A
+    // suspended card fades to nothing but stays laid out, because `_blocked`
+    // has to be able to measure where it would be — see the note there.
+    this.root.style.display = (this.cur || this.a > 0.001) ? '' : 'none';
 
     const e = easeOutQuint(this.a);
     this.card.style.opacity = easeOut(this.a).toFixed(3);
     this.card.style.transform = `translateX(-50%) translateY(${((1 - e) * -18).toFixed(2)}px)`;
+    if (this.a <= 0.001) return;
     // a slow breath on the key glyphs so a still frame still reads as live
     this.keys.style.opacity = (0.82 + 0.18 * (0.5 + 0.5 * Math.sin(game.time.now * 2.1))).toFixed(3);
   }
