@@ -2176,17 +2176,21 @@ export class PoiKits {
       const HW = span / 2;
       const gb = bag();
       for (const sx of [-1, 1]) {
-        gb.wood.push(box(0.34, 3.0, 0.34, { x: sx * HW, y: 1.5, arris: 0.05 }));
+        gb.wood.push(box(0.34, 3.7, 0.34, { x: sx * HW, y: 1.85, arris: 0.05 }));
         // Capped in the same timber, not in cream: two 0.5 m cream plates on
         // top of a beam are the two brightest marks on the whole pad at 40 m
         // and read as objects left on a table.
-        gb.wood.push(box(0.5, 0.16, 0.5, { x: sx * HW, y: 3.23, arris: 0.04 }));
+        gb.wood.push(box(0.5, 0.16, 0.5, { x: sx * HW, y: 3.93, arris: 0.04 }));
         // The brace touches the post at 1.91 and the header's underside at
         // 2.65, so its centre is the midpoint of those and its projection is
         // `1.05 * cos(45)` = 0.742 either way.
-        gb.wood.push(xform(box(1.05, 0.16, 0.2), { rz: -sx * Math.PI / 4, x: sx * (HW - 0.54), y: 2.28 }));
+        gb.wood.push(xform(box(1.05, 0.16, 0.2), { rz: -sx * Math.PI / 4, x: sx * (HW - 0.54), y: 2.98 }));
       }
-      gb.wood.push(box(span + 0.9, 0.5, 0.36, { y: 2.9, arris: 0.05 }));
+      // Head height, and the 0.70 m it went up is the difference between an
+      // arch and a bench. At a 2.9 m header the frames read the whole thing as
+      // a long low table on the pad; at 3.6 the underside clears 3.35 m, which
+      // is a metre over a rider on a bird, and the eye goes under it.
+      gb.wood.push(box(span + 0.9, 0.5, 0.36, { y: 3.6, arris: 0.05 }));
       // No hung nameboard. It was there, and at 40 m
       // (`tmp/shots/l22kit4/near.jpg`) a blank 3.7 x 0.8 m cream slab under a
       // beam is the biggest pale shape on the pad and reads as a picnic table.
@@ -2194,7 +2198,7 @@ export class PoiKits {
       // nothing to say.
       const gm = mergeBag(gb);
       for (const [role, g] of Object.entries(gm)) {
-        bakeTone(g, { y0: 0, y1: 3.3, grime: 0.72, bleach: 1.06 });
+        bakeTone(g, { y0: 0, y1: 4.0, grime: 0.72, bleach: 1.06 });
         put(role === 'trim' ? M.cream : M.plank, g,
           [(p0[0] + p1[0]) / 2, 0, (p0[1] + p1[1]) / 2], [0, -th, 0]);
       }
