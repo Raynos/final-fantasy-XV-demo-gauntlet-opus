@@ -14,8 +14,10 @@ Lifetime 3 of an expected 4.
 
 ### The kit, four defects, all verified fixed by eye
 
-Shots: `tmp/shots/l22kit/` (four bearings, 80 m, before the gateway fix) and
-`tmp/shots/l22kit2/` (after). **Read `y315.jpg` for the current state**: a red
+Shots, in order: `tmp/shots/l22kit/` (four bearings, 80 m), `l22kit2/`
+(after the gateway fix), `l22kit4..7/near.jpg` (40 m, the paddock birds and
+then three rounds of fixes read off each other). **Read
+`tmp/shots/l22kit7/near.jpg` for the current state**: a red
 board-and-batten barn with a clean navy gable inside an unbroken two-rail ring,
 a timber gateway with a hung nameboard on the road side, a banded feed silo, a
 hay corner with a 3+2 bale stack and the tarp beside it, trough and signboard.
@@ -35,6 +37,21 @@ hay corner with a 3+2 bale stack and the tarp beside it, trough and signboard.
    gateway aimed down the pad's own ramp (local +z).
 4. **The bales stand on the ground.** Three at y 0.8 and two nestled at
    `0.8 + sqrt(1.6² − 0.9²)` = 2.12, not `0.9 + 1.6` over nothing.
+
+Three more found by looking at the result, each fixed and re-shot:
+
+5. **The gateway was a football goal**, then a picnic table. Two cylinders and
+   a thin bar read as a goal from two opposite bearings; square section, caps,
+   knee braces and a hung nameboard turned it into a table with a blank cream
+   slab on it; the board is gone and the header went up **0.70 m** so its
+   underside clears 3.35 m — a metre over a rider on a bird — and the eye goes
+   under it rather than along it. **Now reads as an arch** (`l22kit7`).
+6. **The barn's doorway was a pure black rectangle** at 40 m: 4.4 x 4.0 m of
+   `M.interior` in the one place on the building the eye goes. A stall post and
+   two rails, 0.12 m *in front of* the backdrop (anything behind it is
+   invisible), cost four boxes and make it a stable.
+7. **Two of the three paddock birds stood 3.8 m apart** and the camera caught
+   the line between them, so they overlapped into one two-headed bird.
 
 Plus: the sliding-door leaf was `M.plank`, whose grain at 2.5 × 3.9 m reads as
 straw, and is now a cream leaf with a Z-brace; the 9 m side walls carry battens;
