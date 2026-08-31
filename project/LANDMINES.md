@@ -3197,3 +3197,50 @@ reproduce the complaint with something that moves before believing a fix.
 awning", it is every cloth object on the site at once. Anything that wants
 per-object proxies out of a kit (camera occlusion, collision, a picker) has to
 go to triangles; there is no per-part object to read.
+
+## The camera was not too close — the point it orbits was inside the hill
+
+Three lanes worked "the camera goes inside things" before this one, fixing real
+things each time (boulder push-out, characters walking into rocks) and the
+playtest still reported *"a solid minute of playing a brown rectangle"* as the
+worst thing in the build. The cause was not the arm and not the terrain
+collision.
+
+**`CameraRig`'s velocity look-ahead walks the focus point 2.2 m along the
+direction of travel. Into a 40 degree slope that is 6 m of rise**, so the focus
+is *underground* — and every arm sweep then starts inside the hill and returns
+`minDistance` **at every orientation**. Reproduced by
+`probes/camsteep.mts`: `focus (-302.3, 44.0, -266.8)`, ground under focus
+**46.2**, and `armAt` reading `1.10` at every angle tested.
+
+**No arm length and no pitch can escape a sweep that begins inside geometry.**
+That is why three lanes of arm work did not fix it. Halving the look-ahead until
+the focus has air: arm **3.80 -> 5.23 m**, arm crushed below 2.5 m **34.33% ->
+3.37%**, frame that is terrain within 6 m **0.364 -> 0.114**.
+
+**When a solver returns its floor at every input, check its origin before you
+tune its range.**
+
+## An ellipsoid at a box's half-extents lies wholly inside the box
+
+The camera's proxy for the Regalia was **a third smaller than it could safely
+be**, because an ellipsoid inscribed in a box touches only at the six face
+centres and is inside it everywhere else. Correcting the proxy took lens-inside-
+the-car from **19.3% to 9.9%** (44.8% before any fix), with closest approach
+0.56 -> 1.18 m.
+
+Cheap and general: **if you approximate a box with an ellipsoid, scale past the
+half-extents** — otherwise you are protecting a volume noticeably smaller than
+the object.
+
+## `DoubleSide` cloth draws above *and* below, which is what a letterbox is
+
+The haven awning filling the top 35% and bottom 15% of the camp frame is **not**
+an arm failure — the arm is **5.60 m, uncrushed, at all 12 yaws**. The lens sits
+inside the canopy volume, and because the cloth is `DoubleSide` it draws on both
+sides of the eye. The camera never notices it because nothing is *blocking* the
+arm; the geometry is simply on both sides of the near plane.
+
+Also recorded: it is `Landmarks._haven`, not `PoiKits._haven`, and
+`Shots.ts:59`'s note about where `spawn_haven` is has gone stale.
+
