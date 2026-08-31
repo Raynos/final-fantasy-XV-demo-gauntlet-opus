@@ -5,6 +5,18 @@ import type { CollisionWorld, GroundHit } from './CollisionWorld.ts';
 /** Below this the surface no longer holds a character at all. */
 const SLIDE_Y = Math.cos(58 * Math.PI / 180);
 const GRAVITY = 19.5;
+/**
+ * Terminal speed of a slide, m/s.
+ *
+ * Fast enough that one carries a character clear of the contour it started on
+ * — which is the whole point of it having momentum — and slow enough that it
+ * reads as losing your footing rather than as being fired down the hill.
+ */
+const SLIDE_MAX = 6.5;
+/** How fast a slide bleeds off once the ground is walkable again, per second. */
+const SLIDE_BRAKE = 5.0;
+/** Seconds `slip` stays raised after the ground turns walkable again. */
+const SLIP_HOLD = 0.9;
 
 /**
  * Capsule-vs-world movement for a walking character.
@@ -16,7 +28,8 @@ const GRAVITY = 19.5;
  *    wish velocity survives. Anything under 50° is walked normally; between 50°
  *    and 58° authority fades out and gravity along the slope fades in, so there
  *    is no line on the ground where the character flips between states and
- *    jitters.
+ *    jitters. Past 58° the surface does not hold anyone: the character
+ *    **slides**, and the slide has momentum (see `slip`).
  * 2. **Horizontal move, then wall resolution.** Substepped so a sprint never
  *    steps further than the capsule radius, then pushed out of every wall
  *    triangle whose top is more than `stepUp` above the feet. Walls *below*
@@ -31,6 +44,11 @@ export class CharacterController {
   _from!: THREE.Vector3;
   _g!: GroundHit;
   _hold!: number;
+  /** Seconds `slip` has left to run once the ground turns walkable again. */
+  _slipFor!: number;
+  /** Carried slide velocity, m/s, world X and Z. */
+  _slx!: number;
+  _slz!: number;
   climb!: number;
   /** Steepest slope the character will walk up, as `normal.y`. */
   climbMax!: number;
@@ -42,6 +60,17 @@ export class CharacterController {
   radius!: number;
   /** How fast the feet are allowed to be lifted onto a step, m/s. */
   riseRate!: number;
+  /**
+   * How much footing is being lost right now, 0..1 — the signal the game had
+   * no way of giving the player.
+   *
+   * 0 on ground that holds you, 1 on ground that does not (past 58°), with the
+   * fade band in between. It stays raised for `SLIP_HOLD` after the ground
+   * turns walkable again, because a character oscillating across the contour
+   * flickers it four times a second otherwise and a message that flickers is
+   * noise. `src/ui/HUD.ts` reads it; nothing in the collision layer does.
+   */
+  slip!: number;
   stepDown!: number;
   stepUp!: number;
   /**
@@ -91,6 +120,10 @@ export class CharacterController {
     this.swimRate = 2.6;
     this.grounded = true;
     this.onProp = false;
+    this.slip = 0;
+    this._slipFor = 0;
+    this._slx = 0;
+    this._slz = 0;
     /** How much of the wanted move actually happened last step, 0..1. */
     this.progress = 1;
     this.normal = new THREE.Vector3(0, 1, 0);
@@ -112,17 +145,67 @@ export class CharacterController {
     if (this.swim) return this._swimStep(pos, vx, vz, dt);
 
     // ---- 1. slope response --------------------------------------------
+    //
+    // **The dead zone this replaced, and why it was worth a rewrite.** The
+    // fade band was right; past it the response was a *balance*, and a balance
+    // is the one thing a slope limit must never be. The downhill push was
+    // recomputed from scratch each frame and `Player` rebuilds `velocity` from
+    // heading and speed each frame too, so it could never accumulate: a
+    // character walking at a cliff slid down until the push exactly cancelled
+    // his own effort, and PARKED on that contour — upright, `grounded` true,
+    // `progress` ~0 so the animator held the idle. `slopewalk` measured it at
+    // six of fifteen real hillsides: 2.8 m of ground gained in ten seconds of
+    // sprint over 31.9 m of path, which is grinding sideways along the contour
+    // and is exactly what the playtest described as "W just stops working".
+    // `longplay`'s own comment records the same thing costing it 27 of its 30
+    // minutes.
+    //
+    // So: the fade band keeps its old behaviour verbatim — it is tested, and
+    // `slopewalk` shows four of five sites between 47° and 58° do climb — and
+    // past it the slide gets MOMENTUM. It accelerates under gravity along the
+    // slope, is capped at `SLIDE_MAX`, and brakes only once the ground holds
+    // again. It therefore cannot reach an equilibrium: it carries the
+    // character off the contour and down into country he can walk on, which is
+    // a refusal he can see happening to him.
     const n = this.normal;
+    let grip = 1;
     if (this.grounded && n.y < WALKABLE_Y) {
-      const grip = THREE.MathUtils.clamp((n.y - SLIDE_Y) / (WALKABLE_Y - SLIDE_Y), 0, 1);
+      grip = THREE.MathUtils.clamp((n.y - SLIDE_Y) / (WALKABLE_Y - SLIDE_Y), 0, 1);
       const dl = Math.hypot(n.x, n.z) || 1;
       const dx = n.x / dl, dz = n.z / dl;              // horizontal normal = downhill
       const up = vx * -dx + vz * -dz;                  // component pointing uphill
       if (up > 0) { vx += dx * up * (1 - grip); vz += dz * up * (1 - grip); }
-      const slide = GRAVITY * (1 - n.y) * (1 - grip);
-      vx += dx * slide * dt * 6;
-      vz += dz * slide * dt * 6;
+      if (grip > 0) {
+        const slide = GRAVITY * (1 - n.y) * (1 - grip);
+        vx += dx * slide * dt * 6;
+        vz += dz * slide * dt * 6;
+      } else {
+        this._slx += dx * GRAVITY * (1 - n.y) * dt;
+        this._slz += dz * GRAVITY * (1 - n.y) * dt;
+      }
     }
+    // The slide is carried, clamped and braked here rather than inside the
+    // branch above, so a character who slides off a cliff onto flat ground
+    // keeps going for a moment instead of stopping dead on the line.
+    const sl = Math.hypot(this._slx, this._slz);
+    if (sl > 1e-4) {
+      if (sl > SLIDE_MAX) { this._slx *= SLIDE_MAX / sl; this._slz *= SLIDE_MAX / sl; }
+      if (grip > 0 || !this.grounded) {
+        const k = Math.max(0, 1 - SLIDE_BRAKE * dt);
+        this._slx *= k;
+        this._slz *= k;
+      }
+      vx += this._slx;
+      vz += this._slz;
+    } else {
+      this._slx = 0;
+      this._slz = 0;
+    }
+    // Published for the HUD. Held for a moment so a character oscillating
+    // across the 58° contour does not flicker the message.
+    if (grip <= 0 && this.grounded) this._slipFor = SLIP_HOLD;
+    else if (this._slipFor > 0) this._slipFor -= dt;
+    this.slip = this._slipFor > 0 ? 1 : (this.grounded ? 1 - grip : 0);
 
     // ---- 2. horizontal move, substepped, then wall resolution ----------
     const want = Math.hypot(vx, vz) * dt;
@@ -268,6 +351,14 @@ export class CharacterController {
     // out of the water onto a 1.25 m ledge the moment they touch bottom.
     this.climb = this.stepUp;
     this._hold = 0;
+    // Same reasoning as "no slope response" above, one step further: a slide
+    // carried into the water would be a current that only exists where the
+    // swimmer happened to enter, and `slip` is a statement about footing,
+    // which a swimmer has none of and needs none of.
+    this._slx = 0;
+    this._slz = 0;
+    this._slipFor = 0;
+    this.slip = 0;
     this._score(pos, vx, vz, want, dt);
     return pos;
   }
