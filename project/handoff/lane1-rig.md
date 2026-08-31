@@ -887,3 +887,47 @@ purpose; the ball is the next lever. **Frame verification pending** —
 **Predicted, so it can be falsified:** p5 rises a lot on both heads, p50 rises
 some, p99.5 barely moves. If p99.5 climbs materially the pedestal is too high.
 **Measurement pending** — `tmp/shots/l1r4-occ`, `facecheck --only prompto,noctis`.
+
+### Task 6 — verified by eye on the geometry-only frame
+
+`tmp/shots/l1r4-flat0` (before, `7401343`) against `tmp/shots/l1r4-flat1`
+(after, `c6013aa`), same `facefront_flat` framing, mid-face cropped at 3x.
+**Before**: the nose base sits in a hard black ring and a deep dark comma runs
+from each alar crease down and out toward the mouth corner — the war-paint mark,
+in the geometry, with no map and no hair in the frame. **After**: the same marks
+are broader and much lighter; the alar area reads as a fold rather than as a
+slot. Still hard in that frame, and unchanged by this commit: the pit at each
+mouth corner and the broad dark band from the inner canthus down the nose side.
+
+The alar ball is now the largest single term at the crease (2.91 of the
+remaining 5.09). Measured but **not landed**, because it costs the nostril:
+widening the ball to r [13.0, 13.5, 21.0] with the amount held takes the crease
+peak 5.17 -> 3.53 and leaves the ball's own projection *higher* (10.35 -> 10.51),
+but the nostril opening loses 27% of its depth (-8.34 -> -6.08 mm) because the
+two brushes overlap. That is the trade if anyone wants the last third of it.
+
+### Task 2 — measured, and the first constants were a redistribution not a lift
+
+`829ce9b` (weight 0.60, pedestal 0.45) measured on Prompto's hair rect, before
+`tmp/shots/l1-fc10` and after `tmp/shots/l1r4-occ`:
+
+```
+                    p5     p50   p99.5      plate
+  prompto  before    9      76     206      22 / 81 / 176
+  prompto  after    10      71     204
+```
+
+**The rect was cropped and looked at first** (864x540 at 3x): it is all hair bar
+a sliver of background at one edge, and Prompto's extreme percentiles match to
+2/255 across the two runs, so on THIS pair the fixed rect is sound. What the crop
+also shows is that the hair reads as a pile of flat cardboard strips at 3x — hard
+rectangular card edges, visible facets, near-black gaps — which is where the p5
+comes from and is a separate defect from the shading.
+
+`probes/hairocc.mts` (new) explains the null: the channel is **bimodal**, 36-40%
+at 0 and 32-43% at 1, mean **0.516 / 0.531**, so weight 0.60 against pedestal
+0.45 is 0.499 of a term that was 0.500. `ea4fc24` moves it to **0.45 / 0.58**,
+about +21% of level and all of it where `dome` is low, because at `dome = 1` the
+term is still capped at its old value. Predicted: Prompto p50 -> ~85, p5 well
+over 10, p99.5 flat; Noctis p50 -> ~33. **Result pending in
+`tmp/shots/l1r4-fin`.**
