@@ -355,9 +355,28 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
          * coverts and are correct — hence a falloff and not a flat reduction.
          */
         const fwd = Math.max(0, st.z) / 0.32;
-        const pitch = Math.max(0.08, 0.30 * (1 - phi0 * 0.28) * (1 - 0.60 * fwd));
-        const g = feather(st.len, vane, 0.30 * (1 - 0.55 * fwd), 0);
-        tint(g, mixc(col.plume, col.plumeDark, Math.min(0.55, phi0 * 0.22)).getHex(), 0.05);
+        /*
+         * **A floor, because the first falloff traded spikes for baldness.**
+         * At `0.08 / 0.55` the shoulder's tips lay so flat that the look-loop
+         * read the whole fore-flank as "a plain smooth yellow blob with
+         * essentially no feather read at all" -- a different defect, not a fix.
+         * At `0.13 / 0.40` the tip stands `0.24 * sin(0.13) + 0.18 * 0.24` =
+         * 0.074 m off the quill's tangent against a surface that has risen
+         * 0.03, so **0.044 m proud** against the 0.11 that was spiking: enough
+         * shadow under a vane to read as layers, not enough to read as a spine.
+         */
+        const pitch = Math.max(0.13, 0.30 * (1 - phi0 * 0.28) * (1 - 0.60 * fwd));
+        const g = feather(st.len, vane, 0.30 * (1 - 0.40 * fwd), 0);
+        /*
+         * A half-step of value between neighbouring rows. Where the pitch is
+         * low -- the shoulder -- a shingle has almost no cast shadow to
+         * separate it from the one below, so the separation has to come from
+         * tone. `0.06` of the way to `plumeDark`, alternating, is under a
+         * quarter of the falloff the ring angle already applies, and reads as
+         * plumage rather than as stripes.
+         */
+        const alt = (st.rows.indexOf(phi0) % 2) * 0.06;
+        tint(g, mixc(col.plume, col.plumeDark, Math.min(0.55, phi0 * 0.22 + alt)).getHex(), 0.05);
         mat(g, FEATHER, 0);
         shingle(g, phi, pitch, px, py, st.z);
         rig.attachChain(g, ['hips', 'spine', 'chest'], 1.0);
@@ -559,8 +578,17 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
       const g = feather(0.30, 0.062, 0.14, 0);
       tint(g, mixc(col.plume, col.plumeDark, 0.14).getHex(), 0.05);
       mat(g, FEATHER, 0);
+      /*
+       * **On the thigh's outer face, not on its axis.** The first version put
+       * the quills at `(0.205 + cos(a) * 0.055)` -- a ring 55 mm across the
+       * *centreline* of a tube whose own outer surface is at `0.20 + 0.155` =
+       * **0.355**. So every covert hung inside the thigh, and the look-loop
+       * read the far leg as "a large, perfectly smooth yellow sphere with a
+       * specular hotspot, unbroken": the same defect the change was meant to
+       * kill. 0.17 wraps the tube instead of hiding in it.
+       */
       place(g, {
-        pos: [(0.205 + Math.cos(a) * 0.055) * s, 1.235, -0.03 + Math.sin(a) * 0.17],
+        pos: [(0.200 + Math.cos(a) * 0.17) * s, 1.215, -0.04 + Math.sin(a) * 0.19],
         quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.26, a * 0.7, 0)),
       });
       rig.attachChain(g, ['hips', `thg${n}`], 1.0);
@@ -683,15 +711,26 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
     rig.attach(buckle, 'spine');
 
     // stirrup leather and the iron on the end of it
+    /*
+     * **Outboard of the flank, which it was not.**
+     *
+     * The leather ran `0.330 -> 0.350` in x and the iron hung at `0.350`. The
+     * barrel's own radius at that height is `0.37` and the shingles over it
+     * reach about `0.38`; the thigh's outer face at y 1.17 is `0.355`. So the
+     * whole assembly was *inside* the bird, and the look-loop read the iron as
+     * "a black C arc painted on the flank", half buried, in every side and
+     * rear frame of both modes. A stirrup hangs clear of the animal by
+     * definition -- it has a foot in it.
+     */
     const strap = tube([
-      P(0.245 * s, 1.785, 0.06), P(0.330 * s, 1.42, 0.05), P(0.350 * s, 1.16, 0.05),
+      P(0.255 * s, 1.785, 0.06), P(0.410 * s, 1.44, 0.05), P(0.435 * s, 1.17, 0.05),
     ], [[0.022, 0.011], [0.022, 0.011], [0.020, 0.010]], { radialSeg: 6 });
     tint(strap, TAN_DARK, 0.02);
     mat(strap, LEATHER, 0);
     rig.attachBlend(strap, 'spine', 'chest', 1.0);
 
     const iron = new THREE.TorusGeometry(0.065, 0.014, 5, 14);
-    place(iron, { pos: [0.350 * s, 1.09, 0.05], rot: [0, Math.PI / 2, 0] });
+    place(iron, { pos: [0.435 * s, 1.10, 0.05], rot: [0, Math.PI / 2, 0] });
     tint(iron, BRASS);
     mat(iron, 0.34, 0.85);
     rig.attach(iron, 'spine');
