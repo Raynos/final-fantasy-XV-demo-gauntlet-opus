@@ -3067,3 +3067,64 @@ works: **an instrument with a band, a window or a mask has a null it will return
 regardless of the subject.** Prove it responds to the effect — with a positive
 control that fires — before you trust the null.
 
+## Star size was doing brightness's job, and star COUNT is fov-dependent while size is not
+
+A player called the night sky *"a snowstorm rather than stars"*, and a blind art
+critic independently flagged *"uniform-magnitude star dots"*. Measured: bright
+stars were drawn **3x wider** rather than brighter, the magnitude range was
+**31:1 with the floor already at saturation**, and there were **~2800 dots in
+frame against ~150 visible to a naked eye.**
+
+**Why twenty gates walked past it, and this is the transferable part: star count
+scales with fov and star size does not.** So the sky looked correct in a tight
+crop — which is what a face or a prop capture is — and read as weather at
+gameplay fov. Every instrument in this repo that had ever looked at it was
+looking through the wrong lens.
+
+**When a defect appears only at one field of view, no fixed-framing gate can
+see it.** Vary the fov deliberately in anything that judges a full-frame effect.
+
+## The camp moiré was Nyquist, not filtering
+
+Anisotropy 16 and the mip chain were already correct, so "it needs better
+filtering" was wrong. `sin(u*420)` over a **256-texel** bake is **3.83
+texels per cycle** — under two samples per cycle in each axis, and `u x v` at
+that frequency *is* a checkerboard. No filter setting can rescue a pattern
+authored above the Nyquist limit of the texture it is baked into.
+
+Beside it, the same scene's *"lurid orange tiger stripes"* were `sin(v*130)`
+drawing **21 rings at 8.7 cm pitch** around each log at a 2:1 albedo swing — a
+defect `rustMaterial` already documents **one function away** in the same file.
+And the *"hard-edged opaque cone of light"* was a flame profile
+(`wid = 0.5*t^0.55`, a light-shaft shape) with `alpha = min(1, a*1.35)`
+**clipping a smooth falloff to opaque**, times three double-sided cards = six
+layers, on 2.5 m cards over a 1.25 m pit so the tip sat 1.1 m above the pot.
+
+**Five perceptual complaints in one scene, five unrelated mechanisms, none of
+them the one the words implied.**
+
+## Every number on the screen was correct; the labels were wrong
+
+The playtest reported three counting contradictions in a single frame and read
+them as *"the game not knowing its own state"*. **Every value was right.** The
+HUD printed item progress while the quest-log row printed objectives-completed,
+both as a bare `x/y`; the log header's unlabelled `4` was quests active beside a
+"3 available · 2 finished" summary of something else.
+
+**An unlabelled `x/y` is an invitation to compare it with the other `x/y` on
+screen.** Label the axis, or expect the player to do the arithmetic you did not.
+
+A real fourth defect hid behind the three cosmetic ones: **both quest-log caches
+key on `q.progress`, the fraction of objectives *done*** — so an objective's own
+counter ticking moves the key by nothing, and the log keeps saying `(2/3)` after
+the bag says 3. A cache keyed on a coarser quantity than the thing it displays
+is stale by construction.
+
+## Animating `transparent` recompiles the program
+
+three's program cache key includes `parameters.opaque`, so fading a material in
+and out by toggling `transparent` triggers a **shader recompile** — which is why
+the near-camera cull **hides** rather than fades. Worth knowing before writing
+any distance fade: fade an alpha uniform the material already declares, or
+accept a pop.
+
