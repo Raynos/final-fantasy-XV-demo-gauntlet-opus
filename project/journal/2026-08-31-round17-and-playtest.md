@@ -255,3 +255,77 @@ geometry and cloud form — rather than a shading one.** That is a larger and
 different kind of project than this plan was, and it is the honest thing to hand
 back rather than a fourth round at the same number.
 
+---
+
+# Playtest 3 — the same number, different items, and one hard dead end
+
+    playtest 1    4 broken-feels
+    playtest 2    3
+    playtest 3    3          bar: fewer than 3
+
+**Both §4 axes have now plateaued.** Polish held at 0% across three judged
+rounds; playable went 4 -> 3 -> 3 across two fix waves. Neither bar is met and
+neither number is being presented as met.
+
+**But the three items are not the same three**, which is the part worth reading.
+Playtest 2's list (seated T-poses, the camera's orbit point inside hillsides,
+the frozen clock, faces as a smear) is gone — every one of those was fixed and
+none was re-reported. Three *new* things took their place, and the top one is
+more serious than anything either earlier session found.
+
+## 1. The party wipe never ends, and `combatloop` says it does
+
+Reproduced twice, once for **an hour** of continuous play:
+
+    GLADIOLUS 0/4,225 · IGNIS 0/2,991 · PROMPTO 0/2,690 · NOCTIS 0/3,764
+
+Noctis still standing, still holding his sword, still walking. Enemies still
+alive and nameplated. Companions still calling out. A permanent red vignette,
+the prompt bar still offering ATTACK / DODGE / WARP-STRIKE. **No game over, no
+revive, no reload, no message. There is no way to lose and no way to
+continue.** A *single* down is fine — Noctis alone reached 0 and self-revived
+inside a minute. It is the **full wipe** that wedges.
+
+**`combatloop` is 35/35 and one of its rows is
+`game over -> retry restores the party`, reporting "game over reached, retry
+restored 4877 hp".** So the gate drives a game-over path the real game cannot
+reach. That is the night's cleanest example of the standing pattern: an
+instrument that exercises the code and not the situation.
+
+## 2. Three battles fought without ever seeing an enemy
+
+*"An encounter starts. Party HP drains. STAGGER! flashes. And the screen is
+empty desert. I swung at dirt for twelve seconds while Gladio went 4,825 to
+3,051."* The enemies were 30-40 m away and real on the minimap; the companions
+had left frame. **Lock-on does nothing visible** — `V` draws no reticle, marks
+no target and does not turn the camera.
+
+This is the surviving half of playtest 1's complaint. The camera lane fixed
+*"the camera is inside the hill"* and measured it; **nobody fixed "the fight is
+somewhere else"**, which that lane explicitly filed as aggro and party
+engagement rather than a camera problem. It was right, and it is still open.
+
+## 3. Nobody has feet
+
+*"Side-on at 3 m on flat ground: every character's legs stop in a flat stump at
+the ankle or shin and the terrain continues past them. It is in the very first
+frame of the game."* Four heroes wading permanently through the floor — and six
+character lanes measured this cast at 0.4-0.6 m without once looking at it side
+on at walking distance.
+
+## What it said was good
+
+Driving ("I'd have kept driving"), the controls card ("better than most shipped
+games"), **the map's honesty about what it does not know** — *"that turned a
+limitation into a mechanic"* — the shop and the Ascension grid, camping, and
+**the clock**, which it watched run 12:00 to 22:36 with a proper dusk and
+Hammerhead lighting up in the distance. Also, unprompted: max HP shrinking as
+you take damage, *"a real FFXV detail nobody had to include."*
+
+## The honest verdict
+
+**Both bars are plateaued and neither is met.** The polish gap is environment
+content volume, stated by the judge. The playable gap is now three specific,
+diagnosable defects — one of which is a reproducible dead end that a green gate
+believes it covers. That is the state this plan hands back.
+
