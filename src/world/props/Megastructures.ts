@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { demoActive } from '../../engine/Device.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import { bakedParts, matResolver, PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
@@ -455,6 +457,25 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 7, k = 17,
  * function rather than a literal inside the class so {@link MegaMats} is the
  * set itself.
  */
+/**
+ * The phone's one skyline material.
+ *
+ * Deliberately plain: no vertex colours, no instance tint, no emissive. At
+ * 800 m the whole city is a silhouette against the sky, and the only thing
+ * that has to be right is its value against that sky. The colour is `city`'s
+ * own base so the horizon reads the same as it always did.
+ */
+export function impostorMaterial() {
+  return new THREE.MeshStandardMaterial({
+    name: 'mega_impostor',
+    color: 0x555b66,
+    roughness: 0.92,
+    metalness: 0.0,
+    vertexColors: false,
+    fog: true,
+  });
+}
+
 export function megaMaterials() {
   return {
     hull: magitekMaterial(0x2a2f37),
@@ -598,7 +619,28 @@ export class Megastructures {
   build() {
     const M = this.mats = megaMaterials();
     for (const [k, m] of Object.entries(M)) m.name = `mega_${k}`;
-    this._mat = matResolver(Object.values(M));
+    // THE FLAT IMPOSTOR, and it is a material trick rather than a billboard.
+    //
+    // `bakedParts` merges a structure's parts per material, so eighteen
+    // materials is eighteen draws for a skyline 800 m away that nobody can
+    // walk to. Pointing every part at ONE material collapses each structure to
+    // a single merged mesh and keeps the silhouette exactly — which is all
+    // there is to see at that range, and the whole reason the ruling was to
+    // keep it rather than cut it.
+    //
+    // A real camera-facing billboard would be one draw for the LOT rather than
+    // one each, and would also lose parallax on a long lateral move. This gets
+    // most of the win, costs no new art and no bake, and cannot go stale.
+    // Its OWN material, not a borrowed one. `M.city` declares
+    // `vertexColors: true` and `PartBuilder` enforces the contract that goes
+    // with it -- a mesh with no `color` attribute under a vertex-coloured
+    // material reads as BLACK, not as white, and the builder says so rather
+    // than shipping a black city. The impostor's geometry carries position and
+    // normal only, so its material must ask for nothing else.
+    const flat = demoActive() ? impostorMaterial() : null;
+    this._mat = flat
+      ? (() => flat)
+      : matResolver(Object.values(M));
 
     this._dreadnought();
     this._escort();
@@ -606,7 +648,61 @@ export class Megastructures {
     this._meteor();
     this._viaduct();
 
+    if (flat) this._collapse(flat);
     this.scene.add(this.root);
+  }
+
+  /**
+   * Bake the whole skyline down to one mesh.
+   *
+   * Pointing every part at one material already removed seventeen material
+   * state changes, but `bakedParts` merges per material *per structure*, so
+   * five structures still cost eighteen meshes and eighteen draws. This is the
+   * rest of the trade: apply each mesh's world matrix to a clone of its
+   * geometry, merge the lot, and hang one mesh off the root.
+   *
+   * That is what a billboard impostor would have bought, without the art, the
+   * bake, or the loss of parallax — the silhouette is the real geometry, seen
+   * from anywhere, in one draw.
+   *
+   * Only on the phone. Everywhere else the skyline is lit, tinted and
+   * emissive per material, and collapsing it would flatten a city into a
+   * single grey solid.
+   */
+  _collapse(mat: THREE.Material) {
+    const geos: THREE.BufferGeometry[] = [];
+    this.root.updateMatrixWorld(true);
+    this.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.geometry?.attributes?.position) return;
+      // `mergeGeometries` refuses a set whose attributes disagree, and these
+      // carry different extras (uv2, instance tints) depending on the kit that
+      // built them. Position and normal are the only two a silhouette needs.
+      const g = new THREE.BufferGeometry();
+      const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      g.setAttribute('position', src.getAttribute('position').clone());
+      if (src.getAttribute('normal')) g.setAttribute('normal', src.getAttribute('normal').clone());
+      else g.computeVertexNormals();
+      g.applyMatrix4(m.matrixWorld);
+      geos.push(g);
+      if (src !== m.geometry) src.dispose();
+    });
+    if (!geos.length) return;
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) return;
+    // The root's own transform is already baked into every vertex above.
+    this.root.clear();
+    this.root.matrix.identity();
+    this.root.position.set(0, 0, 0);
+    this.root.rotation.set(0, 0, 0);
+    this.root.scale.set(1, 1, 1);
+    const one = new THREE.Mesh(merged, mat);
+    one.name = 'mega_impostor';
+    one.frustumCulled = false;     // it spans the world; culling it is a lie
+    one.castShadow = false;
+    one.receiveShadow = false;
+    this.root.add(one);
   }
 
   // ------------------------------------------------------------- dreadnought
