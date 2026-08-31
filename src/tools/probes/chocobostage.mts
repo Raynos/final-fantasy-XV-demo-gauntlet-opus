@@ -116,7 +116,15 @@ for (const v of views) {
   const fx = p.x + Math.sin(bird.heading) * (v.fwd || 0);
   const fz = p.z + Math.cos(bird.heading) * (v.fwd || 0);
   rig.setShot({ pos: [cx, cy, cz], target: [fx, p.y + (v.aim + 0.16 * RIDER) * h, fz], fov: v.fov });
-  step(3);
+  /*
+   * **Fourteen, not three.** A `setShot` is a camera CUT, and three frames
+   * later the velocity buffer still holds the jump: a look-loop on these
+   * framings reported that "every frame carries heavy motion blur and the
+   * flank smears", which on a probe whose entire job is to show whether a
+   * feather stands proud of a barrel is the difference between a readable
+   * frame and a guess. `shoot.mts` settles 60 for the same reason.
+   */
+  step(14);
   await window.__shot(`${mode}-${v.name}`);
 }
 rig.clearShot();
