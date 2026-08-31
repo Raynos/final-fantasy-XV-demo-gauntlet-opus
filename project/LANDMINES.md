@@ -2530,6 +2530,27 @@ one accident.
 **Before quoting an exit, run its command and confirm the output mentions the
 thing being tested.** A PASS that never names your subject has not tested it.
 
+**And the second half, found while closing that hole: the clock does not run.**
+`Sky.hours` (`src/world/Sky.ts:454`) is initialised to 12 and only ever changes
+inside `Sky.setTimeOfDay`. `DayCycle.syncFromSky` is true and `driveSky` is
+false (`src/game/rpg/DayCycle.ts:167-168`), so `rpg.day` *follows* the sky and
+neither of them advances on its own. **A thirty-minute probe session is thirty
+minutes of one single hour** — whatever the last `applyShot` left in the sky,
+which for `hud_field` is noon. So it is not merely that `--night` was ignored:
+there was no way for any long-running probe to reach night at all, and nothing
+in any of their output ever said which hour it played.
+
+This makes every "the world keeps producing X" rate in `longplay` a *daytime*
+rate, and it silently excludes every night-gated table in `SpawnTables.ts` —
+`goblin_swarm`, `daemon_pack`, `ronin_duel`, `night_giant` — from the only gate
+that runs long enough to meet them. `longplay` now takes `--set __PLAY_NIGHT=1`
+and names the hour, the `nightDepth` and the `nightDanger()` it played at in its
+banner, its summary and its PASS line, on day runs as well as night ones.
+
+**If a system reads a clock, ask what is turning it before you believe a long
+run exercised it.** Two systems politely deferring to each other over who owns
+a number is a clock that never moves and never errors.
+
 ## `PartBuilder.prep()` silently deletes any attribute not on `KEEP`
 
 Found 2026-08-31 by lane 20, after its emissive veins rendered dimmer than
