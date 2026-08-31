@@ -81,6 +81,17 @@ const GROUPS = [
     ],
   },
   {
+    name: 'Chocobo', icon: 'chocobo',
+    rows: [
+      [['6'], '', 'Whistle', 'A bird runs to you. You start with the whistle'],
+      [['E'], 'A / Cross', 'Ride', 'Stand beside her; the prompt says RIDE'],
+      [['W', 'A', 'S', 'D'], 'Left Stick', 'Ride Around', 'Faster than running, and she climbs'],
+      [['Shift'], 'L3', 'Sprint', 'Hold. Spends her stamina bar'],
+      [['6'], '', 'Dismount', 'She waits where you left her'],
+      [['6'], '', 'Send Her Away', 'Press again once you are off'],
+    ],
+  },
+  {
     name: 'Menus', icon: 'system',
     rows: [
       [['Tab'], 'Start', 'Open / Close Menu', 'Works from every screen'],

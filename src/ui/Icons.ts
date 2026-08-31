@@ -43,6 +43,11 @@ const D = {
   camera: 'M3.4 8.2h4l1.6-2.4h6l1.6 2.4h4v11H3.4ZM12 9.6a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z',
   compassPin: 'M12 2.6 15 12l-3 9.4L9 12Z',
   ap: 'M12 2.8 14.6 9l6.6.6-5 4.3 1.5 6.4L12 16.9l-5.7 3.4 1.5-6.4-5-4.3L9.4 9Z',
+  // A chocobo in profile: head, beak, three crest plumes, body, two legs. The
+  // mount had no glyph anywhere in the set, which is part of why it was
+  // invisible -- the controls card, the map card and every prompt that wants
+  // to name the bird had to borrow `map` or `items` and read as neither.
+  chocobo: 'M15.2 5.4a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8M18.1 7.7l3.3 1-3.3 1.3M14.3 5.3 13 2M16.1 5.2 17 2.1M12.9 6.1 10.3 3.7M13.3 10.9c-2.7 1.4-4.6 3.7-4.6 6.4 0 2.2 1.6 3.8 3.9 3.8h3.3M11.2 21.1v1.3M14.9 21.1v1.3M8.8 13.2c-1.6-.2-3 .2-4.4 1.2',
 };
 
 /** Two-tone accent shapes drawn on top of some icons. */
