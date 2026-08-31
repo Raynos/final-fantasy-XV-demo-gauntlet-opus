@@ -17,6 +17,38 @@ in this file.
 
 ## Engine and rendering
 
+- **Two texture container formats, two byte layouts, and one `take()`.** The
+  gzip containers (`baked/*.bin.gz`) store four separate byte **planes** —
+  RRRR GGGG BBBB AAAA — because interleaved RGBA noise defeats gzip's window
+  and per-channel planes of the same noise do not. The WebP containers
+  (`baked/m/*.bin`) store **interleaved** RGBA, because that is what an image
+  is. `take()` ended in an unconditional `decodePlanes8`, so every texture
+  served from an image container had its channels scrambled. **Rock still
+  looked like rock**, which is why it survived three rounds of screenshots; the
+  sky did not, because a 3D cloud noise volume scrambled is white speckle.
+  `TexEntry.interleaved` is now the flag and `compactTexBake` carries it
+  through — dropping it there would reintroduce the scramble an hour into a
+  session, on the deferred containers only.
+- **A canvas round trip is lossy for DATA, at every quality setting.**
+  `putImageData` → `toBlob` → `createImageBitmap` → `getImageData` is not an
+  identity function: canvas 2D is premultiplied-alpha (so RGB is destroyed
+  wherever alpha is 0), and **`toBlob('image/webp', 1)` is lossy q100 — Chrome
+  exposes no lossless-WebP path at all**. PNG is genuinely lossless there. Any
+  texture a shader reads as data rather than looks at — noise volumes, masks,
+  density fields — should skip the canvas entirely; `webpbake.mts` stores those
+  `raw` and lets the CDN's own gzip carry the wire cost.
+- **`Sky.init` used to set `shadowMap.enabled = true` unconditionally**, and it
+  runs *after* `Renderer._applyTier` turns cascades off for `low`. So `?q=low`
+  was never shadow-free for the whole life of the project — not on the phone,
+  and not in `combatloop` or `integration`, both of which load low. Fixing the
+  one conditional took the demo from 540 draws / 6.40 M triangles to 269 /
+  2.70 M.
+- **A `?q=low` page downloaded, decoded and threw away 8.29 MB of terrain layer
+  textures** every load. `Terrain.init` picks a 256 layer size at low and the
+  bake is authored at 512, so `buildLayerTextures` took the baked texels, found
+  them the wrong size and synthesised its own — which is exactly what it does
+  when there are no baked layers at all.
+
 - **`Game.get()` on `constructor.name` returns `undefined` in production.** The
   minifier mangles class names. Registration is by **explicit key**; do not
   "simplify" it back. It worked in dev for weeks because the harness only ever
