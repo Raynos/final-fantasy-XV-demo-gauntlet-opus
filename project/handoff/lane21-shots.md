@@ -785,3 +785,56 @@ The coordinator's instruction not to add lane 22's four framings to the corpus:
 added none. Agreed with the reasoning — a corpus row is permanent, and a rider
 with no legs, nothing in the stirrup and a sword through the bird's neck would
 ride into round 17 and every round after it.
+
+## `galdin_pier_sunset` — the nine shore frames, READ. Best is `PS2sw`, and it is NOT landed
+
+All nine read. Framings in `tmp/shots/l21-pier/_resolved.json`.
+
+**The three aims split cleanly, and the split is the finding:**
+
+- **`w` (west, into the sun) — no water at all, on all three stands.** `PS0w`,
+  `PS1w`, `PS2w` are dunes. The sea is behind the ridge in every one. Best light
+  of the nine and useless for this shot.
+- **`o` (out to sea) — the most water (22-25%) and the worst light.** The camera
+  faces away from the sun, so the sky is plain daylight blue and the sea is cold
+  slate. `PS1o`/`PS2o` also carry a **hard horizontal seam at the horizon with
+  the far water band dropping to near-black**, and shore foam rendered as **flat
+  white axis-aligned rectangles**.
+- **`sw` (along the shallows) — the only aim with both water and warm light**,
+  and the only one that contains **the jetty**: pilings, decking and a dark hut.
+
+**`PS2sw` is the best frame** — jetty and hut left, two framing trees, a
+receding treeline, a distant conical island on the horizon, honeyed dune light,
+real depth. **It is not landed, and should not be, because the pier is about 8%
+of the picture.** Against real FFXV Galdin plates — more than half water, the sun
+on the horizon, a bright path across the sea to the lens — it reads as a picture
+of a dune with a jetty in the corner, and this is a *judged* row.
+
+**Three named changes make it landable, in priority order:**
+
+1. **Yaw further west/south-west so water and jetty take a third to a half of the
+   frame.** The shot is named for the pier; right now the pier is an accident at
+   the left edge. This one alone is most of the gap.
+2. **Push the time past 18.2 until the sun sits near the horizon in frame**, so a
+   sun path and glitter land on the water. At 18.2 the sun is high and blown out
+   in a corner and the sea takes no light from it.
+3. Drop the eye or move a few metres seaward so the shoreline is not hidden
+   behind the dune lip.
+
+Stands are already measured and need no re-derivation: `PS2` `(2499, 0.8, 2478)`
+is the one to work from, `PS1` `(2518, 1.4, 2430)` is the same idea slightly
+worse.
+
+### Two defects from this batch that other lanes need
+
+- **A "WHERE YOU ARE" quest card is composited over `PS0w`.** This is the
+  predecessor's `framecam` HUD finding again, and it is now confirmed as
+  **`framecam`-only**: five `shoot.mts` captures this session
+  (`south_road_dawn`, `threshold_stones`, `northwatch_ruin`, and the three city
+  re-shoots) are all clean. A preview fault, not a corpus one.
+- **An animal is standing on top of a mesa island out at sea** in `PS2o` — a
+  bear-shaped silhouette on an untextured flat-shaded slab it could not have
+  reached. A judge would flag it instantly. Spawn placement, not this lane.
+- Also: leaf cards detach from canopies and float free in `PS0sw`/`PS1sw`/`PS2sw`;
+  small blue pickup glint sprites are visible in `PS1o`/`PS2w`/`PS2sw`; the sun
+  blows to a featureless white field with no disc on every west-facing aim.
