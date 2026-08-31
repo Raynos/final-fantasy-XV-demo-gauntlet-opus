@@ -1000,3 +1000,57 @@ overshoot test could not produce.
 Option 2 is the smaller, better-targeted change and is what I would try first.
 I did not land either: it is a highly visible sculpt change late in a session
 and neither can be believed without a `facefront_flat` capture to judge it on.
+
+### Task 2 — the whole progression, one rect, every arm a separate `facecheck` run
+
+```
+                          prompto p5/p50/p99.5     noctis p5/p50/p99.5
+  before (l1-fc10)            9 /  76 / 206              (old sha)
+  occ 0.60 / ped 0.45        10 /  71 / 204
+  occ 0.45 / ped 0.58        12 /  75 / 205          0 /  24 / 129
+  weight 0.36 + 0.16*lum     13 /  76 / 205          1 /  28 / 132
+  weight 0.44 + 0.05*lum     15 /  78 / 206          4 /  33 / 135
+  plate 12.3                 22 /  81 / 176         20 /  37 / 140
+```
+
+Every number on both heads moved toward the plate and none moved away. Noctis'
+p10 went 3 -> 7 with it. Blond's top end — the only number that was ever *over*
+the plate — moved +1 across the whole session, which is the point of putting the
+lift under a pedestal instead of into the coefficient.
+
+**Verified by eye** (`tmp/shots/l1r4-fin3/noctis_facecheck.png`, head cropped at
+2x): Noctis' groom reads as dark charcoal-black with the fringe locks separating
+individually and a value gradient down each lock — roots dark, tips lighter,
+which is the self-occlusion drawing. It is **not** the grey mass the flat 0.30
+fill produced. The crown still carries the pale drybrush patches that are filed
+as residue.
+
+The rect is the fixed 0.44-0.62 x 0.02-0.22 one. **It was cropped and looked at
+on this corpus** (864x540 at 3x, `tmp/shots/l1r4-occ/prompto_facecheck.png`): all
+hair bar a sliver of dark background at one edge, and Prompto's p10/p99 hexes
+track within 2/255 across all four runs, so the framing was stable across this
+particular set. It is not a general licence — see the landmine.
+
+**Separate defect the crop exposed, worth its own item:** at 3x Prompto's hair
+is a pile of flat cardboard strips. Hard rectangular card ends, visible flat
+facets down each card, and near-black gaps between them — which is where the p5
+lives, and why the fill can only reach the floor so far. That is card geometry
+and the cutout, not shading.
+
+### Gates run this respawn
+
+- `facecheck --only prompto,noctis`: **PASS** on the geometry rows on every run
+  (noseLead 27.6/27.9, mouthRelief 6.53/6.56, transDrop 4.9/4.8, jawWidthErr
+  0.015/0.018, all inside limits). **Prompto came off VOID** — cheek 61.2 -> 58.7
+  against a ceiling of 60. Noctis stays VOID at 95.1: task 47, filed.
+- Every capture's `[harness] sha:` line checked against `git log --format='%h %t'`
+  — the announce line is the **tree** sha, not the commit sha, which is worth
+  knowing before you conclude a run is stale. All four runs measured trees that
+  contained the commit under test.
+- Did NOT run `pnpm run check` — the coordinator owns the suite.
+
+**Looked at, this respawn:** `l1-cold/hero_portrait.jpg`, `l1-fc10/noc_full.png`
+and a 3x mid-face crop of it, `l1r4-flat0/noctis_front_flat.jpg` + 3x mid-face
+crop, `l1r4-flat1/noctis_front_flat.jpg` + the same crop, `l1r4-occ` Noctis hair
+at 2x, `l1r4-occ` Prompto's hair rect at 3x, `l1r4-cam/noctis_face.jpg`,
+`l1r4-fin3/noctis_facecheck.png` head at 2x.
