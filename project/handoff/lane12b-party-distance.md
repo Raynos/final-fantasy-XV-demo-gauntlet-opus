@@ -52,7 +52,21 @@ Replaced with a **render of the real head**, `src/ui/Portraits.ts`:
   that open plates (party stack, pause menu, Gear, camp) build at four unrelated
   moments and none can wait for a bake.
 
-**Verified by eye.** `tmp/l12b/pf_zoom.png` (a 4x crop of
+**Verified in three places by eye.** The HUD stack at 5 m
+(`tmp/l12b/pf_zoom2.png`, a 4x crop of `tmp/shots/l12b-tint1/d5_hud.jpg`): four
+distinct heads with the right hair colour where there were four identical dark
+plates. The Main Menu's 112x132 cards (`tmp/l12b/menu_cards.png`, from
+`tmp/shots/l12b-menu/menu_main.jpg`): four recognisable faces with eyes. The
+Gear screen uses the same call and the same store.
+
+**And measured, because the menu cards *look* blown at a 3x upscale and are
+not.** Percent of covered pixels with any channel >= 230, over the sweep:
+g30 puts 7.32% of Gladiolus and 4.85% of Noctis there; **g24 puts 0.00–0.05%**
+of every hero there and nothing at all >= 250. The white on the cheeks in
+`menu_cards.png` is JPEG plus a 3x resample of a 190 px card, not clipping. The
+red is the skin's own colour — see the §12.1 note under task 3.
+
+`tmp/l12b/pf_zoom.png` (a 4x crop of
 `tmp/shots/l12b-p1/d5_hud.jpg`): four distinct heads in the bottom-left stack
 where there were four identical dark plates. `tmp/l12b/pf_grade.png` is the
 eight-variant sweep at 288 x 336 that chose the grade; `src/tools/_probe/pfbake.mts`
@@ -163,6 +177,22 @@ the plate's bright decile**, and R−B is 78 against the plate's 54 at p65. That
 is the same shape of error as the hair (too bright, too warm) and it is what
 makes the bare arm shout. **Coarse: JPEG, hand-placed blocks, a different plate
 lighting. Re-measure with a mask before acting on it.**
+
+## Gates run
+
+`node src/tools/facecheck.mts` on `106d4c6`: **PASS**, 4 heads on the geometry
+rows, 2 measurable on the pixel rows, `noctis` and `gladio` VOID on
+`CONTROL_CEILING` — **the same two VOIDs lane 1 recorded**, unchanged by the
+hair re-tint, which is the point of running it. Geometry rows unmoved
+(noseLead 27.6–28.3, mouthRelief 6.53–6.82, jawWidthErr 0.0135–0.0450).
+
+`pre-commit` (build + both typechecks + 4 cheap gates) passed on every commit.
+
+**Not measured: the bake's frame cost.** Four extra 288x336 renders plus four
+`readRenderTargetPixels` stalls, once per session, on the four frames after the
+HUD's first `lateUpdate` — i.e. **after** `GAME.ready`, so no first-frame metric
+sees them. Seven other lanes were capturing throughout, so any number I took
+would have been worthless.
 
 ## Files touched
 
