@@ -1053,3 +1053,13 @@ is landed.
   it reported "no pair overlaps" about the frame above. Adding `.dmg` to its
   `WATCH` list is one line and turns it into the gate for the row above.
   `lane12c`
+- **The "too steep" note fires on three hills that are being climbed.**
+  `slopewalk` after lane 12c: 41.6 deg shows `hint 65%`, 42.9 shows 58%, 40.1
+  shows 50% — all three CLIMBED, gaining up to 10.9 m of height. They are
+  genuinely slow (12.8 m along the wish direction over 35.8 m of path, because
+  the character is deflected across the face), so the refusal predicate is not
+  wrong so much as incomplete. **One clause fixes it: a refusal cannot be true
+  while the feet are rising** — add `(pos.y - this._from.y) <= 0` to
+  `CharacterController._scoreRefusal`. Left undone deliberately: it is a new
+  change at a stop line and it needs its own `slopewalk` round. The bar: those
+  three rows go to `hint 0%` and the seven SLID rows stay above 60%. `lane12c`

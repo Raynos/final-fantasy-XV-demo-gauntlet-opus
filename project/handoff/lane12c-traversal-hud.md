@@ -3,7 +3,7 @@
 Playtest complaints #3 (silent slope refusal) and #4 (the tutorial card parks on
 top of every full-screen screen). Both are playability, both cheap.
 
-## Status: LANDED — 8 commits. `uxcheck` **95/95**. One `slopewalk` re-run owed.
+## Status: LANDED. `slopewalk` **0/15 DEAD-SILENT** (from 6/15). `uxcheck` **95/95**.
 
 ## What the instruments say
 
@@ -100,7 +100,7 @@ top of every full-screen screen). Both are playability, both cheap.
    top-right.** Filed in TASKS with the note that `hudstack` reported that frame
    clean only because `.dmg` is not in its `WATCH` list.
 
-## The refusal predicate took three tries, and the third is unconfirmed
+## The refusal predicate took four tries, and every one of them was measured
 
 This is the one thing a successor must pick up. `slopewalk` measured all three:
 
@@ -109,13 +109,23 @@ This is the one thing a successor must pick up. `slopewalk` measured all three:
 | `slip = 1 - grip` | 0 / 15 | **78% slip on a 41.6 deg hill that climbs 12.3 m.** A warning that fires while you are succeeding is one nobody believes the time it is true. |
 | `grip <= 0` (the 58 deg line) | **1 / 15** | a 60 deg face whose local facets sit just *inside* the fade band, where the damped uphill push and the downhill push still cancel |
 | `progress < 0.25` | **6 / 15**, slip 0% everywhere | `progress` is scored against the velocity the slope response PRODUCED, so a character sliding backwards down a cliff scores a perfect 1 |
-| displacement along the pre-slope **wish direction** (`_scoreRefusal`) | **not yet measured** | — |
+| displacement along the pre-slope **wish direction** (`_scoreRefusal`) | **0 / 15** | one thing left, below |
 
-The last one is what is on `main` now. It is committed rather than held because
-it replaces a state that is measured *bad*, and because an uncommitted edit on a
-shared trunk is served to every co-agent's `--dirty` capture anyway. **Re-run
-`node src/tools/probe.mts src/tools/probes/slopewalk.mts --dirty`. The bar is
-0 of 15 DEAD-SILENT with the eight CLIMBED rows between 40 and 55 deg intact.**
+The last one is what is on `main`, and it is **confirmed**: 0 of 15
+DEAD-SILENT, all eight CLIMBED rows between 40 and 55 deg intact, and every
+refusing face now speaks (`hint` 65-100% of frames on all seven).
+
+**The one thing left, and it is a false positive, not a miss.** Three CLIMBED
+rows still show the note: 41.6 deg at `hint 65%`, 42.9 at 58%, 40.1 at 50%.
+Those hillsides are genuinely slow — 12.8 m along the wish direction in ten
+seconds over 35.8 m of path, because the character is being deflected across the
+face — but they gain 10.9 m of height while doing it, and telling someone "find
+a way around" while they are climbing is the exact failure mode the first
+predicate had, in a milder form. **The fix is one clause: a refusal cannot be
+true while the feet are rising**, i.e. add `(pos.y - this._from.y) <= 0` to
+`_scoreRefusal`. Deliberately NOT taken here — it is a new change at the stop
+line and it needs its own `slopewalk` round. The bar for it: the three rows
+above go to `hint 0%` and the seven SLID rows stay above 60%.
 
 Its commit message says it landed with `SKIP_BUILD_CHECK` because the hook was
 red on two other lanes' in-flight files (`weavestat.mts:102`,
