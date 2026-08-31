@@ -332,9 +332,12 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * about 22 m is worth authoring**. This mechanism makes that arithmetic
  * possible instead of approximate: `k` is spacings-per-band, and the spacing is
  * the mass's circumference over `veins`. Eight veins around a 400 m mass is a
- * 315 m spacing, so `k = 26` is a 24 m band -- eleven pixels at Lestallum and
- * thirty-three at the highway spur. The ridged version could only be tuned by
- * capture, because its width depended on the gradient of an fbm.
+ * 315 m spacing, so `k = 17` on seven veins is a band around 38 m -- 26 px at
+ * `landmark_meteor`'s 1.45 m/px and 17 at Lestallum. The first pass at 26 was
+ * arithmetically inside the floor and still read as flecks, because a band that
+ * is only two or three triangles across is broken by every terrace the relief
+ * cuts. The ridged version this replaced could not be tuned this way at all:
+ * its width depended on the gradient of an fbm.
  *
  * The colour is the human's direction: **molten blue**. A near-white-blue core
  * with a warm halo at the band's edge, which is what a crack full of something
@@ -350,7 +353,7 @@ function vertexEmissiveGlow(material: THREE.MeshStandardMaterial) {
  * @param k band tightness -- LOWER is wider. See the width note above.
  * @param amp peak core radiance before `uGlow`
  */
-function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 8, k = 26, amp = 1) {
+function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 7, k = 17, amp = 1) {
   const n = new Noise(seed * 13 + 7);
   const p = geo.attributes.position;
   const count = p.count;
@@ -394,14 +397,25 @@ function meteorVeins(geo: THREE.BufferGeometry, seed: number, veins = 8, k = 26,
     // A crack is not equally hot along its length. This fades each vein in and
     // out over a few hundred metres so it reads as fissure rather than as a
     // painted stripe, and it never quite reaches zero.
-    const heat = 0.45 + 0.55 * (0.5 + 0.5 * n.fbm3(x * 2.3 + 17, y * 2.3, z * 2.3 - 5, 3) * 2);
+    // **Low frequency, and a floor.** At 2.3 this term's period was about
+    // 170 m, which is shorter than the vein is long, so it chopped every
+    // meridian into DASHES -- captured from 3 km at night and it read as
+    // glowing chips of ice embedded in the rock rather than as a crack. 0.85 is
+    // a period of some 600 m, so a vein brightens and dims once or twice over
+    // its whole length, and the 0.62 floor means it never goes out.
+    const heat = 0.62 + 0.38 * (0.5 + 0.5 * n.fbm3(x * 0.85 + 17, y * 0.85, z * 0.85 - 5, 3) * 2);
     // **Not on the up-facing surfaces.** Half of why the first pass read as
     // snow is that emissive on a horizontal face is exactly where snow goes,
     // and the eye has a very strong prior about that. A crack full of
     // something molten is a thing you see in a *wall*: on the steep faces and
     // in the clefts, which is also where it has any value contrast to work
     // with. This one term is the difference between a wound and a snowfield.
-    const face = 1 - 0.72 * Math.max(0, nrm.getY(i));
+    // 0.35, not the 0.72 that first killed the snow read. `relief` covers
+    // these masses in step-fracture terraces, so the vertex normal's y flips
+    // between riser and tread every seven metres -- at 0.72 that alternation
+    // was most of what turned a continuous meridian into a dashed one. Damping
+    // the up-faces is still right; extinguishing them cost more than it bought.
+    const face = 1 - 0.35 * Math.max(0, nrm.getY(i));
     // The crown took the shock and is the most shattered; it is also the only
     // part of the cluster a 1.4 km camera can see over the foreground ridge,
     // which is the same conclusion arrived at from the other direction.
@@ -1445,11 +1459,15 @@ export class Megastructures {
     for (const g of this.glows) g.emissiveIntensity = night * 1.6;
     if (this.mats) {
       this.mats.beacon.emissiveIntensity = 2.2 + 2.6 * (0.5 + 0.5 * Math.sin(t * 2.4));
-      this.mats.meteorGlow.emissiveIntensity = 1.6 + 1.4 * night;
+      // 1.2/2.2 rather than 1.6/3.0: at 3.0 the crust fissures came back as
+      // white shapes with no colour left in them, which is a lamp and not a
+      // crack. The blue has to survive the exposure or the direction does not
+      // ship.
+      this.mats.meteorGlow.emissiveIntensity = 1.2 + 1.0 * night;
       // **`emissiveIntensity` does not reach the veins.** `vertexEmissiveGlow`
       // adds `vEmissive` straight into `totalEmissiveRadiance`, downstream of
       // everything the standard material scales, so the masses' fissures ramp
-      // through their own uniform or not at all. 0.6 by day, 1.9 after dark.
+      // through their own uniform or not at all. 0.85 by day, 1.9 after dark.
       //
       // The night figure was 3.2, chosen to clear bloom's 1.45 post-exposure
       // threshold with room. Captured from the highway spur at t 21.2, that is
@@ -1457,7 +1475,7 @@ export class Megastructures {
       // already lifting the frame, so the headroom bloom needs is much smaller
       // than the daylight arithmetic suggests, and past it every channel clips
       // and the colour the direction asks for is the first thing lost.
-      this.mats.meteorSkin.userData.uGlow.value = 0.6 + 1.3 * night;
+      this.mats.meteorSkin.userData.uGlow.value = 0.85 + 1.05 * night;
       this.mats.lamp.emissiveIntensity = 1.2 + 2.2 * night;
     }
   }
