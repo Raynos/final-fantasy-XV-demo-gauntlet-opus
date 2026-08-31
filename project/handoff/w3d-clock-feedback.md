@@ -12,7 +12,8 @@ unreadable type — plus playtest item 7 (overlay text that reads as a ghost).
 **Not touched:** `src/characters/`, `src/game/CameraRig.ts`, `src/game/Shots.ts`.
 
 **Commits:** `c174019` (clock), `32fe26c` (refusal + legibility), `1152bdc`
-(longplay pin).
+(longplay pin, cross-lane), `0284a9f` (this handoff), `120acaa` (area-card
+type, after looking at the frame).
 
 ## A. The clock — LANDED, verified numerically and by eye
 
@@ -61,10 +62,19 @@ the probe plays live (`Director.play()`), so an encounter's hit-stop time scale
 (`game.time.scale`) eats a fraction of the frames. **Not chased** — worth one
 look if anyone wants the rate exact. Everything else is exact.
 
-### Looked at
+### Looked at — `_probe/w3dday.mts`, one framing, one continuous session
 
-`tmp/w3d/day-0/10/20/30.jpg` — the same framing at 12:01, 15:25, ~18:5x and
-~22:1x of one continuous session. (See "what the frames showed" below.)
+    after  0 min: 12:01 DAY 1 MIDDAY     exposure 0.91
+    after 10 min: 15:25 DAY 1 AFTERNOON  exposure 0.95
+    after 20 min: 18:52 DAY 1 DUSK       exposure 1.83
+    after 30 min: 22:17 DAY 1 DEEP NIGHT exposure 1.54, nightDepth 0.66
+
+- `tmp/w3d/day-20.jpg` — low raking orange light, long shadows, the ridge
+  rimmed and the sky glowing behind Hammerhead. Golden hour, reached by
+  nothing but twenty minutes of play.
+- `tmp/w3d/day-30.jpg` — deep blue-violet field, and **hobgoblins and a
+  Bussemand LV 35 on it**. The night-gated spawn tables opened on their own.
+  That content was unreachable in ordinary play before this change.
 
 ## B. The refusal — LANDED, looked at
 
@@ -106,7 +116,12 @@ already 0.45 and governs dialogue choice rows only).
   `#b6d6f8` over whatever the dawn is doing. `.victory` sits on a 0.74-alpha
   plate, `.hint` on `.plate`, this on nothing. Given an elliptical fade behind
   the type rather than a rectangle (a hard plate would cheapen a soft
-  left-aligned title over the world). **Not yet photographed** — see "left".
+  left-aligned title over the world). **Photographed and re-worked once after
+  looking**: with the scrim in it was legible but still the quietest type on
+  the screen at the loudest moment in the loop, so the line went 10px/.56em
+  `--ice` -> 11px/.5em `#dcebff` and the scrim's core .72 -> .84
+  (`120acaa`). `tmp/w3d/ghost-card2.jpg` — it now reads over bright Longwythe
+  grass without a plate. **Verified.**
 - **`GETTING BACK OUT` could never appear.** `Hints._poll` raises it exactly
   when a menu is open; `HUD` claims the reading band at `PRIORITY.screen`
   exactly while a menu is open; so `_blocked()` was true on every frame the card
@@ -115,7 +130,11 @@ already 0.45 and governs dialogue choice rows only).
   ~20%" is a card that was never shown, only glimpsed on the way out. A card
   teaching you how to leave the surface that owns the band is now allowed inside
   it; every other claimant still blocks it. `uxcheck`'s own "a hint explains how
-  to leave the first menu" still passes. **Not yet photographed.**
+  to leave the first menu" still passes. **Photographed:**
+  `tmp/w3d/ghost-ghost` -> `tmp/w3d/ghost-hint.jpg`, map open, probe reports
+  `id=menu suspended=false a=1.000 cardOpacity=1` and the card renders at full
+  opacity top-centre on its plate, clear of the MAP header (left), the filter
+  rail (left) and the detail card (right). **Verified.**
 - **VICTORY is a measured negative**: it has a full plate (0.74→0.46 gradient,
   10px backdrop blur at brightness 0.70) and its own ramp reaches opacity 1.0.
   Nothing dims it at steady state. If the playtest saw a ghost there it was a
@@ -175,12 +194,8 @@ mix will change once the session reaches night-gated tables).
 
 ## Left / next step
 
-1. **Photograph the two item-7 fixes.** `.areacard` needs a camp-rest frame over
-   bright ground; `GETTING BACK OUT` needs a frame with a menu open. Neither is
-   verified by eye yet — the code path for the hint is proven by `uxcheck`, the
-   `.areacard` scrim is not proven at all.
-2. **Re-run `perfhitch` / `check:perf`** — see the open risk above.
-3. The 4% rate shortfall in `w3dclock.mts` (time-scale during encounters).
-4. `AudioSystem.ts:347` plays `ui:confirm` on Enter **unconditionally** whenever
+1. **Re-run `perfhitch` / `check:perf`** — see the open risk above.
+2. The 4% rate shortfall in `w3dclock.mts` (time-scale during encounters).
+3. `AudioSystem.ts:347` plays `ui:confirm` on Enter **unconditionally** whenever
    a menu is open, so a refused Enter still plays confirm *and* cancel in the
    same frame. Not touched — not my file, and no lane was named for it.
