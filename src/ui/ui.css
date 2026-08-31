@@ -171,17 +171,30 @@
   pointer-events: none; z-index: -1;
 }
 #hud .tl { left: 34px; top: 26px; }
+/* The bottom-centre strip was the ONLY corner with no shade behind it, which is
+   why the control hints were the first thing to disappear when the playtest
+   faced the sun: "the bottom control hints, the ARMIGER bar and the
+   ability-point popups become grey-on-white and unreadable". Same ellipse, same
+   colour and same reasoning as the two above -- a whisper of shade so pale HUD
+   type survives a bright ground. It is centred rather than cornered because
+   this strip is. */
+#hud .bc::before {
+  content: ''; position: absolute; left: 50%; bottom: -28px; width: 900px; height: 240px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse 100% 100% at 50% 100%, rgba(4,8,15,.32), rgba(4,8,15,.11) 48%, rgba(4,8,15,0) 84%);
+  pointer-events: none; z-index: -1;
+}
 #hud .bc { left: 50%; bottom: 28px; transform: translateX(-50%); }
 
 /* ---- notification column ------------------------------------ */
 .toasts { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; align-items: flex-start; }
 .toast { display: flex; align-items: center; gap: 10px; padding-left: 2px; }
-.toast .tz-ico { color: var(--ink-4); display: flex; }
+.toast .tz-ico { color: var(--ink-2); display: flex; }
 .toast.gold .tz-ico { color: var(--gold); }
 .toast.ice .tz-ico { color: var(--ice); }
 .toast .tz-k {
-  font-size: 8px; font-weight: 500; letter-spacing: 0.34em; text-transform: uppercase;
-  color: var(--ink-4); text-shadow: var(--sh-text);
+  font-size: 8.5px; font-weight: 500; letter-spacing: 0.30em; text-transform: uppercase;
+  color: var(--ink-3); text-shadow: var(--sh-text);
 }
 .toast .tz-v {
   font-size: 11.5px; font-weight: 300; letter-spacing: 0.13em;
@@ -283,14 +296,14 @@
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 7px;
 }
 .clock-time { font-size: 21px; font-weight: 200; letter-spacing: 0.12em; color: #fff; text-shadow: var(--sh-text); line-height: 1; }
-.clock-day  { font-size: 8px; letter-spacing: 0.30em; color: var(--ink-2); text-transform: uppercase; text-shadow: var(--sh-text); margin-top: 6px; }
+.clock-day  { font-size: 8.5px; letter-spacing: 0.26em; color: var(--ink); text-transform: uppercase; text-shadow: var(--sh-text-lg); margin-top: 6px; }
 .loc-name   { font-size: 12px; font-weight: 300; letter-spacing: 0.30em; text-transform: uppercase; color: var(--ice); text-shadow: var(--sh-text); text-align: right; }
-.loc-sub    { font-size: 8px; letter-spacing: 0.24em; color: var(--ink-2); text-transform: uppercase; text-align: right; text-shadow: var(--sh-text); margin-top: 6px; }
+.loc-sub    { font-size: 8.5px; letter-spacing: 0.22em; color: var(--ink); text-transform: uppercase; text-align: right; text-shadow: var(--sh-text-lg); margin-top: 6px; }
 .quest-line { display: flex; align-items: center; gap: 9px; margin-top: 9px; justify-content: flex-end; }
 .quest-line .ico { color: var(--gold); opacity: .95; filter: drop-shadow(0 0 6px rgba(232,207,152,.45)); }
 .quest-line .qt { font-size: 10.5px; letter-spacing: 0.12em; color: var(--ink); text-shadow: var(--sh-text); }
 .quest-line .qd { font-size: 10px; color: var(--ice); letter-spacing: .06em; text-shadow: var(--sh-text); }
-.quest-step { font-size: 9px; letter-spacing: .10em; color: var(--ink-2); text-align: right; margin-top: 5px; text-shadow: var(--sh-text); }
+.quest-step { font-size: 9px; letter-spacing: .10em; color: var(--ink); text-align: right; margin-top: 5px; text-shadow: var(--sh-text-lg); }
 
 /* ---- button prompts ----------------------------------------- */
 /* One owner for the bottom-centre corner, same discipline as `.bl`: a column
@@ -315,7 +328,7 @@
   color: var(--ink-2); margin-top: 7px; text-shadow: var(--sh-text);
 }
 .prompt { display: flex; align-items: center; gap: 7px; }
-.prompt .lb { font-size: 9.5px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
+.prompt .lb { font-size: 9.5px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); text-shadow: var(--sh-text-lg); }
 .prompt.key .btn-glyph { color: var(--ice); }
 
 /* ===================================================================== */
@@ -790,7 +803,13 @@
 .armiger .ar-head { margin-bottom: 8px; }
 .armiger .ar-lb { flex: 1; }
 .armiger .ar-pct { font-size: 16px; }
-.armiger .ar-note { font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-4); }
+/* `b3dbbdc`'s recipe, applied one layer out: `--ink-4` at 8px with NO
+   text-shadow was the exact defect lane 10 fixed on `.arm-gauge .d`, except
+   this copy sits over unblurred terrain rather than over a menu scrim, so it is
+   the more serious of the two. Colour up, shadow on, a little larger, less
+   tracking. */
+.armiger .ar-note { font-size: 9px; font-weight: 300; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
 /* narrower than the party stack's 326 px on purpose: five stacked white
    hairlines of the same length read as one panel, and the rail was being
    mistaken for part of the party's HP block */

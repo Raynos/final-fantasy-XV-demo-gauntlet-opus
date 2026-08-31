@@ -8,15 +8,40 @@ const GRAVITY = 19.5;
 /**
  * Terminal speed of a slide, m/s.
  *
- * Fast enough that one carries a character clear of the contour it started on
- * — which is the whole point of it having momentum — and slow enough that it
- * reads as losing your footing rather than as being fired down the hill.
+ * Measured, not chosen. At 6.5 the slide did its job — six of six dead-stops
+ * became slides — and then kept going: a climb that merely *brushed* a
+ * refusing patch on the way up a 48° face was swept off it, `slopewalk`'s
+ * 48.2° site going from `along 42.9 m, dY +18.1` to `along 21.0 m, dY −45.7`.
+ * 3.5 is half the 7 m/s sprint, so it cannot be out-walked on ground that
+ * refuses (where the uphill authority is zero anyway) and is comfortably
+ * out-walked the moment the ground holds again.
  */
-const SLIDE_MAX = 6.5;
-/** How fast a slide bleeds off once the ground is walkable again, per second. */
-const SLIDE_BRAKE = 5.0;
+const SLIDE_MAX = 3.5;
+/**
+ * How fast a slide bleeds off once the ground is walkable again, per second.
+ * At 8 it is down to 9% within a third of a second, which is what keeps a
+ * slide from following you onto ground you can stand on.
+ */
+const SLIDE_BRAKE = 8.0;
 /** Seconds `slip` stays raised after the ground turns walkable again. */
 const SLIP_HOLD = 0.9;
+/**
+ * How long the ground has to keep refusing before it counts as a refusal.
+ *
+ * **This is not a debounce; it is the difference between a hillside and a
+ * facet.** `Terrain.normalAt` is a finite difference over one cell, and this
+ * field is incised — `Field._addDetail`'s gully cuts 4.8 m amplified by
+ * `(0.4 + 0.9*slope)` so it bites the flanks. The consequence, measured: a
+ * 41.6° hillside that `slopewalk` climbs 12.4 m without difficulty spends
+ * **54% of its frames** with a sub-metre facet steeper than 58° under the
+ * feet. Building slide momentum on those swept a climb off a 48.2° face
+ * (`dY +18.1` → `−24.6`), and publishing `slip` from them would have put "too
+ * steep" on screen while the player was walking up the hill.
+ *
+ * A leaky counter rather than a reset, so alternating facets hover near zero
+ * and only a face that keeps refusing ever crosses.
+ */
+const REFUSE_T = 0.35;
 
 /**
  * Capsule-vs-world movement for a walking character.
@@ -44,6 +69,8 @@ export class CharacterController {
   _from!: THREE.Vector3;
   _g!: GroundHit;
   _hold!: number;
+  /** Seconds of (leaky) continuous refusal — see `REFUSE_T`. */
+  _refuseFor!: number;
   /** Seconds `slip` has left to run once the ground turns walkable again. */
   _slipFor!: number;
   /** Carried slide velocity, m/s, world X and Z. */
@@ -64,9 +91,11 @@ export class CharacterController {
    * How much footing is being lost right now, 0..1 — the signal the game had
    * no way of giving the player.
    *
-   * 0 on ground that holds you, 1 on ground that does not (past 58°), with the
-   * fade band in between. It stays raised for `SLIP_HOLD` after the ground
-   * turns walkable again, because a character oscillating across the contour
+   * 0 on ground that holds you and 1 on ground that does not (past 58°). The
+   * 50-58° fade band deliberately reads 0: it is walkable, `slopewalk` shows
+   * four of five sites in it climbing, and a warning that fires while you are
+   * succeeding is a warning nobody believes the time it is true. It stays
+   * raised for `SLIP_HOLD` after the ground turns walkable again, because a character oscillating across the contour
    * flickers it four times a second otherwise and a message that flickers is
    * noise. `src/ui/HUD.ts` reads it; nothing in the collision layer does.
    */
@@ -122,6 +151,7 @@ export class CharacterController {
     this.onProp = false;
     this.slip = 0;
     this._slipFor = 0;
+    this._refuseFor = 0;
     this._slx = 0;
     this._slz = 0;
     /** How much of the wanted move actually happened last step, 0..1. */
@@ -179,11 +209,14 @@ export class CharacterController {
         const slide = GRAVITY * (1 - n.y) * (1 - grip);
         vx += dx * slide * dt * 6;
         vz += dz * slide * dt * 6;
-      } else {
+      } else if (this._refuseFor > REFUSE_T) {
         this._slx += dx * GRAVITY * (1 - n.y) * dt;
         this._slz += dz * GRAVITY * (1 - n.y) * dt;
       }
     }
+    this._refuseFor = grip <= 0 && this.grounded
+      ? Math.min(REFUSE_T * 3, this._refuseFor + dt)
+      : Math.max(0, this._refuseFor - dt * 2);
     // The slide is carried, clamped and braked here rather than inside the
     // branch above, so a character who slides off a cliff onto flat ground
     // keeps going for a moment instead of stopping dead on the line.
@@ -203,9 +236,16 @@ export class CharacterController {
     }
     // Published for the HUD. Held for a moment so a character oscillating
     // across the 58° contour does not flicker the message.
-    if (grip <= 0 && this.grounded) this._slipFor = SLIP_HOLD;
+    //
+    // **A refusal, not a steepness.** The first version published `1 - grip`,
+    // so the fade band raised it too — and `slopewalk` promptly showed 78% slip
+    // on a 41.6° hillside that climbed 12.3 m without complaint. Telling a
+    // player "too steep" while they are successfully climbing is worse than
+    // telling them nothing, because the next time it is true they will not
+    // believe it. This is 1 only where the ground genuinely will not hold.
+    if (this._refuseFor > REFUSE_T) this._slipFor = SLIP_HOLD;
     else if (this._slipFor > 0) this._slipFor -= dt;
-    this.slip = this._slipFor > 0 ? 1 : (this.grounded ? 1 - grip : 0);
+    this.slip = this._slipFor > 0 ? 1 : 0;
 
     // ---- 2. horizontal move, substepped, then wall resolution ----------
     const want = Math.hypot(vx, vz) * dt;
@@ -358,6 +398,7 @@ export class CharacterController {
     this._slx = 0;
     this._slz = 0;
     this._slipFor = 0;
+    this._refuseFor = 0;
     this.slip = 0;
     this._score(pos, vx, vz, want, dt);
     return pos;

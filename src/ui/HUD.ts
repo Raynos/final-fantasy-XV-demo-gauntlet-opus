@@ -181,6 +181,14 @@ export class HUD {
     this.subtitles.clear();
     this.toasts.clear();
     this.hints.reset();
+    // The traversal note is stateful across frames on purpose (it takes half a
+    // second of slipping to speak and half a second to go), so a scene that
+    // captures a hillside leaves it mid-fade over the NEXT scene's frame —
+    // seen once, as a ghost of "TOO STEEP" behind the button row of a
+    // `hud_field` shot. A capture has to be a function of its own scene.
+    this.prompts.slipA = 0;
+    this.prompts._slipFor = 0;
+    this.prompts.slipBox.style.display = 'none';
     if (this.bridge) this.bridge._lastCall = -99;
     this._banterAt = this.game.time.now + 0.30;
     this.fieldA = 0; this.combatA = 0;
