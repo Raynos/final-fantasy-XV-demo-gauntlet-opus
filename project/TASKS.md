@@ -854,3 +854,43 @@ Reproduced exactly (11/6/5) on a second run. Day control unmoved at 2.14 km.*
 - **At night the headlamps bloom into solid white discs that wash out the road
   they light.** A look note from the ambush frames, not from a gate.
 
+## The chocobo, after three lifetimes (2026-08-31)
+
+*The mount is summonable from minute one, rides at 11.00 m/s, both hubs work,
+dye and feed tiers are probe-verified, two of three races are won end to end, and
+the kit's frame-found defects are fixed and verified by eye. `chocobolegal.mts`
+now exercises the refusals for the first time: dry (1.6 deg) mounts, wet (h −47.5
+against level −6.5) refuses, steep (83.8 deg against cos50) refuses, and a refused
+`mountAt` leaves state alone. Draw cost is **10.7 calls for mount plus a
+three-bird flock**, 476.2 of an 800 budget, on an instrument that was aliasing
+until tonight.*
+
+- **The rider has no legs** — a black blob over the fore-flank ending at
+  mid-barrel, nothing in the stirrup, on all four birds. The loudest remaining
+  defect on a ridden frame. `lane22`
+- **The rider's two hand meshes differ** (closed black glove against bare open
+  hand), so a mirror-symmetric `POSE_RIDE` still renders asymmetric; **nothing
+  holds the reins**; and a **sword blade passes through the bird's neck** while
+  mounted. Three items, **none of them the pose table** — `Skeleton.ts:154`
+  mirrors bone translation only, so the table is provably symmetric. `lane22`
+- **The neck and head are now the worst surface on the animal** — a smooth
+  unbroken tube with a peach wedge, bridle drawn as black wires. And the bib is
+  near-cream against saturated yellow: the down rows fixed the smoothness and
+  left the value break. `lane22`
+- **The far thigh is still a bald sphere**, and the next move is named and is
+  **not another radius**: it is the `Euler(pi-0.26, a*0.7, 0)` yaw, which fans
+  the coverts off the leg instead of laying them down it. `lane22`
+- **`_apron`/`gradePad`/`_base` cannot produce a level deck on 59 m of relief**,
+  and six kits inherit it. This is what blocks the Alpine hub and `race_alpine`,
+  and it is **not fixable inside a kit function**: `_base` clamps to ~+-3 m of the
+  pin and the batter reaches only `r` further at 1:3. `lane22`
+- **Grass punches through every POI apron**, very visible at Wiz on all bearings.
+  `PAD_R`'s docstring names the fix (`Ecology.poiClear` plateau-plus-skirt) and
+  assigns it to the vegetation lane. `lane22`
+- `M.cloth` is navy, so the hay tarp reads as a dark blue tent — shared by six
+  kits. Four pale thin stakes stand on the Wiz apron inside the fence at 40 m,
+  unidentified. `lane22`
+- **`Shots.ts` owes four chocobo framings**, and without one `npcdraws` cannot be
+  run with the bird in frame. `ControlsScreen.ts` owes a Chocobo group (`6`
+  whistle/dismiss, `E` ride, `Shift` sprint). `lane22`
+

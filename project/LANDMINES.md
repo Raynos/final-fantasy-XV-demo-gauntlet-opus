@@ -2637,3 +2637,24 @@ peak) and the alar ball (2.91) in one turn, after three respawns had looked for
 it in `paintFace`, in the fringe's cast shadow and in the merged shadow proxy.
 **Ablate the shading stack to prove a defect is geometry; decompose the brush
 field to find out which geometry.**
+
+## An A/B whose sample length is commensurate with a refresh period measures the phase, not the change
+
+`chocobodraws` reported the mount **saving** ~143 draw calls, twice, and its
+control arms read 589 and 489 four frames apart. That was recorded as "the
+instrument does not settle its own control" and no draw number was quoted for
+the mount. The real cause, found 2026-08-31: **shadow cascades refresh every 2
+frames and a read was 31 frames long**, so an A/B pair spanned 62 — an exact
+multiple — and every arm was **phase-locked** to the same point in the cascade
+cycle. The variance was not noise; it was aliasing.
+
+Fixed by making a read the mean of **120** frames. **Null spread fell from 213 to
+1.6 draw calls**, and the honest answer emerged: mount plus a three-bird flock
+costs **10.7 calls, 2.7 per bird**, against a bar of 5.4 and a budget of 800.
+
+**Check your sample length against every periodic thing in the frame** — cascade
+refresh, TAA jitter cycle, a streamer's tick, an animation loop. A quantity that
+looks wildly noisy at one sample length and quiet at another was never noisy.
+And note which way this cut: the aliased instrument's error was **large and
+signed**, so it did not look like noise, it looked like a discovery.
+
