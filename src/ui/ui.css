@@ -935,28 +935,35 @@
  * card with a 160px void under them, which reads as an unfinished layout rather
  * than as four groups. Stretched, they share one baseline and the card is a
  * band between the title rule and the footnote. */
-.ctrl-grid { position: absolute; left: 68px; right: 68px; top: 162px; bottom: 132px;
-  display: flex; gap: 18px; align-items: stretch; }
-.ctrl-col { flex: 1; padding: 16px 18px 16px; display: flex; flex-direction: column; overflow: hidden; }
+/* Five columns, not four: the Chocobo group is a fifth, and a fifth column at
+   the old margins (68px sides, 18px gaps, 18px column padding, 82+74px of
+   reserved glyph and pad gutter per row) left 278px per column against the
+   352px four columns had. Every two-word label wrapped to three lines, rows
+   grew, and Combat's thirteenth row fell out of its own `overflow: hidden`.
+   The margins, the gaps and both gutters all come in so the text column is the
+   width it was; nothing about the type changed. */
+.ctrl-grid { position: absolute; left: 34px; right: 34px; top: 152px; bottom: 130px;
+  display: flex; gap: 11px; align-items: stretch; }
+.ctrl-col { flex: 1; padding: 15px 12px 14px; display: flex; flex-direction: column; overflow: hidden; }
 .crow .cr-k .cr-dash { font-size: 11px; color: var(--ink-4); line-height: 1; }
 .ctrl-col .cc-h { display: flex; align-items: center; gap: 10px; }
 .ctrl-col .cc-h .ico { color: var(--ice); flex: none; }
 .ctrl-col .cc-t { font-size: 10.5px; letter-spacing: .32em; text-transform: uppercase; color: #fff; text-shadow: var(--sh-text); }
-.crow { position: relative; display: flex; align-items: center; gap: 11px; padding: 4px 8px 4px 4px; }
+.crow { position: relative; display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 3px; }
 .crow .mr-bg { position: absolute; left: -8px; right: -4px; top: 0; bottom: 0; opacity: 0;
   background: linear-gradient(90deg, rgba(134,184,239,.22), transparent 74%);
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
-.crow .cr-k { display: flex; align-items: center; gap: 3px; min-width: 82px; flex: none; }
+.crow .cr-k { display: flex; align-items: center; gap: 3px; min-width: 68px; flex: none; }
 .crow .cr-k .btn-glyph { color: var(--ice); }
 .crow .cr-b { flex: 1; min-width: 0; }
 .crow .cr-t { font-size: 10.5px; font-weight: 300; letter-spacing: .1em; color: var(--ink-2); text-shadow: var(--sh-text); }
 .crow .cr-n { font-size: 8px; letter-spacing: .12em; color: var(--ink-4); margin-top: 2px; }
 .crow .cr-p.none { color: var(--ink-4); opacity: .8; letter-spacing: 0; }
-.crow .cr-p { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-4);
-  text-align: right; min-width: 74px; flex: none; }
+.crow .cr-p { font-size: 8px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-4);
+  text-align: right; min-width: 54px; flex: none; }
 .crow.on .cr-t { color: #fff; }
 .crow.on .cr-p { color: var(--ice); }
-.ctrl-note { position: absolute; left: 68px; right: 68px; bottom: 86px; max-width: 980px;
+.ctrl-note { position: absolute; left: 34px; right: 34px; bottom: 92px; max-width: 980px;
   font-size: 9.5px; font-weight: 300; line-height: 1.7; letter-spacing: .1em; color: var(--ink-3); text-shadow: var(--sh-text); }
 
 /* ---- armiger --------------------------------------------------------- */
