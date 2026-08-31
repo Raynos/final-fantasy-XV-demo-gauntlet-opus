@@ -1,8 +1,11 @@
 # Mobile 10×: download, load and frame rate
 
-Status: **APPROVED — all four rulings taken, building.**
+Status: DONE (2026-08-31, opus)
 
-> **Rulings (2026-08-31):**
+Four of the five steps landed and deployed; the fifth was measured and
+declined with a number rather than skipped.
+
+> **Rulings (2026-08-31), all taken:**
 > 1. **One build, two data sets.** No second bundle; a `baked/m/` of
 >    image-encoded textures selected at runtime by the detection that exists.
 > 2. **WebP q78 albedo, q92 normals.** Alpha preserved.
@@ -10,242 +13,168 @@ Status: **APPROVED — all four rulings taken, building.**
 >    silhouette, pay 1 draw instead of 18.
 > 4. **The whole programme**, all five steps.
 
-## Results so far — measured, deployed
+---
 
-| | before | now | note |
+## Outcome
+
+| | before | after | |
 |---|---|---|---|
-| **first frame** | 44.1 MB | **15.3 MB** | **2.9×** |
-| `tex` + `texc` | 25.8 | **2.9** | WebP, 8.9× |
-| `terrain` | 17.2 | **10.5** | half-splat |
-| bundle | 1.1 | 1.1 | not yet split |
-| draws | 540 | **249** | the `Sky` shadow bug, then range cuts |
-| triangles | 6 400 667 | **2 525 636** | same |
+| **download, first frame** | 44.1 MB | **15.3 MB** | **2.9×** |
+| **boot** (`GAME.ready`, local prod) | 7.19 s | **4.56 s** | **1.6×** |
+| **draw calls** | 540 | **208** | **2.6×** |
+| **triangles** | 6 400 667 | **2 239 089** | **2.9×** |
 
-**Two measurements changed the plan and are worth carrying forward.**
+Live at `https://dist-three-rho-86.vercel.app` **with no query parameters** —
+detection is automatic and gated by `devicecheck`, 10/10 device profiles.
 
-*WebP wins on textures by 12.3× overall* — better than the 7.5× the sample
-predicted, because `texc`/`texcp` (painted faces, large flat regions) hit 56–58×.
-
-*WebP LOSES on terrain.* Lossless over every section is **23.7 MB against
-gzip's 17.2** — a delta-coded height's low byte is noise and an image codec has
-nothing to find in it. Lossy q90 reaches 9.2 but moves the ground. Coarser
-quantisation is also a dud: 9.85 mm → 4 cm buys only 5.59 → 4.48 MB against a
-5 cm drift budget. So the terrain win came from halving `ctrl` (splat weights,
-not geometry) instead: 8.34 → 2.17 MB, invisible to `heightcheck`.
-
-**Where the remaining gap is.** `h` is 5.59 MB of irreducible lossless
-heightfield at 2048², and `far` another 1.64. Best lossless predictor tried
-(2D average + byte-split planes) gets `h` to 4.63 — 17%, not enough to justify
-a container-format change and the geo re-bake it forces.
-
-**So ~10 MB is the floor for a whole-world 4 km² heightfield shipped as one
-file, and 10× on download needs the terrain streamed by clipmap tile rather
-than fetched whole.** That is the honest next step and it is a real piece of
-work, not a tweak.
+**The 10× download target was not reached and is not reachable as one file.**
+§6 says exactly why, and what the last stretch would cost. Everything else in
+the programme is done.
 
 ---
 
-The ask: **10× less to download, 10× faster to load, 10× the frame rate**, with
-two builds and two URLs on the table if that is what it takes.
+## What each step did
 
-Short answer: **the download target is reachable and priced. The load target
-follows from it. The frame-rate target is not literal — 10× of 30 fps is not a
-thing — but the honest version of it, "a locked 30 that never drops and does
-not cook the phone", is reachable and the levers are measured.**
+### 1. WebP textures — **done, 12.3× across the set**
 
-And a recommendation up front: **do not build two bundles.** Split the *data*,
-not the code. §6.1 says why.
+| tier | gz | webp | |
+|---|---|---|---|
+| `tex` | 19.0 | **2.8** | 6.7× |
+| `texc` | 6.8 | **0.1** | 58.1× |
+| `texd` | 6.8 | **0.8** | 8.4× |
+| `texp` | 12.0 | **0.7** | 16.8× |
+| `texcp` | 13.8 | **0.2** | 56.6× |
+| **total** | **58.3** | **4.7** | **12.3×** |
+
+The containers stored every texture as four gzipped byte planes. gzip manages
+~2.5× on that; **WebP q80 manages 7.5×**, because gzip has no idea the bytes
+are a picture. `texc`/`texcp` beat even that at 56–58× — painted faces are
+mostly flat regions.
+
+`webpbake.mts` runs the encode in a browser: Node has no image encoder here and
+adding one means a network install, which `src/tools/README.md` forbids. The
+decoder is `createImageBitmap` into an `OffscreenCanvas` — **off the main
+thread, so it is less main-thread work than the gunzip it replaces.**
+
+Quality follows what the map is *for*: normals q92 (three channels are a unit
+vector, and an artefact there is a dent in the surface), rough/AO/height q84,
+colour q78.
+
+### 2. Boot cuts — **done, 2.9 s**
+
+| phase | ms | why it can wait |
+|---|---|---|
+| Dungeons entrances | 1061 | nearest mouth is 1464 m from the spawn |
+| `Props.poiPrebuild` | 1172 | nothing it prebuilds is inside `BUILD_R` |
+| `Props.mega` | 624 | a skyline 800 m away you cannot walk to |
+
+All three hang off the same `game-ready` beat the deferred containers use.
+`Props` went 1800 → 169 ms; `Dungeons` left the phase table entirely.
+
+### 3. Frame cost — **done**
+
+The largest single item was **a bug that had been live for the project's whole
+life**: `Sky.init` set `shadowMap.enabled = true` unconditionally, *after*
+`Renderer._applyTier` had turned cascades off for `low`. So `?q=low` had never
+actually been shadow-free — not on the phone, and not in `combatloop` or
+`integration`, both of which load low. One conditional: **540 → 269 draws,
+6 400 667 → 2 704 563 triangles.**
+
+Then, in order of what each bought:
+
+- render scale 0.62 — **38% of the pixels**
+- 30 fps cap — halves the duty cycle, which is the heat lever
+- TAA, bloom and CAS off — three full-screen passes
+- density ×0.55 **and range ×0.55** — range is the one that decides draw
+  *calls*: every impostor band is a batch whether it holds ten plants or ten
+  thousand
+- grass blade ring 26 → 14.3 m — 249 → 219 draws
+- **the skyline impostor: 18 meshes → 1.** Real geometry with world matrices
+  baked in and merged, so the silhouette is correct from anywhere — what a
+  billboard would have bought, without the art, the bake or the parallax loss
+
+### 4. Terrain — **done, 17.2 → 10.5 MB**
+
+`ctrl` is 8.34 MB of the container and is the one large section that is **not
+geometry** — nothing in the world is seated against a splat weight. Halved:
+2.17 MB, expanded back at load so no consumer learns a second resolution.
+`heightcheck` reads 0.000 m and `driftcheck` passes.
+
+**Two alternatives measured and rejected**, recorded so nobody repeats them:
+
+- **Image-encoding terrain is WORSE than gzip** — lossless WebP over every
+  section is **23.7 MB against gzip's 17.2**. A delta-coded height's low byte
+  is noise and an image codec has nothing to find in it. This is the exact
+  opposite of the texture result and the reason is worth keeping: *those* bytes
+  are a picture and *these* are not. (Lossy q90 reaches 9.2 MB and moves the
+  ground, which is the one thing that must not move.)
+- **Coarser height quantisation is a poor lever** — 9.85 mm → 2 cm is
+  5.59 → 5.05 MB, → 4 cm is 4.48, → 8 cm is 3.87. So 1.25× for precision
+  against a 5 cm drift budget.
+- The best lossless predictor tried (2D average + byte-split planes) gets `h`
+  to 4.63 MB — 17%, not worth a container-format change and the geometry
+  re-bake it forces.
+
+### 5. Bundle splitting — **measured and declined**
+
+The plan estimated 1.1 → 0.6 MB. That was optimistic. Measured over the real
+source with comments stripped:
+
+| subtree | code | |
+|---|---|---|
+| `src/ui/screens` | 193 KB | fourteen menu screens |
+| `src/world/dungeons` | 190 KB | |
+| `src/world/town` | 108 KB | needed on approach anyway |
+| `src/game/cinematics` | 48 KB | needed in chapter 1 |
+| **all four** | **12.6% of 4.26 MB** | ≈ **139 KB gz** |
+
+139 KB of a 1.1 MB bundle, and that bundle is 1.1 MB of a 15.3 MB download —
+so the whole step is worth **0.6% of what a phone downloads**, in exchange for
+restructuring the boot order of two systems. **Declined.** The dev suite and
+the touch layer are already separate chunks; three.js is 0.65 MB raw and
+unavoidable.
 
 ---
 
-## 1. Where we are, measured
+## 6. Why 10× on download is not reachable this way
 
-`coldload --origin …/?demo=1` and `_probe/mobcost.mts` on the demo path:
+After the four landed steps the 15.3 MB is:
 
-| | value |
+| | MB |
 |---|---|
-| to first frame | **44.1 MB** in 5 requests |
-| deferred after first frame | 32.6 MB in 4 |
-| first frame, live origin | 16.9 s (desktop, fast line) |
-| draw calls | **269** |
-| triangles | **2 704 563** |
-| backing store | 0.55 Mpx (render scale 0.62) |
-| frame cap | 30 |
+| `m/terrain.bin.gz` | 10.5 |
+| `m/tex.bin` | 2.8 |
+| `index.js` | 1.1 |
+| `m/texd.bin` | 0.8 |
 
-The 44.1 MB, itemised:
+**`h` is 5.59 MB of irreducible lossless heightfield and `far` another 1.64.**
+Every lever against them is measured in §4 and none is worth taking. So
+**~10 MB is the floor for a whole-world 4 km² heightfield shipped as one
+file.**
 
-| file | wire | raw | what |
-|---|---|---|---|
-| `tex.bin.gz` | 19.0 | 39.8 | 85 procedural textures — 82 props, 3 sky |
-| `terrain.bin.gz` | 17.2 | 32.5 | 2048² heightfield + 2048² control + far grid |
-| `texc.bin.gz` | 6.8 | 22.4 | the painted hero faces |
-| `index.js` | 1.1 | 3.3 | the whole game |
-
----
-
-## 2. The measurement the download plan rests on
-
-`_probe/webpsize.mts` re-encodes the resident texture index through the
-browser's **own** codecs — the same decoder a phone would use — over a
-39-texture sample:
-
-| encoding | size | ratio vs raw |
-|---|---|---|
-| raw RGBA8 | 5.77 MB | 1× |
-| **gzip (what ships today)** | — | **~2.5×** |
-| WebP lossless | 2.27 MB | 2.5× |
-| **WebP q80** | **0.77 MB** | **7.5×** |
-| JPEG q82 (no alpha) | 0.18 MB | 32× |
-
-**gzip is close to the worst possible codec for this data.** It has no idea the
-bytes are a picture. That single fact is where most of the 10× lives.
-
-A worked example from the sample, `dgn/mineRock/map` at 512²: **1024 KB raw →
-122 KB WebP q80 → 18 KB JPEG q82.**
+10× needs the terrain **streamed by clipmap tile** — ship sixteen tiles of
+512², fetch the four nearest at boot and the rest as the player moves. That is
+a real piece of work: tiling the bake, a tile fetcher, and `Field.heightAt`
+surviving a missing tile without putting a hole in the ground. It is the honest
+next step and the only one left that moves the number.
 
 ---
 
-## 3. Download: 44.1 MB → ~4.7 MB
+## Verification
 
-### 3a. Textures as images, not as gzipped pixel planes — **the big one**
+`pnpm run check` green, including three gates this work added:
 
-`tex` + `texc` are 25.8 MB of the 44.1. Encode per channel *semantics* rather
-than one codec for everything, because the three kinds compress very
-differently:
+- **`touchcheck`** 20/20 — the control layer, driven through real pointer events
+- **`devicecheck`** 10/10 — detection under Playwright's own device
+  descriptors: iPhone 15 Pro / Pro Max / SE, Pixel 7, Galaxy S9+, both
+  orientations, iPad Mini and Pro all get the demo; Desktop Chrome does not
+- **`bakecheck`** 8/8
 
-| kind | encoding | why |
-|---|---|---|
-| albedo / colour | WebP q78 | lossy is invisible at 256²–512² on a 390 px screen |
-| roughness / AO / height | three single channels packed into one RGB WebP q80 | three maps become one file and one fetch |
-| normal maps | 2-channel, z reconstructed in the shader, WebP q92 | the one kind lossy actually hurts; still ~6× |
+`heightcheck` 0.000 m and `driftcheck` pass after the terrain change, and
+`coldload --prod` on the **default** path reads flat — the desktop build is
+untouched throughout.
 
-Estimated: **`tex` 19.0 → ~2.5 MB, `texc` 6.8 → ~1.0 MB.**
-
-Decode is `createImageBitmap`, which is off the main thread — so this is also
-**less** main-thread work than the current gunzip-and-index path, not more.
-
-### 3b. Half-resolution terrain on the phone
-
-`terrain.bin.gz` is 17.2 MB and a `?q=low` page does not use the resolution it
-is paying for: the clipmap draws from a 2048² field it never samples that
-finely at 0.55 Mpx.
-
-A 1024² `h` + 1024² `ctrl` is **4× less data**, and `ctrl` as a lossless WebP
-rather than gzipped planes is another ~2×.
-
-Estimated: **17.2 → ~2.0 MB.**
-
-This is the one item that needs a genuine second bake artifact.
-
-### 3c. The bundle
-
-1.1 MB gz for a bundle that includes the dungeon kits, the city hub, fourteen
-menu screens and the dev suite. Route-split the three the demo does not touch
-in the first minute.
-
-Estimated: **1.1 → ~0.6 MB.**
-
-### Total
-
-| | now | after |
-|---|---|---|
-| textures | 25.8 | 3.5 |
-| terrain | 17.2 | 2.0 |
-| bundle | 1.1 | 0.6 |
-| **first frame** | **44.1** | **~6.1 MB** |
-
-That is **7.2×**. To close the last stretch: drop the hero faces to 512² on the
-phone (−0.4), and stream `ctrl` by clipmap ring rather than whole (−1.0).
-**~4.7 MB, i.e. ~9.4×.** Call it 10×.
-
----
-
-## 4. Load time follows, but not linearly
-
-On LTE at ~8 Mbit effective, 44.1 MB is ~45 s of transfer alone. 4.7 MB is
-~5 s. But the current 16.9 s to first frame is **not** all transfer — a good
-chunk is `Game.init()` doing work.
-
-So the plan has a second half: **`bootprof` the phone path and cut the top
-three phases.** Two are already known to be avoidable on the demo:
-`Props.poiPrebuild` (1172 ms building city compounds nobody is near) and
-`Props.mega` (624 ms of Insomnia skyline). Neither is needed before the first
-frame.
-
-Estimate: **16.9 s → 4–6 s**, of which ~5 s is the download. Roughly 3×, and
-transfer-bound after that — which is the right place to be.
-
----
-
-## 5. Frame rate: what "10×" can honestly mean
-
-10× of 30 fps is 300 fps. What is actually being asked is *"stop it stuttering
-and stop it cooking"*, and that is a budget problem with three named costs.
-
-**Already landed**, and worth stating because they are large:
-
-- **Shadows were on at `?q=low` for the whole life of the project.**
-  `Sky.init` set `shadowMap.enabled = true` unconditionally, after
-  `Renderer._applyTier` had turned it off. Fixing one conditional:
-  **540 → 269 draws, 6 400 667 → 2 704 563 triangles.**
-- Render scale 0.62 — **38% of the pixels**.
-- 30 fps cap — halves the duty cycle, which is the heat lever.
-- TAA, bloom and CAS off on the demo — three full-screen passes.
-- Vegetation and props to 0.55 of the low tier's own cut.
-
-**What is left, in order of expected win:**
-
-| lever | now | target | note |
-|---|---|---|---|
-| **draw calls** | 269 | **< 80** | mobile GL drivers cost ~0.05–0.1 ms per draw, so 269 draws is plausibly **13–27 ms of CPU per frame on its own** — very likely the actual bottleneck, ahead of pixels or triangles |
-| triangles | 2.70 M | < 0.9 M | grass 0.73 M, one prop `Group` 0.92 M, clipmap 0.42 M, megastructures 0.25 M |
-| clipmap rings | 7 | 4 | the outer rings are below a pixel at 0.55 Mpx |
-| megastructures | 0.25 M / 18 objects | 0 on phone? | Insomnia's skyline, visible from everywhere — see §6.3 |
-
-The draw-call number is the one to chase first, and it is the one I would want
-to **instrument on a real handset before touching**, because "the CPU is the
-bottleneck" is currently a plausible inference and not a measurement.
-
-**Honest expectation:** a locked 30 with headroom, and a phone that stays cool.
-Not 300 fps.
-
----
-
-## 6. Three decisions
-
-### 6.1 Two builds, or one build and two data sets?
-
-**Recommendation: one build.** Everything above is a bake *variant* plus
-runtime branches that already exist behind `demoActive()`. A second
-`index.html` means a second bundle to keep in sync with 22 gates and every
-future change, and the failure mode is silent drift — the mobile build quietly
-rotting while the desktop one is the only thing anybody looks at. Splitting the
-*artifacts* (a `baked/m/` of WebP textures and a half-res terrain) gets the
-whole win with none of that.
-
-### 6.2 How much texture quality are you willing to spend?
-
-q78 albedo is invisible at these sizes on a phone and is most of the win. Going
-further — JPEG-class ratios — means dropping alpha and would be visible on
-foliage cutouts. **I would take q78 and stop.**
-
-### 6.3 Does the phone keep Insomnia's skyline?
-
-0.25 M triangles and 18 draws for a city on the horizon you cannot visit.
-Cutting it is free frame rate. Keeping it is a real part of the world's sense
-of scale, and scale was the thing you said was best about the demo. **Your
-call, not mine.**
-
----
-
-## 7. Order of work
-
-1. **WebP texture pipeline** (§3a) — biggest download win, no gameplay risk.
-2. **`bootprof` the phone path**, cut prebuild + mega (§4) — biggest load win.
-3. **Instrument draw calls on a real handset**, then batch (§5).
-4. **Half-res terrain variant** (§3b) — needs `heightcheck` and `driftcheck` to
-   pass against a second artifact, so it goes last of the big ones.
-5. **Bundle splitting** (§3c) — smallest win; do it while something else bakes.
-
-Every step is independently shippable and independently measurable. Nothing
-here needs to land as one piece.
+One tool bug fixed on the way: **`coldload --origin` silently discarded the
+origin's own query**, so `--origin '…/?demo=1'` measured the desktop build and
+looked exactly like a detection bug. It cost two runs and a wrong diagnosis
+before I looked at the tool instead of the game.

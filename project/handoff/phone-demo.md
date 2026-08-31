@@ -16,7 +16,28 @@ every byte came from container deferral and the disc only bought ~2.8 s of
 init. What the disc really gave was a memory bound, and POI-kit eviction gives
 that without fencing anything off.
 
-## Measured
+## Measured (after the 10x programme, 2026-08-31)
+
+| | start | now | |
+|---|---|---|---|
+| download, first frame | 44.1 MB | **15.3 MB** | 2.9x |
+| boot (`GAME.ready`) | 7.19 s | **4.56 s** | 1.6x |
+| draw calls | 540 | **208** | 2.6x |
+| triangles | 6 400 667 | **2 239 089** | 2.9x |
+
+The full account is `docs/plans/2026-08-31-opus-mobile-10x.md` (archived when
+DONE). Three things from it that a future agent needs and will not guess:
+
+- **WebP beats gzip 3x on textures and LOSES on terrain.** Textures are
+  pictures; a delta-coded heightfield's low byte is noise. Lossless WebP over
+  the terrain container is 23.7 MB against gzip's 17.2. Do not retry it.
+- **`?q=low` had shadows on for the project's whole life** — `Sky.init`
+  overwrote `Renderer._applyTier`. That one conditional was worth more than
+  every deliberate optimisation next to it.
+- **~10 MB is the floor** for a whole-world heightfield shipped as one file.
+  10x needs tiled terrain streaming, which nothing here does.
+
+## Measured (original phone-demo lane)
 
 | | before | after |
 |---|---|---|
