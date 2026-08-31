@@ -247,6 +247,38 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
   mat(breast, FEATHER, 0);
   rig.attachBlend(breast, 'chest', 'neck1', 1.0);
 
+  /*
+   * **Down over the bib.** Two frames' worth of notes said the same thing about
+   * this one blob: "the cream chest bib is a separate smooth egg with a hard
+   * seam to the yellow body, visible even at 3.4 m", and "the breast down still
+   * reads as one smooth pale mass; it wants a few down feathers over it". They
+   * are the same defect. An ellipsoid emerging from a barrel has a silhouette
+   * line where the two surfaces cross, and no amount of tinting removes it —
+   * what removes it is something lying ACROSS it.
+   *
+   * Three staggered rows down the front of the bib, laid on the ellipsoid's own
+   * radius so they cannot hover, tinted 18% of the way from down to plume so
+   * they read as pale feathers on pale down rather than as a second colour.
+   * The bottom row sits at y 1.16, which is where the bib meets the belly, so
+   * the seam the frames named is under a feather along its whole width.
+   */
+  for (let j = 0; j < 3; j++) {
+    const y = 1.42 - j * 0.13;
+    // The bib's own radius at this height, so the quill is on the surface.
+    const ex = 0.215 * Math.sqrt(Math.max(0.05, 1 - ((y - 1.29) / 0.255) ** 2));
+    for (let i = 0; i < 5; i++) {
+      const a = -0.9 + (i / 4) * 1.8 + (j % 2 ? 0.22 : 0);
+      const g = feather(0.14, 0.048, 0.25, 0);
+      tint(g, mixc(col.down, col.plume, 0.18).getHex(), 0.04);
+      mat(g, FEATHER, 0);
+      place(g, {
+        pos: [Math.sin(a) * ex * 0.96, y, 0.50 + Math.cos(a) * ex * 0.96],
+        quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.52, a, 0)),
+      });
+      rig.attachBlend(g, 'chest', 'neck1', 1.0);
+    }
+  }
+
   /* --------------------------------------------------- contour plumage ---
    * Three rings of shingled feathers over the barrel. The radius at each
    * station is read off the body loft above so the feathers sit ON the
@@ -308,8 +340,23 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
          * layered rather than painted on. So keep the lift where it does work
          * and take it away where it only opens a gap.
          */
-        const pitch = Math.max(0.10, 0.30 * (1 - phi0 * 0.28));
-        const g = feather(st.len, vane, 0.30, 0);
+        /*
+         * **And it falls off toward the shoulder as well**, which the first
+         * version of this rule missed by keying only on the ring angle.
+         *
+         * `shingle` lays a feather pointing at the TAIL, so a feather quilled
+         * at the forward station `z 0.32` has its tip at `z 0.08` — where the
+         * barrel is at its widest, `r 0.37` against the `0.34` it was quilled
+         * on. The lift is `len * sin(pitch) + bend * len` = 0.071 + 0.072 m
+         * against a surface that has risen 0.03, so the tip stood about 0.11 m
+         * proud of the back: a row of hard triangular tips over the shoulder,
+         * which is what the lifetime-2 frames read at 3.4 m. At the rump the
+         * same lift is over a surface that is FALLING away, so the tips read as
+         * coverts and are correct — hence a falloff and not a flat reduction.
+         */
+        const fwd = Math.max(0, st.z) / 0.32;
+        const pitch = Math.max(0.08, 0.30 * (1 - phi0 * 0.28) * (1 - 0.60 * fwd));
+        const g = feather(st.len, vane, 0.30 * (1 - 0.55 * fwd), 0);
         tint(g, mixc(col.plume, col.plumeDark, Math.min(0.55, phi0 * 0.22)).getHex(), 0.05);
         mat(g, FEATHER, 0);
         shingle(g, phi, pitch, px, py, st.z);
@@ -493,6 +540,31 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
     tint(thigh, col.plume, 0.03);
     mat(thigh, FEATHER, 0);
     rig.attachChain(thigh, ['hips', `thg${n}`, `shn${n}`], 1.0);
+
+    /*
+     * **Hip coverts**, and they are the transition the frames said was missing:
+     * "the thigh/hip masses are two bald smooth spheres butted onto the
+     * shingled flank with no transition".
+     *
+     * That is a gap in the coverage and it is measurable. The lowest shingle
+     * row is `phi0 2.34`, which `shingle` puts at `y 1.345 + cos(2.34) * 0.35 *
+     * 0.90` = **1.13**; the highest thigh feather below is quilled at **1.02**.
+     * Between them 110 mm of the thigh tube and the hip is bare loft, at the
+     * one place on the animal where two smooth masses meet. This is the same
+     * ring as the thigh feathers, one station higher and with a longer vane, so
+     * the two overlap instead of leaving a band.
+     */
+    for (let i = 0; i < 6; i++) {
+      const a = -1.25 + (i / 5) * 2.50;
+      const g = feather(0.30, 0.062, 0.14, 0);
+      tint(g, mixc(col.plume, col.plumeDark, 0.14).getHex(), 0.05);
+      mat(g, FEATHER, 0);
+      place(g, {
+        pos: [(0.205 + Math.cos(a) * 0.055) * s, 1.235, -0.03 + Math.sin(a) * 0.17],
+        quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.26, a * 0.7, 0)),
+      });
+      rig.attachChain(g, ['hips', `thg${n}`], 1.0);
+    }
 
     for (let i = 0; i < 5; i++) {
       const a = -1.15 + (i / 4) * 2.30;
