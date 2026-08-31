@@ -934,7 +934,7 @@ export const FACE_RELIEF_SMOOTH = 0;
  * geometry is built. Positions are untouched, so every `facecheck` geometry row
  * is untouched by construction. See the block at the end of `buildHead`.
  */
-export const FACE_NORMAL_SMOOTH = 7;
+export const FACE_NORMAL_SMOOTH = 14;
 
 /**
  * Low-pass the sculpted relief, in the head's own (u, v) grid.
