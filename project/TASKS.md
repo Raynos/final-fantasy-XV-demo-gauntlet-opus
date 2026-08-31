@@ -961,3 +961,18 @@ is landed.
   vertical comb artefacts over fat white star sprites**, and the Meteor's
   fissures read as flat cyan patches painted on facets rather than as glowing
   cracks. `tmp/shots/l21-city3/lest_overlook_disc.jpg`.
+- **The Alpine Stable's prompts have nothing to bind to.** `_reanchor` now binds
+  the kit's published anchors at Wiz, but `meldacio_layby` is
+  `type: 'parking'` (`WorldMap.ts:708`) and `PoiKits` picks its kit off
+  `poi.type`, so the stable publishes **no anchors at all** and its two prompts
+  remain world-axis offsets on a lay-by — 10.3 m and 15.3 m from the pin with
+  nothing built around them. Either give the lay-by a stable kit or move the
+  prompts onto something that exists. `CHOCOBO_HUBS`' docstring still describes
+  the old symptom. `chocobo-reach`
+- **A give-up timer that counts from boot rather than from arrival.** Deleted
+  during the fix, but worth knowing as a shape: `ChocoboHub`'s
+  `_tick > 30 * 40` had been dead for the session 20 s after boot, so the
+  late-bind poll silently stopped running long before the player could reach any
+  hub. Pre-existing, and fatal the moment a prompt's `enabled` hung off that
+  bind. `chocobo-reach`
+
