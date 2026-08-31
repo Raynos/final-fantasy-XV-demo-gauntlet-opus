@@ -266,53 +266,130 @@ Commits: `ca8929e` `615cdf8` `4de578e` `ef1055e` `fd94f1c` `8b986e3` `26c0c1f`
 
 ## Respawn 2026-08-31 — the sunk feet
 
-**Status: diagnosing. Nothing landed yet. Do not tune a constant until this
-section says which mechanism it is.**
+**Root cause found, fixed and measured. It was never a constant.**
 
 Lane 18 read `tmp/shots/l18c/plaza_down.jpg` and reported every Lestallum body
-sunk ~20 cm into the plaza deck; lane 21 reports the same across 21 corpus
-shots ("cut mid-shin, no shoe"), three of them judged PAIRING rows.
+sunk ~20 cm into the plaza deck; lane 21 photographed it twenty-one times and
+called it "cut mid-shin, no shoe"; the coordinator's hypothesis was that the
+site's Y depends on approach order and that `PLAZA_Y` was not being used.
 
-### What is measured, and it is not what the report says
+**All three readings of the cause were wrong, and the evidence says so:**
 
-`src/tools/probes/cityfeet.mts` (new, committed `2af12ab`) walks the **triangle
-that contains each body's (x, z)** and reports the surface under it. A vertex
-search is not good enough and cost the first run: the disc's top face is a
-40-way fan, so its only vertices are the centre and the rim.
+- `probes/cityfeet.mts` (new) walks the **triangle that contains each body's
+  (x, z)** — a vertex search is not good enough and cost the first run, because
+  the disc's top face is a 40-way fan whose only vertices are the centre and
+  the rim. Every body on the disc measured **sink 0.000 against
+  `town_poi_paving`**, by both approach paths (player teleport, and the
+  camera-only path `framecam`/`shoot` take).
+- Hiding the paving disc, hiding the whole POI compound (344 meshes) and hiding
+  every mesh in the scene that is not a person (792) all left the legs cut in
+  the same place. So no single surface was the occluder.
+- A **12-degree lens on one body's boots from the same camera** showed the
+  boots complete, on the flags, at the same distance and LOD as the wide frame
+  that showed them cut.
+
+The reconciliation is that **it is per-body, not per-city**: in one frame three
+people are cut by half a metre and nine are perfect. `cityfeet` with a
+five-point *footprint* sample (a plinth edge running between somebody's boots
+is the case a centre sample misses) named all nine:
 
 ```
-Lestallum  plaza anchor y 121.221  terrain 120.545  pad y 121.221 r 11.4
-  every body on the disc:  sink 0.000 against town_poi_paving
-Galdin     plaza anchor y 14.013   terrain 12.931   pad y 14.013 r 11.4
-  every body on the disc:  sink 0.000 against town_poi_paving
+lest_a lest_c surgate gald_b dino_bench   0.810  a stall counter / bench top
+verdough lest_kid lest_w2               0.500  a building plinth
+gald_e                                  1.067  inside a wall
+navyth                                 -0.189  floating on the plinth's batter
+lest_f 0.741 / lest_g 0.160 (buried)           the graded apron, see below
 ```
 
-So the placement is exactly right and `PLAZA_Y` is being used correctly.
+Every one was authored one to two metres off a **stall** anchor — and a stall
+anchor is already 1.1 m clear of its own counter, so a side offset of 1.5–2.6 m
+walks straight back into the stall's bench or the block behind it. It is a
+placement bug, not a height bug, and a tuned constant would have "fixed" one
+capture and left the rest.
 
-### Three ablations, and the deck is not the occluder
+### Landed
 
-`src/tools/probes/plazafeet.mts` (new) re-shoots lane 18's `plaza_down`
-framing and hides one class of mesh at a time (`tmp/shots/l19-abl`,
-`l19-abl2`). **Verified by eye, each frame read:**
+- `647a874` — **the city ground model is the built deck, not the heightfield.**
+  `_pads` is now a disc *with a rim* (flat to `r`, a ramp to `y2` at `r2`) that
+  **replaces** the terrain rather than being maxed against it, because
+  `gradePad` cuts as well as fills; it carries the plaza (r 11, `PLAZA_Y`), its
+  batter (11 → 11.9) and the graded apron (`APRON_R` 30 m at `base`). It is
+  **re-derived from the live anchor on every `_anchorFrame`** and every body
+  **re-plants every frame** through the new `_plant`, so a site rebuilt at a
+  different `base` can no longer leave the crowd behind — that is the
+  approach-order hazard, closed by construction rather than by a number.
+  Measured: `lest_f` 0.741 → 0.000, `lest_g` 0.160 → 0.000.
+- `2e3cc07` — `_clearSpot`, which asks `CollisionWorld.groundDisc` at placement
+  whether anything solid is within 1.1 m above the feet, and slides the body
+  along sixteen bearings at three radii. **It is a no-op today** — see the
+  residue below — but it costs nothing and becomes the durable fix the moment
+  the city props are in the collision world. Navyth also comes off the batter.
+- `8a24bb3` — the nine offsets, moved and re-measured: 3 m toward the plaza and
+  about a metre to the side, which is where a market vendor actually stands.
+  **26 of 29 bodies at sink 0.000.**
+- The `CITY` docblock now says the offsets are measured: move a row, re-run
+  `cityfeet`, the number to get to is `0.000`.
 
-- `plaza-nopaving` — the disc hidden. The legs are cut in *exactly the same
-  place*, now over the apron 0.675 m lower. The deck is not what cuts them.
-- `p-e-nopoi` — the whole POI compound hidden (344 meshes). Same cut.
-- `p-f-bodiesonly` — every mesh in the scene that is not a person hidden (792).
-  **Same cut.** Nothing is in front of the legs.
-- `plaza-raised` — bodies lifted 0.6 m. More leg is visible.
+### Verified by eye
 
-The last two are hard to reconcile and are why this is still open: nothing
-occludes, yet lifting the body reveals more leg.
+`tmp/shots/l19-fix1/lest_feet.jpg`, lane 18's exact framing: the man in purple
+now stands on his boots on the flags (he was cut at mid-calf in
+`tmp/shots/l19-feet3`, same framing, one commit earlier), and so does the woman
+by the wall. One body in the foreground was still cut at that commit and is one
+of the three below.
 
-### Two real defects the same probe found, both mine, both unfixed
+### Closed, measured at HEAD
 
-1. **The apron is graded and `Npcs._groundAt` does not know it.** `_town` calls
-   `_apron(B, 52, …)`, whose deck is flat at the site `base`; `_groundAt`
-   samples the *ungraded* `Ecology.height`. Measured: `lest_f` stands 0.741 m
-   **below** the gravel it is on, `lest_g` 0.160 m below, and those two rows are
-   the deliberate "two out on the apron, well back" pair.
-2. **The plaza pad radius outlived its kerb.** `_pads` uses r 11.4 against a
-   disc whose walking surface is r 11 — lane 18 turned the kerb into a 0.9 m
-   batter (`CylinderGeometry(11, 11.9, 0.7)`), so a body in the 11–11.9 annulus
-   is held at `PLAZA_Y` over a slope. Measured: Navyth, r 11.72, floats 0.189 m.
+```
+probe.mts src/tools/probes/cityfeet.mts
+  Lestallum  18 bodies within 30 m of the square, every one sink 0.000
+  Galdin Quay 11 bodies, every one sink 0.000
+```
+
+**Verified by eye at `7059133`, `tmp/shots/l19-fix2`:**
+
+- `lest_feet` (lane 18's exact framing) — five bodies, every one standing on
+  its boots on the flags with a contact shadow; the woman in the near
+  foreground, who was cut at the knee two commits earlier, is whole. The crowd
+  now leans a little toward the camera side of the square, which is the cost of
+  moving nine rows toward the plaza and is worth watching in `lest_market_day`.
+- `gald_eye` — six bodies, all with boots on the pavement, nobody clipped.
+- `lest_eye`, `gald_feet` — same read, no new defect.
+
+### Left
+
+1. **EXINERIS steam and awning variance** — the last third of item 67, not
+   started. The recipe is in the section above.
+2. The three items in the residue below are not this lane's files.
+
+### Residue for `project/TASKS.md`
+
+**The city POI compounds are not in `CollisionWorld` at all.** `groundDisc` at
+every one of the twenty-nine city bodies returns `onProp false` and a height
+**0.7-1.1 m below the pavement they are standing on** - raw terrain. So the
+player walking into Lestallum or Galdin Quay walks at terrain height, under the
+square's own deck, and nothing built there can be stood on. It is why
+`_clearSpot` cannot see a bench, and it is a gameplay defect well outside this
+lane. Numbers: Lestallum deck 121.215, collision 120.12-120.84 across eighteen
+sample points; Galdin deck 14.012, collision 12.86-13.48.
+
+**Both squares are shut in, and Galdin Quay is 712 m from the sea.**
+`probes/citysight.mts` (new) stands in the middle of each square and walks
+sixteen bearings outward to the first surface between knee and head height:
+
+```
+Lestallum   reach min 4.0  median 5.5  max 16.0 m   16/16 bearings block inside 20 m
+Galdin Quay reach min 5.5  median 9.0  max 16.5 m   16/16 bearings block inside 20 m
+Galdin: nearest water body 712 m away at 46 deg, level -6.5, ocean 1956x1788;
+        the plaza deck is at 14.0 and that bearing is clear for 5.5 m
+```
+
+Most of the near blocking is the square's **own furniture** - six stalls on a
+7.8 m ring and six light poles - so it is not all the block plan. But a camera
+cannot back out past ~6 m on fourteen of sixteen bearings at either city, which
+is lane 21's finding with numbers on it. And **the sea is not a framing problem
+at Galdin**: the POI pin is 712 m inland of the coastline and 20 m above it, so
+no camera on that square can see water. `galdin_pier_sunset` and
+`galdin_angelgard` need a camera on the coast, not on the square. Both of these
+are content calls for the coordinator; neither is fixable in this lane's files.
+
