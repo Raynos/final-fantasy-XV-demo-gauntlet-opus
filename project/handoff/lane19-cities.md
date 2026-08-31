@@ -261,3 +261,58 @@ One commit each, by agreement: `src/world/props/PoiKits.ts` (H2 anchors,
 
 Commits: `ca8929e` `615cdf8` `4de578e` `ef1055e` `fd94f1c` `8b986e3` `26c0c1f`
 `0c84ecb` `bb1f622`.
+
+---
+
+## Respawn 2026-08-31 — the sunk feet
+
+**Status: diagnosing. Nothing landed yet. Do not tune a constant until this
+section says which mechanism it is.**
+
+Lane 18 read `tmp/shots/l18c/plaza_down.jpg` and reported every Lestallum body
+sunk ~20 cm into the plaza deck; lane 21 reports the same across 21 corpus
+shots ("cut mid-shin, no shoe"), three of them judged PAIRING rows.
+
+### What is measured, and it is not what the report says
+
+`src/tools/probes/cityfeet.mts` (new, committed `2af12ab`) walks the **triangle
+that contains each body's (x, z)** and reports the surface under it. A vertex
+search is not good enough and cost the first run: the disc's top face is a
+40-way fan, so its only vertices are the centre and the rim.
+
+```
+Lestallum  plaza anchor y 121.221  terrain 120.545  pad y 121.221 r 11.4
+  every body on the disc:  sink 0.000 against town_poi_paving
+Galdin     plaza anchor y 14.013   terrain 12.931   pad y 14.013 r 11.4
+  every body on the disc:  sink 0.000 against town_poi_paving
+```
+
+So the placement is exactly right and `PLAZA_Y` is being used correctly.
+
+### Three ablations, and the deck is not the occluder
+
+`src/tools/probes/plazafeet.mts` (new) re-shoots lane 18's `plaza_down`
+framing and hides one class of mesh at a time (`tmp/shots/l19-abl`,
+`l19-abl2`). **Verified by eye, each frame read:**
+
+- `plaza-nopaving` — the disc hidden. The legs are cut in *exactly the same
+  place*, now over the apron 0.675 m lower. The deck is not what cuts them.
+- `p-e-nopoi` — the whole POI compound hidden (344 meshes). Same cut.
+- `p-f-bodiesonly` — every mesh in the scene that is not a person hidden (792).
+  **Same cut.** Nothing is in front of the legs.
+- `plaza-raised` — bodies lifted 0.6 m. More leg is visible.
+
+The last two are hard to reconcile and are why this is still open: nothing
+occludes, yet lifting the body reveals more leg.
+
+### Two real defects the same probe found, both mine, both unfixed
+
+1. **The apron is graded and `Npcs._groundAt` does not know it.** `_town` calls
+   `_apron(B, 52, …)`, whose deck is flat at the site `base`; `_groundAt`
+   samples the *ungraded* `Ecology.height`. Measured: `lest_f` stands 0.741 m
+   **below** the gravel it is on, `lest_g` 0.160 m below, and those two rows are
+   the deliberate "two out on the apron, well back" pair.
+2. **The plaza pad radius outlived its kerb.** `_pads` uses r 11.4 against a
+   disc whose walking surface is r 11 — lane 18 turned the kerb into a 0.9 m
+   batter (`CylinderGeometry(11, 11.9, 0.7)`), so a body in the 11–11.9 annulus
+   is held at `PLAZA_Y` over a slope. Measured: Navyth, r 11.72, floats 0.189 m.
