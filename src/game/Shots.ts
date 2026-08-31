@@ -663,6 +663,49 @@ const SHOT_TABLE = {
     time: 16.2, weather: 'clear',
     pos: [-70, 34.8, -300], target: [-158, 70.7, -325.3], fov: 42,
   },
+  // The two AUTHORED landmark kits, which are the only two `_landmark`
+  // branches with geometry of their own (`PoiKits._landmark`; everything else
+  // falls through to one shared stele-cairn-bench tail). Both framings are
+  // derived, not guessed, and the derivation matters:
+  //
+  //   **Scale the standoff to the subject's HEIGHT, never to the site's span.**
+  //   The first pass took the standoff from the world-space span of the built
+  //   group — 102 m at the graveyard, 89 m here — and put the camera at 1.5x
+  //   that. A 16.8 m building at 133 m with fov 44 is **16% of frame height**,
+  //   and the frames showed exactly that: a legible fort sitting small on the
+  //   horizon over half a frame of dead ground. `d = top / (2·tan(fov/2)·frac)`
+  //   puts the subject at a chosen fraction instead; these are frac 0.34 and
+  //   0.48, and both 0.66 candidates were too tight to hold their own site.
+  //
+  // Framings from `tmp/l21/arc2.mts`, which also marches `Terrain.heightAt`
+  // from the eye to the subject's own top on 24 bearings and rejects any that
+  // is occluded — the failure that leaves `landmark_meteor` clearing 9%.
+  threshold_stones: {
+    // frac 0.48 on the alternate bearing. The four straight-on candidates put
+    // the ridge crest behind the stones so their silhouettes died against
+    // green; from here the felled milestone lies across the left foreground
+    // with its chevrons legible, one stone stands at centre with its three
+    // collar bands, and four more march right over the ridge against sky.
+    // **Known, and lane 18's, not this framing's:** the shafts are flat
+    // untextured tan with no grain, no wear and no dirt at the foot, so at
+    // 21 m they read as moulded clay rather than as cut stone. The carving is
+    // there; the material is not. Filed in `project/TASKS.md`.
+    doc: 'The Threshold Stones: Solheim milestones leaning over the old pilgrim road',
+    time: 8.4, weather: 'clear',
+    pos: [127.8, 28.6, 892], target: [106.4, 31.8, 892], fov: 44,
+  },
+  northwatch_ruin: {
+    // frac 0.34, in the storm the site was authored for. Tighter is worse
+    // here and measurably so: at 0.48 the two flanking watchtowers leave the
+    // frame, and at 0.66 the shot is four crenellation blocks and 80% black.
+    // This is a silhouette-and-sky subject, so it needs the sky.
+    // **Known, and not this framing's:** the four lamp housings are flat
+    // untextured cream quads with no fixture behind them and are the highest
+    // value in the plate after the storm break, so the eye goes to them.
+    doc: 'Northwatch Garrison under the storm, its watchtowers lit and the lightning behind',
+    time: 13.2, weather: 'storm',
+    pos: [208.8, 49.8, -3100], target: [147.8, 52.3, -3100], fov: 44,
+  },
   poi_dungeon_mouth: {
     doc: 'A dungeon entrance: the Keycatrich Trench blockhouse in the badlands',
     time: 16.8, weather: 'clear',
