@@ -33,6 +33,8 @@ export const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'terrain.bin.gz');
 /** The PBR layer texels, fetched only above `?q=low`. Same hash, same stamp. */
 const LAYER_OUT = path.join(BAKE_DIR, 'terrainl.bin.gz');
+/** The phone's field: same sections, splat halved. See `FIELD_BAKE_PATH_M`. */
+const MOBILE_OUT = path.join(BAKE_DIR, 'm', 'terrain.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'terrain.json');
 
 /**
@@ -54,7 +56,7 @@ export async function isFresh(): Promise<boolean> {
   // Both halves: a tree with one and not the other is a half-applied bake, and
   // the symptom -- every page above q=low synthesising six PBR layers it has
   // already paid to have baked -- is a second of boot nobody would attribute.
-  if (!existsSync(OUT) || !existsSync(LAYER_OUT) || !existsSync(STAMP)) return false;
+  if (!existsSync(OUT) || !existsSync(LAYER_OUT) || !existsSync(MOBILE_OUT) || !existsSync(STAMP)) return false;
   try {
     const stamp = JSON.parse(await readFile(STAMP, 'utf8'));
     return stamp.hash === (await sourceHash()) && (await stat(OUT)).size > 1024;
@@ -71,7 +73,7 @@ export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise
   const t0 = Date.now();
 
   const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.ts')).href);
-  const { encodeField, encodeLayers } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.ts')).href);
+  const { encodeField, encodeLayers, encodeFieldMobile } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.ts')).href);
   const { buildLayerData } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Layers.ts')).href);
 
   log('building terrain field (2048^2 heightfield + 420k-droplet erosion)...');
@@ -88,12 +90,16 @@ export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise
   // them, so they go in a file that only a page which can use them fetches.
   const raw = encodeField(field, { seed: 1337, hash }, null);
   const gz = gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 9 });
+  const rawM = encodeFieldMobile(field, { seed: 1337, hash });
+  const gzM = gzipSync(Buffer.from(rawM.buffer, rawM.byteOffset, rawM.byteLength), { level: 9 });
   const rawL = encodeLayers(layers, { seed: 1337, hash });
   const gzL = gzipSync(Buffer.from(rawL.buffer, rawL.byteOffset, rawL.byteLength), { level: 9 });
 
   await mkdir(BAKE_DIR, { recursive: true });
   await writeFile(OUT, gz);
   await writeFile(LAYER_OUT, gzL);
+  await mkdir(path.dirname(MOBILE_OUT), { recursive: true });
+  await writeFile(MOBILE_OUT, gzM);
   await writeFile(STAMP, JSON.stringify({
     hash, bytes: gz.length, raw: raw.length,
     layers: { bytes: gzL.length, raw: rawL.length },
@@ -103,6 +109,8 @@ export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise
     + `(${(raw.length / 1e6).toFixed(1)} MB raw) in ${((Date.now() - t0) / 1000).toFixed(1)} s total`);
   log(`  + ${path.relative(ROOT, LAYER_OUT)} — ${(gzL.length / 1e6).toFixed(1)} MB gz, `
     + `fetched only above ?q=low`);
+  log(`  + ${path.relative(ROOT, MOBILE_OUT)} — ${(gzM.length / 1e6).toFixed(1)} MB gz, `
+    + `half-splat, fetched only on ?demo=1`);
   return true;
 }
 

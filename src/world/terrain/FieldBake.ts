@@ -1,4 +1,5 @@
 import { N, FAR_N, HYD_N } from './Field.ts';
+import { demoActive } from '../../engine/Device.ts';
 import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
@@ -37,6 +38,30 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
  * `Content-Encoding: gzip` defeats HTTP Range on most hosts anyway.
  */
 export const LAYER_BAKE_PATH = 'baked/terrainl.bin.gz';
+
+/**
+ * The phone's heightfield container: same sections, **half-resolution splat**.
+ *
+ * `ctrl` is 8.34 MB of the 17.2, and it is the one big section that is not
+ * geometry — it is per-texel layer weights, and nothing is seated against it.
+ * Halving it is 8.34 -> 2.17 MB (3.8x) and moves no vertex, so `heightcheck`
+ * and `driftcheck` cannot see it.
+ *
+ * Measured alternatives, both rejected:
+ *  - **Image-encoding the whole container is WORSE than gzip.** Lossless WebP
+ *    over every section came to 23.7 MB against gzip's 17.2, because a
+ *    delta-coded height's low byte is noise and an image codec has nothing to
+ *    find in it. (Lossy q90 reaches 9.2 MB and moves the ground, which is the
+ *    one thing that must not move.)
+ *  - **Coarser height quantisation is a poor lever**: 9.85 mm -> 4 cm buys
+ *    5.59 -> 4.48 MB, 1.25x, for real precision against a 5 cm drift budget.
+ *
+ * `h` and `far` are therefore shipped whole, and the phone's terrain is ~10 MB
+ * rather than 17.2. Getting `h` down as well means a 1024 field, which means
+ * re-baking every POI compound against it — a second geometry bake, and the
+ * next thing on the list rather than a thing to sneak in here.
+ */
+export const FIELD_BAKE_PATH_M = 'baked/m/terrain.bin.gz';
 
 /**
  * Serialise the expensive half of a built `Field`.
@@ -81,11 +106,55 @@ export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData
 }
 
 /**
+ * The same field container with the splat sections halved, for the phone.
+ *
+ * `ctrl` alone is 8.34 MB gz of a 17.2 MB file and it is the one large section
+ * that is not geometry — nothing is seated against a layer weight — so halving
+ * it is 3.8x that `heightcheck` and `driftcheck` cannot see. `h` and `far` are
+ * shipped whole for exactly that reason: they ARE the ground.
+ */
+export function encodeFieldMobile(field: Field, meta: BakeMeta = {}): Uint8Array {
+  const roadY = field.network.captureElevations();
+  const hq = encodeQ16D(field.h, N, N);
+  const farq = encodeQ16D(field.far, FAR_N, FAR_N);
+  const ctrl = halvePlanes(encodePlanes8(field.ctrl, N, N, 4), N, N, 4);
+  const farCtrl = halvePlanes(encodePlanes8(field.farCtrl, FAR_N, FAR_N, 4), FAR_N, FAR_N, 4);
+  return packContainer({ ...meta, N, FAR_N }, [
+    { name: 'h', kind: 'q16d', n: N * N, w: N, h: N, min: hq.min, scale: hq.scale, bytes: hq.bytes },
+    { name: 'far', kind: 'q16d', n: FAR_N * FAR_N, w: FAR_N, h: FAR_N, min: farq.min, scale: farq.scale, bytes: farq.bytes },
+    { name: 'ctrl', kind: 'planes8', w: ctrl.w, h: ctrl.h, ch: 4, bytes: ctrl.bytes },
+    { name: 'farCtrl', kind: 'planes8', w: farCtrl.w, h: farCtrl.h, ch: 4, bytes: farCtrl.bytes },
+    // Hydro is 0.78 MB and is read for placement, not drawn — left whole.
+    { name: 'hydro', kind: 'planes8', w: HYD_N, h: HYD_N, ch: 4, bytes: encodePlanes8(field.hydro, HYD_N, HYD_N, 4) },
+    { name: 'roadY', kind: 'f32', bytes: new Uint8Array(roadY.buffer) },
+  ]);
+}
+
+/**
  * Pack the layer texels into their own container. Build step only.
  *
  * One bake, two files, the same source hash and the same stamp — the split is
  * about *who fetches it*, not about what it is. See {@link LAYER_BAKE_PATH}.
  */
+/**
+ * Halve a `planes8` plane block, point-sampled. Build step only.
+ *
+ * Point rather than averaged because these are layer *weights*: averaging two
+ * neighbouring splats invents a blend the generator never produced, and the
+ * material reads it as a third surface that does not exist.
+ */
+export function halvePlanes(src: Uint8Array, w: number, h: number, ch: number): { bytes: Uint8Array, w: number, h: number } {
+  const hw = w >> 1, hh = h >> 1;
+  const out = new Uint8Array(hw * hh * ch);
+  for (let c = 0; c < ch; c++) {
+    const sp = c * w * h, dp = c * hw * hh;
+    for (let y = 0; y < hh; y++) {
+      for (let x = 0; x < hw; x++) out[dp + y * hw + x] = src[sp + (y * 2) * w + x * 2];
+    }
+  }
+  return { bytes: out, w: hw, h: hh };
+}
+
 export function encodeLayers(layers: LayerData, meta: BakeMeta = {}): Uint8Array {
   const { size, detailSize, albedo, surf, detail } = layers;
   // Six PBR layers plus two detail maps, all synthesised per texel — about a
@@ -141,7 +210,7 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
 
   field.h = floatGrid(h);
   field.far = floatGrid(far);
-  field.ctrl = decodePlanes8(ctrl.bytes, sectionField(ctrl, 'w'), sectionField(ctrl, 'h'), sectionField(ctrl, 'ch'));
+  field.ctrl = fitPlanes(ctrl, N);
   field.farCtrl = decodePlanes8(farCtrl.bytes, sectionField(farCtrl, 'w'), sectionField(farCtrl, 'h'), sectionField(farCtrl, 'ch'));
   field.hydro = decodePlanes8(hydro.bytes, sectionField(hydro, 'w'), sectionField(hydro, 'h'), sectionField(hydro, 'ch'));
   field.deriveNormals();
@@ -157,6 +226,33 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
   // only writer, and nothing in the tree ever read it -- `Terrain.road` comes
   // from `field.roadSpline`. Removed with the declaration.
   field.stats = { ...(field.stats || {}), baked: true, buildMs: 0 };
+}
+
+/**
+ * Decode a `planes8` section, expanding it if it was baked at a lower
+ * resolution than the field it has to fill.
+ *
+ * The phone's container ships `ctrl` at N/2 and every consumer — the shader's
+ * `DataTexture` and `Field.ctrlAt`'s CPU sampling — indexes it at N. Rather
+ * than teach both a second resolution, the expand happens once here, at load,
+ * and nothing downstream can tell. Nearest-neighbour on purpose: these are
+ * layer *weights*, and interpolating them invents blends the generator never
+ * produced.
+ */
+function fitPlanes(sec: BakeSection, n: number): Uint8Array {
+  const w = sectionField(sec, 'w'), h = sectionField(sec, 'h'), ch = sectionField(sec, 'ch');
+  const src = decodePlanes8(sec.bytes, w, h, ch);
+  if (w === n && h === n) return src;
+  const out = new Uint8Array(n * n * 4);
+  const sx = w / n, sy = h / n;
+  for (let y = 0; y < n; y++) {
+    const v = Math.min(h - 1, (y * sy) | 0) * w;
+    for (let x = 0; x < n; x++) {
+      const s = (v + Math.min(w - 1, (x * sx) | 0)) * 4, d = (y * n + x) * 4;
+      out[d] = src[s]; out[d + 1] = src[s + 1]; out[d + 2] = src[s + 2]; out[d + 3] = src[s + 3];
+    }
+  }
+  return out;
 }
 
 /**
@@ -206,7 +302,9 @@ export async function loadBaked(wantLayers = true): Promise<{applyTo: (f: Field)
   if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return null;
   const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
   try {
-    const res = await fetch(base + BAKE_PATH);
+    // One build, two data sets: the phone asks for the half-splat container and
+    // a 404 falls through to the generator, same as any other cache miss.
+    const res = await fetch(base + (demoActive() ? FIELD_BAKE_PATH_M : BAKE_PATH));
     if (!res.ok) return null;
     // Static servers that recognise `.gz` (vite dev and preview both do) send
     // `Content-Encoding: gzip` and the browser has already inflated the body by
