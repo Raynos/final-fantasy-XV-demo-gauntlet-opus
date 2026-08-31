@@ -21,6 +21,28 @@ const CSS = `
 }
 #interact *, #dialogue * { box-sizing: border-box; }
 
+/* ---------- the far marker -------------------------------------------
+   A thing you could walk up to, seen from across a forecourt. Same diamond as
+   the prompt's own node so the two read as one object at two distances, at a
+   third of the size and no plate: it says "there is something here", and
+   walking to it says what. Without this, an interactable is invisible until
+   you are already inside its 2.6 m reach, which is how a player can stand in
+   the middle of Hammerhead pressing E and never learn that the diner, the
+   garage counter, the hunt board, the pump and the caravan are all there. */
+.ix-far { position: absolute; left: 0; top: 0; }
+.ix-far-d {
+  position: absolute; left: -3px; top: -3px; width: 6px; height: 6px;
+  transform: rotate(45deg);
+  background: linear-gradient(140deg, #dceaff, #7fa8dc);
+  box-shadow: 0 0 7px rgba(150,198,255,.6), 0 1px 2px rgba(0,0,0,.7);
+}
+.ix-far-t {
+  position: absolute; left: 9px; top: -6px; white-space: nowrap;
+  font-size: 7.5px; font-weight: 300; letter-spacing: .26em;
+  text-transform: uppercase; color: rgba(226,238,255,.9);
+  text-shadow: 0 1px 4px rgba(3,7,14,.95);
+}
+
 /* ---------- contextual prompt ---------------------------------------- */
 .ix { position: absolute; left: 0; top: 0; }
 .ix-stem {

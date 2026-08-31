@@ -38,6 +38,18 @@ import type { ScreenName } from '../../ui/Menus.ts';
  *     normalised distance.
  */
 
+/**
+ * How far a far marker reaches, metres.
+ *
+ * A little wider than Hammerhead's forecourt (the fast-travel pin lands 6.2 m
+ * from the garage counter, 11.5 m from the hunt board, 22.8 m from the pump),
+ * so arriving in a town lights up the town rather than one corner of it.
+ */
+const FAR = 22;
+
+/** At most this many diamonds at once: a map, not confetti. */
+const MAX_MARKERS = 8;
+
 const _fwd = new THREE.Vector3();
 const _to = new THREE.Vector3();
 
@@ -106,9 +118,18 @@ export class InteractionSystem {
   /** Live interactables keyed by id. */
   items!: Map<string, Interactable>;
   prompt!: InteractPrompt;
+  /**
+   * Everything else in sight that could be walked up to, nearest first.
+   *
+   * `current` is the one thing already inside its own 2.6-3.8 m reach. That is
+   * the offer. This is the affordance: what a player can SEE is interactive
+   * from where they are standing, which used to be nothing at all.
+   */
+  nearby!: Interactable[];
   constructor() {
     this.items = new Map();
     this.current = null;
+    this.nearby = [];
     /** Raised while a screen, dialogue or cutscene owns the E key. */
     this.blocked = false;
     /** Smoothed 0..1 appear amount for the prompt. */
@@ -215,6 +236,14 @@ export class InteractionSystem {
     this.appear = THREE.MathUtils.clamp(this.appear + (target > this.appear ? rate : -rate), 0, 1);
 
     this.prompt.update(dt, game, this.current, this.appear);
+    // The markers are part of the field HUD and follow it, the way the minimap
+    // does: they are an affordance for a player holding the controller, and a
+    // posed or cinematic frame has neither. Without this they would appear in
+    // every non-HUD shot in the corpus that happens to stand within 22 m of a
+    // counter, which is a lot of them.
+    const hudOn = hud ? hud.visible !== false : true;
+    this._scanNearby(suppressed || !hudOn ? null : player);
+    this.prompt.updateMarkers(game, this.nearby, FAR);
 
     if (suppressed || !this.current) return;
     // A one-frame guard so the same press cannot fire twice through a screen
@@ -228,6 +257,35 @@ export class InteractionSystem {
     this._firedAt = game.time.now;
     const item = this.current;
     item.handler(game, item);
+  }
+
+  /**
+   * Everything enabled and in sight, minus whatever the prompt is already
+   * offering, nearest first and capped.
+   *
+   * The cap is not a performance measure -- 101 items is a trivial loop -- it
+   * is a design one: eight diamonds over a town square is a map, twenty is
+   * confetti. `FAR` is 22 m because that is a little further than the width of
+   * Hammerhead's forecourt, so arriving in the middle of it lights up the
+   * garage counter, the hunt board and the pump without also lighting up
+   * Cid's van 31 m away behind a building.
+   */
+  _scanNearby(player: import('../../characters/Player.ts').Player | null) {
+    const out = this.nearby;
+    out.length = 0;
+    if (!player) return;
+    const p = this._playerPos.copy(player.position);
+    for (const item of this.items.values()) {
+      if (item === this.current || !item.enabled()) continue;
+      _to.copy(item.pos).sub(p);
+      _to.y = 0;
+      const d = _to.length();
+      if (d > FAR) continue;
+      out.push(item);
+      if (out.length > 64) break;
+    }
+    out.sort((a, b) => a.pos.distanceToSquared(p) - b.pos.distanceToSquared(p));
+    if (out.length > MAX_MARKERS) out.length = MAX_MARKERS;
   }
 
   /** Nearest valid interactable, with hysteresis for the incumbent. */
