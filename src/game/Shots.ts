@@ -811,12 +811,20 @@ const SHOT_TABLE = {
     // northern legs have no road in frame at all — the track is a `track`-class
     // road and its surface only reads once it is running away from the lens,
     // not when it is crossing it. This is the one leg where it reads.
-    // **Known and NOT this shot's fault: at t 6.9 the sky renders as full
-    // midday blue with no dawn gradient.** The frame is otherwise the corpus's
-    // only look down a dirt track: the road sweeps out of the bottom-centre and
-    // bends left past a treeline, marker stones step down the left verge, and
-    // a signboard and a rock cairn hold the bottom-left corner. It gets its
-    // dawn the day the sky does. See `project/TASKS.md`.
+    // **This shot's sky is plain blue at t 6.9, and that is CORRECT, not a
+    // bug.** The first reading of it — "the atmosphere is not responding to the
+    // low sun angle" — was wrong and is retracted: `vista_dawn` at t 6.4,
+    // captured in the same run, is a full gold sunrise with the sun disc, warm
+    // cloud undersides and ground mist. The difference is azimuth. Route 20
+    // runs north-south, so every stand on it looks north or south, away from an
+    // eastern sunrise, and gets dawn's raking light on the country with a blue
+    // sky overhead. Nine reversed candidates on three legs were shot to test
+    // exactly this and all nine came back blue. **The lever is the sun's
+    // azimuth or an east-facing subject, not the hour and not the sky model.**
+    // The frame is the corpus's only look down a dirt track: the road sweeps
+    // out of bottom-centre and bends left past a treeline, marker stones step
+    // down the left verge, and a signboard and a rock cairn hold the
+    // bottom-left corner.
     doc: 'Dawn on the Old South Road, the track bending away past the treeline',
     time: 6.9, weather: 'clear',
     pos: [288.9, 37.1, 1850.9], target: [82, 33.5, 2276], fov: 54,

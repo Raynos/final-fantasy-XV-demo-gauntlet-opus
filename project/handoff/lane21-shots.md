@@ -490,3 +490,86 @@ lighting does respond to the low sun. `vista_dawn` (6.4) and `daycycle_dawn`
 (5.9) sit at the same hour, so this is corpus-wide. Also in the frame: the
 clouds show vertical comb/smear artefacts, and one hard unattenuated white light
 sprite in the left mid-ground.
+
+## The twelve arc shots: THREE LAND, NINE ARE REFUSED, and every refusal has a frame
+
+All 22 first-pass frames and all 16 second-pass frames were read as JPEGs.
+
+### Landed and verified by eye
+
+| shot | commit | framing | what the frame shows |
+|---|---|---|---|
+| `south_road_dawn` | `6d3cf46` | Route 20 south leg, fov 54 | the track sweeps out of bottom-centre and bends left past a treeline, marker stones down the left verge, a signboard and a cairn bottom-left, blue mountains far left |
+| `threshold_stones` | `6e34044` | frac 0.48, alt bearing, fov 44 | the felled milestone across the left foreground with its chevrons legible, one stone at centre with three collar bands, four marching right over the ridge against sky |
+| `northwatch_ruin` | `6e34044` | frac 0.34, storm, fov 44 | crenellated curtain wall, barrel-vaulted hangar, two stilted watchtowers with orange lamps, lightning striking the mountain behind, rain |
+
+### The rule that got the last two there, and it is worth keeping
+
+**Scale the standoff to the subject's HEIGHT, not to the site's span.** The first
+pass used `span * 1.5` — 102 m at the graveyard, 89 m at the garrison — which put
+a 16.8 m building at 133 m and **16% of frame height**. Every first-pass frame
+had the same fault: a correct subject, small, on the horizon, over half a frame
+of dead ground. `d = top / (2·tan(fov/2)·frac)` fixes it, and the right `frac` is
+per subject, measured: Northwatch is a silhouette-and-sky subject and wants
+**0.34** (at 0.48 the flanking towers leave the frame; at 0.66 the shot is four
+crenellation blocks and 80% black), the Threshold Stones are a procession and
+want **0.48** on the *alternate* bearing (straight on, the ridge crest sits behind
+them and every silhouette dies against green).
+
+### Refused, and why — nine subjects
+
+**Five are the same greybox, five times.** `washes_lookout`, `saxham`,
+`peak_overlook`, `saltgrass_flats` and `mencemoor_obelisks` have no named branch
+in `PoiKits._landmark`; they all fall through to one shared tail that builds a
+waymark stele, a cairn, a bench and field boulders. In the frames the stele is a
+**flat untextured beige box**, the cairn is **stacked grey cubes**, and the five
+sites are indistinguishable from one another. `saltgrass_flats` additionally is
+not a dry lake pan — it is a grassy treed slope — and `peak_overlook` has no
+"half of Leide below you"; its own hill fills the horizon.
+
+**Two are blockouts.** `pilgrims_rest`'s shop is a plain white-grey box with no
+door, no windows and a **blank white sign board on a post**, at 13% of frame
+height. `southwatch_haven`'s camp is a **6-7% grey slab pad** with no fire, no
+tent and no read at all.
+
+**Two are lost to the skyline.** `adamantoise_graveyard` and `graveyard_night`
+are the best kit lane 18 built — the rib arches do read as pointed arches, the
+carapace does read as a shell — and **every one of eight frames on four bearings
+has two window-gridded glass office towers standing in the field behind them**,
+self-lit at night and the brightest thing in the plate. The second pass
+deliberately stood on the bearing *toward* Insomnia so the city would be behind
+the lens, and the towers were still there and larger. See the note below: they
+may not be Insomnia at all.
+
+**None of the nine is a framing problem, and no framing fixes any of them.** That
+is the whole finding: the corpus is not short of nine framings, it is short of
+one landmark material, one shop, one haven kit and one draw-distance decision.
+
+## RETRACTION: "the sky does not turn at dawn" was a WRONG DIAGNOSIS
+
+Filed a few hours ago, in this file, in a commit message and very nearly in
+`HUMAN_REVIEW.md`: *at t 6.9 the sky renders as full midday blue with no dawn
+gradient, while the terrain lighting does take the low sun.* **It is wrong.**
+
+`vista_dawn` (t 6.4) was captured in the same `shoot.mts` run as
+`south_road_dawn` (`tmp/shots/l21-sr/`) and is a **full gold sunrise** — the sun
+disc on the horizon, warm cloud undersides, a band of ground mist, Insomnia's
+towers in silhouette. The sky model is fine.
+
+The difference is **azimuth**, and it is physically correct. Route 20 runs
+north-south, so every stand on it looks north or south — away from an eastern
+sunrise — and gets dawn's raking light on the country under a blue sky. To test
+it rather than argue it, nine more candidates were shot on the three legs
+**reversed** so the sun would be ahead of the lens (`tmp/shots/l21-sr2/`, all
+read): **all nine came back plain blue**, because reversing a north-south leg
+gives you the other north-south bearing, not an eastern one.
+
+**The lever is the sun's azimuth or an east-facing subject — not the hour, and
+not the sky.** Corrected in `Shots.ts`'s own comment. The reversed batch also
+returned a verdict on the landed shot: **keep it.** Its best frame (`RBh`) has
+better landscape depth but no signboard, no cairn and no marker-stone line in
+the near field, and does not beat it on the axis the batch was run to test.
+
+This is the LANDMINES "diagnoses that were wrong" shape exactly: a real
+observation (blue sky at 6.9), a plausible mechanism (the atmosphere ignores sun
+elevation), and a control that was one capture away and would have killed it.
