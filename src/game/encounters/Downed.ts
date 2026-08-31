@@ -35,6 +35,8 @@ export class Downed {
   /** Companion key -> seconds until they may drink another potion. */
   _allyPotion!: Map<CompanionKey, number>;
   _checkTimer!: number;
+  /** Seconds the whole party has been at nought HP with no game over. */
+  _wipeHeld!: number;
   _downPos!: THREE.Vector3;
   bleedOut!: number;
   bleedOutMax!: number;
@@ -66,6 +68,8 @@ export class Downed {
     this.vfx = game.get('VFX');
 
     this.state = 'ok';
+    /** Seconds the whole party has been at nought with no game over. */
+    this._wipeHeld = 0;
     /** Seconds left before the party wipes. */
     this.bleedOut = 0;
     this.bleedOutMax = 30;
@@ -250,6 +254,32 @@ export class Downed {
     /* -- companions --------------------------------------------------- */
     this._tickAllies(dt);
 
+    /* -- the watchdog --------------------------------------------------
+       A full party wipe was reported twice as a hard dead end: all four at 0
+       HP, Noctis still walking, enemies still alive, the prompt bar still
+       offering ATTACK -- no game over, no revive, no message, held for an hour.
+
+       `_probe/wipe.mts` drives exactly that state and it resolves in six
+       frames, so whatever the played path was, it is not the one the state
+       description implies and I could not reproduce it. This is therefore a
+       backstop rather than a fix: it does not care how the state was reached.
+
+       It cannot false-positive. Four characters at nought HP for three
+       continuous seconds is a game over under every reading of the rules --
+       the only question the ordinary path answers that this one does not is
+       *which* death it was, and `gameOver` already defaults to `party-wipe`.
+       If the ordinary path is working, this counter never reaches 3. */
+    // No 'gameover' test: the early return at the top of `update` already
+    // means we cannot be in it here, and the compiler says so.
+    if (this._everyoneDown()) {
+      this._wipeHeld += dt;
+      if (this._wipeHeld >= 3) {
+        console.warn('[Downed] whole party at 0 HP for 3 s with no game over — forcing the wipe.'
+          + ' The ordinary path did not fire; see the watchdog note in Downed.update.');
+        this.gameOver('party-wipe');
+      }
+    } else this._wipeHeld = 0;
+
     /* -- checkpoint --------------------------------------------------- */
     this._checkTimer -= dt;
     if (this._checkTimer <= 0) {
@@ -349,6 +379,21 @@ export class Downed {
         }
       }
     }
+  }
+
+  /** Noctis and all three companions at or below nought. */
+  _everyoneDown(): boolean {
+    const n = this.noctis;
+    if (!n || n.hp > 0) return false;
+    if (this.player?.stats && this.player.stats.hp > 0) return false;
+    if (!this.party) return false;
+    for (const m of this.party.members) {
+      const st = this.memberStats(m.key);
+      // A member with no stat block cannot be judged, so it is not a wipe.
+      if (!st) return false;
+      if (st.hp > 0) return false;
+    }
+    return true;
   }
 
   _liveAllies(): PartyMember[] {
