@@ -396,3 +396,46 @@ Not killed: it is another lane's job and its TTL frees it in ~7 min. But a perf
 run that goes to zero CPU while holding the exclusive lease is a harness fault
 worth a `LANDMINES` row if it recurs — it is indistinguishable, from every other
 lane's side, from "the daemon is fine, your job is just slow".
+
+## MEASURED, AND IT OVERTURNS THE PREDECESSOR'S HEADLINE FINDING
+
+**All eleven arc sites have built geometry. None is empty.** `tmp/l21/arcframe.mts`
+asks `PoiKits.sites` for `site.group`, counts the meshes under it and takes the
+box from the group's own children (`framecam --out tmp/shots/l21-arc`, sha
+`00c25ddc6bd0`, ran 9.6 s):
+
+```
+TH threshold_stones      landmark meshes=5  span=50 m  top=+8.3   standoff 75
+GY adamantoise_graveyard landmark meshes=3  span=102 m top=+16.8  standoff 153
+NW northwatch_ruin       imperial meshes=14 span=89 m  top=+16.8  standoff 133
+MO mencemoor_obelisks    landmark meshes=6  span=13 m  top=+3.8   standoff 26
+WL washes_lookout        landmark meshes=6  span=12 m  top=+2.5   standoff 26
+SX saxham                landmark meshes=6  span=14 m  top=+4.0   standoff 26
+PK peak_overlook         landmark meshes=6  span=15 m  top=+3.9   standoff 26
+SF saltgrass_flats       landmark meshes=6  span=13 m  top=+3.4   standoff 26
+PR pilgrims_rest         reststop meshes=14 span=50 m  top=+10.6  standoff 75
+SW southwatch_haven      haven    meshes=12 span=50 m  top=+4.6   standoff 75
+```
+
+The four sites the predecessor reported as "NO BUILT PROPS within 130 m" —
+`peak_overlook`, `southwatch_haven`, `saltgrass_flats`, `pilgrims_rest` — have
+**6, 12, 6 and 14 meshes** respectively. `pilgrims_rest` is a 50 m reststop with
+a 10.6 m tall thing in it. So the earlier reading was an instrument artefact of
+walking `g.scene` and filtering meshes by name and by world distance from the
+**map pin**, and four rows were nearly cut from the corpus on the strength of it.
+`saxham` (id `saxham`, not `saxham_ghost`) has 6 meshes too.
+
+**The lesson, worth a LANDMINES row: ask the system that built the thing whether
+it built it.** `PoiKits` publishes `sites[].group`, and `_make` gives an *empty*
+group to a site inside `_exclude`'s radius — so the three facts a scene traverse
+conflates (excluded, never built, built but missed) are each separately
+observable from the system's own side.
+
+Every framing is also picked by a **twelve-bearing terrain-clearance march** —
+step `Terrain.heightAt` from the eye to the subject's own top and count blocked
+samples — so a foreground ridge cannot eat a subject the way one eats
+`landmark_meteor`. Only three sites have any blocked bearing at all
+(`southwatch_haven` 4 of 12, `saltgrass_flats` 1, `adamantoise_graveyard` 1), and
+the picks avoid them.
+
+**The 22 candidate frames are in `tmp/shots/l21-arc/`; being read now.**
