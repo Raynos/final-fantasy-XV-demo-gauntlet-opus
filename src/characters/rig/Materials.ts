@@ -457,7 +457,28 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // that made Noctis grey at p50 46.
   float expose = 1.0 - 0.45 * clamp( vMat.y, 0.0, 1.0 );
   float skyVis = mix( 0.58, 1.0, pow( dome, 1.2 ) ) * expose;
-  kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.30 + 0.30 * luminance );
+  //
+  // The albedo weight, and it is the one number the two heads still disagree
+  // about. Measured at 0.45 / 0.58 (tmp/shots/l1r4-fin):
+  //
+  //             p5 / p50 / p99.5        plate
+  //   prompto   12 /  75 /  205         22 /  81 / 176
+  //   noctis     0 /  24 /  129         20 /  37 / 140
+  //
+  // Blond is within 6 Y of the plate at the median and 29 OVER at the top end,
+  // so a global coefficient raise is wrong -- it would push the one number that
+  // is already hot. Black is 13 short at the median and has no floor at all,
+  // and its top end is UNDER. The difference between the two is this weight:
+  // 0.30 + 0.30 * luminance is 0.307 on Noctis' 0.022 and 0.45 on Prompto, a
+  // 1.47x spread, and 12.3's own finding is the opposite -- the plates' dark
+  // ends land 10 Y apart across an albedo an order of magnitude different,
+  // because inter-strand scattering saturates rather than tracking albedo. The
+  // comment above already says "nearly flat now" and 1.47x is not flat.
+  //
+  // 0.36 + 0.16 * luminance is 0.364 on Noctis (+19%) and 0.44 on Prompto
+  // (-2%), i.e. it lifts the head that is short and leaves the head that is
+  // hot where it is. One variable, and it cannot touch blond's top end.
+  kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.36 + 0.16 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
