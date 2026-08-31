@@ -1,6 +1,6 @@
 {
-  "measured": "2026-08-30",
-  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts. CLEAR THE OUTPUT DIRECTORIES FIRST: shoot.mts does not empty --out, so a stale capture left in tmp/nf/a from another build is silently diffed against a fresh one in tmp/nf/b and its floor is rewritten from two different builds. vista_dawn, zone_lestallum, zone_three_valleys and zone_vannath were re-measured 2026-08-30 at e5db679 because that commit re-framed them; every other row is older and is the date on the row above it.",
+  "measured": "2026-08-31",
+  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts. USE A FRESH PAIR OF OUTPUT DIRECTORY NAMES EVERY TIME: shoot.mts does not empty --out, so a stale capture left in tmp/nf/a by an earlier build is silently diffed against a fresh one in tmp/nf/b and its floor is rewritten across two different builds -- that is how thirteen rows moved in silence once, and how a later run reported \"calibrated 17 shot(s)\" and exited 0 having re-derived two shots from PNGs days old. --calibrate MERGES: it rewrites only the shots it finds in the directory, so diff this file afterwards and check that only the rows you shot moved. A floor must be measured against the shot's FINAL framing; re-framing a shot invalidates its floor. the five judged PAIRING rows -- lest_market_day, lest_street_night, lest_overlook_disc, galdin_pier_sunset, galdin_angelgard -- were measured 2026-08-31 at 1bd40c28bf53, after the Lestallum shin fix and after galdin_pier_sunset was re-framed onto the water, from tmp/nf-l21-final/{one,two}. vista_dawn, zone_lestallum, zone_three_valleys and zone_vannath were re-measured 2026-08-30 at e5db679 because that commit re-framed them; every other row is older and is the date on the row above it.",
   "floors": {
     "hero_full": 2.254,
     "hero_portrait": 0.185,
@@ -24,6 +24,11 @@
     "zone_nebulawood": 0.744,
     "vista_dawn": 1.23,
     "zone_lestallum": 1.494,
-    "zone_vannath": 1.615
+    "zone_vannath": 1.615,
+    "galdin_angelgard": 0.162,
+    "galdin_pier_sunset": 0.176,
+    "lest_market_day": 0.428,
+    "lest_overlook_disc": 0.269,
+    "lest_street_night": 0.223
   }
 }
