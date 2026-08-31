@@ -1041,3 +1041,15 @@ is landed.
   companion `probes/hudstack.mts` opens all sixteen screens with a tutorial card
   up and measures the ink inside the reading band — it caught 83 px on 16 of 16.
   `lane12c`/`lane16`
+- **The call-out banner is drawn straight through the damage numbers.**
+  `tmp/shots/l12c-legib/combat_wide.png`: `BLINDSIDE / ATTACK FROM BEHIND` has
+  `316 CRITICAL` and `284` printed across it, and `751 / CRITICAL / 781` stack
+  on each other top-right. This is the playtest's "three HUD elements draw at
+  the same screen point" in one frame. `src/ui/Layers.ts` has the `notice` band
+  and `PRIORITY.callOut` for it; the mechanism the numbers want already exists
+  next door (`LANES_X`/`LANES_Y` in `CombatHUD`) and just needs to treat the
+  banner's box as occupied. Small, and entirely inside `src/ui`. `lane12c`
+- **`probes/hudstack.mts` does not yet watch the damage numbers**, which is why
+  it reported "no pair overlaps" about the frame above. Adding `.dmg` to its
+  `WATCH` list is one line and turns it into the gate for the row above.
+  `lane12c`
