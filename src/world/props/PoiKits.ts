@@ -2184,7 +2184,11 @@ export class PoiKits {
         gb.wood.push(xform(box(1.05, 0.16, 0.2), { rz: -sx * Math.PI / 4, x: sx * (HW - 0.54), y: 2.28 }));
       }
       gb.wood.push(box(span + 0.9, 0.5, 0.36, { y: 2.9, arris: 0.05 }));
-      gb.trim.push(box(span * 0.6, 0.8, 0.12, { y: 2.05, arris: 0.04 }));
+      // No hung nameboard. It was there, and at 40 m
+      // (`tmp/shots/l22kit4/near.jpg`) a blank 3.7 x 0.8 m cream slab under a
+      // beam is the biggest pale shape on the pad and reads as a picnic table.
+      // The post's actual sign is 8 m away and carries a texture; this one had
+      // nothing to say.
       const gm = mergeBag(gb);
       for (const [role, g] of Object.entries(gm)) {
         bakeTone(g, { y0: 0, y1: 3.3, grime: 0.72, bleach: 1.06 });
@@ -2367,9 +2371,15 @@ export class PoiKits {
       // every other part: `bird0` is 4.0 m clear of the trough, `bird1` 2.4 m,
       // and the barn's roof envelope stops at (0.25, -0.8), which is 7.5 m from
       // the nearest of them. All three are inside `R` with 7 m to spare.
-      ['bird0', 2.5, 8.5],
-      ['bird1', 9.5, 1.0],
-      ['bird2', 1.0, 12.0],
+      // Spread, and the number is off the frame rather than off taste: at
+      // (2.5, 8.5) and (1.0, 12.0) two of them were 3.8 m apart and the 40 m
+      // frame caught the camera almost along that line, so they overlapped
+      // into one two-headed bird. A chocobo is 1.5 m long; nothing here is
+      // closer than 7 m to another bird, and all three clear the trough, the
+      // tarp and the barn's roof envelope.
+      ['bird0', 3.0, 9.0],
+      ['bird1', 11.5, 3.0],
+      ['bird2', -2.0, 14.0],
     ] as Array<[string, number, number]>) {
       const v = new THREE.Vector3(lx, 0, lz).applyMatrix4(world);
       A[name] = [v.x, v.y, v.z];
