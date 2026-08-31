@@ -920,10 +920,13 @@ export const thetaWarp = warpAxis((t) => 1 + 3.0 * Math.exp(-Math.pow((t - 0.5) 
 export const phiWarp = warpAxis((t) => 1 + 2.2 * Math.exp(-Math.pow(Math.abs(t - 0.665) / 0.26, 6)));
 
 /**
- * Heat-equation passes run over the brush displacement before it is added back
- * to the skull. See `smoothRelief`. Zero restores the sculpt exactly.
+ * Radius, in grid columns, of the low-pass run over the brush displacement
+ * before it is added back to the skull. See `smoothRelief`. Zero restores the
+ * sculpt exactly. `thetaWarp`/`phiWarp` put a column at about 0.7 mm on the
+ * face, so 6 columns is roughly a 4 mm kernel there and a much coarser one on
+ * the occiput, which is the weighting you want.
  */
-export const FACE_RELIEF_SMOOTH = 40;
+export const FACE_RELIEF_SMOOTH = 6;
 
 /**
  * Low-pass the sculpted relief, in the head's own (u, v) grid.
@@ -957,35 +960,59 @@ export const FACE_RELIEF_SMOOTH = 40;
  *
  * Done in grid space, not in world space, because the grid IS the parameterised
  * surface: `thetaWarp`/`phiWarp` already concentrate columns on the face, so one
- * pass is a smaller distance there than at the occiput, which is the weighting
- * you want. `u` wraps at the seam (`thetaWarp` fixes u = 0 and u = 1 on the
- * same point, so the neighbours of column 0 are `segU-1` and 1); `v` clamps,
+ * kernel is a smaller distance there than at the occiput, which is the
+ * weighting you want. `u` wraps at the seam — `thetaWarp` fixes u = 0 and u = 1
+ * on the same point, so the row is periodic with period `segU`; `v` clamps,
  * because the crown and the underside of the jaw are poles.
  *
- * λ = 0.5, so each pass is the mean of the point and its four neighbours. After
- * `iters` passes the kernel is a gaussian of σ ≈ sqrt(iters·λ/2) columns.
+ * **Three separable box passes per axis, on running sums, and NOT a Jacobi
+ * relaxation.** The first version of this was 40 Laplacian passes and it moved
+ * the corrugation only 15% — `keyDark` 0.2647 -> 0.2264 on Noctis — because a
+ * Jacobi pass at λ = 0.5 buys σ = sqrt(iters/4) columns and the corrugation is
+ * 5-8 columns wide, so reaching it would have taken ~250 passes over 17 545
+ * vertices for every `buildHead` in the world and not only for the four heroes.
+ * A triple box of half-width R is a near-gaussian of σ = sqrt(R(R+1)) at a cost
+ * that does not depend on R at all.
  */
-function smoothRelief(rel: Float64Array<ArrayBuffer>, segU: number, segV: number, iters: number) {
-  if (iters <= 0) return;
-  const W = segU + 1, H = segV + 1, lambda = 0.5;
-  let a: Float64Array<ArrayBuffer> = rel, b: Float64Array<ArrayBuffer> = new Float64Array(rel.length);
-  for (let it = 0; it < iters; it++) {
+function smoothRelief(rel: Float64Array<ArrayBuffer>, segU: number, segV: number, radius: number) {
+  if (radius <= 0) return;
+  const W = segU + 1, H = segV + 1;
+  const tmp = new Float64Array(rel.length);
+  const win = 2 * radius + 1;
+  const wrap = (u: number) => ((u % segU) + segU) % segU;
+
+  // u, periodic with period segU: column segU duplicates column 0 and has to be
+  // rewritten at the end of every row or the seam grows a ridge.
+  const boxU = (src: Float64Array<ArrayBuffer>, dst: Float64Array<ArrayBuffer>) => {
     for (let v = 0; v < H; v++) {
-      const vm = (v > 0 ? v - 1 : 0) * W, vp = (v < H - 1 ? v + 1 : H - 1) * W, vv = v * W;
-      for (let u = 0; u < W; u++) {
-        const um = (vv + (u > 0 ? u - 1 : segU - 1)) * 3;
-        const up = (vv + (u < segU ? u + 1 : 1)) * 3;
-        const dn = (vm + u) * 3, ds = (vp + u) * 3;
-        const o = (vv + u) * 3;
-        for (let c = 0; c < 3; c++) {
-          const m = (a[um + c] + a[up + c] + a[dn + c] + a[ds + c]) * 0.25;
-          b[o + c] = a[o + c] + lambda * (m - a[o + c]);
+      const row = v * W;
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += src[(row + wrap(k)) * 3 + c];
+        for (let u = 0; u < segU; u++) {
+          dst[(row + u) * 3 + c] = sum / win;
+          sum += src[(row + wrap(u + radius + 1)) * 3 + c] - src[(row + wrap(u - radius)) * 3 + c];
+        }
+        dst[(row + segU) * 3 + c] = dst[row * 3 + c];
+      }
+    }
+  };
+  // v, clamped: the crown and the underside of the jaw are poles, not a wrap.
+  const boxV = (src: Float64Array<ArrayBuffer>, dst: Float64Array<ArrayBuffer>) => {
+    const cl = (v: number) => (v < 0 ? 0 : v > segV ? segV : v);
+    for (let u = 0; u < W; u++) {
+      for (let c = 0; c < 3; c++) {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += src[(cl(k) * W + u) * 3 + c];
+        for (let v = 0; v < H; v++) {
+          dst[(v * W + u) * 3 + c] = sum / win;
+          sum += src[(cl(v + radius + 1) * W + u) * 3 + c] - src[(cl(v - radius) * W + u) * 3 + c];
         }
       }
     }
-    const t = a; a = b; b = t;
-  }
-  if (a !== rel) rel.set(a);
+  };
+
+  for (let pass = 0; pass < 3; pass++) { boxU(rel, tmp); boxV(tmp, rel); }
 }
 
 /**
