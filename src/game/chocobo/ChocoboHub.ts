@@ -138,8 +138,13 @@ const _v = new THREE.Vector3();
 export class ChocoboHub {
   _handles!: InteractableHandle[];
   _placed!: boolean;
-  /** Hubs whose prompts have been moved onto the kit's anchors. See {@link _reanchor}. */
-  _anchored!: Set<string>;
+  /**
+   * Hubs whose prompt positions are **final** — either re-anchored onto the
+   * kit's own `stable` / `board` anchors, or never going to be because the POI
+   * carries no chocobo kit. A hub outside this set has prompts that are
+   * registered but switched off. See {@link _reanchor}.
+   */
+  _settled!: Set<string>;
   _tick!: number;
   /** Birds standing in each hub's paddock, while the player is near it. */
   _pen!: Map<string, Bird[]>;
@@ -149,7 +154,7 @@ export class ChocoboHub {
     this.system = system;
     this._handles = [];
     this._placed = false;
-    this._anchored = new Set();
+    this._settled = new Set();
     this._tick = 0;
     this._pen = new Map();
   }
@@ -177,10 +182,42 @@ export class ChocoboHub {
       if (!poi) continue;
       const sx = poi.x + hub.dx, sz = poi.z + hub.dz;
       const bx = poi.x + hub.bdx, bz = poi.z + hub.bdz;
+      /*
+       * **Only a POI that gets the chocobo kit will ever publish `stable` and
+       * `board`.** Wiz is `type: 'chocobo'`; the Alpine Stable is a lay-by
+       * (`meldacio_layby`, `type: 'parking'`) that this table decorates with a
+       * stable's prompts, and `PoiKits` picks the kit off `poi.type`. So there
+       * is nothing to re-anchor to there, the offsets above *are* final, and
+       * the hub is settled the moment it is registered. Gating it on an anchor
+       * that never arrives would switch the Alpine Stable off for good.
+       */
+      if (worldMap.poiById(hub.poi)?.type !== 'chocobo') this._settled.add(hub.key);
+      /*
+       * **Off until the position is final.** `_reanchor` moves these prompts
+       * off the POI pin onto the kit's own post-yaw anchors, and that move is
+       * 13.7 to 33.7 m against a 3.2 m reach — a prompt registered here is not
+       * merely mis-placed, it is a `Tend` verb standing on grass the far side
+       * of a fence from the barn it names.
+       *
+       * It also breaks the rule `Interaction._pick` is written against, because
+       * `_pick` reads `pos` live: a prompt that re-anchors *while it is being
+       * offered* teleports out from under whoever walked to where it was.
+       * `integration`'s "walking up to a thing selects that thing" caught
+       * exactly that here — `1/76 unreachable: chocobo-stable-wiz->nothing`,
+       * the same defect `Tombs` had and for the same reason. It is a race, so
+       * it is phase-dependent: the row is red under `HARNESS_TURBO=10` and
+       * green standalone, which is luck rather than a property.
+       *
+       * Nothing is lost in play. `PoiKits` builds a site when the camera comes
+       * within `BUILD_R` = 1500 m, so the anchors land a kilometre before the
+       * player can be inside 3.2 m of anything.
+       */
+      const settled = () => this._settled.has(hub.key);
       this._handles.push(interaction.register({
         id: `chocobo-stable-${hub.key}`,
         pos: new THREE.Vector3(sx, terrain.heightAt(sx, sz) + 0.1, sz),
         radius: 3.2, verb: 'Tend', label: hub.name, priority: 2, yOffset: 1.5,
+        enabled: settled,
         handler: () => { interaction.say(this.stableScript(hub)); },
       }));
       // **No board where no course is posted.** The Alpine Stable had one and
@@ -195,7 +232,7 @@ export class ChocoboHub {
         // A race board is dead weight during a race, and an E press that
         // restarts the run you are three checkpoints into is the kind of
         // footgun you only find by doing it.
-        enabled: () => !this.system.races.running,
+        enabled: () => settled() && !this.system.races.running,
         handler: () => { interaction.say(this.raceScript(hub)); },
       }));
     }
@@ -205,7 +242,7 @@ export class ChocoboHub {
     for (const h of this._handles) h.dispose();
     this._handles.length = 0;
     this._placed = false;
-    this._anchored.clear();
+    this._settled.clear();
     this._tick = 0;
     for (const key of [...this._pen.keys()]) this._empty(key);
   }
@@ -301,31 +338,47 @@ export class ChocoboHub {
    * It has to be **late-bound**, not read at `init`: `PoiKits._make` runs when
    * the camera comes within `BUILD_R`, so at boot `anchorAt` returns `null` for
    * every POI in the world (`CityHub` learned the same thing and says so in its
-   * own docstring). So the prompts are registered off the offsets immediately —
-   * a prompt that exists in the wrong place beats a prompt that does not exist
-   * — and *upgraded* in place the first frame the anchors resolve.
+   * own docstring).
    *
-   * Polled every 30 frames and given up on after 40 tries, i.e. 20 s of play
-   * inside the build radius. `anchorAt` is a linear scan of every built site;
-   * two hubs times 139 POIs every frame forever is not a thing to spend on a
-   * lookup whose answer stops changing.
+   * **The prompts are registered immediately and switched off until the bind,
+   * rather than parked on the pin.** "A prompt in the wrong place beats a
+   * prompt that does not exist" was the old reading and it was wrong twice
+   * over: a `Tend` verb 13.7 m the wrong side of a fence is a prompt offered
+   * where its subject is not, and — because `Interaction._pick` reads `pos`
+   * live — a prompt that moves mid-walk-up vanishes from under the player.
+   * See the `enabled` comment in {@link ChocoboHub.update} for the row that
+   * caught it. **`pos` is written before the hub joins `_settled` and never
+   * after**, so from the frame a prompt turns on, its position never moves.
+   *
+   * Polled every 30 frames, and **not given up on**. It used to stop after 40
+   * tries — 20 s of play measured from boot, not from arrival — which meant a
+   * player who was not already inside `BUILD_R` of Wiz within twenty seconds of
+   * starting the game got prompts that never bound at all; and with the
+   * `enabled` gate that would be prompts that never appear. The cost of keeping
+   * it is one `anchorAt` per unsettled hub per 30 frames, and `anchorAt` scans
+   * only *built* sites, so it is a handful of comparisons a second and it stops
+   * entirely once every hub is settled.
    */
   _reanchor() {
-    if (this._anchored.size >= CHOCOBO_HUBS.length || ++this._tick > 30 * 40) return;
-    if (this._tick % 30) return;
+    if (this._settled.size >= CHOCOBO_HUBS.length) return;
+    if (++this._tick % 30) return;
     const kits = this.game.get('Props')?.poiKits;
     const interaction = this.game.get('Interaction');
     if (!kits || !interaction) return;
     for (const hub of CHOCOBO_HUBS) {
-      if (this._anchored.has(hub.key)) continue;
+      if (this._settled.has(hub.key)) continue;
+      // Both anchors or neither: the kit publishes them together, and settling
+      // on `stable` alone would turn the race board on at the pin and then move
+      // it, which is the exact defect this gate exists to prevent.
       const stable = kits.anchorAt(hub.poi, 'stable');
-      if (!stable) continue;
-      this._anchored.add(hub.key);
-      const board = kits.anchorAt(hub.poi, 'board');
-      for (const [id, at] of [[`chocobo-stable-${hub.key}`, stable], [`chocobo-races-${hub.key}`, board]] as Array<[string, THREE.Vector3 | null]>) {
+      const board = stable && kits.anchorAt(hub.poi, 'board');
+      if (!stable || !board) continue;
+      for (const [id, at] of [[`chocobo-stable-${hub.key}`, stable], [`chocobo-races-${hub.key}`, board]] as Array<[string, THREE.Vector3]>) {
         const item = interaction.items?.get(id);
-        if (item && at) item.pos.set(at.x, at.y + 0.1, at.z);
+        if (item) item.pos.set(at.x, at.y + 0.1, at.z);
       }
+      // Last write to either `pos`, and the write that turns the prompts on.
+      this._settled.add(hub.key);
     }
   }
 
