@@ -430,8 +430,33 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // and rejected on sight — it lifts the top end as hard as the bottom and
   // Noctis' hair reads grey. This leaves dome = 1 untouched at 1.0 and lifts
   // only the dark tail.
-  float expose = 1.0 - 0.60 * clamp( vMat.y, 0.0, 1.0 );
-  float skyVis = mix( 0.45, 1.0, pow( dome, 1.2 ) ) * expose;
+  //
+  // The two constants, and how they were set. probes/hairocc.mts histograms
+  // the channel off the built groom: it is strongly BIMODAL -- 36-40% of hair
+  // vertices at 0 (the scalp shell, the halo, the wisps, the brows, and the
+  // exposed tips) and 32-43% at 1 (roots and buried rows), with almost nothing
+  // between -- and the mean is 0.52 on both Noctis and Prompto. So a weight w
+  // costs the term (1 - 0.52 w) of its level on average, and the pedestal P
+  // gives back (P + (1 - P) E[dome^1.2]) with E[dome^1.2] about a half.
+  //
+  // The first pair landed was 0.60 / 0.45, which is very nearly mean-PRESERVING
+  // (0.688 x 0.725 = 0.499 against 0.5) and measured as such: Prompto's hair
+  // rect went p5 9 -> 10, p50 76 -> 71, p99.5 206 -> 204, i.e. the mechanism
+  // redistributed and did not lift. The plate wants a lift: 22 / 81 / 176 for
+  // blond and 20 / 37 / 140 for black, against our 10 / 71 / 204 and 0 / 26 /
+  // 135. Cropping the rect and looking at it (864x540 at 3x) shows what the
+  // floor actually is -- the near-black GAPS between cards -- and 12.3's plates
+  // have no such gaps on either head.
+  //
+  // So the pedestal comes up and the occlusion weight comes down: the modulation
+  // must not be fighting the term that fixes the floor. 0.45 / 0.58 puts the
+  // average at (0.766 x 0.79) = 0.605, about +21% of level, concentrated where
+  // dome is LOW -- the gaps, the underside of the mass, beneath the fringe --
+  // because at dome = 1 the term is still capped at exactly its old value. That
+  // is the direction 12.3 asks for and the opposite of the flat-coefficient fit
+  // that made Noctis grey at p50 46.
+  float expose = 1.0 - 0.45 * clamp( vMat.y, 0.0, 1.0 );
+  float skyVis = mix( 0.58, 1.0, pow( dome, 1.2 ) ) * expose;
   kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.30 + 0.30 * luminance );
   gl_FragColor.rgb += kk;
 }`);
