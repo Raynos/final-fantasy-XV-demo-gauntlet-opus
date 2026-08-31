@@ -504,7 +504,10 @@
 .areacard {
   position: absolute; left: 10.5%; top: 40%; text-align: left;
 }
-.areacard .ac-sub { font-size: 10px; letter-spacing: 0.56em; text-transform: uppercase; color: var(--ice); text-shadow: var(--sh-text-lg); margin-bottom: 14px; }
+/* 11px, not 10, and a rung brighter than --ice: this line carries the number
+   the camp exists to produce ("1,200 EXP REDEEMED") and it was the quietest
+   type on the screen at the loudest moment in the loop. */
+.areacard .ac-sub { font-size: 11px; letter-spacing: 0.5em; text-transform: uppercase; color: var(--ice); text-shadow: var(--sh-text-lg); margin-bottom: 14px; }
 .areacard .ac-name {
   font-size: 54px; font-weight: 100; letter-spacing: 0.30em; text-transform: uppercase;
   color: #fff; line-height: 1;
@@ -513,7 +516,7 @@
 }
 .areacard .ac-rule { height: 1px; margin-top: 20px; background: linear-gradient(90deg, var(--hair-hot), rgba(206,224,250,.10) 70%, transparent); }
 .areacard .ac-meta { margin-top: 13px; font-size: 9px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 20px rgba(0,0,0,.6); }
-.areacard .ac-sub { text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 22px rgba(0,0,0,.6); }
+.areacard .ac-sub { color: #dcebff; text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 0 22px rgba(0,0,0,.65); }
 /* A scrim, because this card had none.
    `.victory` sits on a 0.74-alpha plate with a 10px backdrop blur and `.hint`
    on `.plate`; the area card — which is where "1,200 EXP REDEEMED" lands after
@@ -527,7 +530,7 @@
 .areacard { position: relative; }
 .areacard::before {
   content: ''; position: absolute; inset: -34px -120px -30px -70px; z-index: -1;
-  background: radial-gradient(60% 62% at 34% 50%, rgba(4,8,15,.72) 0%, rgba(4,8,15,.52) 42%, rgba(4,8,15,0) 78%);
+  background: radial-gradient(58% 64% at 32% 50%, rgba(4,8,15,.84) 0%, rgba(4,8,15,.60) 40%, rgba(4,8,15,0) 78%);
   pointer-events: none;
 }
 .letters .ltr { display: inline-block; }
