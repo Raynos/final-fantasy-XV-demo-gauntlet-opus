@@ -56,8 +56,38 @@ export class CameraOccluders {
    * rotation is its transpose, so this is stored rather than derived.
    */
   data: Float32Array;
-  /** How many proxies `data` holds. */
+  /** How many proxies `data` holds — boulders, then the hard dynamics. */
   count = 0;
+  /**
+   * How many of those are boulders. The boulder window is rate-limited and the
+   * dynamics are not, so the dynamics are appended after this every frame.
+   */
+  rockCount = 0;
+  /**
+   * Creature proxies, {@link STRIDE} floats each, in the same packing.
+   *
+   * **Kept out of `data` on purpose, and never swept by the arm.** The
+   * playtest's second case is "mid-fight the camera ended up inside a
+   * Voretooth — the creature filled the screen, Noctis not visible at all",
+   * and the obvious fix, feeding animals to `sweep` alongside the boulders, is
+   * a regression waiting to happen: in a den fight four creatures circle within
+   * two metres of the lens, so an arm that stops short of any of them is an arm
+   * pinned at `SOLID_MIN` for the whole fight — which is the frame lane 12a
+   * spent its lane getting *away* from. A boulder is scenery and stays where it
+   * is put; a pack is the fight itself.
+   *
+   * So a creature is a containment test and nothing else. Being inside one is
+   * never a shot, and {@link CameraOccluders.creatureAt} says which one, so the
+   * rig can hide that single animal for the frame the way
+   * `Player.cullNearCamera` already hides a companion standing on the lens.
+   */
+  soft: Float32Array;
+  /** How many proxies `soft` holds. */
+  softCount = 0;
+  /** The creatures behind `soft`, index-aligned. */
+  softOf: SoftBody[] = [];
+  /** Ablation knob for the dynamic proxies — the car and the creatures. */
+  dynamic = true;
   /** Instances examined on the last rebuild — the cost, in one number. */
   scanned = 0;
   /**
@@ -82,7 +112,96 @@ export class CameraOccluders {
 
   constructor(max = 128) {
     this.max = max;
-    this.data = new Float32Array(max * STRIDE);
+    this.data = new Float32Array((max + MAX_HARD) * STRIDE);
+    this.soft = new Float32Array(MAX_SOFT * STRIDE);
+  }
+
+  /**
+   * Pack one ellipsoid at slot `n` of `buf`: centre, semi-axes, and the inverse
+   * of a yaw-only rotation.
+   *
+   * The boulder path writes its own because it already holds a full Euler and a
+   * `Matrix4`; a creature and a car have a heading and nothing else, so the
+   * transpose is two cosines written out rather than a matrix build.
+   */
+  _packYaw(buf: Float32Array, n: number, cx: number, cy: number, cz: number,
+    ax: number, ay: number, az: number, yaw: number) {
+    const o = n * STRIDE;
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    buf[o] = cx; buf[o + 1] = cy; buf[o + 2] = cz;
+    buf[o + 3] = ax; buf[o + 4] = ay; buf[o + 5] = az;
+    // R_y(yaw) transposed, i.e. R_y(-yaw), row-major.
+    buf[o + 6] = c; buf[o + 7] = 0; buf[o + 8] = -sn;
+    buf[o + 9] = 0; buf[o + 10] = 1; buf[o + 11] = 0;
+    buf[o + 12] = sn; buf[o + 13] = 0; buf[o + 14] = c;
+  }
+
+  /**
+   * The solid things near the lens that move — rebuilt every frame, because
+   * they do.
+   *
+   * Two classes, treated differently for the reason {@link CameraOccluders.soft}
+   * gives. The **Regalia** is appended to `data` and swept by the arm exactly
+   * like a boulder: the playtest's third case is "getting out of the Regalia put
+   * the camera inside the car's nose — half the frame a black slab with a
+   * disembodied arm at the edge", and a parked car is scenery, so scenery is
+   * what the arm should treat it as. **Creatures** go to `soft` and are only
+   * ever asked whether they contain a point.
+   */
+  _dynamic(game: Game, focus: THREE.Vector3, radius: number) {
+    this.softCount = 0;
+    this.softOf.length = 0;
+    if (!this.dynamic) return;
+
+    const car = game.get('Regalia');
+    if (car && car.enabled && car.root && this.count < this.max + MAX_HARD) {
+      const p = car.root.position;
+      const dx = p.x - focus.x, dz = p.z - focus.z;
+      if (dx * dx + dz * dz < (radius + CAR_LEN) * (radius + CAR_LEN)) {
+        this._packYaw(this.data, this.count, p.x, p.y + CAR_MID, p.z,
+          CAR_WIDE, CAR_TALL, CAR_LEN, car.root.rotation.y);
+        this.count++;
+      }
+    }
+
+    const enemies = game.get('Enemies');
+    // `alive(out)` fills and returns the array it is given. It is typed
+    // `Enemy[]`, and `SoftBody` is the four fields of an `Enemy` this file
+    // reads — importing the class here to satisfy the call would make the
+    // camera depend on the whole bestiary for a radius and a height.
+    const alive = enemies && enemies.alive
+      ? (enemies.alive(_alive as never[]) as unknown as SoftBody[]) : null;
+    if (!alive) return;
+    for (let i = 0; i < alive.length && this.softCount < MAX_SOFT; i++) {
+      const e = alive[i];
+      if (!e || !e.root) continue;
+      const sc = e.scale || 1;
+      const r = (e.radius || 0.5) * sc, h = (e.height || 1.6) * sc;
+      const p = e.root.position;
+      const dx = p.x - focus.x, dz = p.z - focus.z;
+      const reach = radius + r * BODY_LONG;
+      if (dx * dx + dz * dz > reach * reach) continue;
+      // A quadruped is longer than it is wide and `Enemy.radius` is the width.
+      this._packYaw(this.soft, this.softCount, p.x, p.y + h * 0.55, p.z,
+        r, h * 0.55, r * BODY_LONG, e.root.rotation.y);
+      this.softOf.push(e);
+      this.softCount++;
+    }
+  }
+
+  /**
+   * The creature whose body contains this point, or null.
+   *
+   * `CameraRig` hides it for the frame. See {@link CameraOccluders.soft} for
+   * why a creature is not an arm blocker, and `Player.cullNearCamera` for the
+   * precedent: below about a metre a body is not a body, it is a wall of
+   * out-of-focus hide with the world behind it.
+   */
+  creatureAt(x: number, y: number, z: number, probe: number) {
+    for (let i = 0; i < this.softCount; i++) {
+      if (this._localIn(this.soft, i, x, y, z, probe).lengthSq() < 1) return this.softOf[i];
+    }
+    return null;
   }
 
   /**
@@ -99,10 +218,15 @@ export class CameraOccluders {
       if (!this._rocks) return;
     }
     const moved = this._at.distanceToSquared(focus);
-    if (moved < MOVE * MOVE && now - this._t < PERIOD) return;
-    this._at.copy(focus);
-    this._t = now;
-    this._gather(this._rocks, focus, radius);
+    if (moved >= MOVE * MOVE || now - this._t >= PERIOD) {
+      this._at.copy(focus);
+      this._t = now;
+      this._gather(this._rocks, focus, radius);
+    }
+    // The boulder window is rate-limited because boulders do not move. The rest
+    // of the world does, so it is rebuilt every frame, on top of the boulders.
+    this.count = this.rockCount;
+    this._dynamic(game, focus, radius);
   }
 
   _gather(rocks: Rocks, focus: THREE.Vector3, radius: number) {
@@ -153,6 +277,7 @@ export class CameraOccluders {
         }
       }
     }
+    this.rockCount = n;
     this.count = n;
     this.scanned = scanned;
     this.rebuilds++;
@@ -164,7 +289,12 @@ export class CameraOccluders {
    * sphere. Writes `_u`; `probe` inflates each semi-axis.
    */
   _local(i: number, x: number, y: number, z: number, probe: number, dir: boolean) {
-    const d = this.data, o = i * STRIDE;
+    return this._localIn(this.data, i, x, y, z, probe, dir);
+  }
+
+  /** {@link CameraOccluders._local} against an explicit buffer. */
+  _localIn(d: Float32Array, i: number, x: number, y: number, z: number, probe: number, dir = false) {
+    const o = i * STRIDE;
     const mx = dir ? x : x - d[o], my = dir ? y : y - d[o + 1], mz = dir ? z : z - d[o + 2];
     // inverse rotation, stored row-major
     const lx = d[o + 6] * mx + d[o + 7] * my + d[o + 8] * mz;
@@ -260,6 +390,36 @@ export class CameraOccluders {
 
 /** Floats per packed proxy. */
 const STRIDE = 16;
+/** Slots reserved past `max` for hard dynamic proxies: the car, and nothing else. */
+const MAX_HARD = 2;
+/** Creature slots. A den is six animals; this is a whole screen's worth. */
+const MAX_SOFT = 16;
+/** What {@link CameraOccluders.softOf} holds — `Enemy`, minus everything unread. */
+interface SoftBody { root: THREE.Object3D; scale: number; radius: number; height: number }
+/** Reused by `_dynamic`, so the per-frame pass allocates nothing. */
+const _alive: SoftBody[] = [];
+/**
+ * The Regalia's body as semi-axes in its heading frame, metres, and the height
+ * of its centre over the root.
+ *
+ * `world/props/Regalia.ts` builds it 6.4 m long and 2.3 m wide on 0.95 m
+ * wheels. These INSCRIBE that box rather than bound it: the bounding ellipsoid
+ * of a car is nine metres across its diagonal, and an arm that stopped at it
+ * would stop dead in the open air beside the bonnet.
+ */
+const CAR_LEN = 2.5;
+const CAR_WIDE = 0.95;
+const CAR_TALL = 0.62;
+const CAR_MID = 0.95;
+/**
+ * How much longer than wide a creature is.
+ *
+ * `Enemy.radius` is a gameplay radius — the width of the thing you cannot walk
+ * into — and a voretooth is 0.5 m of that and about two metres of animal. 1.9
+ * is what makes the containment test cover the body the player watched fill his
+ * screen rather than a circle around its shoulders.
+ */
+const BODY_LONG = 1.9;
 const _e = new THREE.Euler();
 const _m = new THREE.Matrix4();
 const _u = new THREE.Vector3();

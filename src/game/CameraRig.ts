@@ -136,6 +136,11 @@ export class CameraRig {
    * from outside; `_liftFor` computes where it is heading.
    */
   _lift!: number;
+  /**
+   * The one creature currently hidden because the lens is inside it, if any.
+   * See the block at the end of `lateUpdate`.
+   */
+  _hidBody!: { root: THREE.Object3D } | null;
   restDistance!: number;
   rotDamp!: number;
   sensitivity!: number;
@@ -176,6 +181,7 @@ export class CameraRig {
     this.occluderPush = true;
     this.slopeLift = true;
     this.focusClear = true;
+    this._hidBody = null;
     this._lift = 0;
     this.height = 1.62;
     this.shoulder = 0.55;
@@ -485,6 +491,11 @@ export class CameraRig {
 
   lateUpdate(dt: number, game: Game) {
     this._t += dt;
+    // Whatever the lens was standing inside last frame gets its mesh back
+    // FIRST, before the posed-shot branch below can return past it. A creature
+    // left hidden into a `setShot` is a corpus frame with a missing enemy in
+    // it, and 166 of those are the `perf` gate.
+    if (this._hidBody) { this._hidBody.root.visible = true; this._hidBody = null; }
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
 
     if (this.shot) {
@@ -818,6 +829,28 @@ export class CameraRig {
       this.cam.rotateX(this._tmp2.x);
       this.cam.rotateY(this._tmp2.y);
       this.cam.rotateZ(this._tmp2.z);
+    }
+
+    // ---- and out of any animal ------------------------------------------
+    // The playtest's second case: "mid-fight the camera ended up inside a
+    // Voretooth — the creature filled the screen, Noctis not visible at all,
+    // HUD still up." A creature is not swept by the arm and must not be, for
+    // the reason `CameraOccluders.soft` gives — an arm that stops short of
+    // every animal circling a melee is an arm at `SOLID_MIN` for the whole
+    // fight, which is the frame lane 12a spent a lane escaping. So the animal
+    // the lens is inside is hidden for the frame instead.
+    //
+    // This is `Player.cullNearCamera`'s argument, applied to the other half of
+    // the cast: below about a metre a body is not a body, it is a wall of
+    // out-of-focus hide with the world behind it, and the thing being hidden is
+    // by construction the one thing in the frame you cannot see anyway. It is a
+    // `visible` toggle and not a fade for that file's reason too — three's
+    // program cache key includes `parameters.opaque`, so animating
+    // `transparent` recompiles every program the creature touches.
+    if (this.occluders.softCount) {
+      const p = this.cam.position;
+      const hit = this.occluders.creatureAt(p.x, p.y, p.z, this.probeRadius);
+      if (hit) { hit.root.visible = false; this._hidBody = hit; }
     }
 
     if (Math.abs(this.cam.fov - this.fov) > 1e-3) {
