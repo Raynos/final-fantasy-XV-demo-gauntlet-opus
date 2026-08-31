@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Noise } from '../util/Noise.ts';
+import { CameraOccluders } from './CameraOccluders.ts';
 import { isVector3 } from '../util/three-guards.ts';
 import type { Game } from './Game.ts';
 import type { FollowShot } from './Shots.ts';
@@ -32,9 +33,9 @@ export interface CameraShot {
 /**
  * Third-person game camera.
  *
- * A spring arm with real collision (a swept probe against the terrain — see
- * `_armDistance` for why props are not in it — with a fast push-in and a slow
- * recover), separate position and rotation damping, velocity look-ahead,
+ * A spring arm with real collision (a swept probe against the terrain and
+ * against the near boulders `CameraOccluders` keeps, with a fast push-in and a
+ * slow recover), separate position and rotation damping, velocity look-ahead,
  * speed-reactive FOV, a handheld noise layer, combat framing that keeps the
  * player and the lock-on target in the same frame, and a trauma-driven shake
  * model.
@@ -99,6 +100,26 @@ export class CameraRig {
   posDamp!: number;
   posDampY!: number;
   probeRadius!: number;
+  /**
+   * Metres of air the lens keeps above the ground directly under it.
+   *
+   * Named because the playtest measured it: "on a slope the camera sits 0.7 m
+   * above the ground beneath it". It was `probeRadius + 0.42` written twice —
+   * once in `_armDistance`'s hit test and once in the ground floor — and those
+   * two must agree or the arm stops somewhere the floor then lifts out of.
+   */
+  groundClearance!: number;
+  /**
+   * Near-lens boulder proxies. `CameraRig` has never collided with a prop; see
+   * `CameraOccluders` for why this is not `CollisionWorld`.
+   */
+  occluders!: CameraOccluders;
+  /**
+   * Ablation knob for the occluder push-out — `probes/fightcam.mts` turns it
+   * off and on inside one run to price the fix against itself, which is the
+   * only honest A/B on a world this deterministic.
+   */
+  occluderPush!: boolean;
   restDistance!: number;
   rotDamp!: number;
   sensitivity!: number;
@@ -134,6 +155,9 @@ export class CameraRig {
     this.minDistance = 1.1;
     this.maxDistance = 12;
     this.probeRadius = 0.32;
+    this.groundClearance = 0.74;
+    this.occluders = new CameraOccluders();
+    this.occluderPush = true;
     this.height = 1.62;
     this.shoulder = 0.55;
 
@@ -268,7 +292,7 @@ export class CameraRig {
         const cx = focus.x + dir.x * t;
         const cy = focus.y + dir.y * t;
         const cz = focus.z + dir.z * t;
-        const hit = cy < terrain.heightAt(cx, cz) + R + 0.42;
+        const hit = cy < terrain.heightAt(cx, cz) + this.groundClearance;
 
         if (hit) {
           // Stop at the last step that was clear. With a step no coarser than
@@ -280,13 +304,56 @@ export class CameraRig {
       }
     }
 
-    // There is no prop-collision sweep here. There used to be a raycast against
-    // `Props.cameraColliders || .colliders || .collisionMeshes` — none of which
-    // `Props` has ever had, so the list was always empty and the ray never ran.
-    // To restore it, `Props` needs to publish a real, opt-in
-    // `cameraColliders: THREE.Object3D[]` (opt-in because raycasting a whole
-    // prop group — instanced foliage and the rest — every frame costs more than
-    // the camera is worth), and this is where it would be swept.
+    // ---- and now the props, which for eighteen months were not swept at all.
+    //
+    // What used to be here was a raycast against `Props.cameraColliders ||
+    // .colliders || .collisionMeshes`, none of which `Props` has ever had, so
+    // the list was always empty and the ray never ran. That dead branch is the
+    // whole of lane 11's `f-engage` frame — the camera inside a boulder at the
+    // instant a fight starts — and of the playtest's "fights happen inside a
+    // hill": `probes/camview.mts` clears the heightfield (0.00% of 2592 combat
+    // poses put Noctis behind the ground), so the hill was a rock.
+    //
+    // `CameraOccluders` keeps the two dozen boulders within an arm's length as
+    // bounding spheres, rebuilt twice a second, which is a ray-sphere test and
+    // not a raycast against an instanced group — the reason the old comment
+    // gave for not doing this at all.
+    if (this.occluderPush && this.occluders.count) {
+      const t = this.occluders.sweep(
+        focus.x, focus.y, focus.z, dir.x, dir.y, dir.z, d, this.probeRadius);
+      if (t < d) d = Math.max(this.minDistance, t - 0.04);
+    }
+    return d;
+  }
+
+  /**
+   * Where the lens ends up for a given focus, orbit and wanted arm length —
+   * the whole placement rule, with no damping and no handheld, in one call.
+   *
+   * It exists for `probes/camview.mts`, which sweeps thousands of poses and
+   * must place the lens *the way the rig does* rather than re-deriving the
+   * arithmetic; a probe that re-implements the rule it measures grades a camera
+   * the game does not have.
+   *
+   * @param out written with the lens position
+   * @returns the arm length actually used
+   */
+  _solveLens(game: Game, focus: THREE.Vector3, yaw: number, pitch: number, wanted: number, out: THREE.Vector3) {
+    const cp = Math.cos(pitch);
+    const dir = this._tmp.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp).normalize();
+    this.occluders.update(game, focus, this.maxDistance + 4, this._t);
+    const d = this._armDistance(game, focus, dir, wanted);
+    out.copy(focus).addScaledVector(dir, d);
+    const terrain = game.get('Terrain');
+    const floor = () => {
+      if (!terrain || !terrain.heightAt) return;
+      const y = terrain.heightAt(out.x, out.z) + this.groundClearance;
+      if (out.y < y) out.y = y;
+    };
+    floor();
+    if (this.occluderPush && this.occluders.count) {
+      if (this.occluders.push(out, this.probeRadius) > 0) floor();
+    }
     return d;
   }
 
@@ -491,6 +558,11 @@ export class CameraRig {
     }
 
     // ---- arm + collision ----------------------------------------------
+    // Bring the boulder window to the player first: the sweep below reads it,
+    // and a window centred on last frame's focus is a metre stale at a sprint.
+    // `maxDistance + 4` covers the longest arm plus the distance the damped
+    // lens can still be trailing behind it.
+    this.occluders.update(game, this._focusSmooth, this.maxDistance + 4, this._t);
     const wanted = this.restDistance;
     const clear = this._armDistance(game, this._focusSmooth, this._dir, wanted);
     if (clear < this.distance) this.distance = clear;                       // push in now
@@ -532,9 +604,23 @@ export class CameraRig {
     // camera is standing in; the answer is to stop pretending the arm is the
     // only degree of freedom and let the lens ride up over the ground.
     const groundT = game.get('Terrain');
-    if (groundT && groundT.heightAt) {
-      const floorY = groundT.heightAt(this._smooth.x, this._smooth.z) + this.probeRadius + 0.42;
+    const floor = () => {
+      if (!groundT || !groundT.heightAt) return;
+      const floorY = groundT.heightAt(this._smooth.x, this._smooth.z) + this.groundClearance;
       if (this._smooth.y < floorY) this._smooth.y = floorY;
+    };
+    floor();
+
+    // ---- and out of any boulder --------------------------------------------
+    // The arm sweep above stops the lens *entering* a rock along the arm. It
+    // cannot stop the lens being overtaken by one: `_smooth` lags `_desired` by
+    // a damped frame or two, the handheld layer adds a few centimetres of its
+    // own, and a tor that streams in beside a running player arrives around the
+    // lens rather than in front of it. So the committed position is pushed out
+    // radially as well, and the ground floor is re-applied after it, because a
+    // push out of a half-buried boulder can put the lens under the hill.
+    if (this.occluderPush && this.occluders.count) {
+      if (this.occluders.push(this._smooth, this.probeRadius) > 0) floor();
     }
 
     // ---- commit ----------------------------------------------------------
