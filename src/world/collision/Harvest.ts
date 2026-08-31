@@ -15,12 +15,17 @@ import { isObject3D, isMesh, isInstancedMesh, isLight, isCamera } from '../../ut
  *    read, so those become a *triangle soup* — world-space triangles, culled
  *    hard (buried geometry and anything out of a walker's reach are dropped)
  *    and bucketed into a uniform grid.
- * 2. **Instanced scatter** (rocks) keeps its placements on the JS side as
- *    `Rocks.groups[i].items`, and the instance matrices are rewritten every
- *    time the camera moves, so reading `instanceMatrix` would snapshot only
- *    whatever happened to be near the origin. Those become analytic box
- *    proxies from the item records instead — one box per boulder, emitted as
- *    ten triangles (four sides plus a lid) so the solver has a single path.
+ * 2. **Instanced scatter** (rocks) is **not harvested here at all**, and the
+ *    attempt to is gone. `collectRockProxies` read `g.mesh` and `g.items` off
+ *    each `Rocks` group; neither field has existed at any point in that file's
+ *    history, so it returned `[]` every time it was called and
+ *    `CollisionWorld.stats.rockProxies` read 0 for its whole life — which is
+ *    why a character could stand inside a boulder, and why the playtest's
+ *    number-one complaint was a fight held inside one. The real reason it could
+ *    never live here is that this harvest runs **once**, off the first few
+ *    frames, and rocks **stream** for the whole session. They are answered per
+ *    stream cell by `RockField` instead, which `CollisionWorld` queries from
+ *    `_resolvePass`.
  *
  * Everything else — grass, bushes, tree impostors, debris litter, wildlife,
  * NPCs, VFX, the characters themselves and the terrain clipmap — is skipped.
@@ -88,37 +93,6 @@ export function collectMeshes(game: Game): {mesh:THREE.Mesh, source:string}[] {
 const _box = new THREE.Box3();
 
 /**
- * Analytic box proxies for the instanced boulder fields.
- *
- * **This has never returned anything, and the player has never collided with a
- * boulder.** It read `g.mesh` and `g.items` off each `Rocks` group; neither
- * field has existed at any point in that file's history. A group holds `near`
- * and `far` -- the two instanced LOD meshes -- and the instances live in the
- * streamed window, `rocks.stream.live`, not on the group. So `if (!geo)
- * continue` skipped all eight rock kinds and the function returned `[]` every
- * time. `CollisionWorld.stats.rockProxies` has read 0 since it was written, and
- * nothing looks at it.
- *
- * It stayed invisible for the usual reason: the line above it,
- * `(g.kind && g.kind.key) || (g.mesh && g.mesh.name) || ''`, works off its
- * first arm, so the dead second arm never announced itself.
- *
- * Wiring it up is `g.mesh` -> `g.near` and `g.items` -> iterating
- * `rocks.stream.live.values()` and `rocks.outcrops.live.values()`. That is a
- * behaviour change -- boulders would start colliding, and the proxy count is
- * unbounded by anything but the streamed window -- so it wants its own commit
- * and a perf measurement, not a typing pass. The arithmetic it used (unit-radius
- * `s` as world metres, per-axis jitter, inscribed-core shrink of 0.74, burial
- * sink along the terrain normal, and the 0.34 m knee-high cull) is in the git
- * history at this path.
- *
- * @param minSize smallest boulder radius worth colliding with
- */
-export function collectRockProxies(_game: Game, _minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
-  return [];
-}
-
-/**
  * A yaw-rotated box standing in for a whole object: centre, half-extents and
  * (for a boulder proxy) the yaw it is turned by.
  */
@@ -166,26 +140,4 @@ export function objectBox(obj: THREE.Object3D | null | undefined, shrink = 0.92)
     hy: (_box.max.y - _box.min.y) * 0.5,
     hz: (_box.max.z - _box.min.z) * 0.5 * shrink,
   };
-}
-
-/**
- * Emit a yaw-rotated box as ten triangles: four walls and a two-triangle lid.
- * The underside is never needed — nothing walks beneath a boulder.
- * @param b proxy record
- * @param sink flat destination array, 9 numbers per triangle
- */
-export function boxTriangles(b: BoxProxy, sink: number[]) {
-  const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
-  const px = (x: number, z: number) => b.cx + x * c + z * s;
-  const pz = (x: number, z: number) => b.cz - x * s + z * c;
-  const y0 = b.cy - b.hy, y1 = b.cy + b.hy;
-  const corners = [[-b.hx, -b.hz], [b.hx, -b.hz], [b.hx, b.hz], [-b.hx, b.hz]];
-  const w = corners.map(([x, z]) => [px(x, z), pz(x, z)]);
-  for (let i = 0; i < 4; i++) {
-    const a = w[i], d = w[(i + 1) % 4];
-    sink.push(a[0], y0, a[1], d[0], y1, d[1], d[0], y0, d[1]);
-    sink.push(a[0], y0, a[1], a[0], y1, a[1], d[0], y1, d[1]);
-  }
-  sink.push(w[0][0], y1, w[0][1], w[2][0], y1, w[2][1], w[1][0], y1, w[1][1]);
-  sink.push(w[0][0], y1, w[0][1], w[3][0], y1, w[3][1], w[2][0], y1, w[2][1]);
 }

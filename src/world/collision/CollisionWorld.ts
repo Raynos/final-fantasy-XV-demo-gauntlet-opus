@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import {
-  collectMeshes, collectRockProxies, objectBox, boxTriangles,
-} from './Harvest.ts';
+import { collectMeshes, objectBox } from './Harvest.ts';
+import { RockField } from './RockField.ts';
 import type { Game } from '../../game/Game.ts';
 import type { Terrain } from '../Terrain.ts';
 import type { BoxProxy } from './Harvest.ts';
@@ -94,6 +93,22 @@ export class CollisionWorld {
   floorN!: Float32Array;
   game!: Game;
   ready!: boolean;
+  /**
+   * The boulders, which are **not** in the baked soup and never could be.
+   *
+   * Everything else this class holds is harvested once off the first few frames
+   * and is then static for the session. Rocks stream: `Rocks.stream` and
+   * `Rocks.outcrops` generate and drop cells around the camera forever, so a
+   * one-shot harvest could only collide the boulders near spawn — which is
+   * exactly what `Harvest.collectRockProxies` was, and it returned `[]` for its
+   * whole life. `RockField` answers them per stream cell instead.
+   */
+  rocks!: RockField;
+  /**
+   * Ablation knob for the boulder push-out — `probes/rockwalk.mts` runs the
+   * same route with it off to get the paired before.
+   */
+  rockPush!: boolean;
   stats!: CollisionStats;
   terrain!: Terrain | null;
   wall!: Float32Array;
@@ -109,11 +124,14 @@ export class CollisionWorld {
     this._dyn = [];
     this._v = new THREE.Vector3();
     this._n = new THREE.Vector3();
+    this.rocks = new RockField();
+    this.rockPush = true;
   }
 
   init(game: Game) {
     if (this.game) return this;
     this.game = game;
+    this.rocks.init(game);
     this.terrain = game.get('Terrain') ?? null;
     this._job = null;
     this._t0 = 0;
@@ -202,21 +220,11 @@ export class CollisionWorld {
       yield;
     }
 
-    // ---- 2. instanced boulders as analytic boxes --------------------------
-    const rocks = collectRockProxies(game);
-    this.stats.rockProxies = rocks.length;
-    const tmp: number[] = [];
-    for (const r of rocks) {
-      tmp.length = 0;
-      boxTriangles(r, tmp);
-      for (let i = 0; i < tmp.length; i += 9) {
-        a.set(tmp[i], tmp[i + 1], tmp[i + 2]);
-        b.set(tmp[i + 3], tmp[i + 4], tmp[i + 5]);
-        c.set(tmp[i + 6], tmp[i + 7], tmp[i + 8]);
-        emit('rocks');
-      }
-      yield;
-    }
+    // ---- 2. the boulders are NOT harvested here ---------------------------
+    // They stream. See `this.rocks` (`RockField`), queried per stream cell from
+    // `_resolvePass`. `stats.rockProxies` now reports what that cache holds
+    // rather than the 0 the dead `collectRockProxies` reported for its whole
+    // life; it is a live number, so it moves as the player moves.
 
     // ---- 3. the parked Regalia and anything else that moves ---------------
     this._dyn = [];
@@ -370,7 +378,7 @@ export class CollisionWorld {
    * @returns total horizontal correction applied, metres
    */
   resolve(pos: THREE.Vector3, radius: number, height: number, stepUp: number): number {
-    if (!this.ready || !this.enabled) return this._resolveDynamic(pos, radius, height, stepUp);
+    if (!this.enabled) return this._resolveDynamic(pos, radius, height, stepUp);
     let moved = 0;
     for (let pass = 0; pass < 3; pass++) {
       const d = this._resolvePass(pos, radius, height, stepUp);
@@ -381,6 +389,17 @@ export class CollisionWorld {
   }
 
   _resolvePass(pos: THREE.Vector3, radius: number, height: number, stepUp: number) {
+    // The boulders do not wait for the harvest: `RockField` reads the live
+    // stream, so it answers from the first frame, which is also the frame a
+    // den can already have spawned a voretooth standing inside a tor.
+    let rock = 0;
+    if (this.rockPush) {
+      rock = this.rocks.push(pos, radius, height, stepUp);
+      // Live, not baked: it moves as the player moves, and it is the number
+      // that read 0 for the whole life of the stub this replaced.
+      this.stats.rockProxies = this.rocks.proxies;
+    }
+    if (!this.ready) return rock;
     const tri = this.wall, meta = this.wallN, grid = this.wallGrid;
     const ax = pos.x, az = pos.z;
     const ay0 = pos.y + Math.min(0.18, stepUp * 0.4);
@@ -405,7 +424,7 @@ export class CollisionWorld {
     }
     const big = this.wallCoarse.get(cellKey(Math.floor(ax * INV_COARSE), Math.floor(az * INV_COARSE)));
     if (big) sweep(big);
-    return total;
+    return total + rock;
   }
 
   /** Oriented-box proxies for the two Regalias, tested in the box's own frame. */
@@ -440,7 +459,7 @@ export class CollisionWorld {
    * to pick a way round rather than a way through.
    */
   blocked(x: number, z: number, feetY: number, radius: number, height: number, stepUp: number): boolean {
-    if (!this.ready || !this.enabled) return false;
+    if (!this.enabled) return false;
     this._v.set(x, feetY, z);
     const before = this._v.x + this._v.z;
     this._resolvePass(this._v, radius, height, stepUp);
