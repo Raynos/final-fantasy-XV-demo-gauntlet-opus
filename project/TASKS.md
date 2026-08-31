@@ -1116,3 +1116,36 @@ is landed.
   `CharacterController._scoreRefusal`. Left undone deliberately: it is a new
   change at a stop line and it needs its own `slopewalk` round. The bar: those
   three rows go to `hint 0%` and the seven SLID rows stay above 60%. `lane12c`
+
+## From lane 12a (combat camera) — 2026-08-31
+
+- **Characters walk through boulders, so a third of all combat frames are fought
+  INSIDE a rock.** `Harvest.collectRockProxies` returns `[]` and
+  `CollisionWorld.stats.rockProxies` reads 0 in a live page — verified.
+  `probes/fightcam.mts` measures Noctis' own chest inside a boulder on **31.5%
+  of combat frames** over four real den fights, and 64.4 / 57.7 / 92.8 / 100%
+  in the individual fights that happened in a tor. **This is the root cause of
+  the playtest's "fights happen inside a hill"**, it is the whole of the 0.62%
+  the camera fix cannot reach, and it is not a typing pass: the harvest runs
+  once at boot while rocks stream, so the function as written could only ever
+  collide the boulders near spawn. It needs a streaming answer;
+  `src/game/CameraOccluders.ts` is a working precedent for that half (56 m
+  stream cells, `placedScale` ellipsoids, rebuilt on a 2 m / 0.5 s rule).
+  Wants its own commit, its own `gameplay` number and a `fightshape` round,
+  because it changes pathing. `lane12a`
+- **The lens can be crowded to a 0.5 m arm and there is no player-mesh fade.**
+  `SOLID_MIN` is 0.4 m, which is what makes the boulder frames legible at all,
+  and at that arm Noctis' shoulder is a large soft foreground object. Scaling
+  the shoulder offset with the arm fixed the worst of it (his head is out of
+  frame); the standard remedy is the other half — dither the player mesh out
+  below ~1.2 m of arm. Lives in `Player`/`Cast`, not `CameraRig`. `lane12a`
+- **`fightcam`'s absolute percentages are not quotable across runs, only its
+  paired column.** The arm feeds `Props.update(camPos)`, therefore streaming,
+  therefore `Terrain.drawnHeightAt`, therefore where the player's feet land, so
+  a camera change moves the route and a run finds different dens. Quote
+  `probes/camview.mts`' 3552-pose paired sweep instead. `lane12a`
+- **The player's second complaint is untouched and is not a camera fix**: "the
+  fight is often 40 m up a hill happening to my allies while I stand still —
+  I watched a whole Sabertusk fight resolve as distant specks behind a
+  boulder." That is aggro range and party engagement distance, `src/combat/`
+  and `WildTerritories`. `lane12a`
