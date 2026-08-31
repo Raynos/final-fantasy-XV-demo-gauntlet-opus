@@ -2582,3 +2582,34 @@ Two further lessons from the same diagnosis:
   Both the gate and the scaling were right; only the reset was wrong. Widening
   the gate would have hidden a shipping bug.
 
+## `Face.brushes()` already returns `expandMirrors(b)`, and expanding it twice is silent
+
+`Face.ts:540` ends `return expandMirrors(b)`. `expandMirrors` is **not**
+idempotent: given an already-expanded list it re-mirrors every `mirror: true`
+entry, so each side lands in the list twice and `applyBrushes` — which SUMS
+every brush against the original position — applies it at **double amplitude**.
+99 brushes become 179 and the face silently doubles the depth of every socket,
+crease and cheek.
+
+Measured 2026-08-31: an off-harness decomposition of the mid-face crease read
+17.99 mm of surface Laplacian where the real figure is 9.00, and named the
+mirrored twin of a brush as a contributor at a point it cannot physically reach
+— which is the tell. Anything that consumes `brushes()` hands it to
+`applyBrushes` **as it is**.
+
+## The surface Laplacian decomposes a sculpt exactly, so a groove can be attributed without a build
+
+`applyBrushes` sums each brush's displacement against the *original* position
+(deliberately — sequential application makes mirrored pairs asymmetric). That
+makes the sculpted surface a **linear** function of the brush list, so any
+linear functional of it is too. Take the Laplacian over a 3 mm stencil — a
+groove is a positive Laplacian and its magnitude is how hard the fold turns —
+and `L = sum over brushes of L_b`, exactly. No ablation build, no capture, no
+queue: one Node script names which brush owns a crease and by how many
+millimetres.
+
+That is how the mid-face diagonal was pinned to the alar crease (5.28 of a 9.00
+peak) and the alar ball (2.91) in one turn, after three respawns had looked for
+it in `paintFace`, in the fringe's cast shadow and in the merged shadow proxy.
+**Ablate the shading stack to prove a defect is geometry; decompose the brush
+field to find out which geometry.**
