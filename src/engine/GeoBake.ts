@@ -58,7 +58,7 @@ import * as THREE from 'three';
 
 /** Container magic. Bump {@link GEO_BAKE_VERSION} whenever the layout changes. */
 const MAGIC = 'EOSGEO01';
-export const GEO_BAKE_VERSION = 1;
+export const GEO_BAKE_VERSION = 2;
 /** Where the bake step drops the artifact, relative to the site root. */
 export const GEO_BAKE_PATH = 'baked/geo.bin.gz';
 
@@ -72,6 +72,22 @@ interface GeoAttr {
   i: number;
   /** normalized */
   z: boolean;
+  /**
+   * The attribute was a `THREE.Float16BufferAttribute` — a `Uint16Array` the
+   * GPU is told to read as `HALF_FLOAT`.
+   *
+   * `t` cannot carry this. `Float16BufferAttribute` and a plain `Uint16`
+   * attribute are the same typed array with the same `normalized` flag, and
+   * they differ only in the `gpuType` three uploads. Restoring one as the
+   * other hands the shader the raw half-float **bits** — a value of 1.0
+   * arrives as 15 360 — and `AttrPack` puts every over-bright vertex `color`
+   * into exactly this format. That is a whole city rendering at four
+   * thousand times its radiance, which bloom then smears over the frame; it
+   * shipped as eleven pure-white shots and thirty more with a white veil.
+   * Absent for every attribute that is not half, so an existing header stays
+   * byte-identical apart from the ones that were broken.
+   */
+  h?: boolean;
   /** byte offset into the body */
   off: number;
   /** byte length */
@@ -195,7 +211,11 @@ export function encodeGeoBake(hash: string): Uint8Array {
       for (const [n, a] of Object.entries(geo.attributes)) {
         const at = a as THREE.BufferAttribute;
         const arr = at.array as ArrayBufferView;
-        attrs.push({ n, t: arr.constructor.name, i: at.itemSize, z: !!at.normalized, ...put(arr) });
+        const half = !!(at as unknown as { isFloat16BufferAttribute?: boolean }).isFloat16BufferAttribute;
+        attrs.push({
+          n, t: arr.constructor.name, i: at.itemSize, z: !!at.normalized,
+          ...(half ? { h: true } : {}), ...put(arr),
+        });
       }
       const idxAttr = geo.index;
       const idx = idxAttr
@@ -293,7 +313,10 @@ function inflatePart(p: GeoPartEntry, body: Uint8Array, base: number): THREE.Buf
     return new (C as unknown as new (v: unknown) => ArrayBufferView & { length: number })(view);
   };
   for (const a of p.attrs) {
-    geo.setAttribute(a.n, new THREE.BufferAttribute(grab(a.t, a.off, a.len) as never, a.i, a.z));
+    const raw = grab(a.t, a.off, a.len) as never;
+    geo.setAttribute(a.n, a.h
+      ? new THREE.Float16BufferAttribute(raw, a.i, a.z)
+      : new THREE.BufferAttribute(raw, a.i, a.z));
   }
   if (p.idx) geo.setIndex(new THREE.BufferAttribute(grab(p.idx.t, p.idx.off, p.idx.len) as never, 1));
   for (const g of p.groups) geo.addGroup(g.start, g.count, g.materialIndex);
