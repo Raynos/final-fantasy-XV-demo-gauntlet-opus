@@ -81,7 +81,12 @@ export function landmarkMaterials() {
     dark: woodMaterial(0x4a3d30),
     rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
     steel: new THREE.MeshStandardMaterial({ color: 0x6a6d72, roughness: 0.55, metalness: 0.85 }),
-    cloth: canvasClothMaterial(0x36414c),
+    // Weathered khaki duck, not near-black navy. 0x36414c against a sunlit
+    // sandstone haven is the darkest thing in the frame by a wide margin, and
+    // "the tent is a black checkerboard" was half tint and half the moire
+    // `PropMaterials.canvasClothMaterial` has now lost. FFXV's camp tent is a
+    // warm olive-tan canvas that sits a stop under the rock it is pitched on.
+    cloth: canvasClothMaterial(0x6d6350),
     ceramic: new THREE.MeshStandardMaterial({ color: 0xd8d4c6, roughness: 0.35, metalness: 0 }),
     wire: new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.7, metalness: 0.4 }),
     ember: new THREE.MeshStandardMaterial({
@@ -95,7 +100,7 @@ export function landmarkMaterials() {
     lantern: glowMaterial(0xffbe72, 2.0, 0x271a0c),
     flame: new THREE.MeshBasicMaterial({
       map: flameTexture(), transparent: true, blending: THREE.AdditiveBlending,
-      depthWrite: false, side: THREE.DoubleSide, opacity: 0.95, toneMapped: true,
+      depthWrite: false, side: THREE.DoubleSide, opacity: 0.55, toneMapped: true,
     }),
     signA: new THREE.MeshStandardMaterial({ map: signTexture(0), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
     signB: new THREE.MeshStandardMaterial({ map: signTexture(1), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
@@ -255,13 +260,24 @@ export class Landmarks {
     B.add(M.ember, new THREE.SphereGeometry(0.56, 12, 8),
       mat4([fx, top + 0.16, fz], [0, 0, 0], [1, 0.45, 1]));
 
-    // flame: three crossed cards, scaled and swayed per frame
+    /**
+     * Flame: two crossed cards, scaled and swayed per frame.
+     *
+     * It was three at 1.65 x 2.5 m. Three double-sided cards at 60 degrees is
+     * six additive layers through the middle of the fire, and 2.5 m of flame
+     * standing on a pit whose stone ring is r=1.25 put the tip at top+2.68 —
+     * a metre and a half *above* the cooking pot at top+1.55, which the
+     * playtest read, correctly, as "a cone of light shooting out of the logs
+     * into a black pot". Two cards at 90 degrees is four layers; 1.05 x 1.45
+     * puts the tip at top+1.63, licking the base of the pot instead of
+     * spearing through it.
+     */
     const flames = new THREE.Group();
-    for (let i = 0; i < 3; i++) {
-      const q = new THREE.PlaneGeometry(1.65, 2.5);
-      q.translate(0, 1.25, 0);
+    for (let i = 0; i < 2; i++) {
+      const q = new THREE.PlaneGeometry(1.05, 1.45);
+      q.translate(0, 0.725, 0);
       const m = new THREE.Mesh(q, M.flame);
-      m.rotation.y = (i / 3) * Math.PI;
+      m.rotation.y = (i / 2) * Math.PI;
       m.renderOrder = 5;
       flames.add(m);
     }
@@ -732,7 +748,8 @@ export class Landmarks {
       this.flames.scale.set(s * 0.95, s, s * 0.95);
       this.flames.rotation.y = Math.sin(time * 1.7) * 0.16;
       for (const m of this.flames.children) {
-        if (isMesh(m)) (m.material as THREE.Material).opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 9.1));
+        // 0.55-1.00 on additive cards that already overlap was a solid; 0.34-0.62 flickers.
+        if (isMesh(m)) (m.material as THREE.Material).opacity = 0.34 + 0.28 * (0.5 + 0.5 * Math.sin(time * 9.1));
       }
     }
   }

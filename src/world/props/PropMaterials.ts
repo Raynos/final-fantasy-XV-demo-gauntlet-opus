@@ -227,17 +227,34 @@ export function groundMaterial(tint = 0x796450, rough = 0.96, mpt = 4.0, stony =
 export function woodMaterial(tint = 0x7a6449) {
   return memoMat(`wood${tint}`, (mk) => {
     const n = new Noise(3131);
+    /**
+     * The blind playtest called the haven's fire logs "lurid orange tiger
+     * stripes", which is the exact defect `rustMaterial` below already has a
+     * paragraph about, one material along: it was simply that much contrast.
+     *
+     * Two numbers made the stripes. `sin(v * 130)` is 20.7 cycles per UV unit,
+     * and on the 1.8 m log cylinders at `Landmarks.ts:249` v runs along the
+     * axis — so the grain drew twenty-one *rings* around each log at 8.7 cm
+     * pitch, transverse to the way timber actually grains. And `k = 0.62 + h *
+     * 0.62` is a 2:1 albedo swing, which under the campfire's `0xff7a26`
+     * point light is a full swing from dark brown to hot orange. Twenty-one
+     * bands at 2:1, lit orange, is a tiger.
+     *
+     * 6.7 cycles per UV unit at 1.28:1, with the fbm warp raised so the bands
+     * wander instead of ruling parallel lines, and the normal strength halved
+     * because it was carving the same ripple into the specular.
+     */
     const h = (u: number, v: number) => {
-      const grain = Math.sin(v * 130 + n.fbm2(u * 3, v * 9, 3) * 9) * 0.5 + 0.5;
-      return grain * 0.55 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.45;
+      const grain = Math.sin(v * 42 + n.fbm2(u * 3, v * 9, 3) * 16) * 0.5 + 0.5;
+      return grain * 0.42 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.58;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
-      const k = 0.62 + h(u, v) * 0.62;
+      const k = 0.80 + h(u, v) * 0.28;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.6);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 0.8);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: 0.93, metalness: 0,
@@ -295,15 +312,37 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
 export function canvasClothMaterial(tint = 0x2f3a44) {
   return memoMat(`cloth${tint}`, (mk) => {
     const n = new Noise(1212);
-    const h = (u: number, v: number) => (Math.sin(u * 420) * 0.5 + 0.5) * 0.35 + (Math.sin(v * 420) * 0.5 + 0.5) * 0.35
-      + (n.fbm2(u * 8, v * 8, 3) * 0.5 + 0.5) * 0.3;
+    /**
+     * The tent read as "a black moiré checkerboard" in the playtest, and this
+     * is where it was baked in — not, as one would guess, a mip or anisotropy
+     * failure. `bakedTexture` mips at aniso 16 and there is nothing left to
+     * filter: the checker is already in mip 0.
+     *
+     * `sin(u * 420)` is 66.85 cycles per UV unit against a 256-texel bake that
+     * point-samples once per texel — **3.83 texels per cycle**, essentially
+     * Nyquist. Adding a v-weave at the same frequency makes their product a
+     * checkerboard, and 66.85 does not divide the repeat, so under
+     * `RepeatWrapping` the beat drifts across the panel. That is a moiré
+     * pattern in the source image; mipping it only makes it grey.
+     *
+     * 88 cycles is 2.9 texels per cycle... which is worse, so the weave does
+     * not go to a *higher* frequency: 15 is **17 texels per cycle**, safely
+     * resolved, and the fine cloth detail that the weave was standing in for
+     * comes from fbm, which is band-limited by construction. Contrast drops
+     * from 1.69:1 to 1.36:1 for the same reason the wood's did — a tent is a
+     * flat panel of cloth, not a pattern.
+     */
+    const h = (u: number, v: number) => (Math.sin(u * 15) * 0.5 + 0.5) * 0.16
+      + (Math.sin(v * 15) * 0.5 + 0.5) * 0.16
+      + (n.fbm2(u * 7, v * 7, 4) * 0.5 + 0.5) * 0.48
+      + (n.fbm2(u * 23, v * 23, 2) * 0.5 + 0.5) * 0.20;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
-      const k = 0.72 + h(u, v) * 0.5;
+      const k = 0.84 + h(u, v) * 0.30;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 0.9);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 0.5);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: 0.86, metalness: 0,
@@ -674,17 +713,39 @@ export function flameTexture() {
         const u = x / s, v = y / s;
         // v=0 is the top of the canvas -> tip of the flame
         const t = 1 - v;
-        const wid = 0.5 * Math.pow(t, 0.55) * (1 - t * 0.15);
+        /**
+         * "A hard-edged opaque yellow cone of light shooting out of the logs
+         * into a black pot." Three lines made that, and none of them is the
+         * geometry — the cards at `Landmarks.ts:258` are fine.
+         *
+         * `wid = 0.5 * t^0.55` is widest at the fuel and zero at the tip: a
+         * triangle standing on the fire, which is a light shaft's shape, not a
+         * flame's. A flame is pinched where it leaves the fuel, broadest a
+         * third of the way up, and torn into tongues above that. `sin` shapes
+         * the pinch and the fbm at a higher octave count does the tearing.
+         *
+         * `a * 1.35` was the hard edge. `1 - d*d` is a perfectly smooth
+         * falloff and the 1.35 gain clipped it to 1 across the whole interior,
+         * leaving the gradient alive only in a thin rim — so three crossed
+         * double-sided cards summed to a solid, and the pot behind it was
+         * occluded rather than lit. No gain, and a 1.4 power to pull the
+         * shoulder in.
+         *
+         * The blue channel capped at `heat * heat * 0.5` against red's 0.45
+         * floor, which is saturated yellow at every temperature. A real flame
+         * runs white-hot at the base through orange to red at the tips.
+         */
+        const wid = 0.40 * Math.sin(Math.PI * Math.pow(t, 0.78)) * (0.55 + 0.45 * t);
         const d = Math.abs(u - 0.5) / Math.max(wid, 1e-3);
-        let a = Math.max(0, 1 - d * d);
-        a *= 0.55 + 0.45 * (n.fbm2(u * 6, v * 3, 3) * 0.5 + 0.5);
-        a *= THREE.MathUtils.smoothstep(t, 0.02, 0.22);
-        const heat = THREE.MathUtils.clamp(a * (0.35 + t * 1.5), 0, 1);
+        let a = Math.pow(Math.max(0, 1 - d * d), 1.4);
+        a *= 0.30 + 0.70 * (n.fbm2(u * 7, v * 4.5, 4) * 0.5 + 0.5);
+        a *= THREE.MathUtils.smoothstep(t, 0.02, 0.30);
+        const heat = THREE.MathUtils.clamp(a * (0.30 + t * 1.7), 0, 1);
         const i = (y * s + x) * 4;
-        img.data[i] = 255 * Math.min(1, 0.45 + heat * 1.4);
-        img.data[i + 1] = 255 * Math.min(1, heat * 1.05);
-        img.data[i + 2] = 255 * Math.min(1, heat * heat * 0.5);
-        img.data[i + 3] = 255 * Math.min(1, a * 1.35);
+        img.data[i] = 255 * Math.min(1, 0.35 + heat * 1.5);
+        img.data[i + 1] = 255 * Math.min(1, heat * 1.15);
+        img.data[i + 2] = 255 * Math.min(1, 0.04 + heat * heat * heat * 1.5);
+        img.data[i + 3] = 255 * a;
       }
     }
     ctx.putImageData(img, 0, 0);

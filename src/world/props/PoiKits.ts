@@ -546,7 +546,11 @@ export function poiMaterials() {
     bone: plain(0xc6bba0, 0.88),
     red: plain(0x8f3a2c, 0.68, 0.1),
     magitek: plain(0x3a4048, 0.62, 0.45),
-    cloth: canvasClothMaterial(0x3d4148),
+    // Same one-line tint change as `Landmarks.ts`: weathered khaki duck rather
+    // than near-black slate. The playtest's "the tent is a black moire
+    // checkerboard" was half the 420-cycle weave (fixed in
+    // `PropMaterials.canvasClothMaterial`) and half this value.
+    cloth: canvasClothMaterial(0x6d6350),
     // Glass, and it is deliberately not black. A pane lit only by the sky, with
     // a 0.06 roughness and nothing behind it, renders as a hole -- which is how
     // the first pass drew every unlit window on a shaded elevation. Dusty glass
