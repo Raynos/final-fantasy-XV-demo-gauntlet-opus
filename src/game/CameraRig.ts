@@ -553,7 +553,17 @@ export class CameraRig {
     const cp = Math.cos(this.pitch);
     this._dir.set(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp).normalize();
     const right = this._tmp.copy(this._dir).cross(UP).normalize();
-    this._focus.addScaledVector(right, -this.shoulder);
+    // The shoulder offset is a *composition*: it is 0.55 m because 0.55 m at a
+    // 5.6 m arm puts Noctis a third of the way off centre. It is an ANGLE on
+    // screen, and the angle goes as `shoulder / distance`, so at the 0.66 m arm
+    // a boulder crowds the lens to it is eight times what it was authored as --
+    // which is `probes/camlook.mts`' own after-frame, where the fight is finally
+    // visible and Noctis' head is across a quarter of the screen. Scaling it
+    // with the arm keeps the composition the composition. Last frame's
+    // `distance` because this frame's is not solved until the arm is.
+    const shoulderFit = THREE.MathUtils.clamp(
+      this.distance / Math.max(0.5, this.restDistance), 0.3, 1);
+    this._focus.addScaledVector(right, -this.shoulder * shoulderFit);
 
     if (this._first) this._focusSmooth.copy(this._focus);
     else {
