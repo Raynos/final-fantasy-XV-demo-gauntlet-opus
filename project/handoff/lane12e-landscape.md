@@ -126,7 +126,7 @@ one build and a future judged round can be told which half moved.
 ## 3. `weavestat.mts` — built, calibrated, and it returned a negative
 
 **LANDED as an instrument; the measurement it was built for is a NULL, and the
-null is the instrument's, not the fix's.** Commit pending (see "blocked" below).
+null is the instrument's, not the fix's.** `57eb5d4`.
 
 Nothing here could see tell #2: `imagestats` reports means, `edgestat` crossing
 widths, `reliefstat` a band pyramid, and all three score a rock face and a
