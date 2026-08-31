@@ -503,6 +503,17 @@ export class ChocoboHub {
     const poi = worldMap.poiById(hub.poi);
     if (!poi) return null;
     const terrain = this.game.get('Terrain');
+    /*
+     * **The gateway, when the kit has published one.** The start line used to
+     * be the race board's own world-axis offset, and the board has since moved
+     * onto an anchor inside the paddock — so the two had drifted apart and the
+     * bird was coming to the line on grass outside the rail. The gateway is
+     * where a race out of a paddock starts, and it is post-yaw, so it is the
+     * gap in the fence at every site rather than a bearing that happens to be
+     * clear at one.
+     */
+    const gate = this.game.get('Props')?.poiKits?.anchorAt(hub.poi, 'gate');
+    if (gate) return gate.clone();
     const x = poi.x + hub.bdx, z = poi.z + hub.bdz;
     return _v.set(x, terrain ? terrain.heightAt(x, z) : 0, z).clone();
   }
