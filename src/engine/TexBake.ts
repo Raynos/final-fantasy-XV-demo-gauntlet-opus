@@ -253,13 +253,25 @@ export function loadDeferredTexBake(): Promise<boolean> {
   return deferredLoading;
 }
 
-/** Fetch, inflate and index a set of containers. @returns true if any decoded */
+/**
+ * Fetch, inflate and index a set of containers.
+ *
+ * **Parallel on a desktop, serial on the phone.** Inflating one of these costs
+ * tens of MB of transient buffer and a long main-thread decode, and the phone
+ * path has *four* deferred containers arriving at once — 32.6 MB on the wire
+ * and ~100 MB inflated, landing in the first seconds of play, on a link that
+ * is already the slowest thing about the session. Three of those inflates
+ * overlapping is a stall the player reads as the game being broken, and the
+ * peak allocation is what gets a tab killed.
+ *
+ * @returns true if any decoded
+ */
 async function fetchContainers(paths: string[]): Promise<boolean> {
   if (recorder) return false;
   if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return false;
   if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return false;
   const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
-  const got = await Promise.all(paths.map(async (path) => {
+  const one = async (path: string) => {
     try {
       const res = await fetch(base + path);
       if (!res.ok) return false;
@@ -272,7 +284,18 @@ async function fetchContainers(paths: string[]): Promise<boolean> {
     } catch {
       return false;
     }
-  }));
+  };
+  if (demoActive()) {
+    let decoded = false;
+    for (const path of paths) {
+      decoded = (await one(path)) || decoded;
+      // Give the frame loop the thread back between containers. Without it
+      // four decodes run back to back and the game visibly stops.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return decoded;
+  }
+  const got = await Promise.all(paths.map(one));
   return got.some(Boolean);
 }
 
@@ -534,6 +557,11 @@ if (typeof window !== 'undefined') {
     // it is a few hundred milliseconds before anything could ask for a dungeon
     // texel: `Dungeons.enter()` is player-driven and the fetch is local.
     addEventListener('game-ready', () => {
+      // On the phone the wait is longer: the link is the slowest thing in the
+      // session, and 32.6 MB pulled while the player is taking their first
+      // steps competes with the frames they are trying to take them in.
+      // Nothing needs these bytes for several seconds -- the town is 576 m
+      // away and a cave is minutes off.
       requestAnimationFrame(() => setTimeout(() => {
         // ...and compact once they land. Between them the deferred containers
         // are ~100 MB inflated, and an unserved entry pins the WHOLE body for
@@ -542,7 +570,7 @@ if (typeof window !== 'undefined') {
         // these had arrived. A phone tab dies somewhere around 1-1.5 GB, so
         // this is the difference between a long session and a reload.
         void loadDeferredTexBake().then(() => compactTexBake());
-      }, 0));
+      }, demoActive() ? 2500 : 0));
     }, { once: true });
   }
 }

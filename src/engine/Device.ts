@@ -132,6 +132,57 @@ export function touchActive(): boolean { return TOUCH; }
  * disagreement warning at boot. `Msaa.ts`'s own docblock predicted exactly
  * this and asked for the tier to be threaded rather than guessed twice.
  */
+/**
+ * Backing-store scale on the demo path, as a `devicePixelRatio` cap.
+ *
+ * The first device report was *"phone hot, FPS shit"*, and neither is a
+ * content problem — a handset GPU is filling pixels it has no thermal budget
+ * for. `?q=low` already caps the ratio at 1.0, which on a 390 CSS-px iPhone is
+ * still a 1170x2532 panel driven at 390x844 native-equivalent; the fragment
+ * cost of a full deferred-ish forward pass at that size is what cooks it.
+ *
+ * 0.62 renders **38% of the pixels**. That is the single largest GPU lever
+ * available without touching a shader, and on a screen this small the browser's
+ * upscale is much less visible than the frame rate is.
+ *
+ * `?rs=` overrides it, so the trade can be walked back from the URL without a
+ * build — a phone that turns out to have headroom can ask for 1.0.
+ */
+export function renderScale(): number {
+  const want = Number(params().get('rs'));
+  if (Number.isFinite(want) && want > 0.2 && want <= 2) return want;
+  return DEMO ? 0.62 : 1;
+}
+
+/**
+ * Frames per second the demo asks `Game` for.
+ *
+ * Halving the duty cycle is the only heat lever that costs nothing at all:
+ * every joule the GPU does not spend is a degree the phone does not gain, and
+ * a locked 30 reads as smoother than a 40-55 that swings. `?fps=` still wins,
+ * because `Game` reads that first.
+ */
+export function demoFps(): number { return 30; }
+
+/**
+ * Extra density cut on top of the tier's own, demo only.
+ *
+ * `?q=low` already scales vegetation to 0.45 and props to 0.5, and on a
+ * handset that is still too much: the report was *"phone hot, FPS shit"*, and
+ * after the pixel count the next largest lever is how many things are in
+ * front of the camera at all. 0.55 of the low tier lands vegetation near 0.25
+ * of the desktop's.
+ *
+ * It is a multiplier rather than a fourth tier because a tier is a promise
+ * about a *look* and this is a promise about a *device*. `?dens=` overrides,
+ * so the trade is walkable from the URL.
+ */
+export function demoDensity(): number {
+  const want = Number(params().get('dens'));
+  if (Number.isFinite(want) && want > 0 && want <= 1) return want;
+  return DEMO ? 0.55 : 1;
+}
+
 export function resolveQualityTier(): QualityTier {
   const want = params().get('q') || (DEMO ? 'low' : 'high');
   return TIERS.includes(want as QualityTier) ? (want as QualityTier) : 'high';

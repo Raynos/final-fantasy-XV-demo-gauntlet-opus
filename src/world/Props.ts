@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoDensity } from '../engine/Device.ts';
 import type { EcoSite } from './props/EcoSites.ts';
 import { Ecology } from './veg/Ecology.ts';
 import { Rocks } from './props/Rocks.ts';
@@ -62,8 +63,8 @@ export class Props {
   wildlife!: Wildlife;
   async init(game: Game) {
     this.game = game;
-    const quality = game.rnd && game.rnd.quality === 'low' ? 0.5
-      : game.rnd && game.rnd.quality === 'medium' ? 0.75 : 1.0;
+    const quality = (game.rnd && game.rnd.quality === 'low' ? 0.5
+      : game.rnd && game.rnd.quality === 'medium' ? 0.75 : 1.0) * demoDensity();
 
     // Props is the first system to touch a keyed material, so it is where the
     // baked texel cache has to be resident. The fetch started at module

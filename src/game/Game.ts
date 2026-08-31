@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoActive, demoFps } from '../engine/Device.ts';
 import { Renderer, type QualityTier } from '../engine/Renderer.ts';
 import { PostFX } from '../engine/PostFX.ts';
 import { Time } from '../engine/Time.ts';
@@ -210,7 +211,11 @@ export class Game {
      * would be the same blindfold `?shoot=1` already was.
      */
     const fps = Number(qs.get('fps'));
-    this.maxFps = qs.has('fps') && Number.isFinite(fps) && fps >= 0 ? fps : 60;
+    // The demo asks for 30. Halving the duty cycle is the only heat lever that
+    // costs nothing at all, and a locked 30 reads as smoother than a 40-55 that
+    // swings. `?fps=` still wins, so every harness and experiment is unchanged.
+    this.maxFps = qs.has('fps') && Number.isFinite(fps) && fps >= 0 ? fps
+      : demoActive() ? demoFps() : 60;
   }
 
   /**

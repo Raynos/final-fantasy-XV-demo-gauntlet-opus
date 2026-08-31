@@ -274,7 +274,7 @@ export async function texBake(opts: {force?: boolean, quiet?: boolean} = {}): Pr
   const isPhone = tb.isPhoneDeferredKey as (k: string) => boolean;
   const pack = (keep: (k: string) => boolean) => {
     const raw = tb.encodeTexBake(hash, keep) as Uint8Array;
-    return { raw, gz: gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 6 }) };
+    return { raw, gz: gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 9 }) };
   };
   const boot = pack((k) => !isDeferred(k) && !isPhone(k));
   const deferred = pack(isDeferred);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { resolveQualityTier } from './Device.ts';
+import { renderScale, resolveQualityTier } from './Device.ts';
 
 /**
  * The four render quality tiers, worst to best.
@@ -233,7 +233,11 @@ export class Renderer {
    */
   _applyTier(tier: QualityTier) {
     const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+    // `renderScale` is 1 everywhere but the phone demo, where it is the
+    // largest GPU lever in the build: 0.62 fills 38% of the pixels. It
+    // multiplies the tier cap rather than replacing it, so `?q=` still means
+    // what it always did and no harness page is touched.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap) * renderScale());
     this.renderer.shadowMap.enabled = tier !== 'low';
   }
 

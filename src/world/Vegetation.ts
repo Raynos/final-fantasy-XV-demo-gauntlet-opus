@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoDensity } from '../engine/Device.ts';
 import { Ecology } from './veg/Ecology.ts';
 import { GrassField } from './veg/GrassField.ts';
 import { Bushes } from './veg/Bushes.ts';
@@ -42,8 +43,11 @@ export class Vegetation {
   trees!: Trees;
   async init(game: Game) {
     this.game = game;
-    const quality = game.rnd && game.rnd.quality === 'low' ? 0.45
-      : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0;
+    // `demoDensity` is 1 everywhere but the phone, where it takes another
+    // 45% off the low tier's own cut. After the pixel count, how much is in
+    // front of the camera is the largest lever a handset has.
+    const quality = (game.rnd && game.rnd.quality === 'low' ? 0.45
+      : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0) * demoDensity();
 
     bootPhase('Vegetation.ecology', () => {
       this.ecology = new Ecology(game, game.seed ?? 1337);

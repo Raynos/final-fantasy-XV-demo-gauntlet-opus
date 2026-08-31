@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { resolveQualityTier } from '../engine/Device.ts';
 import { CSM } from 'three/examples/jsm/csm/CSM.js';
 import { Atmosphere } from './sky/Atmosphere.ts';
 import { Clouds } from './sky/Clouds.ts';
@@ -499,7 +500,13 @@ export class Sky {
     // PCFSoftShadowMap is deprecated in three 0.185 and blurs the cascades to
     // mush; PCF with a tight normal bias is sharper and cheaper.
     renderer.shadowMap.type = THREE.PCFShadowMap;
-    renderer.shadowMap.enabled = true;
+    // NOT unconditionally. This line read `= true` and it ran AFTER
+    // `Renderer._applyTier` had already turned cascades off for the low tier,
+    // so `?q=low` has been rendering shadow maps for its whole life -- on the
+    // phone, and in `combatloop` and `integration`, both of which load low.
+    // The tier is asked here rather than threaded because `Sky` is the first
+    // system to init and has no game handle yet.
+    renderer.shadowMap.enabled = resolveQualityTier() !== 'low';
     scene.background = null;
     scene.fog = null;            // aerial perspective replaces flat fog
 
