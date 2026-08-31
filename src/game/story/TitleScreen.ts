@@ -1,6 +1,7 @@
 import './title.css';
+import { demoActive } from '../../engine/Device.ts';
 import * as THREE from 'three';
-import { el, svg, letters, clamp, easeOut, easeOutQuint, lerp } from '../../ui/UIKit.ts';
+import { clamp, easeOut, easeOutQuint, el, lerp, letters, svg, uiScale } from '../../ui/UIKit.ts';
 import { Noise } from '../../util/Noise.ts';
 import type { Game } from '../Game.ts';
 
@@ -144,7 +145,7 @@ export class TitleScreen {
   }
 
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     this.root.style.zoom = s.toFixed(4);
   }
 

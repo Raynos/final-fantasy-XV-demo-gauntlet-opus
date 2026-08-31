@@ -1,5 +1,6 @@
 import './ui.css';
-import { el, clamp } from './UIKit.ts';
+import { demoActive } from '../engine/Device.ts';
+import { clamp, el, uiScale } from './UIKit.ts';
 import { PartyPanel } from './PartyPanel.ts';
 import { WeaponWheel } from './WeaponWheel.ts';
 import { CompassBar } from './CompassBar.ts';
@@ -114,7 +115,7 @@ export class HUD {
 
   /** UI is authored at 1600x900; scale it crisply for other viewport sizes. */
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     this.root.style.zoom = s.toFixed(4);
     this.fx.root.style.zoom = s.toFixed(4);
     if (this.hints) this.hints.root.style.zoom = s.toFixed(4);

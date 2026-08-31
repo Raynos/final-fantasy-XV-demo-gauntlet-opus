@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { el, clamp, easeOut, easeOutQuint } from '../../ui/UIKit.ts';
+import { demoActive } from '../../engine/Device.ts';
+import { clamp, easeOut, easeOutQuint, el, uiScale } from '../../ui/UIKit.ts';
 import { button } from '../../ui/Icons.ts';
 import { ensureInteractCss } from './interact.css.ts';
 import type { Game } from '../Game.ts';
@@ -71,7 +72,7 @@ export class InteractPrompt {
 
   /** Authored at 1600x900 like the rest of the UI. */
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     this.root.style.zoom = s.toFixed(4);
     this.uiScale = s;
   }

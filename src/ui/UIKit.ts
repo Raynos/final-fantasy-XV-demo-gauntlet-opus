@@ -83,6 +83,39 @@ export function clear(node: HTMLElement) { while (node.firstChild) node.removeCh
 export function cls(node: Element, name: string, on: unknown) { node.classList.toggle(name, !!on); }
 
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+
+/**
+ * The `zoom` every UI surface applies, in one place.
+ *
+ * Six files carried a byte-identical copy of this — HUD, Menus, TitleScreen,
+ * Letterbox, Dialogue, InteractPrompt — and all six had the same bug, which
+ * only bites on a small screen and so had never been seen: the floor was a
+ * plain `clamp(fit, 0.72, 1.5)`, and a clamp with a floor *raises* a value
+ * below it. At 844x390 the honest fit is 0.433, so the old code returned 0.72
+ * and the root's layout box became 390/0.72 = 542 px against a design authored
+ * at 900. Everything vertical then overflows off-screen. The floor may never
+ * exceed the fit, hence `Math.min(FLOOR, fit)`.
+ *
+ * On any viewport at or above 1152x648 — which is every capture this project
+ * takes — `fit >= 0.72` and this returns exactly what it always returned, so
+ * the corpus is bit-identical.
+ *
+ * The design box is the second half. A phone at the honest 0.433 is legible in
+ * the sense that it fits and unreadable in the sense that matters, so the demo
+ * authors against a smaller box: 844x390 against 1100x620 gives 0.629, a 1.45x
+ * larger UI. That number is a **tuning value read off `ui-shoot` at a phone
+ * viewport**, not a derivation — change it by looking, not by arithmetic.
+ */
+const DESIGN = { w: 1600, h: 900 };
+const DESIGN_PHONE = { w: 1100, h: 620 };
+const SCALE_FLOOR = 0.72;
+const SCALE_CEIL = 1.5;
+
+export function uiScale(phone = false): number {
+  const d = phone ? DESIGN_PHONE : DESIGN;
+  const fit = Math.min(window.innerWidth / d.w, window.innerHeight / d.h);
+  return clamp(fit, Math.min(SCALE_FLOOR, fit), SCALE_CEIL);
+}
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** Frame-rate independent exponential approach. */
 export const damp = (a: number, b: number, lambda: number, dt: number) => lerp(a, b, 1 - Math.exp(-lambda * dt));

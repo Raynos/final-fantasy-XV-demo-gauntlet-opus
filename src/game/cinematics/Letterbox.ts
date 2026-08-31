@@ -1,5 +1,6 @@
 import './cinematics.css';
-import { el, letters, clamp, easeOut, easeOutQuint, Clip } from '../../ui/UIKit.ts';
+import { demoActive } from '../../engine/Device.ts';
+import { clamp, Clip, easeOut, easeOutQuint, el, letters, uiScale } from '../../ui/UIKit.ts';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
@@ -128,7 +129,7 @@ export class Letterbox {
 
   /** The UI is authored at 1600x900; scale it the way the HUD does. */
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     // bars and fades must stay in *screen* units, so only the type is zoomed
     for (const n of [this.line, this.chap, this.obj, this.skip]) n.style.zoom = s.toFixed(4);
     this.uiScale = s;

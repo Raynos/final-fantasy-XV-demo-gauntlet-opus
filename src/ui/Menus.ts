@@ -1,5 +1,6 @@
 import './ui.css';
-import { el, clamp, easeOut, easeOutQuint } from './UIKit.ts';
+import { demoActive } from '../engine/Device.ts';
+import { clamp, easeOut, easeOutQuint, el, uiScale } from './UIKit.ts';
 import { button } from './Icons.ts';
 import { MainScreen } from './screens/MainScreen.ts';
 import { InventoryScreen } from './screens/InventoryScreen.ts';
@@ -252,7 +253,7 @@ export class Menus {
   }
 
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     this.wrap.style.zoom = s.toFixed(4);
   }
 

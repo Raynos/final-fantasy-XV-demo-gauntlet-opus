@@ -1,4 +1,5 @@
-import { el, clear, clamp, easeOut, easeOutQuint } from '../../ui/UIKit.ts';
+import { clamp, clear, easeOut, easeOutQuint, el, uiScale } from '../../ui/UIKit.ts';
+import { demoActive } from '../../engine/Device.ts';
 import { button, portrait } from '../../ui/Icons.ts';
 import { ensureInteractCss } from './interact.css.ts';
 import type { Game } from '../Game.ts';
@@ -161,7 +162,7 @@ export class Dialogue {
   }
 
   _scale() {
-    const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
+    const s = uiScale(demoActive());
     this.root.style.zoom = s.toFixed(4);
   }
 
