@@ -481,7 +481,13 @@ export class Npcs {
   async init(game: Game) {
     this.game = game;
     const town = game.get('Town');
-    if (!town || !town.anchors || !town.local) {
+    // `town._deferred` first: `Hammerhead` allocates `anchors` as an empty
+    // object at the top of its own init, well before `_build` fills it, so the
+    // truthiness test below cannot tell "no town" from "town not built yet" --
+    // and populating against an empty anchor map placed the hunt-board reader
+    // and the counter cook at the origin while their faces regenerated from
+    // scratch, which is the exact 2.5 s the canvas bake exists to avoid.
+    if (!town || town._deferred || !town.anchors || !town.local) {
       // On the demo path this is the NORMAL state at boot, not a fault: the
       // town is built on approach, so there is nothing to populate yet and
       // `update` does it when there is. Everywhere else it is what it always
