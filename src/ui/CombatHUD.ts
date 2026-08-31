@@ -37,6 +37,16 @@ interface Xyz { x: number; y: number; z: number }
  * is the one shape both `_enemies` branches produce. `ref` is what tells them
  * apart: a stand-in has no enemy behind it.
  */
+/** One nameplate's resolved screen placement, before de-collision. */
+interface Placed {
+  pl: Nameplate;
+  cx: number;
+  y: number;
+  scale: number;
+  fade: number;
+  focus: boolean;
+}
+
 interface PlateEnemy {
   /** The real enemy, when there is one. */
   ref?: Enemy;
@@ -347,7 +357,19 @@ export class CombatHUD {
    * @param appear 0..1 combat reveal
    */
   update(dt: number, game: Game, appear: number) {
-    const w = window.innerWidth, h = window.innerHeight;
+    // **In the HUD's own coordinates, not the window's.** `#hud` carries
+    // `style.zoom` (`HUD._scale`, 0.72..1.5), so a `translate(px)` written into
+    // this layer is multiplied by that zoom before it reaches the screen —
+    // which means projecting into `innerWidth`/`innerHeight` puts every
+    // nameplate, reticle, damage number and call-out off by the zoom factor at
+    // any viewport that is not the 1600x900 the UI is authored at. It is
+    // exactly zero at the authoring size, which is why every capture in this
+    // repo agrees with itself and no gate has ever seen it; `InteractPrompt`
+    // is the only projector in the codebase that already compensates
+    // (`InteractPrompt.ts:111`). Three HUD elements drawing at the same screen
+    // point was reported twice this session against a player's own window.
+    const uiScale = (game.get?.('HUD') as { uiScale?: number } | undefined)?.uiScale || 1;
+    const w = window.innerWidth / uiScale, h = window.innerHeight / uiScale;
     const cam = game.camera;
     const e = easeOut(appear);
     this.root.style.opacity = e.toFixed(3);
@@ -542,6 +564,7 @@ export class CombatHUD {
       this.plateLayer.appendChild(node);
       this.plates.push({ node, bar, name, lv, weak, key: '' });
     }
+    const placed: Placed[] = [];
     for (let i = 0; i < this.plates.length; i++) {
       const pl = this.plates[i];
       const e2 = enemies[i];
@@ -575,8 +598,55 @@ export class CombatHUD {
       const focus = !!(this.lockOn && this.lockOn === e2.ref);
       if (pl._focus !== focus) { pl.node.classList.toggle('focus', focus); pl._focus = focus; }
       const cx = clamp(sp.x, 92, w - 92);
-      pl.node.style.transform = `translate(${cx.toFixed(1)}px, ${sp.y.toFixed(1)}px) scale(${scale.toFixed(3)})`;
-      pl.node.style.opacity = (focus ? Math.min(1, fade + 0.28) : fade).toFixed(3);
+      placed.push({ pl, cx, y: sp.y, scale, fade: focus ? Math.min(1, fade + 0.28) : fade, focus });
+    }
+    this._deCollide(placed);
+  }
+
+  /**
+   * Push overlapping nameplates apart, and give up honestly when they cannot be.
+   *
+   * Dens draw 5-8 hostiles where they used to draw 3-5, and at that density two
+   * animals standing side by side project to the same point: the plates
+   * overprinted into `SABERTUSKSABERTUSK` and landed on the party HP rows. The
+   * damage numbers next to them have had a lane dealer since they were written
+   * (`LANES_X`/`LANES_Y`); the plates were edge-clamped and nothing else.
+   *
+   * Nearest first, because the nearest animal is the one you are fighting and
+   * the one whose plate must stay where its head is. Later plates move UP —
+   * away from the creature and into empty sky rather than down across the
+   * fight. Past `MAX_SHOVE` a plate has stopped pointing at its own enemy, so
+   * it is faded out instead of moved further: a label in the wrong place is
+   * worse than no label, and this is the one case where the right answer is to
+   * draw less.
+   */
+  _deCollide(placed: Placed[]) {
+    const PLATE_H = 34, GAP = 5, MAX_SHOVE = 92;
+    const order = placed.slice().sort((a, b) => b.scale - a.scale);
+    const done: Placed[] = [];
+    for (const p of order) {
+      let shove = 0;
+      for (let guard = 0; guard < 12; guard++) {
+        let hit = null;
+        for (const q of done) {
+          const halfW = 76 * (p.scale + q.scale) * 0.5;
+          if (Math.abs(p.cx - q.cx) > halfW * 1.84) continue;
+          const ph = PLATE_H * p.scale, qh = PLATE_H * q.scale;
+          if (p.y + ph + GAP > q.y && p.y < q.y + qh + GAP) { hit = q; break; }
+        }
+        if (!hit) break;
+        const step = (hit.y + PLATE_H * hit.scale + GAP) - p.y;
+        p.y -= Math.max(2, step);
+        shove += Math.max(2, step);
+        if (shove > MAX_SHOVE) break;
+      }
+      if (shove > MAX_SHOVE) p.fade *= 0.18;
+      done.push(p);
+    }
+    for (const p of placed) {
+      p.pl.node.style.transform =
+        `translate(${p.cx.toFixed(1)}px, ${p.y.toFixed(1)}px) scale(${p.scale.toFixed(3)})`;
+      p.pl.node.style.opacity = p.fade.toFixed(3);
     }
   }
 
@@ -671,7 +741,8 @@ export class CombatHUD {
     this.calloutRule.style.width = `${Math.round(rw / 2) * 2}px`;
     this.calloutSub.style.opacity = easeOut(clamp((age - 0.22) / 0.4, 0, 1)).toFixed(3);
     this.calloutNode.style.opacity = (easeOut(clamp(age / 0.16, 0, 1)) * (1 - out)).toFixed(3);
-    // integer scanline: a half-pixel top resamples every glyph in the block
+    // integer scanline: a half-pixel top resamples every glyph in the block.
+    // `h` is the HUD's own height, not the window's — see `update`.
     this.calloutNode.style.top = `${Math.round(h * 0.215 - out * 12)}px`;
   }
 }
