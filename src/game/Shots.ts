@@ -759,6 +759,25 @@ const SHOT_TABLE = {
     time: 17.0, weather: 'clear',
     pos: [-700, 97.4, 180], target: [-880, 50.5, -120], fov: 44,
   },
+  south_road_dawn: {
+    // Route 20, the Old South Road (`RoadGraph.ts` `route20`), on the long
+    // straight between (280, 1880) and Pilgrim's Rest. Derived, not guessed:
+    // `tmp/l21/roadmeteor.mts` walks the route's own node list, stands 30 m
+    // back along the road's tangent and 5 m onto the left shoulder, and takes
+    // the eye height off live terrain. Six candidates on three legs; the two
+    // northern legs have no road in frame at all — the track is a `track`-class
+    // road and its surface only reads once it is running away from the lens,
+    // not when it is crossing it. This is the one leg where it reads.
+    // **Known and NOT this shot's fault: at t 6.9 the sky renders as full
+    // midday blue with no dawn gradient.** The frame is otherwise the corpus's
+    // only look down a dirt track: the road sweeps out of the bottom-centre and
+    // bends left past a treeline, marker stones step down the left verge, and
+    // a signboard and a rock cairn hold the bottom-left corner. It gets its
+    // dawn the day the sky does. See `project/TASKS.md`.
+    doc: 'Dawn on the Old South Road, the track bending away past the treeline',
+    time: 6.9, weather: 'clear',
+    pos: [288.9, 37.1, 1850.9], target: [82, 33.5, 2276], fov: 54,
+  },
   windpump_flats: {
     doc: 'Windpump and stock pens on the flats — the world is worked, not empty',
     time: 7.8, weather: 'clear',
