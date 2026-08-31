@@ -173,6 +173,59 @@ put wild dens 3–5 *over* the party while authored ones sat 4 *under* it, a
 nine-level disagreement falling the wrong way round) and its **count**, which
 lives in `SpawnTables.ts` and belongs to lane 18.
 
+## Third look, at `653a0e3` — the splat is gone, the pileup is not (and now has a cause)
+
+Ten frames of `tmp/shots/lane11c/`, read one at a time in a subagent.
+
+- **The white splat is gone.** Pixels at >=245 in all channels over the bottom
+  60% of the ground region: `engage 1, stagger 37, midfight 30, kill 167,
+  victory 8, after 0` out of 675 000 — and the 167 in `f-kill` are damage-number
+  glyphs, not a ring. Nothing blows out anywhere.
+  **Caveat, stated plainly:** no *translucent* ring was caught either, in any of
+  the ten beats. The ring is 0.6-0.9 s long and the beats simply did not land on
+  one; it is clearly visible at 1.35/0.6 in the posed ablation
+  (`tmp/shots/bloom2/g-d-parry.png`), which is the arm that was actually
+  verified. And `VFX.shockwave` still passes its own 3.4/1.0 and is untouched by
+  the default change — that path is not exercised by these frames at all.
+  The one genuine blow-out left is a hard-clipped white **quad sprite** with
+  visible square corners and a bloom halo, a loot/drop sparkle, not a ground
+  ring. Filed.
+- **The pileup survived `b24d958`.** All five sabertusks simultaneously visible
+  in `f-midfight` and all five inside one ~50-60 degree wedge on the player's
+  right, nothing behind or on the far side, one body drawn straight through
+  another's chest and a third lying across a fourth's back. That is what sent
+  this lane back into `_tickStrafe`, and it found the cause — see below.
+- **`f-engage` is still 85% the dark interior of a boulder.** Unchanged, not
+  this lane's file.
+- **The HUD is worse than reported before**: two `SABERTUSK` plates stacked and
+  touching plus a third on the minimap; in `f-kill` one plate clipped *under*
+  the minimap disc, another over the `LONGWYTHE / LEIDE` label and the `480 M`
+  scale text, six damage numbers piled on each other, and the reward-toast
+  column drawn over the technique list so both are illegible.
+- New, and filed: Gladio's greatsword passes through Prompto's shoulder in
+  `f-victory`; a fourth party member stands inside the camera in `f-after`;
+  `f-kill`'s radial motion blur smears the frame to mush.
+
+## The pileup had a second cause, and it was in `_tickStrafe` (`7fec437`)
+
+`EnemyBase._tickStrafe` carries the comment *"let the whole ring rotate slowly"*
+and did the opposite: the rotation was `this._strafeDir * dt * 0.45`, and
+`_strafeDir` is set once at construction to `(this.id % 2) ? 1 : -1`. **Half of
+every pack circled clockwise and half anticlockwise.** The ring did not rotate,
+it counter-rotated into itself, and each animal walked into the bearing of the
+one coming the other way — undoing `_reslot`'s evenly spread slots within a
+second or two of the first strafe. That is why the frames above still show a
+wedge on a tree where the slot *assignment* was already fixed.
+
+`Pack.strafeDir` is now one value for the whole pack, hashed from the pack id so
+a pack circles the same way across a reload and two neighbouring packs do not
+reliably mirror. The per-member 4.5 s reversal goes with it — a rigidly rotating
+ring is never stale, and reversing per member is a second way for the phase to
+decohere. A **packless** enemy keeps both: it has no ring to stay in phase with.
+
+By construction this moves bearings around the target and not distances to it,
+so nothing should move in `fightshape`. Re-measured anyway.
+
 ## I looked at the frames — and they were not good
 
 Nine frames of round 1 (`tmp/shots/lane11/`, sabertusk den, Longwythe), read one
