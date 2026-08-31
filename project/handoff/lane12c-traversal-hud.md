@@ -69,7 +69,15 @@ top of every full-screen screen). Both are playability, both cheap.
    capture and no gate has ever seen it and it took a human playing in their own
    window to report it. **NOT verified by eye** — needs a combat capture at 5-8
    enemies, and one at a viewport that is not 1600x900.
-6. **Legibility over a bright ground.** Confirmed **still present on the
+6. **Legibility over a bright ground — now VERIFIED by eye.**
+   `tmp/shots/l12c-legib/hud_field.png` against
+   `tmp/shots/l12c-before/hint_over_prompt.png`: the bottom control strip is
+   clearly whiter with a visible ground behind it, and the top-right
+   `M.E. 756 · DAY 1 · MIDDAY` line went from near-invisible grey to legible
+   white. The HUD did not get shouty. **The minimap caption is still the least
+   legible thing in the frame** and is filed — it is a self-contained `<style>`
+   tag in `Minimap.ts` that does not use the ui.css tokens.
+   Confirmed **still present on the
    post-`e848801` build**, so it is not the Float16 white-frame bug: in
    `tmp/shots/l12c-after/hud_field.png` the top-right `M.E. 756 · DAY 1 ·
    MIDDAY` line and the minimap caption are close to invisible over sunlit
@@ -79,8 +87,38 @@ top of every full-screen screen). Both are playability, both cheap.
    `.armiger .ar-note` (`--ink-4`, 8px, no text-shadow: the same defect one
    layer out, and over unblurred terrain rather than a scrim) and a colour step
    on `.clock-day`, `.loc-sub`, `.quest-step`, `.prompt .lb`, `.toast
-   .tz-k`/`.tz-ico`. **NOT verified by eye yet** — re-capture `hud_field` and
-   read it.
+   .tz-k`/`.tz-ico`.
+7. **`_deCollide` is landed but its test frame was too easy.**
+   `tmp/shots/l12c-legib/combat_wide.png` has four well-separated nameplates
+   and no overprint, which proves nothing — the reported failure is at 5-8
+   hostiles in a den. **What that frame DID show is a live instance of the same
+   class one layer over: `BLINDSIDE / ATTACK FROM BEHIND` with `316 CRITICAL`
+   and `284` printed straight through it, and `751 / CRITICAL / 781` stacked
+   top-right.** Filed in TASKS with the note that `hudstack` reported that frame
+   clean only because `.dmg` is not in its `WATCH` list.
+
+## The refusal predicate took three tries, and the third is unconfirmed
+
+This is the one thing a successor must pick up. `slopewalk` measured all three:
+
+| refusal predicate | DEAD-SILENT | what it got wrong |
+|---|---|---|
+| `slip = 1 - grip` | 0 / 15 | **78% slip on a 41.6 deg hill that climbs 12.3 m.** A warning that fires while you are succeeding is one nobody believes the time it is true. |
+| `grip <= 0` (the 58 deg line) | **1 / 15** | a 60 deg face whose local facets sit just *inside* the fade band, where the damped uphill push and the downhill push still cancel |
+| `progress < 0.25` | **6 / 15**, slip 0% everywhere | `progress` is scored against the velocity the slope response PRODUCED, so a character sliding backwards down a cliff scores a perfect 1 |
+| displacement along the pre-slope **wish direction** (`_scoreRefusal`) | **not yet measured** | — |
+
+The last one is what is on `main` now. It is committed rather than held because
+it replaces a state that is measured *bad*, and because an uncommitted edit on a
+shared trunk is served to every co-agent's `--dirty` capture anyway. **Re-run
+`node src/tools/probe.mts src/tools/probes/slopewalk.mts --dirty`. The bar is
+0 of 15 DEAD-SILENT with the eight CLIMBED rows between 40 and 55 deg intact.**
+
+Its commit message says it landed with `SKIP_BUILD_CHECK` because the hook was
+red on two other lanes' in-flight files (`weavestat.mts:102`,
+`WorldMapScreen.ts:603,648`). By the time it actually ran, those were fixed and
+**the hook passed normally** — build, typechecks and four gates all green. The
+message is wrong on that one point and is not being rewritten on a shared trunk.
 
 ## Caveat on the commits
 
@@ -113,6 +151,9 @@ comment, which is where that reasoning needs to live anyway.
 |---|---|---|
 | before | **6 / 15** | never (`slip 0%`, `hint 0%` on every row) |
 | after  | **0 / 15** | on every refusing face |
+
+but see the section below: the predicate that produced that 0/15 was replaced
+twice afterwards, and the version on `main` is not yet confirmed.
 
 Slope census (unchanged by the fix, it is the world): `>50 deg 8.57%`,
 `>55 6.48%`, `>58 5.25%`, `>62 3.80%`, `>66 2.53%` over 42 025 samples.
