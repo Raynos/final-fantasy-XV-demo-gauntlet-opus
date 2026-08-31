@@ -57,6 +57,18 @@ const WANTED = Number(window.__CV_DIST) || 5.3;
 const NX = Number(window.__CV_NX) || 12;
 const NY = Number(window.__CV_NY) || 7;
 const FAR = Number(window.__CV_FAR) || 30;
+/**
+ * Which rig field the paired sweep ablates.
+ *
+ * Was hard-coded to `occluderPush`, the boulder fix. The steep-terrain fix
+ * (`CameraRig.slopeLift`) is a second knob on the same solver, and the pairing
+ * — same world, same poses, solver off then on — is the part worth reusing.
+ * Default unchanged, so every number this probe has ever printed still means
+ * what it meant.
+ *
+ *   --set __CV_ABLATE=slopeLift
+ */
+const ABLATE = String(window.__CV_ABLATE || 'occluderPush');
 
 const focus = new V(), dir = new V(), lens = new V();
 const fwd = new V(), right = new V(), up = new V(), ray = new V();
@@ -102,11 +114,11 @@ const legacyFloor = rig.groundClearance ?? (rig.probeRadius + 0.42);
 function solve(fx, fy, fz, yaw, pitch, out, push) {
   focus.set(fx, fy, fz);
   if (typeof rig._solveLens === 'function') {
-    const was = rig.occluderPush;
-    rig.occluderPush = push;
-    rig._solveLens(g, focus, yaw, pitch, WANTED, out);
-    rig.occluderPush = was;
-    return;
+    const was = rig[ABLATE];
+    rig[ABLATE] = push;
+    const d = rig._solveLens(g, focus, yaw, pitch, WANTED, out);
+    rig[ABLATE] = was;
+    return d;
   }
   const cp = Math.cos(pitch);
   dir.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp).normalize();
@@ -114,6 +126,7 @@ function solve(fx, fy, fz, yaw, pitch, out, push) {
   out.copy(focus).addScaledVector(dir, d);
   const fl = terr.heightAt(out.x, out.z) + legacyFloor;
   if (out.y < fl) out.y = fl;
+  return d;
 }
 
 /**
@@ -130,7 +143,7 @@ function grade(lensP, fx, fy, fz) {
   fwd.multiplyScalar(1 / dl);
   right.copy(fwd).cross(WORLD_UP).normalize();
   up.copy(right).cross(fwd).normalize();
-  let n3 = 0, n8 = 0;
+  let n3 = 0, n8 = 0, open = 0;
   for (let iy = 0; iy < NY; iy++) {
     const sy = (2 * (iy + 0.5) / NY - 1) * th;
     for (let ix = 0; ix < NX; ix++) {
@@ -140,12 +153,21 @@ function grade(lensP, fx, fy, fz) {
         raySolid(lensP.x, lensP.y, lensP.z, ray.x, ray.y, ray.z));
       if (t < 3) n3++;
       if (t < 8) n8++;
+      if (t >= FAR) open++;
     }
   }
   const cells = NX * NY;
   return {
     mud3: n3 / cells,
     mud8: n8 / cells,
+    /**
+     * Fraction of the frame that reaches `FAR` without hitting anything — sky,
+     * horizon, the mesa on the skyline. The playtest's steep-hill complaint is
+     * this number going to zero: "no character, no horizon, no landmarks,
+     * minimap a blank disc". `mud3` does not see it, because a hillside two
+     * metres past Noctis is five metres from the lens and reads as clear.
+     */
+    open: open / cells,
     clear: lensP.y - terr.heightAt(lensP.x, lensP.z),
     inRock: !!(occ && occ.count && occ.inside(lensP.x, lensP.y, lensP.z, rig.probeRadius)),
     see: sees(lensP.x, lensP.y, lensP.z, fx, fy, fz)
@@ -154,15 +176,32 @@ function grade(lensP, fx, fy, fz) {
 }
 /** One column of the report. */
 const col = () => ({ poses: 0, blind: 0, inRock: 0, mud3: 0, mud8: 0, clear: 0,
-  half: 0, nine: 0, worstClear: 1e9 });
-const tally = (c, m) => {
+  half: 0, nine: 0, worstClear: 1e9, arm: 0, shortArm: 0, open: 0, walled: 0,
+  sPoses: 0, sArm: 0, sShort: 0, sOpen: 0, sWalled: 0, sMud8: 0 });
+const tally = (c, m, steep) => {
   c.poses++; c.mud3 += m.mud3; c.mud8 += m.mud8; c.clear += m.clear;
   if (!m.see) c.blind++;
   if (m.inRock) c.inRock++;
   if (m.mud3 > 0.5) c.half++;
   if (m.mud3 > 0.9) c.nine++;
   if (m.clear < c.worstClear) c.worstClear = m.clear;
+  c.arm += m.arm; c.open += m.open;
+  if (m.arm < SHORT_ARM) c.shortArm++;
+  if (m.open < WALLED) c.walled++;
+  if (steep) {
+    c.sPoses++; c.sArm += m.arm; c.sOpen += m.open; c.sMud8 += m.mud8;
+    if (m.arm < SHORT_ARM) c.sShort++;
+    if (m.open < WALLED) c.sWalled++;
+  }
 };
+/**
+ * The playtest measured the defect as an arm length: "camera distance collapsed
+ * 5.2 m -> 1.4 m as I climbed". 2.5 m is where Noctis' own shoulder starts
+ * taking the frame, and it is what a 30-degree slope crushes a 5.3 m arm to.
+ */
+const SHORT_ARM = Number(window.__CV_SHORT) || 2.5;
+/** Below this much visible distance the frame is "a featureless wall". */
+const WALLED = Number(window.__CV_WALLED) || 0.05;
 const ON = col(), OFF = col();
 const lensOff = new V();
 
@@ -193,11 +232,13 @@ for (let ox = -EXT; ox <= EXT; ox += STEP) {
       const yaw = (a / YAWS) * Math.PI * 2;
       for (const pitch of PITCHES) {
         const fy = h0 + 1.62;
-        solve(gx, fy, gz, yaw, pitch, lens, true);
+        const armOn = solve(gx, fy, gz, yaw, pitch, lens, true);
         const on = grade(lens, gx, fy, gz);
-        solve(gx, fy, gz, yaw, pitch, lensOff, false);
+        on.arm = armOn ?? lens.distanceTo(focus.set(gx, fy, gz));
+        const armOff = solve(gx, fy, gz, yaw, pitch, lensOff, false);
         const off = grade(lensOff, gx, fy, gz);
-        tally(ON, on); tally(OFF, off);
+        off.arm = armOff ?? lensOff.distanceTo(focus.set(gx, fy, gz));
+        tally(ON, on, steep); tally(OFF, off, steep);
         poses++;
         hist[Math.min(9, Math.floor(on.mud3 * 10))]++;
         if (steep) {
@@ -221,6 +262,7 @@ const pc = (n, d) => `${(100 * n / Math.max(1, d)).toFixed(2)}%`;
 worst.sort((p, q) => (q.was - p.was) || (q.mud3 - p.mud3));
 const out = [];
 out.push(`solver: ${typeof rig._solveLens === 'function' ? '_solveLens (fixed)' : '_armDistance + floor (legacy)'}`);
+out.push(`ablating rig.${ABLATE} (ON = ${JSON.stringify(rig[ABLATE])})`);
 out.push(`poses ${poses}  (${sPoses} on ground steeper than 15 deg)  rays ${NX}x${NY}  arm ${WANTED} m  far ${FAR} m`);
 out.push(`centred on the player at (${OX}, ${OZ}), half-width ${EXT} m, step ${STEP} m`);
 if (occ) out.push(`boulder proxies in the last window: ${occ.count} of ${occ.scanned} instances scanned, ${occ.lastMs.toFixed(3)} ms, ${occ.rebuilds} rebuilds`);
@@ -235,6 +277,18 @@ row('mean mud3', (ON.mud3 / ON.poses).toFixed(4), (OFF.mud3 / OFF.poses).toFixed
 row('mean mud8', (ON.mud8 / ON.poses).toFixed(4), (OFF.mud8 / OFF.poses).toFixed(4));
 row('mean clearance, m', (ON.clear / ON.poses).toFixed(2), (OFF.clear / OFF.poses).toFixed(2));
 row('min clearance, m', ON.worstClear.toFixed(2), OFF.worstClear.toFixed(2));
+row('mean arm, m', (ON.arm / ON.poses).toFixed(2), (OFF.arm / OFF.poses).toFixed(2));
+row(`arm crushed below ${SHORT_ARM} m`, pc(ON.shortArm, ON.poses), pc(OFF.shortArm, OFF.poses));
+row('mean frame reaching the horizon', (ON.open / ON.poses).toFixed(4), (OFF.open / OFF.poses).toFixed(4));
+row('WALLED (no horizon anywhere in frame)', pc(ON.walled, ON.poses), pc(OFF.walled, OFF.poses));
+out.push('');
+out.push(`  the same rows on ground steeper than 15 deg only (${ON.sPoses} poses):`);
+row('mean arm, m', (ON.sArm / Math.max(1, ON.sPoses)).toFixed(2), (OFF.sArm / Math.max(1, OFF.sPoses)).toFixed(2));
+row(`arm crushed below ${SHORT_ARM} m`, pc(ON.sShort, ON.sPoses), pc(OFF.sShort, OFF.sPoses));
+out.push('');
+row('mean frame reaching the horizon', (ON.sOpen / Math.max(1, ON.sPoses)).toFixed(4), (OFF.sOpen / Math.max(1, OFF.sPoses)).toFixed(4));
+row('WALLED (no horizon anywhere in frame)', pc(ON.sWalled, ON.sPoses), pc(OFF.sWalled, OFF.sPoses));
+row('mean mud8', (ON.sMud8 / Math.max(1, ON.sPoses)).toFixed(4), (OFF.sMud8 / Math.max(1, OFF.sPoses)).toFixed(4));
 out.push('');
 out.push(`  on steep ground (>15 deg), push-out ON: blind ${pc(sBlind, sPoses)}, >50% mud ${pc(sHalf, sPoses)}, >90% ${pc(sNine, sPoses)}, mean mud3 ${(sMud3 / Math.max(1, sPoses)).toFixed(4)}`);
 out.push(`  mud3 histogram, push-out ON (0.0 .. 1.0 in tenths): ${hist.join(' ')}`);
