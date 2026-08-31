@@ -426,7 +426,32 @@ shadow, a windmill silhouette, garulas at different depths. **The fight frames
 are not.** By `BRIEF.md`'s bar this is not done, and the remaining work is
 mostly not in `src/combat/` or `src/game/encounters/`.
 
-## Both perf gates — **verified PASS, on a CONTENDED box**
+## Both perf gates re-certified at `cf163cb` — **PASS, exit 0, still CONTENDED**
+
+Taken behind `daemon.mts --wait exclusive-free --for 600`. The box was **not**
+quiet and this time that is honest rather than the `contention()` weakness — the
+verdict names tools that were demonstrably running concurrently:
+
+```
+perf      VERDICT: CONTENDED (another lane is running drawcheck, probe, sheet, texbake)
+          PASS: every certified shot >= 60 fps, on a ruler that validated itself
+          per-shot floors: 163/163 shots clear the 60 fps target by more than their own noise
+          noise floor (hero_closeup, 24 ABBA pairs): IQR 0.20 ms, bias +0.00 ms
+          PERF EXIT=0
+gameplay  VERDICT: CONTENDED (drawcheck, facecheck, framecam, probe, sheet, shoot, texbake)
+          PASS: every segment >= 60 fps, on a ruler that validated itself
+          noise floor (walking): start IQR 0.58 ms / end IQR 0.23 ms = 12% of the 4.9 ms median
+          GAMEPLAY EXIT=0
+```
+
+So the second density increase — authored territories now drawing 5-7 hostiles
+where they drew 3-5, and ten territories at four engage tokens instead of three
+— **costs the perf gates nothing measurable**, exactly as the wild-roster
+increase did. The noise floor validated itself on both gates, which is what
+makes a PASS on a contended box worth quoting: the ruler is 0.20 ms wide against
+a 3.9 ms frame.
+
+## (earlier) Both perf gates — **verified PASS, on a CONTENDED box**
 
 Taken behind `daemon.mts --wait exclusive-free`, which returned `exclusive-free
 after 0.0 s`. Both gates nevertheless printed `VERDICT: CONTENDED` naming other
