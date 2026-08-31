@@ -76,6 +76,20 @@ export class StorySystem {
     this.title = new TitleScreen(game.uiRoot, game);
     this.title.onChoose = (pick: TitleChoice) => this._titleChoice(pick);
 
+    // Losing the WebGL context costs a reload, and on a phone the ordinary
+    // cause is the player taking a call — so the reload has to land back where
+    // they were rather than at the title screen. The renderer asks; this
+    // answers with a save and the query string to come back on, carrying
+    // whatever mode this page was actually running.
+    if (game.rnd) {
+      game.rnd.onContextRestored = () => {
+        try { this.rpg?.save?.('auto'); } catch { /* a full disk must not block the reload */ }
+        const p = new URLSearchParams(location.search);
+        p.set('continue', '1');
+        return p.toString();
+      };
+    }
+
     /** Current chapter number. Mirrors `rpg.chapter` but leads it. */
     this.chapterN = 0;
     this.chapter = null;

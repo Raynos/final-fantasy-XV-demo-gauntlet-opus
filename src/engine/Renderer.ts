@@ -34,6 +34,17 @@ export class Renderer {
   _onResize: () => void;
   /** Set by `Game`; called with the new backbuffer size on every resize. */
   onResize: ((w: number, h: number) => void) | null = null;
+  /**
+   * Set by whoever knows how to come back.
+   *
+   * A lost WebGL context costs a reload — the CPU copies of 103 MB of
+   * generated texels are freed after upload and cannot be re-uploaded — and
+   * on a phone the ordinary cause is the player taking a call. Returning this
+   * hook a search string is how `StorySystem` turns that reload into a
+   * continue rather than a trip back to the title. `Renderer` never learns
+   * what a save is; it just uses the string.
+   */
+  onContextRestored: (() => string | null) | null = null;
   camera: THREE.PerspectiveCamera;
   container: HTMLElement;
   isWebGL2: boolean;
@@ -127,10 +138,68 @@ export class Renderer {
           + ' freed after upload, so this page now draws empty maps. Reload it.');
         return;
       }
+      this._reloadIntoSession();
+    });
+  }
+
+  /**
+   * Reload, but survivably.
+   *
+   * Keeping the texels resident is not the alternative: `TextureGen` measures
+   * them at 103.0 MB over 221 `DataTexture`s, which is most of a phone tab's
+   * whole budget. So the reload stays, and the three things that made it hurt
+   * go away.
+   *
+   * **Never while hidden.** Backgrounding a tab is the ordinary way a phone
+   * loses its context, and reloading a page nobody is looking at throws the
+   * boot away and does it again when they come back. Deferred to the next
+   * `visibilitychange`, which is the moment the reload is actually wanted.
+   *
+   * **Back into the session, not to the title.** `onContextRestored` is set by
+   * `StorySystem`, which saves and returns a search string carrying `continue`
+   * plus whatever `q`/`demo`/`touch` this page was running — `RpgSystem.init`
+   * already honours `?continue`. `Renderer` never learns what `RpgSystem` is.
+   *
+   * **Never in a loop.** A `sessionStorage` counter survives the reload; on
+   * the third restore it logs and stays up rather than cycling forever on a
+   * device that cannot hold a context at all.
+   */
+  _reloadIntoSession() {
+    const KEY = 'ffxv:ctxlost';
+    let n = 0;
+    try { n = Number(sessionStorage.getItem(KEY) || 0) + 1; sessionStorage.setItem(KEY, String(n)); } catch { n = 1; }
+    if (n >= 3) {
+      console.error(`[Renderer] WebGL context restored ${n} times this session —`
+        + ' staying up rather than reloading again. The page will draw empty maps.');
+      return;
+    }
+    const go = () => {
+      const search = this.onContextRestored ? this.onContextRestored() : null;
       console.warn('[Renderer] WebGL context restored — reloading, because the CPU copies of the'
         + ' generated textures were freed after upload and cannot be re-uploaded');
-      location.reload();
-    });
+      this._navigate(search);
+    };
+    if (typeof document !== 'undefined' && document.hidden) {
+      document.addEventListener('visibilitychange', function once() {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', once);
+        go();
+      });
+      return;
+    }
+    go();
+  }
+
+  /**
+   * The one line that actually navigates. A method rather than an inline
+   * `location.reload()` so `_probe/ctxloss.mts` can exercise the deferral and
+   * the loop guard without the page navigating out from under the probe --
+   * `location.reload` is not assignable, so there is no way to stub it from
+   * outside.
+   */
+  _navigate(search: string | null) {
+    if (search != null) location.search = search;
+    else location.reload();
   }
 
   get domElement() { return this.renderer.domElement; }
