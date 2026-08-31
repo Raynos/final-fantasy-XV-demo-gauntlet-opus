@@ -212,6 +212,16 @@ export const ARTIFACTS: BakeArtifact[] = [
     regenerable: true, remedy: 'pnpm run build  (the vite plugin bakes it)', bootCostSec: 7,
   },
   {
+    // Written by the same `bake` run off the same source hash and stamped in
+    // `terrain.json` rather than one of its own: one bake split across two
+    // files so a `?q=low` page does not pay 8.29 MB for texels it decodes and
+    // discards. `bootCostSec` is the layer synthesis a page above low pays
+    // when this is missing.
+    file: 'terrainl.bin.gz', stamp: 'terrain.json', sources: TERRAIN_SOURCES,
+    what: 'the six PBR layer textures, fetched only above ?q=low',
+    regenerable: true, remedy: 'pnpm run build  (the vite plugin bakes it)', bootCostSec: 1.1,
+  },
+  {
     file: 'tex.bin.gz', stamp: 'tex.json', sources: TEX_SOURCES,
     what: '143 procedural DataTextures (src/engine/TexBake.ts)',
     regenerable: true, remedy: 'node src/tools/texbake.mts --force', bootCostSec: 4,

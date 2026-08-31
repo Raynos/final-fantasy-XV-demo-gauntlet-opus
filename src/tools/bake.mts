@@ -31,6 +31,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  */
 export const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'terrain.bin.gz');
+/** The PBR layer texels, fetched only above `?q=low`. Same hash, same stamp. */
+const LAYER_OUT = path.join(BAKE_DIR, 'terrainl.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'terrain.json');
 
 /**
@@ -49,7 +51,10 @@ export async function sourceHash(): Promise<string> { return hashSources(TERRAIN
 
 /** @returns true when the artifact already matches the sources */
 export async function isFresh(): Promise<boolean> {
-  if (!existsSync(OUT) || !existsSync(STAMP)) return false;
+  // Both halves: a tree with one and not the other is a half-applied bake, and
+  // the symptom -- every page above q=low synthesising six PBR layers it has
+  // already paid to have baked -- is a second of boot nobody would attribute.
+  if (!existsSync(OUT) || !existsSync(LAYER_OUT) || !existsSync(STAMP)) return false;
   try {
     const stamp = JSON.parse(await readFile(STAMP, 'utf8'));
     return stamp.hash === (await sourceHash()) && (await stat(OUT)).size > 1024;
@@ -66,7 +71,7 @@ export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise
   const t0 = Date.now();
 
   const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.ts')).href);
-  const { encodeField } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.ts')).href);
+  const { encodeField, encodeLayers } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.ts')).href);
   const { buildLayerData } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Layers.ts')).href);
 
   log('building terrain field (2048^2 heightfield + 420k-droplet erosion)...');
@@ -78,14 +83,26 @@ export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise
   const layers = buildLayerData(512);
 
   const hash = await sourceHash();
-  const raw = encodeField(field, { seed: 1337, hash }, layers);
+  // ONE bake, TWO containers, one hash, one stamp. The six PBR layers are
+  // 8.29 MB of the 25.51 and a `?q=low` page decodes and discards every one of
+  // them, so they go in a file that only a page which can use them fetches.
+  const raw = encodeField(field, { seed: 1337, hash }, null);
   const gz = gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 9 });
+  const rawL = encodeLayers(layers, { seed: 1337, hash });
+  const gzL = gzipSync(Buffer.from(rawL.buffer, rawL.byteOffset, rawL.byteLength), { level: 9 });
 
   await mkdir(BAKE_DIR, { recursive: true });
   await writeFile(OUT, gz);
-  await writeFile(STAMP, JSON.stringify({ hash, bytes: gz.length, raw: raw.length, at: new Date().toISOString() }, null, 2));
+  await writeFile(LAYER_OUT, gzL);
+  await writeFile(STAMP, JSON.stringify({
+    hash, bytes: gz.length, raw: raw.length,
+    layers: { bytes: gzL.length, raw: rawL.length },
+    at: new Date().toISOString(),
+  }, null, 2));
   log(`wrote ${path.relative(ROOT, OUT)} — ${(gz.length / 1e6).toFixed(1)} MB gz `
     + `(${(raw.length / 1e6).toFixed(1)} MB raw) in ${((Date.now() - t0) / 1000).toFixed(1)} s total`);
+  log(`  + ${path.relative(ROOT, LAYER_OUT)} — ${(gzL.length / 1e6).toFixed(1)} MB gz, `
+    + `fetched only above ?q=low`);
   return true;
 }
 

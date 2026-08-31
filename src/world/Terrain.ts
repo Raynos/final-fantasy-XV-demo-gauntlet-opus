@@ -163,13 +163,18 @@ export class Terrain implements Ground {
     // A baked heightfield is just the cached output of `Field.build()` — same
     // generator, same seed, run in the build step instead of on every page
     // load. Missing or stale artifacts fall through to generating in place.
-    const baked = await bootPhase('Terrain.bake', () => loadBaked());
+    // The tier is read BEFORE the fetch, because it decides whether the 8.29 MB
+    // layer container is fetched at all: at `low` this code has always taken
+    // the baked 512 texels, found them the wrong size, thrown them away and
+    // synthesised 256 ones instead. Not fetching them is the same behaviour
+    // without the download.
+    const quality = game.rnd ? game.rnd.quality : 'high';
+    const layerSize = quality === 'low' ? 256 : 512;
+    const baked = await bootPhase('Terrain.bake', () => loadBaked(layerSize === 512));
     if (baked) bootPhase('Terrain.apply', () => baked.applyTo(this.field));
     else bootPhase('Terrain.field', () => this.field.build());
     this.road = this.field.roadSpline;
 
-    const quality = game.rnd ? game.rnd.quality : 'high';
-    const layerSize = quality === 'low' ? 256 : 512;
     // The regional palette rides in two extra layers of the detail array rather
     // than a sampler of its own — see `terrain/Biome.ts`. It is not baked: it
     // costs a few milliseconds and depends on the cartography, not on the layer

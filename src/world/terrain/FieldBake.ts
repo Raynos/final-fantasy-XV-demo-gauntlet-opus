@@ -21,6 +21,22 @@ import {
 
 /** Where the build step drops the artifact, relative to the site root. */
 export const BAKE_PATH = 'baked/terrain.bin.gz';
+/**
+ * The six PBR layer textures, in a container of their own.
+ *
+ * 8.29 MB gz of 25.51, and **a `?q=low` page decodes every byte of it and
+ * throws the result away.** `Terrain.init` picks a 256 layer size at low and
+ * the bake is authored at 512, so `buildLayerTextures` takes the mismatch,
+ * discards the baked texels and synthesises 256 ones instead — which is
+ * exactly what it does when there are no baked layers at all. So a low page
+ * paying for this file gets nothing whatsoever for the money.
+ *
+ * The split is at the file rather than at a section offset for the same reason
+ * the texture tiers are: the container is one gzip member with its index at the
+ * front, so there is no way to read part of it without inflating all of it, and
+ * `Content-Encoding: gzip` defeats HTTP Range on most hosts anyway.
+ */
+export const LAYER_BAKE_PATH = 'baked/terrainl.bin.gz';
 
 /**
  * Serialise the expensive half of a built `Field`.
@@ -61,18 +77,25 @@ export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData
     { name: 'hydro', kind: 'planes8', w: HYD_N, h: HYD_N, ch: 4, bytes: encodePlanes8(field.hydro, HYD_N, HYD_N, 4) },
     { name: 'roadY', kind: 'f32', bytes: new Uint8Array(roadY.buffer) },
   ];
-  if (layers) {
-    const { size, detailSize, albedo, surf, detail } = layers;
-    // Six PBR layers plus two detail maps, all synthesised per texel — about a
-    // second of boot that is identical on every load.
-    sections.push(
-      { name: 'layerAlbedo', kind: 'planes8', w: size, h: size * LAYER_COUNT, ch: 4, bytes: encodePlanes8(albedo, size, size * LAYER_COUNT, 4) },
-      { name: 'layerSurf', kind: 'planes8', w: size, h: size * LAYER_COUNT, ch: 4, bytes: encodePlanes8(surf, size, size * LAYER_COUNT, 4) },
-      { name: 'layerDetail', kind: 'planes8', w: detailSize, h: detailSize * 2, ch: 4, bytes: encodePlanes8(detail, detailSize, detailSize * 2, 4) },
-    );
-    sections.push({ name: 'layerMeta', kind: 'json', bytes: new TextEncoder().encode(JSON.stringify({ size, detailSize })) });
-  }
   return packContainer({ ...meta, N, FAR_N }, sections);
+}
+
+/**
+ * Pack the layer texels into their own container. Build step only.
+ *
+ * One bake, two files, the same source hash and the same stamp — the split is
+ * about *who fetches it*, not about what it is. See {@link LAYER_BAKE_PATH}.
+ */
+export function encodeLayers(layers: LayerData, meta: BakeMeta = {}): Uint8Array {
+  const { size, detailSize, albedo, surf, detail } = layers;
+  // Six PBR layers plus two detail maps, all synthesised per texel — about a
+  // second of boot that is identical on every load.
+  return packContainer(meta, [
+    { name: 'layerAlbedo', kind: 'planes8', w: size, h: size * LAYER_COUNT, ch: 4, bytes: encodePlanes8(albedo, size, size * LAYER_COUNT, 4) },
+    { name: 'layerSurf', kind: 'planes8', w: size, h: size * LAYER_COUNT, ch: 4, bytes: encodePlanes8(surf, size, size * LAYER_COUNT, 4) },
+    { name: 'layerDetail', kind: 'planes8', w: detailSize, h: detailSize * 2, ch: 4, bytes: encodePlanes8(detail, detailSize, detailSize * 2, 4) },
+    { name: 'layerMeta', kind: 'json', bytes: new TextEncoder().encode(JSON.stringify({ size, detailSize })) },
+  ]);
 }
 
 /**
@@ -163,7 +186,20 @@ export function bakedLayers(buf: Uint8Array): LayerData | null {
  * the generator when it misses.
  *
  */
-export async function loadBaked(): Promise<{applyTo: (f: Field) => void, layers: () => LayerData | null} | null> {
+/** Fetch and inflate one container, or null. Shared by the two halves. */
+async function fetchContainer(url: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
+    const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
+    const buf = new Uint8Array(await new Response(body).arrayBuffer());
+    unpackContainer(buf);
+    return buf;
+  } catch { return null; }
+}
+
+export async function loadBaked(wantLayers = true): Promise<{applyTo: (f: Field) => void, layers: () => LayerData | null} | null> {
   if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return null;
   // `?nobake=1` forces the generator path, so the two can be A/B'd in one
   // session and a suspected bake bug can always be ruled out from the URL.
@@ -180,7 +216,12 @@ export async function loadBaked(): Promise<{applyTo: (f: Field) => void, layers:
     const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
     const buf = new Uint8Array(await new Response(body).arrayBuffer());
     unpackContainer(buf);            // validates magic and format version
-    return { applyTo: (f) => applyBakedField(f, buf), layers: () => bakedLayers(buf) };
+    // The layer container is fetched only when the caller can use it. Its
+    // absence is the same as any other cache miss — `buildLayerTextures`
+    // synthesises instead — which is precisely what a `?q=low` page already
+    // did with these bytes after paying for them.
+    const layerBuf = wantLayers ? await fetchContainer(base + LAYER_BAKE_PATH) : null;
+    return { applyTo: (f) => applyBakedField(f, buf), layers: () => (layerBuf ? bakedLayers(layerBuf) : null) };
   } catch (e: unknown) {
     // A missing or stale artifact must never be fatal: the generator is still
     // the source of truth and is only slower, never different.
