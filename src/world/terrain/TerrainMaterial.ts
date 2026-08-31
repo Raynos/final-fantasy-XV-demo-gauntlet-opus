@@ -687,6 +687,20 @@ void tf_shade() {
     clamp(max(length(rawN), length(N.xz)), 0.0, 1.0),
     clamp(length(N.xz), 0.0, 1.0),
     smoothstep(900.0, 2200.0, vTDist));
+  // ?post=nostructfade -- the hand-back to the filtered normal removed, so the
+  // strata and the runnels stay switched on past 2.2 km.
+  //
+  // Round 17's tell #4 has a second half nobody has taken: "distant mountains
+  // rendered as untextured cones". Everything below this line is gated on
+  // structSlope crossing 0.295-0.34, and past 2200 m structSlope is
+  // length(N.xz) off a normal that tf_surfNormal has deliberately low-passed --
+  // which flattens a distant face toward zero and switches the whole detail
+  // block off. The comment above already names that mechanism and mitigates it
+  // out to 2.2 km; beyond that it is unmitigated, and beyond that is where the
+  // cones are. This token is how to price extending the fade, and the cost it
+  // is being weighed against is the horizon hatch the fade exists to stop --
+  // which is a CRAWL, so a still frame is not enough to clear it.
+  ${ABLATE.has('nostructfade') ? 'structSlope = clamp(max(length(rawN), length(N.xz)), 0.0, 1.0);' : ''}
 
   // ---- analytic relief, in metres, at every distance -----------------------
   //
