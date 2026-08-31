@@ -478,7 +478,15 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // 0.36 + 0.16 * luminance is 0.364 on Noctis (+19%) and 0.44 on Prompto
   // (-2%), i.e. it lifts the head that is short and leaves the head that is
   // hot where it is. One variable, and it cannot touch blond's top end.
-  kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.36 + 0.16 * luminance );
+  //
+  // Measured, and the response is linear enough to budget with: Noctis went
+  // p5 0 -> 1, p50 24 -> 28 (+17% for a +19% weight), p99.5 129 -> 132, and
+  // Prompto did not move (12 / 75 / 205 -> 13 / 76 / 205). So the same argument
+  // taken one step further -- 12.3 says the weight is essentially flat, and
+  // 0.36/0.44 is still a 1.21x spread. 0.44 + 0.05 * lum is 0.441 on Noctis
+  // (+21%) and 0.465 on Prompto (+6%), which should land both medians on the
+  // plate (37 and 81) from underneath.
+  kk += uSunColor * skyVis * 0.18 * strand * fillC * ( 0.44 + 0.05 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
