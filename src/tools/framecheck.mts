@@ -64,7 +64,10 @@
  *    it may not *average* one.
  *
  * Whole-corpus run at that sha: **PASS, worst white 18.8%, highest scene mean
- * 0.76, 0 NaN pixels in 166 shots.**
+ * 0.76, 0 NaN pixels in 166 shots.** A second run on a busy tree read 19.1% and
+ * 0.75 — 0.3 of a point apart, which is the reproducibility to quote before
+ * anyone reads a movement off this gate. **358.6 s** wall, one browser worker,
+ * with three other jobs running; that is the `cost` in `check.mts`.
  *
  * These are floors on absurdity, not on taste. A gate that fires on an ugly
  * frame would be turned off within the week; this one fires on a frame that is

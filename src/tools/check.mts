@@ -244,7 +244,7 @@ const GATES: Gate[] = [
   // produced it, so it also says whether the scene or the post chain is at
   // fault. Subsumes `probes/nanscan.mts` at no extra read. NOT pixelBlind --
   // it is the one gate here whose entire subject is the pixels.
-  { name: 'framecheck', gate: true, script: 'framecheck.mts', expect: '166 shots, none blown or blank', kind: 'browser', cost: 200 },
+  { name: 'framecheck', gate: true, script: 'framecheck.mts', expect: '166 shots, none blown or blank', kind: 'browser', cost: 360 },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
   { name: 'reachcheck', pixelBlind: true, script: 'reachcheck.mts', expect: 'every must-run path executes', kind: 'browser', cost: 49 },
