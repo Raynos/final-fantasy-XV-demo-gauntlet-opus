@@ -3160,3 +3160,40 @@ reaches collision only through `groundAt`, so making boulders standable would le
 the Regalia drive up them. Filed rather than landed, and it wants `roadcheck`
 if anyone takes it.
 
+
+## Two camera instruments, opposite blind spots, and a fix that measured 6x while doing nothing
+
+`probes/camview.mts` grades thousands of **standing** poses and is the quotable
+paired sweep. `probes/camsteep.mts` drives a **sprint** into a slope and is the
+one that reproduces the playtest's frame. A slope-lift fix measured **10.59% ->
+1.68%** on camview's steep poses and, in the same tree, changed nothing at all
+live: 34.37% against 35.67%, a null result.
+
+Neither number was wrong. camview places the lens from a **standing** focus, and
+so has **no velocity look-ahead in it** — and the look-ahead was the entire
+defect. It walks the focus up to `lookAheadMax` = 2.2 m along the direction of
+travel, which into a 40-degree slope is six metres of rise, so the point the
+camera orbits is *inside the hill*:
+
+    focus (-302.3, 44.0, -266.8)   ground under focus 46.2
+    armAt +0.00:1.10 +0.11:1.10 +0.22:1.10 +0.33:1.10 +0.44:1.10 +0.55:1.10
+
+From a buried origin every arm sweep is a hit on its first step and returns
+`minDistance` **at every orientation** — the second line. No arm length and no
+pitch escapes a hill the orbit is centred inside, so a fix aimed at the arm or
+at the pitch could not possibly fire, and a sweep that never simulates motion
+could not possibly notice.
+
+The general shape: **an instrument that samples poses rather than playing them
+is blind to every term that only exists while moving** — look-ahead, damping
+lag, streaming, and where the feet land. Quote it for what it holds fixed, and
+reproduce the complaint with something that moves before believing a fix.
+
+## `PartBuilder` merges one mesh per material, so a POI's per-mesh bounding box is the whole camp
+
+`PoiKits` builds a haven from dozens of pieces and `PartBuilder.build` emits
+**one merged mesh per material** — a whole camp is twelve meshes. So
+`new THREE.Box3().setFromObject(mesh)` on a kit child is not "the tent" or "the
+awning", it is every cloth object on the site at once. Anything that wants
+per-object proxies out of a kit (camera occlusion, collision, a picker) has to
+go to triangles; there is no per-part object to read.
