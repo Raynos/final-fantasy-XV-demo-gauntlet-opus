@@ -2936,3 +2936,50 @@ never rendered.
 believe it.** Related and recorded above: `applyShot` on a cold page returns a
 white rectangle until ~200 settle steps.
 
+## A disposed PMREM silently rebinds to a 1x1 black texture
+
+The Regalia rendered as **a flat black silhouette from every angle in full
+midday sun** — reported by a blind playtester as "the car in the middle of it
+looks unfinished", and it had been that way indefinitely.
+
+`RegaliaSystem.init` pinned `scene.environment`. **`Sky._updateEnv` disposes that
+render target on every time-of-day change**, and three.js then **silently rebinds
+`emptyTextures`** — a 1x1 black. The car's `chrome` material is `metalness 1.0`,
+so the environment map is its **only** light source. Black in, black out, no
+warning, no error.
+
+**Never hold a reference to a render target another system owns and disposes.**
+And when a `metalness 1.0` material renders black, suspect its environment
+binding before its albedo — a fully metallic surface has no diffuse term to fall
+back on, so an unbound env map is indistinguishable from black paint.
+
+## `E` with no prompt fires a warp-strike, so pressing it walks you away
+
+The playtest's *"stood in Hammerhead, pressed INTERACT ten times, nothing"* had a
+second half nobody guessed: with no prompt in reach, `E` falls through to
+warp-strike (`CombatSystem.ts:1529`). **Each of those ten presses teleported the
+player further from the shop they were standing next to.**
+
+The interactable itself was real — the garage counter was **7.0 m away against a
+2.6 m reach**, and the diner's anchor was **inside a sealed building**.
+
+Two rules: a null interact should be a null, not a different verb, inside a
+settlement; and **a prompt that is out of reach and a prompt that does not exist
+must not feel identical to the player.**
+
+## A probe that teleports cannot tell you whether a human can stand there
+
+`tombreach.mts`, `reachall.mts` and `reaudit.mts` all write
+`player.root.position` **directly**, bypassing `CollisionWorld`. So all of them
+happily verified an interactable that sits **inside a sealed building** — the
+prompt is reachable from a position no player can occupy.
+
+That is how `integration` stayed green over an unreachable shop while a
+first-time player pressed E at it ten times. `integration` now carries a
+`Collision.blocked` assertion; the three probes still owe it.
+
+Measured alongside: **35 of 56 fast-travel arrivals have nothing in reach at
+all**, and one (`meldacio_layby`) lands **inside geometry**. The pad-height
+hypothesis for the Hammerhead case was tested and is a **measured negative** —
+1 of 56, and not that one.
+
