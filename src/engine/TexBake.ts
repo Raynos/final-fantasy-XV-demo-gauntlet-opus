@@ -309,6 +309,11 @@ export function compactTexBake(): number {
   let held = 0;
   for (const [k, e] of store.index) {
     const len = e.w * e.h * 4;
+    // Already compact: it owns its buffer outright. Without this test a second
+    // call re-slices every entry, which is now a real cost rather than a
+    // theoretical one -- there are four deferred containers to compact after
+    // and the call is made more than once.
+    if (e.off === 0 && e.buf.length === len) { held += len; continue; }
     // `slice`, not `subarray`: a view would keep the container alive, which is
     // the entire bug being fixed here.
     store.index.set(k, { k: e.k, w: e.w, h: e.h, off: 0, buf: e.buf.slice(e.off, e.off + len) });
@@ -529,7 +534,15 @@ if (typeof window !== 'undefined') {
     // it is a few hundred milliseconds before anything could ask for a dungeon
     // texel: `Dungeons.enter()` is player-driven and the fetch is local.
     addEventListener('game-ready', () => {
-      requestAnimationFrame(() => setTimeout(() => { void loadDeferredTexBake(); }, 0));
+      requestAnimationFrame(() => setTimeout(() => {
+        // ...and compact once they land. Between them the deferred containers
+        // are ~100 MB inflated, and an unserved entry pins the WHOLE body for
+        // the life of the session -- the defect `compactTexBake` was written
+        // for, which until now was only ever called at boot, before any of
+        // these had arrived. A phone tab dies somewhere around 1-1.5 GB, so
+        // this is the difference between a long session and a reload.
+        void loadDeferredTexBake().then(() => compactTexBake());
+      }, 0));
     }, { once: true });
   }
 }

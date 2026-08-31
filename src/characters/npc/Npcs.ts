@@ -4,6 +4,7 @@ import { NPC_CAST } from './NpcCast.ts';
 import { NPC_DIALOGUE } from './NpcDialogue.ts';
 import { Rng } from '../../util/Rng.ts';
 import { worldMap } from '../../world/map/WorldMap.ts';
+import { compactTexBake } from '../../engine/TexBake.ts';
 import { PLAZA_Y } from '../../world/props/PoiKits.ts';
 import { updateSun } from '../rig/Materials.ts';
 import type { GroundSampler } from '../rig/Anim.ts';
@@ -592,6 +593,12 @@ export class Npcs {
 
     this._registerTalk(game);
     this.stats = { count: this.list.length, draws: this.list.length * 5 };
+    // The last consumer of the phone-deferred containers. On the demo path
+    // this runs a second or two after the first frame, with texp and texcp
+    // resident and now fully served; compacting here is what actually frees
+    // them. On every other path the store is already compact and the guard
+    // inside makes this a walk of the index.
+    compactTexBake();
   }
 
   /**

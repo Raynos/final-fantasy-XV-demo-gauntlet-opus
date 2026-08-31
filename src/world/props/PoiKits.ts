@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { KEEP_R, demoActive } from '../../engine/Device.ts';
 import { Rng } from '../../util/Rng.ts';
 import { bakedParts, matResolver, PartBuilder, type Vec3 } from './PartBuilder.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -44,6 +45,23 @@ import type { Game } from '../../game/Game.ts';
  */
 
 const BUILD_R = 1500;
+
+/**
+ * Metres past which the demo throws a built kit away again.
+ *
+ * `update` has always had a build half and no matching teardown: a kit built
+ * once stays in the scene for the session, so a drive across Eos accumulates
+ * every compound it passes. On a desktop that is a fine trade — the geometry is
+ * cheap next to the textures and rebuilding costs a frame. On a phone it is the
+ * memory ceiling, and the tab dies somewhere around 1-1.5 GB.
+ *
+ * So the whole world stays, and the far half of it stops being resident. The
+ * radius is a long way outside {@link BUILD_R} on purpose: a kit that keeps
+ * crossing one threshold would rebuild every few seconds, and the rebuild is
+ * the expensive direction. 1100 m of hysteresis is about 90 seconds of road at
+ * a cruise, so a player driving out and turning back finds it still there.
+ */
+const EVICT_R = KEEP_R;
 
 /**
  * Kit types built at load rather than streamed in.
@@ -271,6 +289,15 @@ export interface PoiSite {
  */
 export interface BuiltSite extends PoiSite {
   group: THREE.Group;
+  /**
+   * The queue entry this was built from.
+   *
+   * They are different objects — `_make` spreads the site into a new record —
+   * and eviction has to clear `group` on the *queue* entry, which is what the
+   * build pass reads. Without this back-reference an evicted kit could never
+   * be rebuilt.
+   */
+  site: PoiSite;
   canCast: boolean;
   /** Footprint radius the kit reported. Write-only today — nothing reads it. */
   radius: number;
@@ -586,6 +613,19 @@ export type PoiMats = ReturnType<typeof poiMaterials>;
 
 export class PoiKits {
   built!: BuiltSite[];
+  /** Demo only: throw far kits away again. See {@link EVICT_R}. */
+  _evict!: boolean;
+  /**
+   * How many built sites each geometry is part of.
+   *
+   * Eviction may not simply dispose everything under a group. `bakedParts` can
+   * hand the same geometry to two sites of the same type, and a kit that shared
+   * one with a neighbour would take the neighbour's mesh down with it — an
+   * invisible compound a hundred metres away, with nothing to connect it to the
+   * eviction that caused it. Counting is the only version of this that cannot
+   * be subtly wrong, and evictions are rare enough that the bookkeeping is free.
+   */
+  _geoRefs!: Map<THREE.BufferGeometry, number>;
   _exclusions!: { x: number; z: number; r: number; sameOnly: string | null }[] | null;
   /**
    * Where the pad being built right now is, in world metres.
@@ -622,6 +662,8 @@ export class PoiKits {
     this.scene.add(this.root);
     this.sites = [];
     this.built = [];
+    this._evict = demoActive();
+    this._geoRefs = new Map();
     this._exclusions = null;
     this._padCtx = { x: 0, z: 0, base: 0, cull: DRAW_R };
     this._padStats = null;
@@ -3514,7 +3556,9 @@ export class PoiKits {
     for (const m of g.children) if (m !== proxy && isMesh(m) && alphaCut(m.material)) casters.push(m);
     this.root.add(g);
     site.group = g;
+    if (this._evict) this._countGeo(g, +1);
     this.built.push({
+      site,
       ...site,
       group: g,
       canCast: res.cast !== false,
@@ -3524,6 +3568,37 @@ export class PoiKits {
       proxy,
       anchors: res.anchors || {},
     });
+  }
+
+  /** Add or subtract this group's geometries from the reference count. */
+  _countGeo(g: THREE.Object3D, d: number) {
+    const refs = this._geoRefs || (this._geoRefs = new Map());
+    g.traverse((o) => {
+      const geo = (o as THREE.Mesh).geometry;
+      if (!geo || !geo.dispose) return;
+      const n = (refs.get(geo) || 0) + d;
+      if (n > 0) refs.set(geo, n);
+      else { refs.delete(geo); if (d < 0) geo.dispose(); }
+    });
+  }
+
+  /**
+   * Throw one built kit away and put its site back in the build queue.
+   *
+   * Materials are never disposed: they are the shared set `build()` made, and
+   * disposing one would take every kit in the world with it. Geometry is
+   * disposed only at a zero reference count — see {@link _geoRefs}.
+   */
+  _drop(i: number) {
+    const b = this.built[i];
+    this.built.splice(i, 1);
+    this._countGeo(b.group, -1);
+    this.root.remove(b.group);
+    // The queue entry is a different object from the built record, so clearing
+    // the group here is what makes the site eligible to build again. Without
+    // it the kit is gone and never comes back, which is a worse bug than the
+    // memory it was freeing.
+    b.site.group = null;
   }
 
   /**
@@ -3570,6 +3645,16 @@ export class PoiKits {
       if (d2 < bestD) { bestD = d2; best = s; }
     }
     if (best) this._make(best, game);
+
+    // The matching half. One per frame, like the build, so a fast drive never
+    // pays for two teardowns in the same frame as a build.
+    if (this._evict) {
+      for (let i = this.built.length - 1; i >= 0; i--) {
+        const b = this.built[i];
+        const dx = b.poi.x - camPos.x, dz = b.poi.z - camPos.z;
+        if (dx * dx + dz * dz > EVICT_R * EVICT_R) { this._drop(i); break; }
+      }
+    }
 
     for (const s of this.built) {
       const dx = s.poi.x - camPos.x, dz = s.poi.z - camPos.z;
