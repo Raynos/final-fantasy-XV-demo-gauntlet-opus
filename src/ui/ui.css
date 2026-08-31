@@ -514,6 +514,22 @@
 .areacard .ac-rule { height: 1px; margin-top: 20px; background: linear-gradient(90deg, var(--hair-hot), rgba(206,224,250,.10) 70%, transparent); }
 .areacard .ac-meta { margin-top: 13px; font-size: 9px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 20px rgba(0,0,0,.6); }
 .areacard .ac-sub { text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 22px rgba(0,0,0,.6); }
+/* A scrim, because this card had none.
+   `.victory` sits on a 0.74-alpha plate with a 10px backdrop blur and `.hint`
+   on `.plate`; the area card — which is where "1,200 EXP REDEEMED" lands after
+   a night at a haven — was 10px type at .56em tracking in #b6d6f8 with two drop
+   shadows and nothing behind it. Over a bright dawn ridge a playtester read the
+   payoff line as a ghost. Not a plate: this card is a soft left-aligned title
+   over the world and a rectangle would cheapen it. An elliptical fade anchored
+   under the type darkens the ground it needs and reaches nothing else, and it
+   is painted behind the text with a negative-inset pseudo-element so the card's
+   own opacity ramp still carries it. */
+.areacard { position: relative; }
+.areacard::before {
+  content: ''; position: absolute; inset: -34px -120px -30px -70px; z-index: -1;
+  background: radial-gradient(60% 62% at 34% 50%, rgba(4,8,15,.72) 0%, rgba(4,8,15,.52) 42%, rgba(4,8,15,0) 78%);
+  pointer-events: none;
+}
 .letters .ltr { display: inline-block; }
 
 .levelup { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); text-align: center; }
@@ -845,6 +861,11 @@
 /* menu footer prompt row */
 .menu-foot .prompt { display: flex; align-items: center; gap: 8px; }
 .menu-foot .prompt .lb { font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
+/* A key the open screen has said will refuse. Drawn, so it stays discoverable
+   and the legend does not reflow as the selection steps, but plainly not live:
+   `Enter TRAVEL` at full weight next to `M CLOSE`, on a pin Enter would refuse,
+   is what a playtester read as a crash-level bug. See `Menus.setFoot`. */
+.menu-foot .prompt.off { opacity: .3; filter: saturate(.25); }
 
 /* ===================================================================== */
 /* Controls & menu UX pass                                               */

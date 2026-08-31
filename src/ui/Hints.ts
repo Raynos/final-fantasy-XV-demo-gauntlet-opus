@@ -158,7 +158,24 @@ export class Hints {
    * layers carry, which is what makes the comparison valid across two roots.
    */
   _blocked(): boolean {
-    if (!bands.free('reading', 'hint')) return true;
+    // **One exception, and it is not a hole in the rule.** The `menu` hint —
+    // GETTING BACK OUT — is raised by `_poll` precisely when a menu is open,
+    // and `HUD` claims the reading band at `PRIORITY.screen` for precisely as
+    // long as a menu is open. So the card was suspended on every frame it was
+    // ever current: it held at opacity 0 behind the screen and then played its
+    // 0.4 s fade-in *after* the player closed the menu, by which time `_poll`
+    // no longer wanted it and it faded straight back out. A playtester saw the
+    // resulting flicker and filed it as "a ghost at about 20% opacity" — the
+    // card was never once shown, only glimpsed mid-ramp on the way out.
+    //
+    // A card teaching you how to leave the surface that owns the band is the
+    // one card that has to be allowed inside it. It is a top-centre plate at
+    // x 550..1050 in authoring space; the menu header is left-aligned at 68 and
+    // the world map's detail card is right-aligned, so nothing it can cover is
+    // anything the player needs. Every other claimant still blocks it, and the
+    // world-anchored interact-prompt test below still applies.
+    const teachingTheOwner = this.cur?.id === 'menu' && bands.owner('reading') === 'screen';
+    if (!teachingTheOwner && !bands.free('reading', 'hint')) return true;
     if (!this._ixBody) this._ixBody = document.querySelector('#interact .ix-body');
     const ix = this._ixBody;
     if (!ix) return false;

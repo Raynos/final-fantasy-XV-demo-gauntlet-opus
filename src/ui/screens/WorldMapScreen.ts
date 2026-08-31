@@ -22,6 +22,8 @@ import type { Game } from '../../game/Game.ts';
  */
 export interface ScreenHost {
   setScreen(name: ScreenName | null): void;
+  /** Replace the chrome legend with one gated on what the keys will do. */
+  setFoot?(rows: [string, string, boolean?][]): void;
 }
 
 /**
@@ -172,7 +174,12 @@ export class WorldMapScreen {
   cardType!: HTMLElement;
   /** Why the last Enter was refused, and when — see `_refuse`. */
   _refuseMsg!: string;
+  _refuseFix!: string;
   _refuseAt!: number;
+  _refuseA!: number;
+  refuseBar!: HTMLElement;
+  refuseHead!: HTMLElement;
+  refuseFix!: HTMLElement;
   chart!: Chart;
   ctx!: CanvasRenderingContext2D;
   dpr!: number;
@@ -221,7 +228,9 @@ export class WorldMapScreen {
     this.sel = 0;
     this.hover = null;
     this._refuseMsg = '';
+    this._refuseFix = '';
     this._refuseAt = -99;
+    this._refuseA = 0;
     this._a = 0;
     this._drag = null;
     this._screenPos = new Map();
@@ -284,6 +293,31 @@ export class WorldMapScreen {
     this.scaleBar = el('div.wm-scalebar', {}, [this.scaleTxt, this.scaleLine]);
     root.appendChild(this.scaleBar);
 
+    // ---- the refusal banner ----------------------------------------------
+    //
+    // Deliberately NOT another line of 8px chrome. The playtest pressed Enter
+    // on a haven it had not surveyed, got nothing it could perceive, pressed it
+    // again, tried `I`, and concluded it had found a crash-level bug — while
+    // the reason sat in the card footer in 34%-alpha grey. So the refusal
+    // arrives where the player's eyes already are (immediately above the
+    // `Enter TRAVEL` legend they were reading when they pressed the key), at a
+    // size they cannot miss, and it carries the *fix* rather than only the
+    // complaint: "Survey this place first — walk within 55 m" is an objective;
+    // "not surveyed" is a shrug.
+    //
+    // It lives in this screen's own root rather than going through
+    // `ui/Layers.ts`: a menu screen already owns the whole `reading` band —
+    // `HUD.update` claims it at `PRIORITY.screen` for as long as any menu is
+    // open — so there is nothing here to arbitrate with, and a band claim from
+    // inside the thing that already won the band would only be ceremony.
+    this.refuseHead = el('div.wm-rf-h', { text: '' });
+    this.refuseFix = el('div.wm-rf-x', { text: '' });
+    this.refuseBar = el('div.wm-refuse.plate', {}, [
+      el('div.wm-rf-bar'), el('div', {}, [this.refuseHead, this.refuseFix]),
+    ]);
+    this.refuseBar.style.opacity = '0';
+    root.appendChild(this.refuseBar);
+
     this.surveyV = el('div.wm-surveyv', { text: '' });
     this.survey = el('div.wm-survey', {}, [
       el('div.wm-surveyk', { text: 'Surveyed' }), this.surveyV,
@@ -317,6 +351,11 @@ export class WorldMapScreen {
   /** Called by Menus when the screen becomes visible. */
   enter(game: Game) {
     this.game = game;
+    // `game.time.now` keeps running while the map is shut, so a stale refusal
+    // was replaying itself over whatever pin happened to be selected when the
+    // screen was reopened inside the hold window.
+    this._refuseMsg = ''; this._refuseFix = ''; this._refuseAt = -99;
+    this.refuseBar.style.opacity = '0';
     const t = game.get('Terrain');
     if (!this.chart) this.chart = getChart(t);
     const p = game.get('Player');
@@ -405,27 +444,62 @@ export class WorldMapScreen {
    * travel was not implemented. A refusal that names its own reason is the
    * cheapest teaching this screen has.
    */
-  _refuse(msg: string) {
+  _refuse(msg: string, fix: string) {
     this._refuseMsg = msg;
+    this._refuseFix = fix;
     this._refuseAt = this.game?.time?.now ?? 0;
     this.game?.get?.('Audio')?.sfx?.play?.('ui:cancel', null, {});
+  }
+
+  /**
+   * Has the party actually walked this place?
+   *
+   * Not the same question as `_known`, and conflating them is a bug the
+   * playtest could see: `_known` is true for everything on the atlas, so the
+   * card printed `FAST TRAVEL AVAILABLE` over a pin that `accept()` then
+   * refused as `NOT SURVEYED`. One predicate decides the affordance now, and
+   * both the footer and the two verbs read it.
+   */
+  _surveyed(p: Poi | undefined): boolean { return !!p && this.map.discovered.has(p.id); }
+
+  /**
+   * What the two travel verbs would do with the current selection, and why not
+   * if not. One place, so the legend, the card footer and the refusal can never
+   * disagree again — a key drawn as available that does nothing is
+   * indistinguishable from a broken build.
+   */
+  _verbs(p: Poi | undefined) {
+    const def = p ? POI_TYPES[p.type as keyof typeof POI_TYPES] : null;
+    const label = def ? def.label.toLowerCase() : 'place';
+    if (!p) return { travel: false, drive: false, head: '', fix: '' };
+    if (!this._surveyed(p)) {
+      return {
+        travel: false, drive: false,
+        head: 'NOT SURVEYED YET',
+        fix: `Survey this place first — walk within ${Math.round(p.r)} m of it.`,
+      };
+    }
+    const dead = this._unavailable(p);
+    if (dead) return { travel: false, drive: false, head: 'NOTHING HERE', fix: dead };
+    const drive = !!(p.travel || POI_TYPES[p.type]?.drive);
+    if (!p.travel) {
+      return {
+        travel: false, drive,
+        head: 'NO FAST TRAVEL POINT HERE',
+        fix: drive
+          ? `Press I and let Ignis drive you to this ${label}.`
+          : `There is no landing here — this ${label} has to be walked into.`,
+      };
+    }
+    return { travel: true, drive, head: '', fix: '' };
   }
 
   /** Fast travel to the selected point, if it allows it. */
   accept() {
     const p = this.list[this.sel];
     if (!p) return;
-    if (!this.map.discovered.has(p.id)) {
-      const def = POI_TYPES[p.type as keyof typeof POI_TYPES];
-      this._refuse(`NOT SURVEYED — WALK WITHIN ${Math.round(p.r)} m OF THIS ${def.label.toUpperCase()} FIRST`);
-      return;
-    }
-    if (!p.travel) {
-      this._refuse(this.canDrive(p)
-        ? 'NO FAST TRAVEL HERE — PRESS I AND LET IGNIS DRIVE YOU'
-        : 'NO FAST TRAVEL HERE — YOU HAVE TO WALK IN');
-      return;
-    }
+    const v = this._verbs(p);
+    if (!v.travel) { this._refuse(v.head, v.fix); return; }
     const game = this.game;
     const player = game?.get('Player');
     const terrain = game?.get('Terrain');
@@ -447,10 +521,7 @@ export class WorldMapScreen {
    * point on the highway, so anything within reach of the road works, and the
    * 23 parking POIs become destinations rather than decoration.
    */
-  canDrive(p: Poi | undefined): p is Poi {
-    if (!p || !this.map.discovered.has(p.id)) return false;
-    return !!(p.travel || POI_TYPES[p.type]?.drive);
-  }
+  canDrive(p: Poi | undefined): p is Poi { return !!p && this._verbs(p).drive; }
 
   /**
    * "Ignis, drive there."
@@ -465,9 +536,19 @@ export class WorldMapScreen {
    */
   driveThere() {
     const p = this.list[this.sel];
-    if (!this.canDrive(p)) return false;
+    if (!p) return false;
+    // `I` used to return `false` in three places without a sound, a word or a
+    // mark on the screen, while `_onKey` swallowed the key with
+    // `preventDefault()`. The playtest tried it straight after the silent
+    // Enter and took the second silence as confirmation that the map was
+    // broken. Every path out of here now says something.
+    const v = this._verbs(p);
+    if (!v.drive) { this._refuse(v.head, v.fix); return false; }
     const regalia = this.game?.get('Regalia');
-    if (!regalia || !regalia.driveTo) return false;
+    if (!regalia || !regalia.driveTo) {
+      this._refuse('THE REGALIA IS NOT WITH YOU', 'Find the car before asking Ignis to drive.');
+      return false;
+    }
     regalia.driveTo(p.x, p.z, p.name);
     this.menus.setScreen(null);
     return true;
@@ -583,6 +664,7 @@ export class WorldMapScreen {
 
     this._draw(game, t, rev);
     this._card(game);
+    this._refuseBar(game);
   }
 
   _card(game: Game) {
@@ -638,19 +720,50 @@ export class WorldMapScreen {
       this._rowEls[i][0].textContent = rows[i][0].toUpperCase();
       this._rowEls[i][1].textContent = rows[i][1];
     }
-    const canDrive = !dead && this.canDrive(p);
-    // A refusal owns the footer for two and a half seconds, because the footer
-    // is the line the player was reading when they pressed the key.
-    const since = (this.game?.time?.now ?? 0) - this._refuseAt;
-    const refusing = !!this._refuseMsg && since >= 0 && since < 2.5;
+    const v = this._verbs(p);
     const away = Math.hypot(p.x - px, p.z - pz);
-    this.cardFt.textContent = refusing ? this._refuseMsg
-      : !known ? `UNSURVEYED  ·  WALK WITHIN ${Math.round(p.r)} m  ·  YOU ARE ${fmtDist(away)} OFF`
-        : dead ? 'UNAVAILABLE IN THIS WORLD'
-          : p.travel && canDrive ? 'ENTER  FAST TRAVEL   ·   I  IGNIS, DRIVE THERE'
-            : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER'
-              : canDrive ? 'I  IGNIS, DRIVE THERE' : 'NO FAST TRAVEL';
-    this.cardFt.className = `wm-ft${refusing ? ' warn' : dead ? ' dead' : known && p.travel ? ' on' : ''}`;
+    // The footer states the affordance and nothing else — the refusal has its
+    // own banner now and no longer has to fight for this line. It is also the
+    // one string that has to agree with `accept()`, so it is built from the
+    // same `_verbs` answer the key press will get.
+    this.cardFt.textContent = !this._surveyed(p)
+      ? `UNSURVEYED  ·  WALK WITHIN ${Math.round(p.r)} m  ·  YOU ARE ${fmtDist(away)} OFF`
+      : dead ? 'UNAVAILABLE IN THIS WORLD'
+        : v.travel && v.drive ? 'ENTER  FAST TRAVEL   ·   I  IGNIS, DRIVE THERE'
+          : v.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER'
+            : v.drive ? 'I  IGNIS, DRIVE THERE' : 'NO FAST TRAVEL';
+    this.cardFt.className = `wm-ft${dead ? ' dead' : v.travel || v.drive ? ' on' : ''}`;
+
+    // The chrome legend is gated on the same answer: a key that will refuse is
+    // drawn as unavailable rather than as a live verb sitting next to `M CLOSE`,
+    // which worked. This is the general rule the playtest asked for — an
+    // affordance drawn as available must either work or say why it did not.
+    this.menus?.setFoot?.([
+      ['←→', 'Place'], ['↑↓', 'Filter'],
+      ['Enter', 'Travel', v.travel], ['I', 'Drive', v.drive], ['M', 'Close'],
+    ]);
+  }
+
+  /**
+   * The refusal banner: a fast rise, a long hold, a slow leave.
+   *
+   * 3.4 s of hold, because the thing being taught is a sentence and the player
+   * is reading a chart at the time. The old refusal held the card footer for
+   * 2.5 s at 8 px and 34% alpha and was not perceived at all.
+   */
+  _refuseBar(game: Game) {
+    const since = (game.time?.now ?? 0) - this._refuseAt;
+    const live = !!this._refuseMsg && since >= 0 && since < 3.9;
+    const want = live ? (since < 3.4 ? 1 : 1 - (since - 3.4) / 0.5) : 0;
+    const rise = live ? easeOutQuint(clamp(since / 0.18, 0, 1)) : 0;
+    const a = clamp(Math.min(want, rise), 0, 1) * this._a;
+    if (a <= 0.001 && this.refuseBar.style.opacity === '0') return;
+    if (live && this.refuseHead.textContent !== this._refuseMsg) {
+      this.refuseHead.textContent = this._refuseMsg;
+      this.refuseFix.textContent = this._refuseFix;
+    }
+    this.refuseBar.style.opacity = a.toFixed(3);
+    this.refuseBar.style.transform = `translate(-50%, ${((1 - rise) * 10).toFixed(2)}px)`;
   }
 
   _draw(game: Game, t: number, rev: number) {
@@ -1278,15 +1391,46 @@ function styleTag() {
   font-size: 11px; font-weight: 300; letter-spacing: .04em; color: var(--ink);
   text-shadow: var(--sh-text); font-variant-numeric: tabular-nums;
 }
+/* The card footer: the line that says what the two travel keys will do.
+   It was 8px at .3em tracking in 34%-alpha grey inside 296px of content box,
+   which is 420px of text -- so the sentence explaining why fast travel was
+   refused wrapped, ran into the plate's bottom-left clip and read as clipped
+   grey noise. The playtest found it only by squinting, minutes after the
+   press. Wider tracking is what made it overflow, so tracking is what gives:
+   9.5/.16em fits "UNSURVEYED . WALK WITHIN 55 m . YOU ARE 2.76 km OFF" on two
+   comfortable lines, overflow-wrap guarantees it even at the longest string
+   in the set, and min-height holds two lines' worth so the plate stops
+   resizing as the selection steps. --ink-3 is the same rung the menu chrome's
+   own labels use; --ink-4 is for things nobody has to read. */
 .wm .wm-ft {
-  margin-top: 15px; font-size: 8px; letter-spacing: .3em; color: var(--ink-4);
-  text-shadow: var(--sh-text);
+  margin-top: 15px; font-size: 9.5px; letter-spacing: .16em; line-height: 1.75;
+  color: var(--ink-3); text-shadow: var(--sh-text);
+  overflow-wrap: anywhere; min-height: 33px;
 }
 .wm .wm-ft.on { color: var(--gold); }
 .wm .wm-ft.dead { color: rgba(226,184,150,.72); }
-/* A refusal. Louder than the resting footer on purpose -- it is the answer to
-   a key the player just pressed, and the old answer was silence. */
-.wm .wm-ft.warn { color: #f0b268; }
+
+/* ---- the refusal banner -------------------------------------------------
+   Sits immediately above the "Enter TRAVEL" legend, centred on the chart:
+   the player pressed a key while reading that legend, so that is where the
+   answer belongs. Amber, plated and backdrop-blurred, because it lands over a
+   chart of bright ridge lines and a refusal that cannot be read is the defect
+   this whole element exists to fix. */
+.wm .wm-refuse {
+  position: absolute; left: 50%; bottom: 96px; transform: translate(-50%, 0);
+  display: flex; gap: 13px; align-items: stretch;
+  max-width: 560px; padding: 13px 20px 13px 15px;
+  pointer-events: none;
+}
+.wm .wm-rf-bar { flex: none; width: 2px; background: linear-gradient(180deg, #f0b268, rgba(240,178,104,.28)); }
+.wm .wm-rf-h {
+  font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: #f5c489;
+  text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 0 18px rgba(240,178,104,.35);
+}
+.wm .wm-rf-x {
+  margin-top: 8px; font-size: 13px; font-weight: 300; letter-spacing: .025em;
+  line-height: 1.5; color: var(--ink); text-shadow: 0 1px 2px rgba(0,0,0,.9);
+}
 
 .wm .wm-scalebar { position: absolute; left: 66px; bottom: 118px; }
 .wm .wm-scaleline {

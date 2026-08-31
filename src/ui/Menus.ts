@@ -259,9 +259,38 @@ export class Menus {
   _renderFoot(kind: string) {
     if (this._foot === kind) return;
     this._foot = kind;
+    this._paint(FOOT[kind as keyof typeof FOOT] || FOOT.default);
+  }
+
+  /**
+   * Let the open screen replace the legend with a live one.
+   *
+   * The chrome legend is a static table per screen, so the world map advertised
+   * `Enter TRAVEL` in the same weight as `M CLOSE` on every pin, including the
+   * ones Enter would refuse. A blind playtester pressed it on an unsurveyed
+   * haven, got nothing they could perceive, and spent their most confused
+   * minute believing they had found a crash. **An affordance drawn as available
+   * must either work or say why it did not** — this is the "drawn as available"
+   * half, and a third element in a row dims the key rather than removing it, so
+   * the legend does not reflow under the player's eyes as the selection steps
+   * and the key stays discoverable for when it *will* work.
+   *
+   * Safe to call every frame: the rows are rebuilt only when the signature
+   * changes.
+   */
+  setFoot(rows: [string, string, boolean?][]) {
+    const sig = rows.map((r) => `${r[0]}\u0001${r[1]}\u0001${r[2] === false ? 0 : 1}`).join('\u0002');
+    if (this._foot === sig) return;
+    this._foot = sig;
+    this._paint(rows);
+  }
+
+  _paint(rows: readonly (readonly (string | boolean | undefined)[])[]) {
     while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild!);
-    for (const [key, label] of FOOT[kind as keyof typeof FOOT] || FOOT.default) {
-      this.foot.appendChild(el('div.prompt.key', {}, [
+    for (const row of rows) {
+      const key = String(row[0]), label = String(row[1]);
+      const on = row[2] !== false;
+      this.foot.appendChild(el(`div.prompt.key${on ? '' : '.off'}`, {}, [
         button(key, { size: key.length > 2 ? 24 : 20 }), el('div.lb', { text: label }),
       ]));
     }
