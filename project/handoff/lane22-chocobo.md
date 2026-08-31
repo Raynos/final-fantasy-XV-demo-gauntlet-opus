@@ -112,23 +112,47 @@ Wiz a 200 m barn.
 2. **The rider's arms.** `POSE_RIDE` is provably mirror-symmetric
    (`Skeleton.ts`:154 mirrors bone *translation* only), so the pose table is not
    the bug — **re-shoot before re-tuning**; `e8051ea` widened the ride framings.
-3. **The paddock is empty of birds.** The single largest remaining gap in the
-   read of a chocobo post: `l22kit2/y315.jpg` is a stable yard with no animals
-   in it. `_chocobo` publishes a `yard` anchor for exactly this. Two or three
-   idle birds built by `ChocoboSystem._makeBird` and range-gated on the hub
-   would land it; nothing else in the frame needs work.
-4. `M.cloth` is a navy canvas and the hay tarp reads as a dark blue tent. Shared
+3. `M.cloth` is a navy canvas and the hay tarp reads as a dark blue tent. Shared
    material, six kits use it; needs a hay-tarp colour or the tarp dropping.
+4. **Grass punches through the gravel apron** at Wiz in every bearing — green
+   blotches all over the pad. That is `Ecology.poiClear`'s plateau-plus-skirt,
+   which `PAD_R`'s docstring in `PoiKits.ts` describes and assigns to the
+   vegetation lane. Not this lane's, and very visible.
+
+### The mount's draw cost, measured, and the confound that hid it
+
+Taken behind `daemon.mts --wait exclusive-free`, which reported
+`exclusive-free after 0.0 s` — **the tree was quiet.**
+
+```
+per-frame census over 200 frames: 392..608 calls, 99 spike onsets, gaps 2,2,2,...
+null ablation (nothing toggled): 473.8/475.3/475.4/475.3 (mean 474.9, spread 1.6)
+away    463.9/463.7/465.3 (mean 464.3, spread 1.6)
+present 473.5/475.3/476.2 (mean 475.0, spread 2.7)
+MOUNT + FLOCK COST 10.7 DRAW CALLS (2.7 per bird), against a bar of 5.4
+frame with the bird present: 476.2 draw calls (BRIEF budget 800/shot)
+```
+
+**The old probe was not drifting; it was aliasing.** The shadow cascades
+refresh on a **2-frame** schedule (the census measures it) and a read was
+`SETTLE + 1` = 31 frames, so an A/B pair was 62: every `away` read landed on
+the refresh phase and every `present` read on the quiet one, in every repeat,
+for ever. That is why the two arms were individually *tight* (589/488/589/490
+and 395/393/396/396, spread 3) while the null ablation spread 213, and why two
+independent runs both produced about **-143**. Two runs agreeing is what a
+systematic error looks like. A read is now the mean of **120 consecutive
+frames** -- 60 full periods -- and the null spread fell from 213 to 1.6.
+
+So: **the mount and its three-bird flock cost 10.7 draw calls, 2.7 each, and a
+ridden frame is 475 of a budget of 800.** Wiz Chocobo Post from four `dresscam`
+bearings reads 404-545 calls, also inside budget.
 
 ## Not done / owed
 
-- **Draw numbers for the mount.** `chocobodraws.mts` was rewritten this lifetime
-  (240-frame warm-up, 30-frame arms, four A/B pairs, a null ablation as the
-  noise floor) because its first run's control drifted 100 calls against a
-  delta of −142. See the commits for whatever it printed.
 - `npcdraws` needs a `Shots.ts` framing with the bird in it and **lane 3/21 owns
-  `Shots.ts`** — the four framings this lane wants are in the cross-boundary
-  list below and have not landed.
+  `Shots.ts`** -- the four framings this lane wants are in the cross-boundary
+  list below and have not landed. The draw question it would have answered is
+  answered above by `chocobodraws`, which does its own ablation.
 - **No `ControlsScreen` row** — see cross-boundary.
 
 ## Corrected anchors (the cold-start brief's were partly stale)
@@ -206,4 +230,7 @@ Lifetime 1: `13b7ff8` · `ce162a3` · `5070a7f` · `9c35b9f`.
 Lifetime 2: `5b76207` · `bb5b420` · `ea5eea0` · `193c130` · `52fe779`.
 Lifetime 3: `653a0e3` the kit's four frame-found defects · `3dfb43c` the
 gateway and the tarp · `76096bb` `chocobolegal.mts` · `3ac09cb` the prompts
-onto the kit's anchors · `353b843` `chocobodraws`' settle.
+onto the kit's anchors · `353b843` `chocobodraws`' settle · `a800bb5` the
+phase fix and its numbers · `0d1a38c` the three sculpt seams (**not yet
+verified by eye**) · `3d8a760` + `9423058` birds in the paddock (**not yet
+verified by eye**).
