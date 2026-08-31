@@ -926,7 +926,7 @@ export const phiWarp = warpAxis((t) => 1 + 2.2 * Math.exp(-Math.pow(Math.abs(t -
  * face, so 6 columns is roughly a 4 mm kernel there and a much coarser one on
  * the occiput, which is the weighting you want.
  */
-export const FACE_RELIEF_SMOOTH = 4;
+export const FACE_RELIEF_SMOOTH = 1;
 
 /**
  * Low-pass the sculpted relief, in the head's own (u, v) grid.
