@@ -791,3 +791,41 @@ measured negative with two instruments agreeing. All of the below is
   hair median +5% and a +19% change to its albedo weight moved Noctis' +17%.
   Anyone planning another hair value change should size it against those two
   numbers rather than against the fill's own coefficient. `lane1`
+
+## Cities: what lane 19 left behind (2026-08-31)
+
+*The sunk-feet defect is fixed — all 29 city bodies read `sink 0.000`. It was
+never `PLAZA_Y`, never a constant and not approach order: **nine bodies were
+standing inside the furniture** (a stall counter 0.81 m up, a building plinth
+0.50, a wall 1.07), plus one buried 0.741 m in the graded apron and Navyth
+floating 0.189 on a plinth's batter. Each was authored 1-2 m off a **stall**
+anchor, and a stall anchor is already 1.1 m clear of its own counter, so a side
+offset of 1.5-2.6 m walks straight back into the bench. In one frame three
+people were cut by half a metre and nine were perfect — a tuned offset would
+have fixed one capture and left the rest.*
+
+- **The city POI compounds are not in `CollisionWorld` at all.** `groundDisc` at
+  all 29 city bodies returns `onProp false`, with raw terrain **0.7-1.1 m below
+  the pavement they stand on** (Lestallum deck 121.215 against collision
+  120.12-120.84; Galdin 14.012 against 12.86-13.48). **The player walks under the
+  square's own deck.** A gameplay defect, outside the lane that found it — and it
+  is also why `_clearSpot` is currently a no-op, kept because it costs nothing and
+  becomes the durable fix the moment the props are registered. `lane19`
+- **Both squares are shut in, measured.** `citysight.mts`: Lestallum reach min
+  4.0 / median 5.5 / max 16.0 m; Galdin 5.5 / 9.0 / 16.5 m; **16 of 16 bearings
+  block inside 20 m at both.** Much of the near blocking is the square's own six
+  stalls on a 7.8 m ring plus six light poles, so it is not all block plan — but
+  no long lens crosses either plaza at deck height. `lane19`
+- **Galdin Quay is 712 m from the sea** — nearest water at 46°, level −6.5,
+  plaza deck at 14.0. **No camera on that square can see water.** A content call,
+  not a framing problem: `galdin_pier_sunset` and `galdin_angelgard` are judged
+  rows and need a camera on the coast. `lane19`
+- **EXINERIS steam and awning variance** — the last third of task 67, not done.
+  The recipe for doing it inside `CityHub` without touching another file is in
+  `project/handoff/lane19-cities.md`. `lane19`
+- **Two capture traps worth keeping:** `applyShot` on a cold page returns a
+  **white rectangle** until ~200 settle steps, so `framecam --settle 60` is not
+  enough; and hiding every non-person mesh to isolate bodies **takes the bounce
+  light with it**, so dark trousers on black read exactly like missing legs.
+  `lane19`
+
