@@ -926,7 +926,15 @@ export const phiWarp = warpAxis((t) => 1 + 2.2 * Math.exp(-Math.pow(Math.abs(t -
  * face, so 6 columns is roughly a 4 mm kernel there and a much coarser one on
  * the occiput, which is the weighting you want.
  */
-export const FACE_RELIEF_SMOOTH = 1;
+export const FACE_RELIEF_SMOOTH = 0;
+
+/**
+ * Radius, in grid columns, of the SECOND and much harder low-pass, whose
+ * surface normal is written over the skull shell's shading normal after the
+ * geometry is built. Positions are untouched, so every `facecheck` geometry row
+ * is untouched by construction. See the block at the end of `buildHead`.
+ */
+export const FACE_NORMAL_SMOOTH = 7;
 
 /**
  * Low-pass the sculpted relief, in the head's own (u, v) grid.
@@ -1288,6 +1296,62 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
   }
 
   const geometry = B.build();
+
+  // ---- soften the SHADING normal on the skull shell ----------------------
+  //
+  // Low-passing the positions is a measured negative and the numbers are in the
+  // commit: at a radius of 4 columns `facecheck` reported `noseLead` 27.6 ->
+  // 16.8 and `mouthRelief` 6.8 -> **0.00, "no mouth geometry"**. The lips and
+  // the corrugation are the same spatial scale, so a position filter trades one
+  // for the other about 1:1 and there is no radius that buys much of the second
+  // without most of the first.
+  //
+  // The shading normal is a different budget. `facecheck`'s geometry rows are
+  // measured off POSITIONS, so nothing here can move `noseLead`,
+  // `mouthRelief`, `transDrop` or `jawWidthErr` by construction, and the
+  // silhouette is untouched — but N·L is what the playtest actually saw. So the
+  // relief is filtered a second time, much harder, and the surface normal of
+  // *that* surface is written over the shell's own. The nose still projects
+  // 27.6 mm and still occludes; it simply stops carrying a 90-degree normal
+  // flip every five millimetres.
+  //
+  // Only the shell vertices are rewritten — `idx[v][u]` are exactly their
+  // builder indices — so the lids, lashes, ears and chin cap keep the normals
+  // `smoothNormals` gave them.
+  if (FACE_NORMAL_SMOOTH > 0) {
+    const soft = rel.slice();
+    smoothRelief(soft, segU, segV, FACE_NORMAL_SMOOTH);
+    const nrm = geometry.attributes.normal.array as Float32Array;
+    const S = (v: number, u: number, c: number) => {
+      const uu = ((u % segU) + segU) % segU;
+      const vv = v < 0 ? 0 : v > segV ? segV : v;
+      const k = (vv * W + uu) * 3 + c;
+      return base[k] + soft[k];
+    };
+    for (let v = 0; v <= segV; v++) {
+      for (let u = 0; u <= segU; u++) {
+        // central differences along the two grid axes; the cross product is the
+        // outward normal because `u` runs with +theta and `v` with +phi, which
+        // is the same handedness the shell's own winding is built on.
+        const du = [S(v, u + 1, 0) - S(v, u - 1, 0), S(v, u + 1, 1) - S(v, u - 1, 1), S(v, u + 1, 2) - S(v, u - 1, 2)];
+        const dv = [S(v + 1, u, 0) - S(v - 1, u, 0), S(v + 1, u, 1) - S(v - 1, u, 1), S(v + 1, u, 2) - S(v - 1, u, 2)];
+        let nx = du[1] * dv[2] - du[2] * dv[1];
+        let ny = du[2] * dv[0] - du[0] * dv[2];
+        let nz = du[0] * dv[1] - du[1] * dv[0];
+        const l = Math.hypot(nx, ny, nz);
+        // the two poles have no tangent frame; leave them to `smoothNormals`
+        if (l < 1e-12) continue;
+        nx /= l; ny /= l; nz /= l;
+        const i = idx[v][u] * 3;
+        // sign against the vertex's own normal rather than against the origin:
+        // a brushed skull is not star-shaped about its centre
+        const s = nrm[i] * nx + nrm[i + 1] * ny + nrm[i + 2] * nz < 0 ? -1 : 1;
+        nrm[i] = s * nx; nrm[i + 1] = s * ny; nrm[i + 2] = s * nz;
+      }
+    }
+    geometry.attributes.normal.needsUpdate = true;
+  }
+
   const map = paintFace(look, uvOf, bakeKey);
   return { geometry, map, origin, scale, uvOf };
 }
