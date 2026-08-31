@@ -50,6 +50,18 @@ const combat = g.get('Combat');
 const party = g.get('Party');
 const hud = g.get('HUD');
 
+/**
+ * Ablation for the boulder collision (`--set rockPush=0`).
+ *
+ * `CollisionWorld` now pushes every walker out of a streamed boulder --
+ * `RockField`, landed for the playtest's number-one complaint -- and enemies
+ * that can no longer path THROUGH a tor may fight differently. This probe's two
+ * bars are 4-sample medians over a den lottery, so the only way to ask whether
+ * the collision moved them is to run the same rounds both ways.
+ */
+const _coll = g.get('Collision');
+if (_coll && window.rockPush !== undefined) _coll.rockPush = !!Number(window.rockPush);
+
 /* ---- live world, no title card ------------------------------------- */
 g.applyShot('hud_field');
 g.get('Director')?.play?.();
