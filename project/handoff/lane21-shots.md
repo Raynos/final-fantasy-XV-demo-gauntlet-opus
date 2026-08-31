@@ -439,3 +439,54 @@ samples — so a foreground ridge cannot eat a subject the way one eats
 the picks avoid them.
 
 **The 22 candidate frames are in `tmp/shots/l21-arc/`; being read now.**
+
+## `landmark_meteor` — RE-FRAME REFUSED, WITH EVIDENCE. This closes item 3.
+
+The brief was: re-frame it if I judge it right, in its own commit with an
+`imgdiff`. **I judge it wrong, and here is why.**
+
+Six candidate stands were captured (`tmp/shots/l21-rm/MT_*.jpg`, all read) at the
+four best rings `probes/discview.mts` found — due east 3.0 km (frac 0.42), due
+west 2.4 km (0.43) and north-east 2.0 km (0.41) — each at two aim heights. Then
+the **current** shot was captured through `shoot.mts`
+(`tmp/shots/l21-met/landmark_meteor.jpg`, sha `ededb69eceb3`, 619 draws) and read
+beside them.
+
+**The current frame is better than all six.** In it the Meteor's crown is a dark
+faceted mass at roughly **28% of frame height** with its blue fissures clearly
+lit, standing over a big sunlit ridge that has real texture and depth. In every
+0.41-0.43 stand the Meteor is 2.0-3.0 km away, aerial haze has washed it to
+almost exactly the sky's own value, and it reads — the reviewer's words, and mine
+— as *one more distant mountain*. None of the six shows the crater or the rim
+either, because from the whole ring only `n_disc` at eye 300 does, and that stand
+is already `disc_crater_night`.
+
+So **the 0.09 figure is a terrain-clearance metric, not a picture-quality one.**
+It measures how much of the mass's vertical extent clears the ground between
+here and there. It does not measure angular size, contrast against the sky, or
+whether the fissures read — and on all three of those the 0.09 stand wins,
+because it is 1.4 km out instead of 3.0 and the ridge it stands over is what
+gives the mass its scale.
+
+Re-framing to a better clearance number would have made the shot worse and
+re-baselined a judged row to do it. **Not done, on purpose.**
+
+The real defect in that frame is not the framing: **a large hard-edged flat tan
+slab floats detached in the air at the left of the plate**, and two smaller ones
+at the right edge. Terrain LOD, not this lane. Same artefact on the distant
+mountains in four of the six candidates.
+
+## `south_road_dawn` — LANDED (`6d3cf46`), verified by eye
+
+The 22nd shot. Frame read: a pale gravel track sweeps out of bottom-centre and
+bends left past a treeline, marker stones step down the left verge, a signboard
+and a rock cairn hold the bottom-left, a treed ridge closes the right and blue
+mountains sit far left. It reads as a road going somewhere, which four of the six
+candidates did not.
+
+**Filed against another lane, seen in the frame:** at t 6.9 the sky is **full
+midday blue with no dawn gradient and no warm horizon**, while the terrain
+lighting does respond to the low sun. `vista_dawn` (6.4) and `daycycle_dawn`
+(5.9) sit at the same hour, so this is corpus-wide. Also in the frame: the
+clouds show vertical comb/smear artefacts, and one hard unattenuated white light
+sprite in the left mid-ground.
