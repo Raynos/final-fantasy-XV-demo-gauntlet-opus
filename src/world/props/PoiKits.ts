@@ -2153,19 +2153,44 @@ export class PoiKits {
       }
     }
     {
-      // The gateway. Two stout posts on the ends of the arc and a header across
-      // them, so the opening reads as a way in from the road rather than as a
-      // hole in the fence. A hung leaf was tried on paper and rejected: at the
-      // 80 m this place is read from, a 3 m five-bar gate is four pixels of
-      // slat and the header is the whole signal.
+      /*
+       * The gateway, and the first version of it was a **football goal**.
+       *
+       * Two 3 m cylinders and a 0.3 x 0.24 bar across them is, at the range
+       * this place is read from, a thin dark rectangle standing on a fence
+       * line: `tmp/shots/l22kit/y225.jpg` and `y315.jpg` both read it as a
+       * goal, from opposite sides. What separates a gateway from a goal is
+       * *carpentry* — square section, a cap on each post, a knee brace into the
+       * header and a board hung under it — so it gets all four, merged and
+       * placed with one yaw the way the barn is, because a diagonal member
+       * cannot be `put` with an Euler that also carries the chord bearing.
+       *
+       * A hung five-bar leaf was tried on paper and rejected: at 80 m a 3 m
+       * gate is four pixels of slat, and the header is the whole signal.
+       */
       const a0 = Math.PI / 2 - GATE_HALF, a1 = A0;
       const p0: [number, number] = [Math.cos(a0) * R, Math.sin(a0) * R];
       const p1: [number, number] = [Math.cos(a1) * R, Math.sin(a1) * R];
-      for (const p of [p0, p1]) put(M.plank, new THREE.CylinderGeometry(0.15, 0.17, 3.0, 8), [p[0], 1.45, p[1]]);
       const span = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
       const th = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
-      put(M.plank, box(span + 0.3, 0.3, 0.24, { arris: 0.04 }),
-        [(p0[0] + p1[0]) / 2, 2.9, (p0[1] + p1[1]) / 2], [0, -th, 0]);
+      const HW = span / 2;
+      const gb = bag();
+      for (const sx of [-1, 1]) {
+        gb.wood.push(box(0.34, 3.0, 0.34, { x: sx * HW, y: 1.5, arris: 0.05 }));
+        gb.trim.push(box(0.5, 0.16, 0.5, { x: sx * HW, y: 3.23, arris: 0.04 }));
+        // The brace touches the post at 1.91 and the header's underside at
+        // 2.65, so its centre is the midpoint of those and its projection is
+        // `1.05 * cos(45)` = 0.742 either way.
+        gb.wood.push(xform(box(1.05, 0.16, 0.2), { rz: -sx * Math.PI / 4, x: sx * (HW - 0.54), y: 2.28 }));
+      }
+      gb.wood.push(box(span + 0.9, 0.5, 0.36, { y: 2.9, arris: 0.05 }));
+      gb.trim.push(box(span * 0.6, 0.8, 0.12, { y: 2.05, arris: 0.04 }));
+      const gm = mergeBag(gb);
+      for (const [role, g] of Object.entries(gm)) {
+        bakeTone(g, { y0: 0, y1: 3.3, grime: 0.72, bleach: 1.06 });
+        put(role === 'trim' ? M.cream : M.plank, g,
+          [(p0[0] + p1[0]) / 2, 0, (p0[1] + p1[1]) / 2], [0, -th, 0]);
+      }
     }
 
     // Barn.
@@ -2301,7 +2326,11 @@ export class PoiKits {
           { x: 1.9, z: -0.1, w: 1.5, d: 2.2, h: 0.95 },
         ],
       });
-      put(M.cloth, tarp, [12, 0.05, -3.4], [0, rng.range(0, 3), 0]);
+      // Beside the stack, not marooned in the middle of the yard: covered hay
+      // next to stacked hay reads as a hay corner. The yaw is fixed rather than
+      // `rng.range(0, 3)` because the clearance to the nearest bale — 4.70 m
+      // against an envelope of 3.51 + 0.80 — is only provable for a known one.
+      put(M.cloth, tarp, [13.5, 0.05, -6.5], [0, 0.35, 0]);
     }
     put(M.plank, new THREE.CylinderGeometry(0.13, 0.15, 4.6, 6), [13, 2.3, 12]);
     put(M.sign, new THREE.PlaneGeometry(3.4, 1.8), [13, 4.4, 12.1]);
