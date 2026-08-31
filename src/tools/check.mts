@@ -222,6 +222,7 @@ const GATES: Gate[] = [
   // rather than passing on frames it knows were never submitted. See its comment.
   { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '26 pass, 1 wired, 0 fail', kind: 'browser', cost: 45 },
   { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
+  { name: 'touchcheck', pixelBlind: true, gate: true, script: 'touchcheck.mts', expect: '20/20', kind: 'browser', cost: 14 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
   { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '35/35', kind: 'browser', cost: 45 },
   { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures', kind: 'cpu', cost: 7.6 },

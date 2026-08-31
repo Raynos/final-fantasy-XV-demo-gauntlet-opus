@@ -39,6 +39,8 @@ interface Slot {
   latched: boolean;
   /** Held buttons that re-latch, for the edge-reading menu screens. */
   repeat: boolean;
+  /** One frame of forced release, so a repeat reads as a new rising edge. */
+  gap: boolean;
   /** When the next auto-repeat is due, ms on the `performance.now` clock. */
   nextAt: number;
   /** 0..1 analogue ramp for the two triggers; 1 for a plain button. */
@@ -58,7 +60,7 @@ export class VirtualPad implements PadLike {
     this._slots = [];
     for (let i = 0; i < N_BUTTONS; i++) {
       this.buttons.push({ pressed: false, value: 0 });
-      this._slots.push({ held: false, latched: false, repeat: false, nextAt: 0, value: 0, ramp: 0 });
+      this._slots.push({ held: false, latched: false, repeat: false, gap: false, nextAt: 0, value: 0, ramp: 0 });
     }
     // [lx, ly, rx, ry]. `Input` negates axes[1], so forward is negative here,
     // exactly as a real stick reports it.
@@ -90,7 +92,7 @@ export class VirtualPad implements PadLike {
 
   /** Drop every finger — called when the layout changes or the page hides. */
   releaseAll() {
-    for (const s of this._slots) { s.held = false; s.latched = false; s.value = 0; }
+    for (const s of this._slots) { s.held = false; s.latched = false; s.gap = false; s.value = 0; }
     this.axes[0] = this.axes[1] = this.axes[2] = this.axes[3] = 0;
   }
 
@@ -107,9 +109,16 @@ export class VirtualPad implements PadLike {
     this._last = now;
     for (let i = 0; i < N_BUTTONS; i++) {
       const s = this._slots[i];
-      if (s.repeat && s.held && now >= s.nextAt) { s.latched = true; s.nextAt = now + REPEAT_MS; }
-      const on = s.held || s.latched;
+      // Auto-repeat has to publish an actual *gap*, not just a second latch.
+      // `Input.gpDown` is `pressed && !prev`, and `prev` is refreshed from the
+      // live pad in `endFrame` — so a button that never reads low again can
+      // never produce a second rising edge however often it re-latches. One
+      // frame of forced release is what a held key looks like to an edge
+      // reader, and it is what the menu screens are written against.
+      if (s.repeat && s.held && !s.gap && now >= s.nextAt) { s.gap = true; s.nextAt = now + REPEAT_MS; }
+      const on = s.gap ? false : (s.held || s.latched);
       s.latched = false;
+      s.gap = false;
       // A throttle that snaps to 1 on touch makes the car undriveable; a ramp
       // gives the same "squeeze" a real trigger has. Release is twice as fast
       // as press, so lifting off still feels immediate.

@@ -54,7 +54,10 @@ export class Stick {
       this.id = e.pointerId;
       this.ox = e.clientX;
       this.oy = e.clientY;
-      this.root.setPointerCapture(e.pointerId);
+      // A synthetic PointerEvent has no active pointer to capture, and the
+      // call throws NotFoundError rather than no-opping. `touchcheck` drives
+      // this layer with synthetic events, so the capture is best-effort.
+      try { this.root.setPointerCapture(e.pointerId); } catch { /* synthetic */ }
       this._show();
       this._move(0, 0);
       e.preventDefault();

@@ -34,6 +34,26 @@ interface Window {
   /** `key` down, step, `key` up, settle. */
   press: (code: string, frames?: number) => void;
   /**
+   * Dispatch a real `PointerEvent` at a node. `touchcheck` drives the
+   * on-screen controls through the same events a thumb produces, rather than
+   * calling into `VirtualPad` -- an assertion that skipped the DOM would not
+   * notice a button that stopped receiving taps.
+   */
+  ptr: (node: Element, type: string, x?: number, y?: number, id?: number) => void;
+  /** One of the touch layer's buttons, by its stable slot id. */
+  btn: (id: string) => import('../ui/touch/TouchButton.ts').TouchButton;
+  /** Press and release a touch button, then settle. */
+  tap: (id: string, frames?: number) => void;
+  /**
+   * Rising edges seen per pad index since `watch()`, counted from inside
+   * `Input.endFrame`. An edge is only visible during the frame that carries
+   * it -- `_gpPrev` is rewritten on the way out -- so counting it from outside
+   * `game.frame()` always reads zero.
+   */
+  edges: Record<string, number>;
+  /** Start counting edges on these pad indices, discarding any previous count. */
+  watch: (...idx: number[]) => void;
+  /**
    * The minimap under test. `mapshoot` builds one by hand because `Minimap`
    * is not in the boot order yet -- the harness is how it gets looked at
    * before the registration line is handed over.

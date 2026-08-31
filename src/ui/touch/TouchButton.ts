@@ -69,7 +69,7 @@ export class TouchButton {
       e.stopPropagation();
       if (!this.enabled || this.id !== -1) return;
       this.id = e.pointerId;
-      this.node.setPointerCapture(e.pointerId);
+      try { this.node.setPointerCapture(e.pointerId); } catch { /* synthetic event, see Stick */ }
       this.node.classList.add('is-down');
       if (spec.toggle) { this.on = !this.on; this.node.classList.toggle('is-on', this.on); this._write(); }
       else this._down();
