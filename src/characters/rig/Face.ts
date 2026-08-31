@@ -349,10 +349,34 @@ export function brushes(look: Look): SculptBrush[] {
   // grid's resolution floor (`brushsurvive.mts`), and shrinking them is how the
   // nostrils lost every vertex of support the last time round.
   add({ p: [0.0155, -0.0365, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0125, dir: 'normal', mirror: true });
-  // The alar crease is the darkest small value on a lit face and it was 5.5 mm
-  // of a brush 5.5 mm wide — half a millimetre of actual groove once the cosine
-  // falloff is paid. Doubled and widened enough to have vertices in it.
-  add({ p: [0.0228, -0.0370, 0.0800], r: [0.0080, 0.0120, 0.0170], amt: -0.0076, dir: 'normal', mirror: true });
+  /**
+   * **The alar crease — and it is the mid-face diagonal, measured.**
+   *
+   * The dark slash that runs from each nose wing out and down across the cheek
+   * in every portrait, and that a blind judge reads as war paint, is this brush
+   * plus the alar ball above it. Measured on the brush field itself rather than
+   * on the frame, because `applyBrushes` is a linear sum and therefore *exactly*
+   * decomposable: take the surface Laplacian over a 3 mm stencil (a groove is a
+   * positive Laplacian; its magnitude is how hard the fold turns) and the peak
+   * over the whole cheek sits at x 24 mm, y -39 mm — beside the nose wing — at
+   * **9.00 mm**, against 1-4 for the brow, the mouth and the nasolabial. Of
+   * that 9.00, **5.28 is this brush and 2.91 is the alar ball**; nothing else on
+   * the face contributes as much as 0.4.
+   *
+   * The note this replaces argued the crease was "half a millimetre of actual
+   * groove once the cosine falloff is paid" and doubled it. That measured the
+   * *falloff* and not the *fold*: -7.6 mm of push through an 8 mm radius is a
+   * 60-degree V, and the surface here drops **8.85 mm** below the mean of its
+   * two shoulders 6 mm either side. A twenty-year-old's alar crease is 1-2 mm.
+   *
+   * So: shallower and, more importantly, *broader*. Hardness is what makes it
+   * read as paint rather than as skin — at 0.55 m the face is ~2 px/mm and a
+   * 9 mm Laplacian over 3 mm is an abrupt normal flip, which is a drawn line.
+   * -3.0 through 11 mm takes the peak to **5.17** and the fold to **5.94 mm**,
+   * i.e. it stays the sharpest small feature on the face (it should be) without
+   * being three times the next one.
+   */
+  add({ p: [0.0228, -0.0370, 0.0800], r: [0.0110, 0.0155, 0.0210], amt: -0.0030, dir: 'normal', mirror: true });
   add({ p: [0, -0.0425, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0072, dir: [0, 0, 1] });
   // nostril openings, cut upward into the underside of the nose
   add({ p: [0.0092, -0.0412, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0112, dir: [0, 0.55, 1], mirror: true });
