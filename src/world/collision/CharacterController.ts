@@ -173,6 +173,8 @@ export class CharacterController {
     if (dt <= 0) return pos;
     this._from.copy(pos);
     if (this.swim) return this._swimStep(pos, vx, vz, dt);
+    // How hard this character is trying, before the slope gets a vote.
+    const wish = Math.hypot(vx, vz);
 
     // ---- 1. slope response --------------------------------------------
     //
@@ -210,11 +212,30 @@ export class CharacterController {
         vx += dx * slide * dt * 6;
         vz += dz * slide * dt * 6;
       } else if (this._refuseFor > REFUSE_T) {
+        // Momentum only where the ground is PHYSICALLY unable to hold anyone
+        // (`grip <= 0`), even though the message fires on the wider predicate
+        // below: sliding someone off a 54 deg face they are merely struggling
+        // on would be inventing a refusal the collision model does not make.
         this._slx += dx * GRAVITY * (1 - n.y) * dt;
         this._slz += dz * GRAVITY * (1 - n.y) * dt;
       }
     }
-    this._refuseFor = grip <= 0 && this.grounded
+    // **The predicate is failure, not steepness** — and it took a measured
+    // negative to get here. Gating this on `grip <= 0` alone left one of
+    // fifteen `slopewalk` sites still silent: a 60 deg face whose local facets
+    // sat just INSIDE the fade band, where a heavily-damped uphill push and the
+    // per-frame downhill push still cancel. The dead zone is not a property of
+    // the 58 deg line; it is a property of a balance, and a balance can happen
+    // anywhere in the band. So this asks the question the player asks — *am I
+    // on steep ground, trying, and getting nowhere* — which is true in both
+    // cases and false on every hillside that is merely steep.
+    //
+    // `progress` is last step's. That is correct and not a lag bug: it is the
+    // only honest measure of whether the previous frame's effort arrived, and
+    // 16 ms of staleness against a 0.35 s counter is nothing.
+    const refusing = this.grounded && n.y < WALKABLE_Y
+      && wish > 0.6 && this.progress < 0.25;
+    this._refuseFor = refusing
       ? Math.min(REFUSE_T * 3, this._refuseFor + dt)
       : Math.max(0, this._refuseFor - dt * 2);
     // The slide is carried, clamped and braked here rather than inside the
