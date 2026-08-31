@@ -332,7 +332,7 @@ const APRON_R = 30;
 export const CITY: RemoteNpc[] = [
   /* ---------------------------------------------------------- Lestallum -- */
   // The three counters, each with the person whose name is on the shop row.
-  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [3.0, 1.0], posture: 'folded', talkRadius: 3.0 },
+  { castKey: 'verdough', at: 'lestallum', anchor: 'stall0', off: [4.8, -1.2], posture: 'folded', talkRadius: 3.0 },
   { castKey: 'surgate', at: 'lestallum', anchor: 'stall2', off: [3.0, -1.0], posture: 'folded', talkRadius: 3.0 },
   { castKey: 'randolph', at: 'lestallum', anchor: 'stall4', off: [1.8, 1.5], posture: 'folded', talkRadius: 3.2 },
   // Sania at last, on the square with a specimen jar and no interest in
@@ -348,9 +348,9 @@ export const CITY: RemoteNpc[] = [
   // apron behind the stalls, so no single framing carries all of them.
   { castKey: 'trucker', at: 'lestallum', key: 'lest_a', seed: 21, anchor: 'stall1', off: [3.2, -1.1], posture: 'folded' },
   { castKey: 'traveller', at: 'lestallum', key: 'lest_b', seed: 22, anchor: 'stall3', off: [1.4, 1.9], posture: 'pockets' },
-  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'stall0', off: [2.8, -2.2], posture: 'pockets' },
+  { castKey: 'mechanic', at: 'lestallum', key: 'lest_c', seed: 23, anchor: 'plaza', off: [4.4, 3.2], posture: 'pockets' },
   { castKey: 'kid', at: 'lestallum', key: 'lest_d', seed: 24, anchor: 'plaza', off: [-3.2, -2.6] },
-  { castKey: 'trucker', at: 'lestallum', key: 'lest_e', seed: 25, anchor: 'edge2', off: [-2.0, 3.0], posture: 'folded' },
+  { castKey: 'trucker', at: 'lestallum', key: 'lest_e', seed: 25, anchor: 'edge2', off: [-0.4, 3.0], posture: 'folded' },
   // Four walkers. A square with nobody crossing it is a diorama.
   {
     castKey: 'traveller', at: 'lestallum', key: 'lest_w1', seed: 26, anchor: 'edge3',
@@ -403,7 +403,7 @@ export const CITY: RemoteNpc[] = [
     castKey: 'traveller', at: 'galdin_quay', key: 'gald_w2', seed: 47, anchor: 'stall5',
     route: [[2.0, 1.5], [6.5, -2.0], [2.0, -6.0]], pause: [1.8, 1.0, 2.2], speed: 1.2,
   },
-  { castKey: 'kid', at: 'galdin_quay', key: 'gald_e', seed: 48, anchor: 'edge5', off: [-8.0, 1.5] },
+  { castKey: 'kid', at: 'galdin_quay', key: 'gald_e', seed: 48, anchor: 'edge5', off: [2.0, 3.0] },
 ];
 
 /** Where and how one townsperson is placed. */
