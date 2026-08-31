@@ -396,6 +396,11 @@ for (let f = 0; f < FRAMES; f++) {
   // learns nothing about whether they are fights. A player stops.
   if (NIGHT_DRIVE && mode === 'drive' && nightSpawns > seenNightSpawns) {
     seenNightSpawns = nightSpawns;
+    // A photograph of the thing itself, from the driver's seat, before he gets
+    // out: headlights, road, and whatever just walked onto it. Two of them,
+    // because this is a dead-end gate and not a contact sheet.
+    // `--shot tmp/shots/night/ambush.jpg` to collect them.
+    if (window.__shot && pulledOver < 2) await window.__shot(`ambush-${pulledOver + 1}`);
     if (reg.isDriving) { reg.exit(); jumped = true; }
     mode = 'fight';
     legEndF = f + 45 * 60;
