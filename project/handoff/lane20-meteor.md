@@ -181,3 +181,38 @@ landmark's glow has ever produced from a judged stand. **verified.**
   baseline did not have — an apron shard poking its top through the hillside,
   consistent with the −70 m median. Watch it after the seat fix: it should
   become talus rather than a blob.
+
+### The night frames, read (build `7a1f5e1`, `tmp/shots/l20-night/`)
+
+The lane's direction is a night read, so these are the frames that matter, and
+they are the ones that redirected the work. All **verified by eye**.
+
+- **`west_night.jpg`** (3 km WNW, fov 39, t 21.2) — this is the composition I
+  want for `lest_overlook_disc`. The Disc sits on the horizon over a dark basin
+  with Lestallum's lights bottom-right. **The ground fissures render**: three or
+  four bright blue-white bars around the mass's foot, the first light this
+  landmark's glow has ever put on a screen. But the mass itself is mottled
+  **warm orange-white**, which is the one colour the direction is not, and the
+  fissure segments read as clean glowing **rectangles** — boxes, unmistakably.
+- **`lest_night.jpg`** (Lestallum shelf, fov 34) — the same read with the town's
+  rooftops in the foreground. Confirms the stand.
+- **`spur_high_night.jpg`** (the Disc overlook, 825 m, 40 m up) — the veins are
+  **blown to white**. At night the exposure is already lifting the frame, so the
+  headroom bloom needs is far smaller than the daylight arithmetic suggested,
+  and past the clip every channel saturates and the colour goes first.
+
+All three defects are fixed in `0b8d3ed` (colour ramp inverted so the band is
+blue nearly all the way out; night gain 3.2 → 1.9; fissure boxes sunk 2–9 m
+under the drawn surface so the terrain cuts them into ragged bands instead of
+standing them proud as rectangles) — **not yet re-captured.**
+
+### The seat fix, measured after (`v4`, build `7a1f5e1`)
+
+| mesh | median proud, before | after |
+|---|---|---|
+| apron + rim (`mega_stone`) | **−70 m** | **+3 m** |
+| ground fissures (`mega_meteorGlow`) | **−79 m** | **+11 m** |
+
+Both now straddle the drawn ground. `v4-landmark_meteor-on.png` confirms by eye:
+the two 260 m monoliths the un-burying first produced are gone and the Disc
+stands on a rocky skirt. **verified.**
