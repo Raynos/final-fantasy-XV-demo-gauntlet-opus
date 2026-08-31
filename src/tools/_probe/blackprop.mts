@@ -83,7 +83,18 @@ for (const name of names) {
         if (dist > 45) continue;
         pr.copy(ctr).project(cam);
         if (pr.z < -1 || pr.z > 1 || Math.abs(pr.x) > 1 || Math.abs(pr.y) > 1) continue;
-        const key = `${m.name || m.uuid.slice(0, 6)}@${Math.round(ctr.x / 2)},${Math.round(ctr.y / 2)},${Math.round(ctr.z / 2)}`;
+        /**
+         * Cluster on a 3 m plan grid and NOT on height.
+         *
+         * The first version keyed on `round(x/2), round(y/2), round(z/2)` and
+         * duly reported ONE 0.66 m tyre as two clusters 0.17 m apart, because
+         * its centroids straddled y = 5.0. That cost a commit chasing a pair of
+         * interpenetrating props that did not exist. Over-merging is the safe
+         * direction for "what is that object": two real props in one 3 m cell
+         * come back as one row with a bounding box big enough to say so,
+         * whereas splitting one prop invents a second.
+         */
+        const key = `${m.name || m.uuid.slice(0, 6)}@${Math.round(ctr.x / 3)},${Math.round(ctr.z / 3)}`;
         let row = clusters.get(key);
         if (!row) clusters.set(key, row = {
           mat: m.name || '(unnamed)', matType: m.type,

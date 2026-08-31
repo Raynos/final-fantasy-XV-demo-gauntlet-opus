@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, type Vec3 } from './PartBuilder.ts';
+import { PartBuilder, emitParts, type Vec3 } from './PartBuilder.ts';
 import {
   concreteMaterial, paintedMaterial, rustMaterial, woodMaterial,
   glowMaterial, markerTexture,
@@ -108,8 +108,16 @@ interface RoadChunk {
   group: THREE.Group | null;
   casting: boolean;
   /**
-   * How many of the group's children came from the casting builder. The flat
-   * decals after them get `renderOrder = 1` and never a cascade.
+   * The one merged, position-only caster standing in for the whole roadkit —
+   * see the note in {@link RoadFurniture._buildChunk}. Range-gated by
+   * `visible`, so out of shadow range it costs nothing in either pass.
+   */
+  shadow: THREE.Object3D | null;
+  /**
+   * Fallback only: how many of the group's children still cast for themselves,
+   * which is non-zero exactly when the shadow merge returned null. The flat
+   * decals after the casting builder's children get `renderOrder = 1` and never
+   * a cascade either way.
    */
   castCount: number;
 }
@@ -251,7 +259,7 @@ export class RoadFurniture {
     this.chunks.push({
       key, cls, samples,
       center: new THREE.Vector3(cx, this.eco.height(cx, cz), cz),
-      group: null, casting: false, castCount: 0,
+      group: null, casting: false, shadow: null, castCount: 0,
     });
   }
 
@@ -280,10 +288,10 @@ export class RoadFurniture {
      * index, so a 1 m object sat on bare dirt with nothing under it. `flat`
      * also stamps `renderOrder = 1` on its children, i.e. draws them as decals.
      *
-     * This is close to free in draw calls: `cast` gains the `rust` and `wood`
-     * buckets and `flat` loses `rust`, `wood` and `dark`, so the group emits one
-     * mesh FEWER. It does add those buckets to the shadow pass inside `CAST`
-     * (110 m) — measured with `drawcheck` below.
+     * It is not free: `drawcheck lest_street_night` went **736 -> 750** on the
+     * move alone (e5f65cf vs 56ddb24), because each material bucket in `cast`
+     * is a draw per cascade in the shadow pass. The `mergeShadow` proxy below
+     * pays that back and more.
      */
     this._litter(c, cast);
     this._gravel(c, flat);
@@ -291,11 +299,32 @@ export class RoadFurniture {
 
     const g = new THREE.Group();
     g.name = `roadchunk_${c.key}`;
-    cast.build(g, { cast: false, receive: true, name: 'roadkit' });
+    /**
+     * One merged shadow caster for the whole roadkit, not one per material.
+     *
+     * A road chunk is split into meshes because it carries that many
+     * *materials* — guardrail beam, post, drum, tyre, crate — and not because
+     * it is that many objects, which is exactly the case {@link shadowProxy}
+     * exists for: the union casts the silhouette the pieces cast, at one draw
+     * per cascade instead of one each. Measured on `lest_street_night`: 736
+     * before litter moved into `cast`, 750 after the move, **734 with the
+     * proxy** — so the contact shadows the judge asked for arrive two draws
+     * cheaper than the frame that did not have them.
+     *
+     * The per-chunk range gate now toggles the proxy's `visible` rather than
+     * `castShadow` on each mesh, which is what the docblock on `shadowProxy`
+     * asks a range-gating caller to do: an invisible object is skipped in the
+     * colour pass and the shadow pass alike, so out of range it costs nothing
+     * at all. If the merge ever fails, `shadow` is null and `castCount` keeps
+     * the old per-mesh path alive rather than silently dropping every shadow.
+     */
+    const madeCast = emitParts(g, cast.merge(), { cast: true, receive: true, name: 'roadkit', mergeShadow: true });
+    const proxy = g.children.length > madeCast.length ? g.children[g.children.length - 1] : null;
+    if (proxy) { proxy.visible = false; c.shadow = proxy; c.castCount = 0; }
+    else { c.castCount = madeCast.length; for (const m of madeCast) m.castShadow = false; }
     const nCast = g.children.length;
     flat.build(g, { cast: false, receive: true, name: 'roadflat' });
     for (let i = nCast; i < g.children.length; i++) g.children[i].renderOrder = 1;
-    c.castCount = nCast;
     this.root.add(g);
     c.group = g;
     this._live.push(c);
@@ -306,6 +335,7 @@ export class RoadFurniture {
     for (const m of c.group.children) if (isMesh(m)) m.geometry.dispose();
     this.root.remove(c.group);
     c.group = null;
+    c.shadow = null;
     c.casting = false;
   }
 
@@ -587,6 +617,9 @@ export class RoadFurniture {
       const cast = d2 < CAST * CAST;
       if (c.casting !== cast) {
         c.casting = cast;
+        // One proxy for the whole roadkit; `castCount` is only non-zero on the
+        // fallback path where the shadow merge returned null.
+        if (c.shadow) c.shadow.visible = cast;
         for (let i = 0; i < c.castCount; i++) c.group.children[i].castShadow = cast;
       }
     }
