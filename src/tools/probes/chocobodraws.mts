@@ -73,11 +73,20 @@ step(30);
  * periods per read is what makes an arm phase-independent.
  */
 const WINDOW = 120;
+let _ms = 0;
 const calls = (n = WINDOW) => {
-  let s = 0;
-  for (let i = 0; i < n; i++) { g.frame(1 / 60); s += g.renderer.info.render.calls; }
+  let s = 0, t = 0;
+  for (let i = 0; i < n; i++) {
+    const t0 = performance.now();
+    g.frame(1 / 60);
+    t += performance.now() - t0;
+    s += g.renderer.info.render.calls;
+  }
+  _ms = t / n;
   return s / n;
 };
+/** The wall time of the same window the last `calls()` measured. */
+const lastMs = () => _ms;
 const roots = () => {
   const r = cb.bird ? [cb.bird.root] : [];
   for (const f of cb._flock) r.push(f.root);
@@ -120,14 +129,14 @@ const fmt = (xs) => `${xs.map((v) => v.toFixed(1)).join('/')} (mean ${(xs.reduce
 }
 
 // The noise floor: change nothing, measure anyway.
-const nul = [];
-for (let i = 0; i < NULL_N; i++) { step(SETTLE); nul.push(calls()); }
+const nul = [], nulMs = [];
+for (let i = 0; i < NULL_N; i++) { step(SETTLE); nul.push(calls()); nulMs.push(lastMs()); }
 const floor = spread(nul);
 
-const away = [], present = [];
+const away = [], present = [], awayMs = [], presentMs = [];
 for (let i = 0; i < REPS; i++) {
-  show(false); step(SETTLE); away.push(calls());
-  show(true); step(SETTLE); present.push(calls());
+  show(false); step(SETTLE); away.push(calls()); awayMs.push(lastMs());
+  show(true); step(SETTLE); present.push(calls()); presentMs.push(lastMs());
 }
 show(true);
 
@@ -147,4 +156,19 @@ out.push(delta > bar2
   ? `MOUNT + FLOCK COST ${delta.toFixed(1)} DRAW CALLS (${(delta / Math.max(1, roots().length)).toFixed(1)} per bird), against a bar of ${bar2.toFixed(1)}`
   : `NO USABLE NUMBER: delta ${delta.toFixed(1)} does not clear ${bar2.toFixed(1)} (drift ${drift.toFixed(1)}, floor ${floor.toFixed(1)}). Do not quote this.`);
 out.push(`frame with the bird present: ${Math.max(...present).toFixed(1)} draw calls mean over ${WINDOW} frames (BRIEF budget 800/shot; the four party rigs cost ~34 draws each)`);
+
+/*
+ * Wall time on the same windows. `LANDMINES`' measurement trap is about timing
+ * loops, and it is why this is a *third* arm of the same ablation rather than a
+ * benchmark: the null arm is a timing loop that changed nothing, so if the box
+ * is drifting under the run its spread says so before the delta is read.
+ */
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+const dMs = mean(presentMs) - mean(awayMs);
+out.push(`frame ms  null ${fmt(nulMs)}`);
+out.push(`frame ms  away ${fmt(awayMs)}   present ${fmt(presentMs)}`);
+const msBar = Math.max(spread(awayMs), spread(presentMs), spread(nulMs)) * 2;
+out.push(dMs > msBar
+  ? `MOUNT + FLOCK COST ${dMs.toFixed(3)} ms/frame, against a bar of ${msBar.toFixed(3)}`
+  : `frame ms: delta ${dMs.toFixed(3)} does not clear ${msBar.toFixed(3)} — the mount is below this instrument's floor`);
 return out.join('\n');
