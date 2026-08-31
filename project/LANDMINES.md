@@ -2692,3 +2692,24 @@ see a target that moves between the sample and the assertion. When such a gate
 fails on one of N identical things, suspect a race, not that one thing — and be
 suspicious of the N-1 that passed.
 
+**It happened again, in `ChocoboHub`, and the probe written for it missed.**
+Same shape: prompts registered off world-axis offsets 23.7 m and 35.4 m from
+the POI pin, `_reanchor` re-pointing the same live vectors onto the kit's
+post-yaw `stable`/`board` anchors at ~10 m. Measured `moved=32.39`,
+`dEnd=34.34`, `radius=3.2` -> `1/76 unreachable: chocobo-stable-wiz->nothing`,
+red under `HARNESS_TURBO=10` and green standalone because turbo changes the
+phase. Two lessons past the first:
+
+- **`tombreach` reported `0 moved while offered` on that exact run.** Its
+  claim-3 test compared each item's `pos` across *its own* eight-frame walk-up,
+  and `_reanchor`'s 30-frame throttle put the move in another item's window. A
+  probe written for a class inherits the luck of the class unless it is
+  phase-independent: it now records where each item was **the first frame it
+  was seen enabled** and compares at the end of the whole run.
+- **Check the give-up before you gate on the bind.** `_reanchor` stopped polling
+  after `_tick > 30 * 40`, counted from *boot* rather than arrival, so twenty
+  seconds in the poll was dead for the session. Gating `enabled` on a bind that
+  a timer can cancel turns a mis-placed prompt into an absent one. And not
+  every hub in a table gets the kit: the Alpine Stable sits on a `parking` POI
+  that publishes no anchors at all, so it has to be settled at registration.
+
