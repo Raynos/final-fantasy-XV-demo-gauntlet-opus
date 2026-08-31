@@ -707,3 +707,36 @@ measured negative with two instruments agreeing. All of the below is
   draw-cost instrument does not settle its own control, so **quote no draw number
   for the mount**. `lane22`
 
+
+## From lane 11 (fight shape), respawn — 2026-08-31
+
+- **`CameraRig` has no collision push-out against world props at combat framing
+  distance.** `f-engage` of `tmp/shots/lane11/` is the camera fully inside a
+  boulder: the whole frame is dark rock with five enemy nameplates floating in
+  it. This is the frame where a fight *starts*. Whoever owns the encounter
+  camera. `lane11`
+- **The HUD does not survive the density increase.** Dens now draw 5-8 hostiles
+  where they drew 3-5, and enemy nameplates overprint each other into
+  "SABERTUSKSABERTUSK", land on the party HP rows, the technique list, the
+  Armiger bar and the minimap's zone label; reward toasts stack three deep on
+  each other; floating damage numbers are drawn on top of one another (169 over
+  431). Nameplates and toasts need collision/stacking rules. `lane11`
+- **Two party members stand inside each other**, in `f-victory` and `f-after`
+  both — two torsos in one volume. There is no separation force between party
+  members at rest. `src/characters/ai/PartyAI.ts` / `Party`. `lane11`
+- **The retinue does 60-70% of a fight's damage** (`ignis 32% gladio 31% warp
+  22% noctis 8%` in one round; 29/28/22/12/9 in another). `probes/dpsshare.mts`
+  says Noctis should be 64% at full uptime. Party throughput is the other half
+  of the duration lever `WildTerritories`' own comment names, and it lives in
+  `PartyAI.ts`. `lane11`
+- **Enemy corpses vanish instantly and the kill frame's motion blur is heavy
+  enough to make the action illegible.** Observed, not diagnosed. `lane11`
+- **`fightshape`'s six-round run only played three**: the page lost its vite
+  connection mid-run (`[vite] server connection lost`) with seven lanes editing
+  the trunk. The medians quoted for this lane are over three finished fights and
+  should be re-run on a quiet tree before anyone treats 23.0 s as final. `lane11`
+- **`BossFight.ts` 3 -> 4 engage tokens was on the plan's lever list and is
+  still NOT taken.** Lane 17's Keycatrich Magitek Commander round is a
+  Definition-of-Done content bar and no instrument points at a boss fight —
+  `fightshape` walks into wild dens. Changing boss pacing blind is not worth the
+  risk; it needs its own instrument first. `lane11`
