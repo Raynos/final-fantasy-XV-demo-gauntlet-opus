@@ -722,15 +722,24 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
      * rear frame of both modes. A stirrup hangs clear of the animal by
      * definition -- it has a foot in it.
      */
+    /*
+     * **Short enough for the leg that is actually on this bird.**
+     *
+     * The iron hung at y 1.10 and the leathers ran down to 1.17. A 1.8 m rig
+     * seated at y 1.86 has 0.837 m of leg, so a boot in that iron is a leg at
+     * 100% extension — there is no such riding pose, and `Saddle.POSE_RIDE`
+     * solved to an ankle at y 1.29 with the sole about 1.20. The iron comes up
+     * to meet it rather than the leg going straight to reach it.
+     */
     const strap = tube([
-      P(0.255 * s, 1.785, 0.06), P(0.410 * s, 1.44, 0.05), P(0.435 * s, 1.17, 0.05),
+      P(0.255 * s, 1.785, 0.06), P(0.415 * s, 1.50, 0.05), P(0.435 * s, 1.26, 0.05),
     ], [[0.022, 0.011], [0.022, 0.011], [0.020, 0.010]], { radialSeg: 6 });
     tint(strap, TAN_DARK, 0.02);
     mat(strap, LEATHER, 0);
     rig.attachBlend(strap, 'spine', 'chest', 1.0);
 
     const iron = new THREE.TorusGeometry(0.065, 0.014, 5, 14);
-    place(iron, { pos: [0.435 * s, 1.10, 0.05], rot: [0, Math.PI / 2, 0] });
+    place(iron, { pos: [0.435 * s, 1.19, 0.05], rot: [0, Math.PI / 2, 0] });
     tint(iron, BRASS);
     mat(iron, 0.34, 0.85);
     /*
@@ -739,8 +748,8 @@ export function buildChocoboPrototype(col: ChocoboColours = CHOCOBO_COLOURS[0]) 
      * The strap is `attachBlend('spine', 'chest')` and this was `attach('spine')`
      * — rigid to one bone against an interpolation between two — so under any
      * pose the two ends of one object went different ways. Geometrically they
-     * touch (the strap ends at y 1.17 and the ring's top is 1.10 + 0.065 =
-     * 1.165); the 20 cm the look-loop measured between them was the skinning
+     * touch (the strap ends at y 1.26 and the ring's top is 1.19 + 0.065 =
+     * 1.255); the 20 cm the look-loop measured between them was the skinning
      * alone, and at 8 m the strap thinned out of sight and left the ring
      * reading as a black donut floating beside the bird. It only became
      * visible when the assembly moved outboard: buried in the flank, a skinning
