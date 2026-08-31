@@ -19,9 +19,12 @@
  *     the price of the `enabled: () => n.anchored` gate;
  *  2. the pin-to-coffin distance is the same 7.19 m at every site, which is
  *     what makes any reach under it unable to cover the pin;
- *  3. **no enabled interactable's `pos` moves during its own walk-up**, which
- *     is the invariant the picker is written against and the one the pin-parked
- *     prompt broke;
+ *  3. **no enabled interactable's `pos` ever moves**, which is the invariant
+ *     the picker is written against and the one the pin-parked prompt broke.
+ *     Two halves: during its own walk-up, and -- because a throttled re-bind
+ *     usually lands in somebody else's window -- across the whole run, from the
+ *     first frame each item was seen enabled. The second half is what caught
+ *     `chocobo-stable-wiz`, which the first half missed;
  *  4. the walk-up itself -- `integration`'s own 2.2 m diagonal approach, over
  *     every enabled item, so a regression here is caught without waiting for
  *     the full audit.
@@ -42,6 +45,37 @@ g.get('Story') && g.get('Story').applyShot && g.get('Story').applyShot(null);
 g.get('Cinematics') && g.get('Cinematics').stop && g.get('Cinematics').stop({ skipped: true });
 menus.setScreen(null); step(24);
 hud.setMenuOpen(false); step(4);
+
+/*
+ * Claim 3, the way it should have been written the first time.
+ *
+ * The in-window test below only catches a re-bind that lands inside *one item's
+ * own eight frames* -- which is exactly the luck nine of the ten tombs passed
+ * on, and it let a second instance of the same defect through: this probe
+ * reported `0 moved while offered` on a tree where `chocobo-stable-wiz` moved
+ * off the POI pin onto the kit's post-yaw `stable` anchor. `ChocoboHub`
+ * re-anchors on a 30-frame throttle and the walk-up holds each item for eight,
+ * so the move simply landed during some *other* item's turn -- invisible to a
+ * per-item before/after, and fatal the one time the phase lines up (which is
+ * what `HARNESS_TURBO=10` changed).
+ *
+ * So remember where each item was **the first frame it was seen enabled**, and
+ * compare at the very end of the run. A prompt offered at A and standing at B
+ * is a violation whoever's window the move fell in.
+ *
+ * `npc_*` is excluded and the exclusion is *measured*, not assumed: a talk
+ * anchor tracks a person who is allowed to walk, and `Npcs.update` rewrites it
+ * every frame inside 85 m. Their drift is counted and printed separately so
+ * this stays an argument rather than a blanket.
+ */
+const firstSeen = new Map();
+const observe = () => {
+  for (const it of ix.items.values()) {
+    if (!it.enabled() || firstSeen.has(it.id)) continue;
+    firstSeen.set(it.id, [it.pos.x, it.pos.z]);
+  }
+};
+observe();
 
 /*
  * Claim 1 and 2. The **player** has to visit each site, not the camera:
@@ -77,9 +111,11 @@ for (const n of rpg.tombs.nodes) {
  * facing the anchor, camera brought along (`Npcs.update` stops writing talk
  * anchors past 85 m), player pinned for eight stepped frames.
  */
+
 const items = [...ix.items.values()].filter((i) => i.enabled());
 const missed = [], moved = [];
 for (const it of items) {
+  observe();
   const x0 = it.pos.x, z0 = it.pos.z;
   const ax = it.pos.x + 1.55, az = it.pos.z + 1.55;
   const ay = terrain.heightAt(ax, az);
@@ -96,11 +132,30 @@ for (const it of items) {
   if (got !== it.id) missed.push(`${it.id}->${got || 'nothing'}`);
 }
 
+observe();
+
+/*
+ * The whole-run half of claim 3. `drifted` is the one that matters; `npcDrift`
+ * is the control that keeps the `npc_` exclusion honest -- if it ever reads 0,
+ * the exclusion is dead weight and should go.
+ */
+const drifted = [], npcDrift = [];
+for (const [id, p0] of firstSeen) {
+  const it = ix.items.get(id);
+  if (!it) continue;
+  const d = Math.hypot(it.pos.x - p0[0], it.pos.z - p0[1]);
+  if (d <= 0.01) continue;
+  (id.indexOf('npc_') === 0 ? npcDrift : drifted).push(`${id} moved ${d.toFixed(2)} m after being offered`);
+}
+
 out.push(`${rpg.tombs.nodes.length} tombs; ${unanchored} never anchored; ${offPitch} off the 7.19 m pin-to-coffin pitch`);
 for (const a of anchors) out.push(a);
 out.push(`walk-up: ${items.length} enabled interactables, ${missed.length} unreachable, ${moved.length} moved while offered`);
+out.push(`whole run: ${firstSeen.size} items seen enabled, ${drifted.length} moved after being offered`
+  + ` (${npcDrift.length} npc talk anchors excluded -- they track people who walk)`);
 for (const m of missed.slice(0, 8)) out.push(`  MISS  ${m}`);
 for (const m of moved.slice(0, 8)) out.push(`  MOVED ${m}`);
+for (const m of drifted.slice(0, 8)) out.push(`  DRIFT ${m}`);
 
 return {
   report: out.join('\n'),
@@ -110,5 +165,8 @@ return {
   items: items.length,
   missed,
   moved,
-  pass: unanchored === 0 && offPitch === 0 && missed.length === 0 && moved.length === 0,
+  drifted,
+  npcDrift: npcDrift.length,
+  pass: unanchored === 0 && offPitch === 0 && missed.length === 0 && moved.length === 0
+    && drifted.length === 0,
 };
