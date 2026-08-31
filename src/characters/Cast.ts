@@ -418,7 +418,24 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x322e2e), rough: 0.40 },
       hair: {
-        color: 0x8f8371, tipColor: 0xdecbae, rough: 0.34, shell: 0.011, volume: 0.85,
+        // **Was 0x8f8371 / 0xdecbae, and both were grey.** (143,131,113) and
+        // (222,203,174) carry R-B of +30 and +48 at 21% and 14% saturation —
+        // warm greys, not ash-brown — and rendered they measure R-B **+19 at
+        // the median** against `ART-DIRECTION` 12.3's `#642402`, i.e. **+98**.
+        // That is a fifth of the plate's chroma, and it is why a playtester at
+        // walking distance saw "four grey-haired people": Ignis' hair is
+        // literally silver in the frame. See `_probe/hairstat.mts`.
+        //
+        // §12.3 is a table of **luminance** percentiles and lane 1 matched it —
+        // Ignis' rendered Y ran 36/69/109/149 against a plate 11/47/73/83, the
+        // right shape, only bright. A Y distribution can match a plate at every
+        // percentile with no colour in it whatsoever, which is exactly what
+        // happened, and it is the one axis nobody measured.
+        //
+        // (135,95,62) holds a plausible ash-brown *value* — albedo Y 132 -> 101,
+        // which pulls the rendered median down toward the plate — while taking
+        // R-B from +30 to +73. The tip goes the same way: caramel, not cream.
+        color: 0x875f3e, tipColor: 0xd8b074, rough: 0.34, shell: 0.011, volume: 0.85,
         hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         // A slicked quiff: up off the brow, over the crown and back, with the
         // sides tight against the skull. The contrast between the two is the
@@ -529,7 +546,21 @@ export const CAST = {
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
       brows: { color: 0xa8823f, len: 0.013, width: 0.0058 },
       hair: {
-        color: 0xa8977e, tipColor: 0xf4e2bd, rough: 0.30, shell: 0.011, volume: 0.86,
+        // **Was 0xa8977e / 0xf4e2bd: a warm grey under a cream.** Prompto is
+        // the blond and he rendered at R-B 8/23/34/39 across p10..p99 — a
+        // 31-point chroma range where `plates/character-prompto-daylight-01.jpg`
+        // spans **-22 to +55**, 77 points, cool in the roots and properly gold
+        // in the top decile (`#968567`). Our whole head sits in a narrow warm-
+        // grey band, which is what "grey/white hair" means when a player says
+        // it about a blond character.
+        //
+        // Luminance is held on purpose — albedo Y 153 -> 147, and the rendered
+        // median was already good (74 against the plate's 82) — so this is a
+        // chroma change and nothing else: R-B +42 -> +86 on the root, +55 ->
+        // +110 on the tip. Read `_probe/hairstat.mts` before touching it; a
+        // fixed `regionstat` rect cannot measure this and 12.3's Y table will
+        // not notice it move.
+        color: 0xac9256, tipColor: 0xfad78c, rough: 0.30, shell: 0.011, volume: 0.86,
         hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         // `plates/character-prompto-daylight-01.jpg`: a swept quiff off a low
         // side parting, sides flat against the skull, and one long fringe
