@@ -740,3 +740,18 @@ measured negative with two instruments agreeing. All of the below is
   Definition-of-Done content bar and no instrument points at a boss fight —
   `fightshape` walks into wild dens. Changing boss pacing blind is not worth the
   risk; it needs its own instrument first. `lane11`
+- **A hard-clipped white quad sprite on the ground**, with visible square
+  corners and a bloom halo — a loot/drop sparkle, not a ground ring. Seen in the
+  round-2 aftermath frame of `tmp/shots/lane11c/`. Whoever owns the drop/pickup
+  VFX. `lane11`
+- **`VFX.shockwave` still passes `intensity: 3.4, opacity: 1`** and so is not
+  covered by `GroundFX.ring`'s new 1.35/0.6 defaults. It is the only remaining
+  path that can clip a ground ring to flat white, and no fight beat this lane
+  captured exercised it — a boss round would. `lane11`
+- **Gladio's greatsword passes through Prompto's shoulder** in `f-victory`, and
+  in `f-after` a fourth party member stands inside the camera with his head
+  clipped at the frame edge behind the HP panel. Same owner as the
+  party-separation item above. `lane11`
+- **`f-kill`'s radial motion blur is heavy enough that nothing in the frame is
+  legible** except the HUD. Whoever owns the post stack / the kill camera.
+  `lane11`
