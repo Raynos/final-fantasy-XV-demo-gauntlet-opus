@@ -1,7 +1,53 @@
 # To nine — the one plan
 
-Status: LOCKED (2026-08-30 13:22 CEST, fable — locked by the human).
-**Nothing builds before tonight: lanes staff at ~02:20 CEST, 2026-08-31.**
+Status: **BUILT — awaiting the human's ruling on five decisions, then archives.**
+Built overnight 2026-08-30/31 by a coordinator session; see
+`project/handoff/2026-08-30-coordinator.md` for the six decisions taken at
+dispatch and the endgame sequence, and
+`project/journal/2026-08-31-round17-and-playtest.md` for every judged number.
+
+**All 20 lanes are closed.** 35 agent-lifetimes: 20 plan lanes, 11 in the
+first fix wave, 4 in the second. Everything in Parts A-E is landed or closed
+with a measured negative, which plan rule 2 counts as a win.
+
+**The mechanical Definition of Done is met.** `pnpm run check` **21/21** (the
+suite grew two gates tonight, `bakecheck` and `framecheck`); `perf` and
+`gameplay` both certify on a quiet tree with `RULER_VALID: true`, 166/166
+shots clearing 60 fps and **0 hitches**; draw peak **747/800**; `nanscan` 0 of
+166. Content bars: `mainchain` runs ch1-ch5 with its self-grant shim deleted,
+**all 8 royal arms are claimable**, dungeons fight back (`combatloop` 35/35),
+`longplay` is clean for 30 minutes **day and night**, and every sector is
+populated. Part E: the chocobo is summonable from minute one at **11.00 m/s**
+— exactly what `WorldMap.travel()` already priced it at — with a race
+completable end to end; Alstor is swimmable at **0.06% floor-walk over 167 m**
+and divable with a breath limit that forces an ascent.
+
+**§4's two bars: one plateaued, one still moving.**
+
+- **Polish — MEASURED PLATEAU at 0%.** Judged rounds 17, 18 and 19 each
+  returned **0% hesitation over 35 pairs, 0 fooled**, against a bar of >=30%
+  with >=2 fooled. Controls ran 62%, 50%, **88%** — the instrument separates
+  more sharply than in round 16 and is not saturated. Round 19 followed an
+  eleven-lane fix wave built from round 18's own ranked tells; **the number did
+  not move at all**, which is precisely §4's stopping condition. The judge's
+  closing verdict: *"what fails is never the shot, it is material response and
+  asset finish"* — and it could not separate the **Lestallum street** from
+  shipped work in two separate pairings.
+- **Playable — still improving, NOT plateaued: 4 -> 3 broken-feels** against a
+  bar of fewer than three. A third playtest was in flight when this session
+  wound down; its result is the next thing to read.
+
+**Not done, and deliberately so:** the public-URL deploy (descoped by the human
+— it is theirs, not a lane's), and plan task 47, which is held unlanded pending
+a ruling because `facecheck` may be measuring art direction rather than a
+defect.
+
+**Five decisions need the human before this archives.** They are at the top of
+`HUMAN_REVIEW.md`, each with its numbers: combat difficulty (a den now costs
+25% of Noctis's HP median, 49% worst — measured, unplayed); the `fightshape`
+trade boulder collision created (duration into PASS, danger out of it); task
+47's `CONTROL_CEILING`; the camera's slope lift trading horizon for arm; and
+Noctis's hair hue, where the plate table and `Cast.ts` disagree in writing.
 Supersedes `2026-08-29-opus-to-nine.md` and absorbs
 `2026-08-30-fable-content-arc.md` (both archived). Every claim was verified
 2026-08-29/30 against the code at `66b354ad`, a fresh `--jpeg` capture, or a
