@@ -98,9 +98,13 @@ const CSS = `
  * covered as well as the middle. */
 .dlg::before {
   content: ''; position: absolute; left: -30%; right: -30%; top: -120px; bottom: -110px;
+  /* Both layers are ellipses. The first attempt put a linear top-to-bottom
+   * wash under the radial, and a linear gradient on a box with hard left and
+   * right edges paints a visible RECTANGLE across a bright frame -- which a
+   * midday capture showed immediately. Feather on both axes or not at all. */
   background:
-    radial-gradient(ellipse 60% 100% at 50% 50%, rgba(3,6,12,.60), rgba(3,6,12,.24) 52%, rgba(3,6,12,0) 86%),
-    linear-gradient(180deg, rgba(3,6,12,0), rgba(3,6,12,.30) 34%, rgba(3,6,12,.34) 82%, rgba(3,6,12,0));
+    radial-gradient(ellipse 58% 96% at 50% 46%, rgba(3,6,12,.62), rgba(3,6,12,.26) 52%, rgba(3,6,12,0) 86%),
+    radial-gradient(ellipse 76% 118% at 50% 66%, rgba(3,6,12,.34), rgba(3,6,12,.12) 58%, rgba(3,6,12,0) 92%);
   z-index: -1;
 }
 .dlg-head { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 12px; }
@@ -137,7 +141,12 @@ const CSS = `
  * interactive part of the screen. */
 .dlg-ch {
   position: relative; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px;
-  background: linear-gradient(90deg, rgba(4,8,15,.66), rgba(4,8,15,.40) 68%, rgba(4,8,15,.06));
+  /* Dark the whole way across, not just under the label: .dlg-note sits at
+   * margin-left: auto, i.e. at the far right of an 860px panel, and the
+   * first version faded to .06 alpha exactly where it lives. A midday capture
+   * over sandstone showed the labels readable and the effect strings -- which
+   * are the actual decision -- still gone. */
+  background: linear-gradient(90deg, rgba(4,8,15,.84), rgba(4,8,15,.68) 72%, rgba(4,8,15,.46));
   clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 .dlg-ch .dlg-bg {
@@ -147,9 +156,12 @@ const CSS = `
 }
 .dlg-ch .dlg-dot { width: 6px; height: 6px; transform: rotate(45deg); background: var(--ink-4); flex: none; }
 .dlg-ch.on .dlg-dot { background: var(--accent-hot); box-shadow: 0 0 9px rgba(180,220,255,.9); }
+/* Opaque. Every translucent ink token in this file was authored against a HUD
+ * that sits over whatever the camera is pointing at, and a camp conversation
+ * points it at sunlit rock. */
 .dlg-ch .dlg-t {
   font-size: 12.5px; font-weight: 300; letter-spacing: .18em; text-transform: uppercase;
-  color: var(--ink-2); text-shadow: var(--sh-text);
+  color: var(--ink); text-shadow: var(--sh-text);
 }
 .dlg-ch.on .dlg-t { color: #fff; letter-spacing: .22em; }
 /* The note is what the meal is WORTH -- "+600 HP, +25 Vitality" -- which is the

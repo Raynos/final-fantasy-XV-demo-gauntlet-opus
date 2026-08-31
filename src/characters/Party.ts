@@ -540,8 +540,13 @@ export class Party {
        * standing still.
        */
       const chase = 1.12 + 1.08 * THREE.MathUtils.smoothstep(dist, 6, 50);
+      // A companion walking to a camp mark has no player speed to inherit --
+      // the player is standing at the fire -- so `playerSpeed + 1.9` is a
+      // 1.9 m/s stroll and the retinue arrives after the conversation is over.
+      // A brisk 3.6 only while `stations` is set; normal following is untouched.
+      const urge = dist > 2.4 ? (st ? 3.6 : 1.9) : 0.5;
       const wanted = Math.min(
-        (playerSpeed + (dist > 2.4 ? 1.9 : 0.5)) * m.speedMul,
+        (playerSpeed + urge) * m.speedMul,
         player.runSpeed * chase
       ) * arrive;
 
