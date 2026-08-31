@@ -976,3 +976,24 @@ is landed.
   hub. Pre-existing, and fatal the moment a prompt's `enabled` hung off that
   bind. `chocobo-reach`
 
+
+- **`galdin_restaurant` is shot from under a parasol.** 80% of the frame is the
+  flat maroon underside of a canopy; the picture is a sliver of paving, one
+  NPC's leg and a shadow along the bottom edge. It is the smallest healthy
+  frame in the corpus after the whiteout fix — 48 096 B against a corpus median
+  of 244 320 — and it is a stand/aim problem in `src/game/Shots.ts`, not a
+  render one. `tmp/wf/corpus/galdin_restaurant.jpg`. `white-frames`
+- **`dun_balouve_drift` is 78.5% crushed black** — 78.5% of the frame is at or
+  below 3/255, `meanL` 2.01, `p50` 1.0, and the whole picture is one lit stone
+  shaft at frame centre with drifting motes around it. It reads as a deliberate
+  dark mine and it is still too crushed to be good; it is also the single
+  tightest margin `framecheck`'s `black% >= 98` has (1.25x), so opening it up
+  buys the gate room as well as buying the frame a picture.
+  `tmp/wf/corpus/dun_balouve_drift.jpg`. `white-frames`
+- **The Insomnia LOD's "solid pure-white blocks" at night were probably this
+  bug, not an emissive problem.** `HUMAN_REVIEW.md` records `capital_mega_cityLit`
+  clipping to pure white in `tmp/shots/l21-arc/MO_7.jpg`. `capital_mega_city` is
+  one of the 43 meshes whose vertex colour came back out of `geo.bin.gz` as an
+  unnormalised `UNSIGNED_SHORT` (`e848801`), and `zone_mencemoor` went from
+  84.2% clipped pixels to 0.58% on the fix alone. **Re-shoot `MO_7` before
+  spending an art round on it.** `white-frames`
