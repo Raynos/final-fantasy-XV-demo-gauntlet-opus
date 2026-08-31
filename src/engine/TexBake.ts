@@ -39,6 +39,25 @@ import { demoActive } from './Device.ts';
 /** Container magic. Bump the version whenever the layout below changes. */
 const MAGIC = 'EOSTEX01';
 export const TEX_BAKE_VERSION = 1;
+
+/**
+ * The **image** container's magic. Same index, different payload.
+ *
+ * `EOSTEX01` stores each texture as four gzipped byte planes. That is a
+ * reasonable thing to do to arbitrary bytes and a poor thing to do to a
+ * picture: measured over 39 textures, gzip manages ~2.5x on this data while
+ * **WebP q80 manages 7.5x** on the same bytes, because gzip has no idea the
+ * bytes are a picture and WebP does.
+ *
+ * So the phone fetches `baked/m/*`, where every entry is a WebP file and the
+ * header carries the quality it was written at. The index is byte-for-byte the
+ * same shape, so `take()`, `compactTexBake()` and every consumer are unchanged
+ * — only the decode differs, and it is `createImageBitmap`, which is off the
+ * main thread and therefore *less* main-thread work than the inflate it
+ * replaces.
+ */
+const IMG_MAGIC = 'EOSTIM01';
+export const TEX_IMAGE_VERSION = 1;
 /**
  * Where the build step drops the artifacts, relative to the site root.
  *
@@ -196,6 +215,65 @@ export function encodeTexBake(hash: string, keep: (key: string) => boolean = () 
   return out;
 }
 
+/** One image entry: the index fields, plus where its file sits in the body. */
+interface ImgEntry { k: string; w: number; h: number; off: number; len: number }
+
+/** Is this an image container rather than a plane container? */
+function isImageContainer(buf: Uint8Array): boolean {
+  if (buf.length < 12) return false;
+  for (let i = 0; i < 8; i++) if (buf[i] !== IMG_MAGIC.charCodeAt(i)) return false;
+  return true;
+}
+
+/**
+ * Decode an image container into {@link store}.
+ *
+ * Async, unlike its plane sibling, because image decode is. Everything
+ * downstream stays synchronous: by the time this resolves the index holds
+ * plain texel buffers and no consumer can tell which container they came from.
+ *
+ * A single texture that fails to decode is skipped rather than failing the
+ * container — the generator is still the source of truth and a miss costs the
+ * boot it used to cost. See the file docblock's "every failure path
+ * regenerates".
+ */
+async function decodeImageBake(buf: Uint8Array): Promise<boolean> {
+  if (!isImageContainer(buf)) return false;
+  if (typeof createImageBitmap !== 'function') return false;
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const hlen = dv.getUint32(8, true);
+  const header = JSON.parse(new TextDecoder().decode(buf.subarray(12, 12 + hlen)));
+  if (header.version !== TEX_IMAGE_VERSION) return false;
+  const body = 12 + hlen;
+
+  // One canvas for the whole container, resized per texture. `willReadFrequently`
+  // keeps Chromium from round-tripping the surface to the GPU between the draw
+  // and the read, which is the whole cost here.
+  const cv = typeof OffscreenCanvas === 'function'
+    ? new OffscreenCanvas(1, 1)
+    : Object.assign(document.createElement('canvas'), { width: 1, height: 1 });
+  const ctx = (cv as OffscreenCanvas).getContext('2d', { willReadFrequently: true }) as
+    OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return false;
+
+  if (!store) store = { index: new Map() };
+  let n = 0;
+  for (const e of header.entries as ImgEntry[]) {
+    try {
+      const bytes = buf.subarray(body + e.off, body + e.off + e.len);
+      const bmp = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/webp' }));
+      cv.width = e.w; cv.height = e.h;
+      ctx.clearRect(0, 0, e.w, e.h);
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+      const px = ctx.getImageData(0, 0, e.w, e.h).data;
+      store.index.set(e.k, { k: e.k, w: e.w, h: e.h, off: 0, buf: new Uint8Array(px.buffer.slice(0)) });
+      n++;
+    } catch { /* one texture regenerates; the container is still worth having */ }
+  }
+  return n > 0;
+}
+
 /** Parse a container into {@link store}. @returns false if it is not one */
 function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
   if (buf.length < 12) return false;
@@ -219,16 +297,34 @@ function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
  *
  * @returns true when the cache is live
  */
+/**
+ * The five containers, by tier, for whichever encoding this page wants.
+ *
+ * A phone gets `baked/m/<tier>.bin` — WebP, ~7.5x smaller than the gzipped
+ * planes — and everything else gets the plane containers it always did. One
+ * build, two data sets: the choice is made here, synchronously, at module
+ * evaluation, and it is made *before* the first `fetch` goes out, so a phone
+ * never learns the desktop URLs exist.
+ *
+ * Falling back is automatic and free: `fetchContainers` treats a 404 as a
+ * miss, and a miss is the generator, which is what produced these bytes in the
+ * first place. So a deploy that forgot to run `texbake --webp` is slow on a
+ * phone rather than broken on one.
+ */
+function tierPath(tier: 'tex' | 'texc' | 'texd' | 'texp' | 'texcp'): string {
+  return demoActive() ? `baked/m/${tier}.bin` : `baked/${tier}.bin.gz`;
+}
+
 export function loadTexBake(): Promise<boolean> {
   if (loading) return loading;
   // Both boot artifacts, in parallel, and a missing one is not an error: the
   // canvas half is baked by a separate opt-in command and is routinely absent
   // on a fresh clone. `texd` is NOT here — see {@link loadDeferredTexBake}.
-  const boot = [TEX_BAKE_PATH, TEX_CANVAS_PATH];
+  const boot = [tierPath('tex'), tierPath('texc')];
   // The phone tier is a boot artifact on every page but the demo, where the
   // three consumers that read it have a lazy path and the bytes go after the
   // first frame instead.
-  if (!demoActive()) boot.push(TEX_PHONE_PATH, TEX_CANVAS_PHONE_PATH);
+  if (!demoActive()) boot.push(tierPath('texp'), tierPath('texcp'));
   loading = fetchContainers(boot);
   return loading;
 }
@@ -248,8 +344,8 @@ export function loadTexBake(): Promise<boolean> {
 export function loadDeferredTexBake(): Promise<boolean> {
   if (deferredLoading) return deferredLoading;
   deferredLoading = fetchContainers(demoActive()
-    ? [TEX_DEFERRED_PATH, TEX_PHONE_PATH, TEX_CANVAS_PHONE_PATH]
-    : [TEX_DEFERRED_PATH]);
+    ? [tierPath('texd'), tierPath('texp'), tierPath('texcp')]
+    : [tierPath('texd')]);
   return deferredLoading;
 }
 
@@ -278,6 +374,11 @@ async function fetchContainers(paths: string[]): Promise<boolean> {
       // vite dev and preview both recognise `.gz` and send `Content-Encoding:
       // gzip`, in which case the body is already inflated; inflating again
       // aborts the stream. Only decode in JS when the transfer was opaque.
+      // An image container is already compressed and is not gzipped on disk,
+      // so it is read straight through. The magic decides, not the filename.
+      if (path.endsWith('.bin')) {
+        return await decodeImageBake(new Uint8Array(await res.arrayBuffer()));
+      }
       const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
       const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
       return decodeTexBake(new Uint8Array(await new Response(body).arrayBuffer()), null);

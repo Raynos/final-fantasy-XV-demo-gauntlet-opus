@@ -1,6 +1,14 @@
 # Mobile 10×: download, load and frame rate
 
-Status: **PROPOSED — needs a ruling on the three decisions in §6.**
+Status: **APPROVED — all four rulings taken, building.**
+
+> **Rulings (2026-08-31):**
+> 1. **One build, two data sets.** No second bundle; a `baked/m/` of
+>    image-encoded textures selected at runtime by the detection that exists.
+> 2. **WebP q78 albedo, q92 normals.** Alpha preserved.
+> 3. **Insomnia's skyline becomes a flat impostor** on the phone — keep the
+>    silhouette, pay 1 draw instead of 18.
+> 4. **The whole programme**, all five steps.
 
 The ask: **10× less to download, 10× faster to load, 10× the frame rate**, with
 two builds and two URLs on the table if that is what it takes.
