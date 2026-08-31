@@ -205,6 +205,7 @@ const FOOT_MIN = Number(window.__PLAY_FOOT_LEG || 2);
 let mode = 'foot';
 let legEndF = NIGHT_DRIVE ? 0 : Infinity;
 let driveM = 0, driveFrames = 0, footFrames = 0;
+let depthMin = Infinity, depthMax = -Infinity;
 let refuels = 0, roadWraps = 0, pulledOver = 0, seenNightSpawns = 0;
 const roadPt = { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
 const retarget = () => {
@@ -351,6 +352,9 @@ for (let f = 0; f < FRAMES; f++) {
     }
   }
   if (f % 3600 === 0) {
+    const dh = depthNow();
+    if (dh < depthMin) depthMin = dh;
+    if (dh > depthMax) depthMax = dh;
     if (performance.memory) heap.push(Math.round(performance.memory.usedJSHeapSize / 1e6));
     if (f) console.log(`[longplay] game minute ${f / 3600}/${MINUTES} — `
       + `${wallMin().toFixed(1)} min wall, ${(travelled / 1000).toFixed(2)} km, `
@@ -410,6 +414,16 @@ for (let f = 0; f < FRAMES; f++) {
 inp.keys.clear();
 step(30);
 
+// **Snapshot the clock HERE.** The dead-end checks below call
+// `rpg.camp({force:true})`, and camping sleeps until morning — so reading the
+// hour after them reported a 23:12 night session as "06:30, depth 0.00" and
+// failed its own night checks on a run that had been at night throughout.
+// Everything printed or asserted about the time of day reads these three.
+const clockPlayed = clockNow();
+const depthPlayed = depthNow();
+const nightDepthPlayed = day ? day.nightDepth : 0;
+if (depthMin === Infinity) { depthMin = depthPlayed; depthMax = depthPlayed; }
+
 out.push('');
 out.push('--- what happened ---');
 const wallMinutes = wallMin();
@@ -433,8 +447,9 @@ out.push(`  prompts met: ${[...seenPrompts].slice(0, 10).join(' | ') || 'NONE'}`
 // exists is that a PASS which never mentions the time of day is a PASS about
 // an unknown half of the game.
 out.push('');
-out.push(`--- time of day: ${clockNow()}, nightDepth ${(day ? day.nightDepth : 0).toFixed(2)}, `
-  + `nightDanger() ${depthNow().toFixed(2)} ---`);
+out.push(`--- time of day: ${clockPlayed}, nightDepth ${nightDepthPlayed.toFixed(2)}, `
+  + `nightDanger() ${depthPlayed.toFixed(2)} `
+  + `(held ${depthMin.toFixed(2)}..${depthMax.toFixed(2)} across the session) ---`);
 if (!NIGHT) {
   out.push('  day session: RegaliaSystem._nightRoadDanger cannot fire below 0.5 depth '
     + 'and was not exercised. Re-run with --set __PLAY_NIGHT=1.');
@@ -447,6 +462,23 @@ if (!NIGHT) {
     + `pulled over for ${pulledOver}`);
   out.push(`  what it put on the road: `
     + `${Object.keys(nightIds).map((k) => `${k} x${nightIds[k]}`).join(', ') || 'nothing'}`);
+  // Why the rolls that landed on nothing landed on nothing, in the order
+  // `_nightRoadDanger` tests them. A bare "0 spawns" is not a finding; "nine of
+  // twelve rolls were inside 90 m of a live daemon" is.
+  const blocked = { depth: 0, suppressed: 0, boss: 0, nearFight: 0, other: 0 };
+  for (const r of rollLog) {
+    if (r.spawned) continue;
+    if (r.depth <= 0.5) blocked.depth++;
+    else if (r.suppress) blocked.suppressed++;
+    else if (r.boss) blocked.boss++;
+    else if (r.near > 0) blocked.nearFight++;
+    else blocked.other++;
+  }
+  const landed = rollLog.filter((r) => r.spawned).length;
+  out.push(`  of ${rollLog.length} rolls: ${landed} landed; blocked by `
+    + `${blocked.depth} depth<=0.5, ${blocked.suppressed} suppressRoamers, `
+    + `${blocked.boss} boss, ${blocked.nearFight} a live enemy within 90 m, `
+    + `${blocked.other} unexplained`);
   for (const r of rollLog.slice(0, 16)) {
     out.push(`    roll @ ${r.min.toFixed(1)} min: depth ${r.depth.toFixed(2)}, `
       + `${r.kmh.toFixed(0)} km/h, suppressRoamers=${r.suppress}, boss=${r.boss}, `
@@ -514,9 +546,10 @@ ok('the shop still sells', (() => {
 if (NIGHT) {
   out.push('');
   out.push('--- the night on the road (RegaliaSystem._nightRoadDanger) ---');
-  ok('the clock is actually at night', (day ? day.nightDepth : 0) > 0.5,
-    `${clockNow()}, depth ${(day ? day.nightDepth : 0).toFixed(2)}`);
-  ok('nightDanger() clears the 0.5 floor', depthNow() > 0.5, `${depthNow().toFixed(2)}`);
+  ok('the clock is actually at night', nightDepthPlayed > 0.5,
+    `${clockPlayed}, depth ${nightDepthPlayed.toFixed(2)}`);
+  ok('nightDanger() clears the 0.5 floor', depthMin > 0.5,
+    `${depthMin.toFixed(2)}..${depthMax.toFixed(2)} across the session`);
   ok('the car was actually driven', driveM > 2000,
     `${(driveM / 1000).toFixed(2)} km over ${(driveFrames / 3600).toFixed(1)} game min`);
   ok('the danger roll was reached at all', nightCalls > 0, `${nightCalls} frames`);
@@ -530,9 +563,9 @@ if (NIGHT) {
 
 out.push('');
 out.push(fails.length
-  ? `*** ${fails.length} DEAD END(S) in ${MINUTES} min at ${clockNow()}`
+  ? `*** ${fails.length} DEAD END(S) in ${MINUTES} min at ${clockPlayed}`
     + `${NIGHT ? ' (night, on the road)' : ' (day, on foot)'}: ${fails.join(', ')} ***`
-  : `PASS — ${MINUTES} minutes of continuous play at ${clockNow()}`
+  : `PASS — ${MINUTES} minutes of continuous play at ${clockPlayed}`
     + `${NIGHT ? `, ${(driveM / 1000).toFixed(1)} km of it driving after dark, `
       + `${nightSpawns} roadside ambush(es)` : ' (DAY, on foot — the night was not tested)'}`
     + `, nothing wedged.`);
