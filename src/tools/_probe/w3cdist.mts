@@ -37,6 +37,18 @@ const wrap = (sys) => {
   sys.update = (dt, game) => { orig(dt, game); restore(); };
   sys.__pinned = true;
 };
+// Pin the blink too. `framecam` settles 60 frames per spec, so which heroes
+// happen to be mid-blink changes between runs, and a closed lid reads as
+// exactly the defect this lane is measuring — a dark band where the eyes go.
+const noBlink = (m) => {
+  const ch = m && m.character;
+  if (!ch || !ch.anim || ch.anim.__w3c) return;
+  const orig = ch.anim.update.bind(ch.anim);
+  ch.anim.update = (dt, st) => { orig(dt, st); ch.anim.blink = 0; };
+  ch.anim.__w3c = true;
+};
+noBlink(player);
+if (party) for (const m of party.members) noBlink(m);
 if (player && player.root) pin(player.root, player);
 if (party) for (const m of party.members) pin(m.root, m);
 wrap(player); wrap(party);
