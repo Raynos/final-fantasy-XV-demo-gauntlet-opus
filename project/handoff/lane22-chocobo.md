@@ -77,9 +77,31 @@ Every candidate is measured cold and again after the player is teleported to
 within 30 m and given 90 frames, because `Terrain.heightAt` answers differently
 before and after the clipmap settles. They agreed at all three sites.
 
+### Birds in the paddock
+
+**Verified by eye** (`tmp/shots/l22kit5/near.jpg`, 40 m): three yellow chocobos
+standing in the yard, well separated, and the place finally reads as a chocobo
+post rather than as a farm with nothing in it. `_chocobo` publishes `bird0..2`
+and `ChocoboHub._paddock` builds them at 150 m and drops them at 210 (the gap
+is hysteresis), **gated on the camera, not the player**, because `PoiKits._make`
+builds on camera distance and every free-camera framing would otherwise
+photograph a built yard with an empty pen.
+
+All three are yellow deliberately: `_prototype` memoises per colour and a second
+colour is a second whole rig built as the player crests the hill. Their cost is
+the lane's own measured 2.7 draws each — eight of 800.
+
+The first placement put two of them 3.8 m apart and the frame caught the camera
+along that line, so they overlapped into one two-headed bird. Nothing is now
+closer than 7 m to another bird.
+
 ### `race_paddock` still wins after all of it
 
-`21.75 s against a par of 25`, gil and AP paid, waypoint and clock cleaned up.
+**23.67 s against a par of 27.** It was 21.75 against 25 until `startLine`
+moved onto the kit's `gate` anchor — the actual gap in the fence rather than a
+world-axis offset from the pin — which is a longer run to gate 1. **Par is set
+off the measured perfect lap and never estimated**; 27 restores the 14% cushion
+that 25 had against 21.75.
 
 ## The Alpine Stable: still cut, and the reason is not this kit
 
@@ -103,15 +125,28 @@ Wiz a 200 m barn.
 
 ## Where to pick this up (the exact next step)
 
-1. **The bird's sculpt, from lifetime 2's frames, not yet re-shot.** The
-   thigh/hip masses are two bald spheres butted onto the shingled flank with no
-   transition; the cream chest bib is a separate smooth egg with a hard seam;
-   the shoulder/fore-flank still spikes into triangular tips because the pitch
-   falloff `0.30 * (1 - phi0 * 0.28)` is keyed on the ring angle and the forward
-   stations need it too. **Re-shoot `chocobostage --set __MODE=ride` first.**
-2. **The rider's arms.** `POSE_RIDE` is provably mirror-symmetric
-   (`Skeleton.ts`:154 mirrors bone *translation* only), so the pose table is not
-   the bug — **re-shoot before re-tuning**; `e8051ea` widened the ride framings.
+1. **The bird's sculpt** — two rounds landed this lifetime, the second not yet
+   verified. Round 1 (`0d1a38c`) added hip coverts, bib down and a shoulder
+   pitch falloff; a look-loop found **two of the three had missed, each by a
+   radius**: the coverts were quilled 0.055 from the thigh's *centreline* while
+   its outer surface is at 0.355, so they hung inside the leg, and the shoulder
+   falloff overshot into "a plain smooth yellow blob with essentially no feather
+   read at all". Round 2 (`da354da`) puts the coverts at 0.17, raises the pitch
+   floor to 0.13 with a 0.06 alternating tone step, and — a defect the look-loop
+   found on its own — moves the **stirrup leather and iron from x 0.350 to
+   0.435**, because the barrel's radius there is 0.37 and the iron was reading
+   as "a black C arc painted on the flank" in every side and rear frame.
+   **Re-shoot and check round 2.**
+2. **The rider's arms: the pose table is exonerated and the cause is named.**
+   `POSE_RIDE` is mirror-symmetric (`Skeleton.ts`:154 mirrors bone *translation*
+   only) — and a look-loop at close crop reports that **one hand mesh is a
+   closed black glove and the other a bare open hand**, so a symmetric pose
+   still renders asymmetric. The far hand also sits at chin height over empty
+   air while both reins droop unheld from the bit to the withers. So there are
+   two separate items and neither is `POSE_RIDE`: (a) the hands are not the same
+   mesh — find out whether that is the party rig or a *second rider* from the
+   flock caught in the crop, which was hypothesis (b) all along; (b) nothing
+   holds the reins, which is a rein-attachment problem, not a pose one.
 3. `M.cloth` is a navy canvas and the hay tarp reads as a dark blue tent. Shared
    material, six kits use it; needs a hay-tarp colour or the tarp dropping.
 4. **Grass punches through the gravel apron** at Wiz in every bearing — green
@@ -232,5 +267,7 @@ Lifetime 3: `653a0e3` the kit's four frame-found defects · `3dfb43c` the
 gateway and the tarp · `76096bb` `chocobolegal.mts` · `3ac09cb` the prompts
 onto the kit's anchors · `353b843` `chocobodraws`' settle · `a800bb5` the
 phase fix and its numbers · `0d1a38c` the three sculpt seams (**not yet
-verified by eye**) · `3d8a760` + `9423058` birds in the paddock (**not yet
-verified by eye**).
+verified by eye**) · `3d8a760` + `9423058` birds in the paddock (**verified**)
+· `da354da` the sculpt again after a look-loop (**not yet verified**) ·
+`529be22` bird spacing and the gateway's blank slab · `08e8f91` the start line
+onto the gateway · `f51ce0b` stalls behind the barn door and par 25 -> 27.
