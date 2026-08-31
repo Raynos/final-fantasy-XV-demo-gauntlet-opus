@@ -43,6 +43,61 @@ export interface Vitals {
   ko?: boolean;
 }
 
+/**
+ * Hide a character whose mesh the camera is standing inside.
+ *
+ * Playtest complaint #14: "companions constantly clip into the camera -- one
+ * filled the bottom-right quarter of the screen, huge and out of focus, for
+ * several seconds", and a camera lane filed the same thing about Noctis
+ * himself, as "there is no player-mesh fade below a ~1.2 m camera arm". Two
+ * reports, one geometry: below about a metre a character is not a character,
+ * it is a wall of out-of-focus cloth with the world behind it.
+ *
+ * **It hides rather than fades, and that is deliberate.** three's program cache
+ * key includes `parameters.opaque`, which is
+ * `transparent === false && blending === NormalBlending && alphaToCoverage === false`
+ * -- so animating `material.transparent` to fade a character out recompiles
+ * every program it touches, which is the shape of the 9.5 s freeze
+ * `project/LANDMINES.md` records for toggling a light's `visible`. Permanently
+ * transparent characters would instead move four skinned meshes into the
+ * back-to-front bucket and sort hair against face. Neither is worth paying for
+ * a transition nobody can see: at 0.85 m the mesh already fills the frame, so
+ * the pop happens inside an object that occupies every pixel of it.
+ *
+ * The real fix for the companions is upstream, in `Party.update` -- the camera
+ * is a separation obstacle there now, so they should rarely reach this. This is
+ * the backstop for the cases geometry cannot prevent, mainly a camera pushed
+ * onto the player by a wall.
+ *
+ * @param camera the render camera
+ * @param character the character whose `root` group is toggled
+ * @param footY world y of the character's feet
+ * @param x world x of the character's feet
+ * @param z world z of the character's feet
+ */
+export function cullNearCamera(
+  camera: THREE.Camera | null | undefined,
+  character: { root: THREE.Object3D } | null | undefined,
+  x: number, footY: number, z: number
+) {
+  if (!camera || !character || !character.root) return;
+  // Chest height, not the feet: the camera arm sits at eye level and the
+  // distance that matters is to the mass in front of the lens.
+  const dx = camera.position.x - x;
+  const dy = camera.position.y - (footY + CULL_CHEST_Y);
+  const dz = camera.position.z - z;
+  const vis = (dx * dx + dy * dy + dz * dz) > CULL_RADIUS * CULL_RADIUS;
+  if (character.root.visible !== vis) character.root.visible = vis;
+}
+
+/**
+ * Chest height above the feet, and the radius inside which a character is
+ * hidden. 0.85 m to the chest axis is about 0.6 m to the nearest shoulder,
+ * which is inside the 1.1 m the rig treats as its comfort minimum.
+ */
+const CULL_CHEST_Y = 1.10;
+const CULL_RADIUS = 0.85;
+
 export class Player {
   _gazeOn!: boolean;
   _gazeT!: number;
@@ -241,6 +296,11 @@ export class Player {
       combat: combat && combat.inCombat ? 1 : 0,
       weaponHand: 'R',
     });
+
+    // The camera can end up standing inside Noctis whenever a wall shortens
+    // the arm; below 0.85 m he is a wall of out-of-focus cloth. See
+    // `cullNearCamera` for why this hides rather than fades.
+    cullNearCamera(cam, this.character, this.root.position.x, this.root.position.y, this.root.position.z);
   }
 
   /**

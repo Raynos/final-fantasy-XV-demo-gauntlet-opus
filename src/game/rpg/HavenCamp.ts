@@ -92,6 +92,36 @@ export class HavenCamp {
     rpg.day.discoverHaven(haven.id);
 
     /**
+     * Bring the retinue to the fire.
+     *
+     * Playtest complaint #7 ends: "and the party isn't at the camp -- Ignis
+     * talks to me about tonight's recipe from an empty campsite." He does, and
+     * the reason is that nothing in the game had ever asked the party to be
+     * anywhere except behind Noctis. `Party`'s three formation slots are a
+     * wedge off his shoulder, and they hold it perfectly well while he stands
+     * on a haven listening to a man standing behind his left ear.
+     *
+     * `Party.stationAt` overrides the slot rather than teleporting, so they
+     * walk in over a second or two with the steering, separation, arrival
+     * damping and ground-following they already have. The ring's open sector
+     * faces the player -- `phase` is the bearing from the fire back to Noctis
+     * -- so nobody is sent to stand where he is.
+     *
+     * Released from `onEnd`, which `Dialogue.end` calls on every exit
+     * including Escape, rather than from each terminal node: a release that
+     * three of four paths reach is a party permanently frozen at a campsite the
+     * player left an hour ago.
+     */
+    const party = game?.get?.('Party');
+    if (party && party.stationAt) {
+      const px = game?.get?.('Player')?.position;
+      const phase = px
+        ? Math.atan2(px.x - haven.pos[0], px.z - haven.pos[2]) + Math.PI
+        : 0;
+      party.stationAt(haven.pos[0], haven.pos[2], 2.9, phase);
+    }
+
+    /**
      * What the night did, read back by the `slept` and `failed` lines.
      * `CampResult` is the refusal union too, which is why every read below
      * narrows on `ok` or on `exp` before it touches a field.
@@ -132,6 +162,7 @@ export class HavenCamp {
       role: 'Haven',
       hue: 205,
       start: 'arrive',
+      onEnd: () => { if (party && party.release) party.release(); },
       nodes: {
         arrive: {
           lines: () => {

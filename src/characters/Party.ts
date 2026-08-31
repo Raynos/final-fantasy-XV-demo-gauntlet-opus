@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeCharacter } from './Cast.ts';
-import { dampAngle, angleDelta } from './Player.ts';
+import { dampAngle, angleDelta, cullNearCamera } from './Player.ts';
 import { ROLES } from './ai/PartyAI.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
 import { Rng } from '../util/Rng.ts';
@@ -132,6 +132,26 @@ const SPECS: { key: CompanionKey, slot: [number, number], speedMul: number, lag:
 const PARTY_SEED = 9182;
 
 /**
+ * How close a companion may get to the camera, in plan, and how hard they are
+ * pushed off it.
+ *
+ * Playtest complaint #14: "companions constantly clip into the camera -- one
+ * filled the bottom-right quarter of the screen, huge and out of focus, for
+ * several seconds". This is not bad luck. The three formation slots are
+ * [-1.95, -0.95], [1.85, -1.45] and [0.85, -2.75] -- *behind* Noctis -- and the
+ * third-person arm is also behind Noctis, at 2.5 to 3.5 m and shorter than that
+ * wherever `CameraOccluders` finds a rock. Prompto's slot is 2.75 m back. The
+ * camera and the companion are being told to stand in the same place, and when
+ * the arm shortens against a wall the companion wins.
+ *
+ * There is already machinery for "do not stand there": the separation pushes
+ * that keep them off Noctis and off each other. The camera is simply one more
+ * obstacle, and a bigger one, because unlike a companion it is a lens.
+ */
+const CAM_CLEAR = 2.4;
+const CAM_PUSH = 3.6;
+
+/**
  * Gladiolus, Ignis and Prompto following Noctis.
  *
  * Each companion steers toward a slot defined in the player's frame — offset
@@ -162,6 +182,43 @@ export class Party {
    * so the foot IK has nothing to plant on at 100 km/h.
    */
   terrain!: Ground | undefined;
+  /**
+   * Scripted marks, one per member in {@link SPECS} order, or null for the
+   * formation. `[x, z]` in world space. Set by {@link stationAt}; the members
+   * *walk* to them through the ordinary steering rather than being placed, so a
+   * camp fills up over a second or two the way it should.
+   */
+  stations: [number, number][] | null = null;
+
+  /**
+   * Send the retinue to a ring of marks around a point and hold them there.
+   *
+   * `HavenCamp` calls this when the camp conversation opens: the playtest's
+   * "the party isn't at the camp -- Ignis talks to me about tonight's recipe
+   * from an empty campsite" is a formation doing its job in the one place the
+   * formation is wrong. `release()` puts them back.
+   *
+   * @param x centre, usually the fire
+   * @param z centre
+   * @param radius how far off the centre they stand
+   * @param phase rotates the ring, so nobody stands where the player does
+   */
+  stationAt(x: number, z: number, radius = 2.9, phase = 0) {
+    const n = this.members ? this.members.length : SPECS.length;
+    const marks: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      // Spread over 260 degrees rather than 360: the open sector is where the
+      // player walks in, and three people evenly around a fire with a fourth
+      // squeezing between them reads as a queue, not a camp.
+      const a = phase + (i / Math.max(1, n - 1) - 0.5) * 4.54;
+      marks.push([x + Math.sin(a) * radius, z + Math.cos(a) * radius]);
+    }
+    this.stations = marks;
+  }
+
+  /** Back to the formation. Safe to call when nothing was stationed. */
+  release() { this.stations = null; }
+
   async init(game: Game) {
     this.game = game;
     this.members = [];
@@ -388,6 +445,20 @@ export class Party {
 
       // formation slot in the player's frame, breathing with a slow wander
       this._slotTarget(m, pp, cos, sin, m._target);
+      /**
+       * ...unless something has given them a mark to stand on.
+       *
+       * `HavenCamp` sets these. Playtest complaint #7 ended with "and the party
+       * isn't at the camp -- Ignis talks to me about tonight's recipe from an
+       * empty campsite", which is exactly what a formation slot does: three
+       * people in a wedge behind Noctis's shoulder, wherever Noctis happens to
+       * be standing, while the fire, the chairs and the stove sit empty two
+       * metres away. Overriding the slot rather than teleporting them means
+       * they *walk* to the camp with the steering, separation, arrival damping
+       * and ground-following they already have, and the release is one field.
+       */
+      const st = this.stations && this.stations[i];
+      if (st) m._target.set(st[0], m._target.y, st[1]);
       const tx = m._target.x, tz = m._target.z;
 
       const steer = m._steer.set(tx - m.root.position.x, 0, tz - m.root.position.z);
@@ -438,6 +509,8 @@ export class Party {
         if (d < minD && d > 1e-4) push.add(new THREE.Vector3(dx / d, 0, dz / d).multiplyScalar((minD - d) * weight));
       };
       addPush(pp.x, pp.z, 1.30, 2.6);
+      // and off the lens -- see CAM_CLEAR
+      if (game.camera) addPush(game.camera.position.x, game.camera.position.z, CAM_CLEAR, CAM_PUSH);
       for (let j = 0; j < this.members.length; j++) {
         if (j === i) continue;
         const o = this.members[j];
@@ -546,6 +619,11 @@ export class Party {
         // `PartyAI._equip` sockets every companion weapon into `attach.handR`
         weaponHand: 'R',
       });
+
+      // Backstop for the frames the push above cannot win: a companion pinned
+      // between the lens and a wall is hidden rather than drawn as a screenful
+      // of shoulder. Same call, same numbers, as Noctis gets in `Player`.
+      cullNearCamera(game.camera, m.character, m.root.position.x, m.root.position.y, m.root.position.z);
     }
   }
 }
