@@ -714,3 +714,28 @@ the coordinator's two shots only **`galdin_pier_sunset`** was on the deck, at
 
 Nine candidates from three shore stands (`tmp/shots/l21-pier/`), three aims each:
 west into the setting sun, south-west along the shallows, and out to sea.
+
+## NOT DONE — the exact next step, in order
+
+1. **`galdin_pier_sunset` is still posed on the plaza at `(2324, 15.9, 2371)`
+   and must move to the shore.** Nine candidates are captured in
+   `tmp/shots/l21-pier/` from three stands on the 220 m waterline (`PS0` north
+   `(2525, 0.9, 2380)`, `PS1` `(2518, 1.4, 2430)`, `PS2` `(2499, 0.8, 2478)`),
+   three aims each — `w` west into the setting sun fov 40, `sw` south-west along
+   the shallows fov 44, `o` out to sea fov 40. **Read them and land the best.**
+   The framings are in `tmp/shots/l21-pier/_resolved.json`.
+2. **Then, and only then, measure the five noise floors.** They must be taken
+   against the *final* framings, so measuring before (1) lands is wasted work.
+   `tmp/nf-l21a/` already holds ONE cold capture of the five at
+   sha `f8f3aebbc77d` — **it is stale the moment `galdin_pier_sunset` moves, and
+   `shoot.mts` does not empty `--out`, so use a FRESH pair of directory names,
+   never `tmp/nf/a` and `tmp/nf/b`** (LANDMINES: `--calibrate` rewrote thirteen
+   cross-build rows in silence). Two `--cold` captures, `imgdiff --calibrate`,
+   then **diff `project/noise-floors.json` and check that only the five rows you
+   shot moved** — `--calibrate` rewrites whatever it finds and does not merge.
+3. The three re-shot city frames are in `tmp/shots/l21-city2/` and are being read
+   as this is written; if the shin fix reads clean they need no further work.
+4. Nine subjects stay out of the corpus and each is waiting on a *content* fix,
+   not a framing — see the refusal table above and the residue list. The moment
+   `PoiKits._landmark`'s generic tail gets a material, five rows can be landed
+   from framings that are already measured (`tmp/shots/l21-arc/_resolved.json`).
