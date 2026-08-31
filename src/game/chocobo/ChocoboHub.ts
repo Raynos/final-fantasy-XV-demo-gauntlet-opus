@@ -128,12 +128,17 @@ const _v = new THREE.Vector3();
 export class ChocoboHub {
   _handles!: InteractableHandle[];
   _placed!: boolean;
+  /** Hubs whose prompts have been moved onto the kit's anchors. See {@link _reanchor}. */
+  _anchored!: Set<string>;
+  _tick!: number;
   game!: Game;
   system!: ChocoboSystem;
   constructor(system: ChocoboSystem) {
     this.system = system;
     this._handles = [];
     this._placed = false;
+    this._anchored = new Set();
+    this._tick = 0;
   }
 
   init(game: Game) { this.game = game; }
@@ -148,7 +153,8 @@ export class ChocoboHub {
    * the player crosses a radius is four allocations a frame at the boundary.
    */
   update() {
-    if (this._placed || !this.game) return;
+    if (!this.game) return;
+    if (this._placed) { this._reanchor(); return; }
     const interaction = this.game.get('Interaction');
     const terrain = this.game.get('Terrain');
     if (!interaction || !terrain) return;
@@ -186,6 +192,50 @@ export class ChocoboHub {
     for (const h of this._handles) h.dispose();
     this._handles.length = 0;
     this._placed = false;
+    this._anchored.clear();
+    this._tick = 0;
+  }
+
+  /**
+   * Move the prompts onto the kit's own published anchors, once each hub's
+   * site has actually been built.
+   *
+   * **The offsets in `CHOCOBO_HUBS` are world-axis and `PoiKits._chocobo`
+   * yaws its entire layout**, so the only property an offset there keeps
+   * across the rotation is its radius — which is why the stable and board
+   * prompts sit at 23.7 and 35.4 m, outside the rail, on grass. The kit now
+   * publishes `stable`, `board`, `gate` and `yard` through
+   * {@link PoiKits.anchors}, which are post-yaw by construction.
+   *
+   * It has to be **late-bound**, not read at `init`: `PoiKits._make` runs when
+   * the camera comes within `BUILD_R`, so at boot `anchorAt` returns `null` for
+   * every POI in the world (`CityHub` learned the same thing and says so in its
+   * own docstring). So the prompts are registered off the offsets immediately —
+   * a prompt that exists in the wrong place beats a prompt that does not exist
+   * — and *upgraded* in place the first frame the anchors resolve.
+   *
+   * Polled every 30 frames and given up on after 40 tries, i.e. 20 s of play
+   * inside the build radius. `anchorAt` is a linear scan of every built site;
+   * two hubs times 139 POIs every frame forever is not a thing to spend on a
+   * lookup whose answer stops changing.
+   */
+  _reanchor() {
+    if (this._anchored.size >= CHOCOBO_HUBS.length || ++this._tick > 30 * 40) return;
+    if (this._tick % 30) return;
+    const kits = this.game.get('Props')?.poiKits;
+    const interaction = this.game.get('Interaction');
+    if (!kits || !interaction) return;
+    for (const hub of CHOCOBO_HUBS) {
+      if (this._anchored.has(hub.key)) continue;
+      const stable = kits.anchorAt(hub.poi, 'stable');
+      if (!stable) continue;
+      this._anchored.add(hub.key);
+      const board = kits.anchorAt(hub.poi, 'board');
+      for (const [id, at] of [[`chocobo-stable-${hub.key}`, stable], [`chocobo-races-${hub.key}`, board]] as Array<[string, THREE.Vector3 | null]>) {
+        const item = interaction.items?.get(id);
+        if (item && at) item.pos.set(at.x, at.y + 0.1, at.z);
+      }
+    }
   }
 
   /* ------------------------------------------------------------ the stable */

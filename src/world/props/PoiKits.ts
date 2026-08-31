@@ -2335,7 +2335,39 @@ export class PoiKits {
     put(M.plank, new THREE.CylinderGeometry(0.13, 0.15, 4.6, 6), [13, 2.3, 12]);
     put(M.sign, new THREE.PlaneGeometry(3.4, 1.8), [13, 4.4, 12.1]);
     put(M.cream, box(3.6, 2.0, 0.16, { arris: 0.04 }), [13, 4.4, 12]);
-    return { cast: true, r: 26 };
+
+    /*
+     * **Where the stable's verbs belong, published, so nothing has to guess.**
+     *
+     * `CHOCOBO_HUBS` places its four prompts as *world-axis* offsets from the
+     * POI pin — and this kit rotates its whole layout by a per-site yaw that
+     * table cannot see, so the only property such an offset keeps is its
+     * radius. Its own comment says as much and concludes that there is no
+     * yaw-blind spot inside the paddock guaranteed to be empty, so the prompts
+     * sit at 23.7 and 35.4 m: outside the rail, on grass, four metres the
+     * wrong side of a fence from the thing they name.
+     *
+     * That is what {@link KitResult.anchors} is for. Post-yaw and pre-position,
+     * exactly as `_town` publishes its sarcophagus, so `anchorAt` adds the
+     * group's own position and the caller gets a world point on this pad.
+     *
+     *   `stable`  2.6 m out from the sliding door, on the apron
+     *   `board`   1.9 m in front of the signboard, facing the yard
+     *   `gate`    the middle of the gateway, which is also the way in
+     *   `yard`    the open half of the paddock, clear of every part above
+     */
+    const A: Record<string, [number, number, number]> = {};
+    const gateA = Math.PI / 2;
+    for (const [name, lx, lz] of [
+      ['stable', BARN_X - 2.9, BARN_Z + 4.5 + 2.6],
+      ['board', 11.8, 10.4],
+      ['gate', Math.cos(gateA) * R * Math.cos(GATE_HALF), Math.sin(gateA) * R * Math.cos(GATE_HALF)],
+      ['yard', 5, 5],
+    ] as Array<[string, number, number]>) {
+      const v = new THREE.Vector3(lx, 0, lz).applyMatrix4(world);
+      A[name] = [v.x, v.y, v.z];
+    }
+    return { cast: true, r: 26, anchors: A };
   }
 
   /**
