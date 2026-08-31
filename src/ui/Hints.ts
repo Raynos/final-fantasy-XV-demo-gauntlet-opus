@@ -212,6 +212,32 @@ export class Hints {
         ['F', 'I', 'V'], 'machinery');
     }
 
+    // The chocobo. She is summonable from minute one -- `chocobo_whistle` is in
+    // `STARTING_ITEMS`, `Digit6` whistles, she arrives from 22 m and rides at
+    // 11.00 m/s -- and the entire feature shipped dark: no row on the controls
+    // card, both chocobo map points unsurveyed, and no bird standing anywhere
+    // near where the game starts you. A blind playtester wrote "after several
+    // minutes I gave up without ever learning whether riding one was a thing I
+    // could do", which is the whole system paid for and never seen.
+    //
+    // Gated on actually owning the whistle rather than on a chapter, so it
+    // stays true if the item ever moves out of `STARTING_ITEMS`, and it waits
+    // for the player to be on foot and out of the car -- a hint about a mount
+    // while you are driving is noise.
+    const choco = game.get?.('Chocobo');
+    const rpg = game.get?.('Rpg');
+    const rega = game.get?.('Regalia');
+    const hasWhistle = !!rpg?.inventory?.count?.('chocobo_whistle');
+    if (choco && choco.enabled && hasWhistle && !choco.bird && !(rega && rega.isDriving)
+      && game.time.now > 40) {
+      this.show('chocobo',
+        'You have a whistle',
+        'Press 6 anywhere in the field and a chocobo comes to you. Stand beside her and '
+        + 'press E to ride: she is faster than running, she climbs what you cannot, and '
+        + 'Shift sprints. Press 6 again to send her away.',
+        ['6', 'E'], 'chocobo');
+    }
+
     // Anything you can walk up to and press a key at.
     const ix = game.get?.('Interaction');
     if (ix && ix.current) {
