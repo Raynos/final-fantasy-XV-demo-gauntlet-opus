@@ -577,6 +577,12 @@ export class CameraRig {
     const wanted = this.restDistance;
     const clear = this._armDistance(game, this._focusSmooth, this._dir, wanted);
     if (clear < this.distance) this.distance = clear;                       // push in now
+    // ...and out now, when the arm is climbing out through the far face of a
+    // rock Noctis is standing in. The 3.2/s recovery below is deliberately slow
+    // so a camera crowded by a hillside eases back out rather than snapping,
+    // and it is exactly wrong here: it is half a second of the inside of a
+    // boulder. See `CameraOccluders.exiting`.
+    else if (this.occluderPush && this.occluders.exiting) this.distance = clear;
     else this.distance = THREE.MathUtils.damp(this.distance, clear, 3.2, dt); // recover slowly
 
     this._desired.copy(this._focusSmooth).addScaledVector(this._dir, this.distance);

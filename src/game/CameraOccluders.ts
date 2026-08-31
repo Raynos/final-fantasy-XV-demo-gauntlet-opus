@@ -44,6 +44,19 @@ export class CameraOccluders {
   count = 0;
   /** Instances examined on the last rebuild — the cost, in one number. */
   scanned = 0;
+  /**
+   * True when the last {@link CameraOccluders.arm} call took the far-face
+   * branch, i.e. the focus itself is inside a proxy.
+   *
+   * The rig reads it to decide how fast the arm may lengthen. Its normal
+   * recovery is 3.2/s — deliberately slow, so a camera that has been crowded by
+   * a hillside eases back out instead of snapping. That rate is exactly wrong
+   * here: the arm is trying to leave a rock, and half a second of easing is
+   * thirty frames of the inside of one. Measured: without this, the far-face
+   * branch still left 4.39% of combat frames inside a rock, in 52 separate runs
+   * on one fight — an oscillation, not a burial.
+   */
+  exiting = false;
   /** Rebuilds since `init`, and the last rebuild's wall clock in ms. */
   rebuilds = 0;
   lastMs = 0;
@@ -202,7 +215,9 @@ export class CameraOccluders {
   arm(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
     wanted: number, terrainD: number, probe: number, minLen: number) {
     const entry = this.sweep(ox, oy, oz, dx, dy, dz, wanted, probe);
+    this.exiting = false;
     if (entry >= minLen) return Math.min(terrainD, Math.max(minLen, entry - 0.04));
+    this.exiting = true;
 
     // Focus inside the union: march for the far face. A 0.2 m step is finer
     // than any proxy this keeps (`MIN_R` is 0.55) so it cannot tunnel one.
