@@ -2802,11 +2802,16 @@ Y held.
   recorded above: `facecheck` stabilises the face, not the heading, so a fixed
   rect samples a different population run to run.
 
-And the diagnostic that ruled out the obvious answers first, worth copying: a
-**constant-head-size distance ladder** — fov narrowed so the head covers the same
-pixels at 1, 3, 5 and 10 m. **1 m and 5 m came back the same image**, which kills
-LOD swap, mip collapse, alpha-test dropout and a stale painted-face cache in one
-capture, without four separate ablations.
+And the diagnostic that ruled out several obvious answers, **with a correction
+that matters**: a **constant-head-size distance ladder** — fov narrowed so the
+head covers the same pixels at 1, 3, 5 and 10 m — returned the same image at 1 m
+and 5 m. That rules out an LOD *mesh* swap and alpha-test dropout.
+
+**It does NOT rule out mips, and the original note claiming it did was wrong.**
+Mip selection is texels per *pixel*, which a constant-head-size ladder holds
+constant **by construction** — so the ladder is *silent* on mip behaviour, not
+exculpatory. Corrected 2026-08-31 by a later lane. **A control that holds the
+suspect variable fixed cannot clear the suspect.**
 
 ## The same "hole" in Gladiolus's back has now fooled three observers
 
@@ -3288,4 +3293,51 @@ sit **0.26-0.31 m above the beltline** no matter how they are posed. *"An elbow
 on the sill" was never geometrically possible.* Recorded because the next person
 to look at seated characters will otherwise try to pose their way out of a
 modelling problem.
+
+## The faces were corrugated, and the painted-shadow diagnosis was wrong twice
+
+A blind playtester twice described the party at walking distance as having *"a
+bright orange band across the eyes, like they're all wearing blindfolds"* and
+faces that are *"a smear"*. The standing explanation, filed by an earlier lane,
+was that `browShadow`, `fringeShadow` and `lashColor` stack inside one horizontal
+band and merge at 30 px of head. **That is not it.**
+
+Measured at 5 m with the player's own fov: lit skin is **Y 180-210** while large
+parts of the mid-face are **Y 0-20** — a lit-to-shadow ratio of **10-30x**, where
+ART-DIRECTION 12.1 measures shipped FFXV at **2.0-3.2x and never more**.
+
+Ablations at that framing, `imgdiff` mean over the face: flat albedo
+**0.72/255**, flat vertex colours **0.74**, null normal map **0.34**,
+`uSssAmt = 0` **0.56**, `castShadow=false` on the entire character **nothing at
+all**, and a 2x supersample box-filtered down **the same image**. Every candidate
+cleared.
+
+Then a debug pass writing the dot product of normal and light read **exactly 0**
+on every dark pixel and, as an image, was a hard black-and-white **zebra**:
+**26% of each visible face turns past 90 degrees from the key light, 12% past
+107** — identical on all four heroes because they share one sculpt. **The faces
+are corrugated**, and the bands are self-shadowing terminators, not paint.
+
+Fixed with a **shading-normal filter** — a smoothed normal used for lighting
+only — which is why `facecheck`'s geometry rows are unmoved: `noseLead 27.9`,
+`mouthRelief 6.56`, `jawWidthErr 0.0182`, every row inside its band. `keyDeep`
+halved, 0.1247 to 0.0621. **Smoothing the sculpted positions instead was tried
+and is a measured negative: `mouthRelief 6.53 -> 0.00`, i.e. it deletes the
+mouth.**
+
+**When a shading complaint survives every albedo, texture and shadow ablation,
+write out the lambert term and look at it as an image.**
+
+## Ignis's glasses are 0.7 px wide, and that is most of "the same model twice"
+
+A playtester could not tell Ignis from Prompto apart at all. `Outfit.ts:1060`
+builds his frames as a tube of `rx 0.0018 * s` — **3.6 mm of rim seen
+front-on**. At 5 m (193 px/m) that is **0.7 px**; at 8 m, **0.43 px**. The
+comment at `Cast.ts:498` already says *"the rim geometry is the whole silhouette
+read"*, and it is right.
+
+**A silhouette cue thinner than a pixel is not a silhouette cue.** The fix is
+**area, not line** — a thicker rim plus a tinted lens, so the read is two dark
+ovals rather than a hairline that vanishes. Generalises to every thin identifying
+prop: **measure it in pixels at playing distance, not in millimetres.**
 
