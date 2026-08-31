@@ -203,13 +203,33 @@ would have been worthless.
 Prompto's `hair.color` / `hair.tipColor` only),
 `src/tools/_probe/gladioback_{nobody,nooutfit,plain}.mts` (new).
 
+## Open, and the exact next step
+
+1. **Noctis' hair still reads grey at 5–10 m** and I did not touch it — the
+   `ART-DIRECTION` 12.3 / `Cast.ts` contradiction below is a decision, not a
+   lane task. If the human rules for the plate, the change is one hex in
+   `Cast.ts` (`0x2c2823` -> about `0x252a33`, R−B +9 -> −14, luminance held) and
+   `_probe/hairstat.mts` re-run is the whole verification.
+2. **Ignis is still 20 Y over the plate at the median** (57 against 47) after
+   the re-tint. Darkening his `hair.color` toward Y 85 would close it; I stopped
+   because the chroma was the complaint and I had a frame that showed it fixed.
+3. **The eye band** — lane 1's task 6, and it should be graded at 5 m as well
+   as at 0.55 m.
+4. **Gladiolus' arm** — `eagleInk` onto the deltoid, or a contact-shadow term
+   where the arm meets the torso.
+
 ## Also seen, not mine
 
 - **Two large black tori lie on the ground beside the party spawn**, 1–2 m
   across, in every frame at playing distance —
   `tmp/shots/l12b-dist/d5.jpg`, `d10.jpg`, `d5_hud.jpg`. They read as giant
-  inner tubes. Not investigated; candidates are `RoadFurniture.tyre`
-  (`TorusGeometry(0.42, 0.16)`) or `Outposts.ts:309` at a wrong scale.
+  inner tubes. **Not identified** — a scene walk listing every mesh within 12 m
+  of the player comes back with everything at distance 0.0, because the props
+  near spawn are instanced/merged and their object positions are all the origin.
+  Identifying them needs a raycast from the camera into the torus, not a
+  proximity list. Candidates by shape are `RoadFurniture.tyre`
+  (`TorusGeometry(0.42, 0.16)`, `:152`) and `Outposts.ts:309`
+  (`TorusGeometry(0.4, 0.15)`) at roughly 4x scale.
 - **`ART-DIRECTION` 12.3 and `Cast.ts` contradict each other on Noctis' hair
   hue, and it needs the human.** The table says his hair is `B > G > R` at both
   p10 and p50 (`#101922`, `#1f2630`) — a blue-black. `Cast.ts:104-117` records
