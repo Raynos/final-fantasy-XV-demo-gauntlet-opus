@@ -4,6 +4,7 @@ import { NPC_CAST } from './NpcCast.ts';
 import { NPC_DIALOGUE } from './NpcDialogue.ts';
 import { Rng } from '../../util/Rng.ts';
 import { worldMap } from '../../world/map/WorldMap.ts';
+import { PLAZA_Y } from '../../world/props/PoiKits.ts';
 import { updateSun } from '../rig/Materials.ts';
 import type { GroundSampler } from '../rig/Anim.ts';
 import type { Hammerhead } from '../../world/town/Hammerhead.ts';
@@ -286,6 +287,19 @@ const CROWD_MAX = 11;
 const CROWD_FAR = 60;
 
 /**
+ * How far the graded apron of a city reads as flat ground, in metres.
+ *
+ * `PoiKits._town` calls `_apron(B, 52, ...)`, and `gradePad` makes that radius
+ * a **flat deck at the site's `base`** with the batter outside it — so the
+ * true number is 52 and this is deliberately shorter. The cost of the two
+ * errors is not symmetric: too small leaves a body on the ungraded heightfield
+ * (measured: 0.74 m under its own gravel), too large stands one on thin air
+ * over the embankment. 30 m covers every row this file places — the furthest,
+ * `lest_f`, is 24.4 m out — with 22 m of margin against the real edge.
+ */
+const APRON_R = 30;
+
+/**
  * The people of Lestallum and Galdin Quay.
  *
  * Twenty-nine bodies, and only five of them are new archetypes. That ratio is
@@ -407,15 +421,31 @@ export class Npcs {
   /** Scratch for the per-frame crowd ranking. Reused; never reallocated. */
   _rank!: { npc: Npc, d: number }[];
   /**
-   * Raised, walkable decks the ground sampler has to know about.
+   * The **built** ground under a city, which is not the ground `Ecology` has.
    *
-   * A `_town` plaza is a 0.35 m slab whose top sits 0.675 m over the graded
-   * apron, and the rig's foot IK plants on `Ecology.height`. Without this every
-   * person on a city square stands shin-deep in their own pavement. Filled by
-   * `_place` the first time it resolves a city anchor, so it costs nothing at
-   * all in a game that never goes to a city.
+   * A city POI is three surfaces stacked on the raw heightfield, and the rig's
+   * foot IK plants on `Ecology.height`, which knows about none of them:
+   *
+   * - the **apron** — `PoiKits._apron` grades a flat deck at the site's own
+   *   `base` out to a wide radius, cutting where the hill is proud and filling
+   *   where it dips. Measured at Lestallum: the gravel is at 120.546 and
+   *   `Ecology.height` is 119.804 under `lest_f`, so the one row this lane
+   *   deliberately put "out on the apron, well back" stood **0.74 m under it**.
+   * - the **batter** — the kerb the plaza plinth is battered out on, from the
+   *   walking surface down to the apron over 0.9 m.
+   * - the **plaza** — the walking surface itself, at {@link PLAZA_Y} over base.
+   *
+   * A pad is therefore a *disc with a rim*: flat at `y` out to `r`, then a
+   * straight ramp to `y2` at `r2`, and it **replaces** the terrain rather than
+   * being maxed against it, because a graded pad cuts as well as fills. The
+   * innermost pad that contains a point wins, so they are pushed inside-out.
+   *
+   * Every entry is re-derived from the live anchor each time `_anchorFrame`
+   * runs — never cached from the first resolve. `PoiKits` rebuilds a site when
+   * the camera re-enters `BUILD_R`, and a pad remembered from an earlier build
+   * is a deck the bodies are no longer standing on.
    */
-  _pads!: { x: number, z: number, r: number, y: number }[];
+  _pads!: { x: number, z: number, r: number, y: number, r2: number, y2: number }[];
   eco!: Ecology | undefined;
   game!: Game;
   /** The pad-aware ground the rig's foot IK plants on. See `_groundAt`. */
@@ -635,15 +665,47 @@ export class Npcs {
     const o = kits.anchorAt(r.at, r.anchor as string);
     const plaza = kits.anchorAt(r.at, 'plaza');
     if (!o || !plaza) return null;
-    if (!this._pads.some((q) => q.x === plaza.x && q.z === plaza.z)) {
-      // The paved disc is 11 m; 11.4 covers the kerb the apron meets it at.
-      this._pads.push({ x: plaza.x, z: plaza.z, r: 11.4, y: plaza.y });
-    }
+    this._registerPads(plaza);
     let fx = plaza.x - o.x, fz = plaza.z - o.z;
     const d = Math.hypot(fx, fz) || 1;
     fx /= d; fz /= d;
     // left of `f` in this handedness
     return { o, plaza, fx, fz, sx: -fz, sz: fx };
+  }
+
+  /**
+   * Publish the three built surfaces of a city as {@link _pads}, from the
+   * live anchor.
+   *
+   * **Re-derived on every call, not pushed once.** `PoiKits._make` runs when
+   * the camera comes within `BUILD_R`, so a site can be built more than once
+   * in a session and its `base` is recomputed against the heightfield each
+   * time; a pad remembered from the first build is a deck nobody is standing
+   * on any more. Keyed on the plaza's plan position, which is the site's own
+   * origin and does not move.
+   *
+   * The three radii are `PoiKits._town`'s and are the one place this file
+   * models another kit's geometry, which is why `probes/cityfeet.mts` measures
+   * the surface under every body rather than trusting them: if `_town` moves,
+   * the probe says so in metres instead of the crowd quietly sinking.
+   *
+   * @param plaza the live `plaza` anchor, world space
+   */
+  _registerPads(plaza: THREE.Vector3) {
+    const base = plaza.y - PLAZA_Y;
+    const pads = this._pads;
+    let i = pads.findIndex((q) => Math.abs(q.x - plaza.x) < 0.01 && Math.abs(q.z - plaza.z) < 0.01);
+    if (i < 0) { i = pads.length; pads.push(null!, null!); }
+    // The disc is `CylinderGeometry(11, 11.9, 0.7)` at 0.325: an 11 m walking
+    // surface, then 0.9 m of batter down to 0.025 under the apron.
+    pads[i] = { x: plaza.x, z: plaza.z, r: 11, y: plaza.y, r2: 11.9, y2: base - 0.025 };
+    // `_apron(B, 52, ...)`: the graded deck is flat at `base` well past
+    // anything this file places, and past that the batter is nobody's floor.
+    pads[i + 1] = { x: plaza.x, z: plaza.z, r: APRON_R, y: base, r2: APRON_R, y2: base };
+    // Innermost first, so `_groundAt` can take the first pad that contains a
+    // point: two cities interleaved in one array would otherwise depend on the
+    // order they streamed in.
+    pads.sort((a, b) => a.r - b.r);
   }
 
   /**
@@ -681,12 +743,11 @@ export class Npcs {
       face: opts.face ? opts.face.clone() : null,
       lookW: 0,
       phase: this.list.length * 0.618,
-      // Stand on the terrain, or on the town pad where that is higher. A seated
-      // NPC drops by the difference between a standing hip and a bench seat, so
-      // the backside lands on the plank rather than hovering over it.
-      groundY: this._groundAt(pos.x, pos.z),
+      // Overwritten by `_plant` below, which is what actually stands this
+      // person on the ground; the field is not optional so it needs a value.
+      groundY: 0,
     };
-    npc.pos.y = npc.groundY + (opts.sit ? -0.30 * (body.height / 1.7) : 0);
+    this._plant(npc);
     body.root.position.copy(npc.pos);
     if (npc.face) npc.heading = Math.atan2(npc.face.x - npc.pos.x, npc.face.z - npc.pos.z);
     body.root.rotation.y = npc.heading;
@@ -695,17 +756,40 @@ export class Npcs {
     return npc;
   }
 
-  /** Terrain height, floored at the town pad so nobody sinks into the tarmac. */
+  /**
+   * Put one person's feet on the ground under them.
+   *
+   * A seated NPC drops by the difference between a standing hip and a bench
+   * seat, so the backside lands on the plank rather than hovering over it.
+   *
+   * @param npc the person, moved in place
+   */
+  _plant(npc: Npc) {
+    npc.groundY = this._groundAt(npc.pos.x, npc.pos.z);
+    npc.pos.y = npc.groundY + (npc.sit ? -0.30 * (npc.body.height / 1.7) : 0);
+  }
+
+  /**
+   * The ground a person stands on: terrain, or the built deck over it.
+   *
+   * Hammerhead's pad is a floor (`max`), because it is a slab poured on the
+   * dirt. A city pad is a *replacement* — see {@link _pads} — because
+   * `gradePad` cuts the hill as well as filling the hollow, so the honest
+   * height inside it is the pad's, whatever the heightfield still says.
+   */
   _groundAt(x: number, z: number) {
     const t = this.town;
     const eco = this.eco;
+    // Innermost first: the plaza sits inside the batter sits inside the apron.
+    for (const pad of this._pads) {
+      const d = Math.hypot(x - pad.x, z - pad.z);
+      if (d <= pad.r) return pad.y;
+      if (d <= pad.r2) return pad.y + (pad.y2 - pad.y) * (d - pad.r) / (pad.r2 - pad.r);
+    }
     let y = eco ? eco.height(x, z) : 0;
     if (t && t.origin) {
       const d = Math.hypot(x - t.origin.x, z - t.origin.z);
       if (d < 42) y = Math.max(y, t.base + 0.02);
-    }
-    for (const pad of this._pads) {
-      if (Math.hypot(x - pad.x, z - pad.z) < pad.r) y = Math.max(y, pad.y);
     }
     return y;
   }
@@ -837,6 +921,14 @@ export class Npcs {
         npc.heading = dampAngle(npc.heading, want, 4, dt);
       }
 
+      // Re-plant every frame rather than trusting the height sampled at spawn.
+      // `PoiKits` can rebuild a site the camera re-enters, and it recomputes
+      // the compound's `base` against the heightfield when it does; a body
+      // that resolved its ground once at placement then stands on a deck that
+      // has moved under it. This is two `Math.hypot`s against {@link _pads}
+      // for a body already inside the LOD budget, and it makes the whole
+      // system self-correcting instead of order-dependent.
+      this._plant(npc);
       npc.body.root.position.copy(npc.pos);
       npc.body.root.rotation.y = npc.heading;
 
@@ -923,7 +1015,7 @@ export class Npcs {
     npc.moveSpeed = THREE.MathUtils.damp(npc.moveSpeed, npc.speed, 5, dt);
     npc.pos.x += Math.sin(npc.heading) * npc.moveSpeed * dt;
     npc.pos.z += Math.cos(npc.heading) * npc.moveSpeed * dt;
-    npc.pos.y = this._groundAt(npc.pos.x, npc.pos.z);
+    // `update` re-plants every body it steps, walkers included. See `_plant`.
   }
 
   /**
