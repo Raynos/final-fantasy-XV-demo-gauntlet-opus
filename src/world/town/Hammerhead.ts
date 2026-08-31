@@ -8,7 +8,8 @@ import type { Ecology } from '../veg/Ecology.ts';
 import type { Props } from '../Props.ts';
 import { townMaterials, type TownMats } from './TownMaterials.ts';
 import { bootPhase } from '../../engine/BootProfile.ts';
-import { loadTexBake } from '../../engine/TexBake.ts';
+import { demoActive } from '../../engine/Device.ts';
+import { loadDeferredTexBake, loadTexBake } from '../../engine/TexBake.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
   carShell, patioSet, palletStack, fuelPump, sbox, texelPlace, authored, type PlaceFn,
@@ -103,6 +104,10 @@ export class Hammerhead {
   lights!: TownLight[];
   _camPos!: THREE.Vector3;
   _cast!: boolean;
+  /** Demo path: the town is not built yet and `update` is watching for it. */
+  _deferred!: boolean;
+  /** The deferred build is in flight; do not start a second one. */
+  _building!: boolean;
   _casters!: THREE.Object3D[];
   /** Interaction registrations, kept so they could be disposed. Never read. */
   _handles!: { dispose(): void }[];
@@ -166,6 +171,17 @@ export class Hammerhead {
     this.base = this._padHeight(site.x, site.z);
     this.world = mat4([site.x, this.base, site.z], [0, this.yaw, 0]);
     this.origin = new THREE.Vector3(site.x, this.base, site.z);
+
+    // On the demo path the town's 5.76 MB of material texels live in the
+    // phone-deferred container, which is fetched after the first frame.
+    // Building here would either stall boot on that fetch or synthesise every
+    // material from scratch, so the town is built on approach instead. Its
+    // origin is already resolved above, which is all `update` needs to decide
+    // when — and from the spawn point it is 576 m, so in practice the trigger
+    // fires on the first frame and the town appears as soon as the bytes land.
+    this._deferred = demoActive();
+    this._building = false;
+    if (this._deferred) return this;
 
     // The baked texel cache saves ~1.4 s of texture synthesis here. The fetch
     // started at module evaluation, so on a warm disk this is already settled.
@@ -1242,7 +1258,28 @@ export class Hammerhead {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
+  /** Metres. Build the town before anything of it could be read as detail. */
+  static DEFERRED_BUILD_D = 1400;
+
   update(dt: number, game: Game) {
+    if (this._deferred) {
+      if (!this._building) {
+        this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
+        if (this._camPos.distanceTo(this.origin) < Hammerhead.DEFERRED_BUILD_D) {
+          this._building = true;
+          void loadDeferredTexBake().then(() => {
+            this._build();
+            game.scene.add(this.root);
+            this._registerScreens(game);
+            this._registerInteractables(game);
+            // Last, so nothing can observe a half-built town: `Npcs` keys its
+            // own deferred population off exactly this flag.
+            this._deferred = false;
+          });
+        }
+      }
+      return;
+    }
     if (!this.shell) return;
     const night = this._night(game);
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);

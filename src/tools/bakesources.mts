@@ -229,6 +229,17 @@ export const ARTIFACTS: BakeArtifact[] = [
     regenerable: true, remedy: 'node src/tools/texbake.mts --force', bootCostSec: 0,
   },
   {
+    // The third tier off the same run: deferred on `?demo=1`, boot everywhere
+    // else. `bootCostSec` is 0 for the same reason `texd`'s is -- a page that
+    // does not have it regenerates the texels rather than failing -- but note
+    // that on the DEFAULT path this file is fetched before the first frame, so
+    // its absence costs a desktop the chart rasterisation and the town's
+    // material synthesis, not nothing.
+    file: 'texp.bin.gz', stamp: 'tex.json', sources: TEX_SOURCES,
+    what: 'the phone-deferred tier of the same bake: map/* and town/* texels',
+    regenerable: true, remedy: 'node src/tools/texbake.mts --force', bootCostSec: 1.9,
+  },
+  {
     file: 'texc.bin.gz', stamp: 'texc.json', sources: CANVAS_SOURCES,
     what: 'the drawn-canvas mip chains behind every painted face',
     regenerable: false, remedy: 'node src/tools/texbake.mts --canvas --force', bootCostSec: 2.5,

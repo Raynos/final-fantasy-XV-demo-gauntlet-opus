@@ -458,6 +458,8 @@ export class Npcs {
    */
   _pads!: { x: number, z: number, r: number, y: number, r2: number, y2: number }[];
   eco!: Ecology | undefined;
+  /** Demo path: the town has not been built yet and `update` is waiting on it. */
+  _awaitTown!: boolean;
   game!: Game;
   /** The pad-aware ground the rig's foot IK plants on. See `_groundAt`. */
   ground!: GroundSampler;
@@ -480,16 +482,29 @@ export class Npcs {
     this.game = game;
     const town = game.get('Town');
     if (!town || !town.anchors || !town.local) {
-      console.warn('[Npcs] no town to populate');
-      // The five outside Hammerhead do not need the town, and the main story
-      // dead-ends without them. Keep the root in the scene for them.
+      // On the demo path this is the NORMAL state at boot, not a fault: the
+      // town is built on approach, so there is nothing to populate yet and
+      // `update` does it when there is. Everywhere else it is what it always
+      // was — the five outside Hammerhead do not need the town, and the main
+      // story dead-ends without them, so the root stays in the scene for them.
+      this._awaitTown = !!(town && town._deferred);
+      if (!this._awaitTown) console.warn('[Npcs] no town to populate');
       game.scene.add(this.root);
       this.stats = { count: 0, draws: 0 };
       return this;
     }
+    game.scene.add(this.root);
+    this.populate(game, town);
+    return this;
+  }
+
+  /**
+   * Place the Hammerhead cast. Split out of `init` because on the demo path it
+   * runs later — once the deferred town has built — rather than at boot.
+   */
+  populate(game: Game, town: Hammerhead) {
     this.town = town;
     this.eco = town.eco;
-    game.scene.add(this.root);
 
     // The rig's foot IK plants boots on `terrain.heightAt`, and the terrain
     // under Hammerhead is up to three metres below the graded pad — feed it the
@@ -571,7 +586,6 @@ export class Npcs {
 
     this._registerTalk(game);
     this.stats = { count: this.list.length, draws: this.list.length * 5 };
-    return this;
   }
 
   /**
@@ -908,6 +922,16 @@ export class Npcs {
   /* --------------------------------------------------------------- tick */
 
   update(dt: number, game: Game) {
+    // The demo's town builds on approach; its nine townspeople follow it in
+    // the same frame it finishes, keyed off the town's own flag so there is no
+    // second definition of "the town is ready".
+    if (this._awaitTown) {
+      const town = game.get('Town');
+      if (town && !town._deferred && town.anchors) {
+        this._awaitTown = false;
+        this.populate(game, town);
+      }
+    }
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     this._streamRemote(game);
     if (!this.list.length) return;

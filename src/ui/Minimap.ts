@@ -1,4 +1,5 @@
 import { el, damp, easeOut } from './UIKit.ts';
+import { demoActive } from '../engine/Device.ts';
 import { worldMap, POI_TYPES } from '../world/map/WorldMap.ts';
 import { getChart } from '../world/map/Chart.ts';
 import { drawRoads } from '../world/map/MapDraw.ts';
@@ -123,7 +124,14 @@ export class Minimap {
 
     // The static world image: 2048² at 4 m per pixel, straight off the
     // terrain's own elevation grid. One bake, shared with the map screens.
-    this.chart = getChart(this.terrain);
+    //
+    // The demo asks for 512² instead. That is a clean miss on the baked
+    // `map/chart/rgba@2048` key — `ChartOpts.size` is a documented escape
+    // hatch for exactly this — so the 6.27 MB of chart texels leave the first
+    // frame entirely and a 512 chart rasterises in ~30 ms rather than 458.
+    // At 390 px tall it is also the honest resolution: the full-screen map
+    // never shows more than a quarter of the 2048 sheet's detail.
+    this.chart = getChart(this.terrain, demoActive() ? { size: 512 } : undefined);
 
     /** The shared survey mask. Exposed for the map screens' fog queries. */
     this.fog = fog;

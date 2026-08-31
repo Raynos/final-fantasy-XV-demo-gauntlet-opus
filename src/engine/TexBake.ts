@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeTexture, makeDataMap, normalFromHeight, dropTexelsAfterUpload } from '../util/TextureGen.ts';
 import type { TexelFn, ScalarFn, HeightFn, TextureOpts } from '../util/TextureGen.ts';
 import { encodePlanes8, decodePlanes8 } from '../world/terrain/FieldCodec.ts';
+import { demoActive } from './Device.ts';
 
 /**
  * Baked procedural textures.
@@ -72,6 +73,31 @@ export const TEX_CANVAS_PATH = 'baked/texc.bin.gz';
 export const TEX_DEFERRED_PATH = 'baked/texd.bin.gz';
 /** Keys that live in {@link TEX_DEFERRED_PATH} rather than in the boot tier. */
 export const isDeferredKey = (k: string): boolean => k.startsWith('dgn/');
+
+/**
+ * The third tier: **deferred on a phone, boot on a desktop.**
+ *
+ * `dgn/*` above is deferred for everybody, because nothing reads it until the
+ * player walks into a cave. These keys are different — a desktop genuinely
+ * wants them in the first frame:
+ *
+ * | prefix | gz | who reads it at boot |
+ * |---|---|---|
+ * | `map/*`  | 6.27 MB | `Minimap.init` -> `getChart(terrain)`, the 2048 chart |
+ * | `town/*` | 5.76 MB | `Hammerhead.init`, 576 m from spawn |
+ *
+ * So the tier is not a statement about *what* the bytes are, it is a statement
+ * about *when* a given page needs them, and the two pages disagree. Putting
+ * them in `texd` instead would have moved 6.8 MB of dungeon back in front of
+ * the desktop's first frame, which is the opposite of what that split is for.
+ *
+ * `loadTexBake` pulls this at boot unless the demo is active; the post-first-
+ * frame kick pulls it when the demo *is* active. Net effect: the default
+ * page's first-frame byte count is unchanged to the byte, one extra request.
+ */
+export const TEX_PHONE_PATH = 'baked/texp.bin.gz';
+/** Keys that live in {@link TEX_PHONE_PATH}. */
+export const isPhoneDeferredKey = (k: string): boolean => k.startsWith('map/') || k.startsWith('town/');
 
 /** One texture's bytes in the container. */
 export interface TexEntry {
@@ -188,7 +214,12 @@ export function loadTexBake(): Promise<boolean> {
   // Both boot artifacts, in parallel, and a missing one is not an error: the
   // canvas half is baked by a separate opt-in command and is routinely absent
   // on a fresh clone. `texd` is NOT here — see {@link loadDeferredTexBake}.
-  loading = fetchContainers([TEX_BAKE_PATH, TEX_CANVAS_PATH]);
+  const boot = [TEX_BAKE_PATH, TEX_CANVAS_PATH];
+  // The phone tier is a boot artifact on every page but the demo, where the
+  // three consumers that read it have a lazy path and the bytes go after the
+  // first frame instead.
+  if (!demoActive()) boot.push(TEX_PHONE_PATH);
+  loading = fetchContainers(boot);
   return loading;
 }
 
@@ -206,7 +237,9 @@ export function loadTexBake(): Promise<boolean> {
  */
 export function loadDeferredTexBake(): Promise<boolean> {
   if (deferredLoading) return deferredLoading;
-  deferredLoading = fetchContainers([TEX_DEFERRED_PATH]);
+  deferredLoading = fetchContainers(demoActive()
+    ? [TEX_DEFERRED_PATH, TEX_PHONE_PATH]
+    : [TEX_DEFERRED_PATH]);
   return deferredLoading;
 }
 
