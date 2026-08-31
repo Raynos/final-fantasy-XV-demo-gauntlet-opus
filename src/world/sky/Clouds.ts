@@ -407,9 +407,21 @@ uniform float uShadowStrength;
 uniform float uShadowFieldScale;
 varying vec2 vUv;
 void main() {
-  // The cloud field has kilometre scale features; magnify it so several shadow
-  // patches fit inside the playable world instead of one giant blob. Everything
-  // here happens in that magnified field space, including the slant of the sun
+  // The world span this tile covers. uShadowFieldScale is the magnification of
+  // the cloud field relative to the ground the tile is mapped onto by
+  // sky/MaterialPatch.ts, which samples it over uShadowTile alone -- so the
+  // only physically correct value is 1.0, and anything else makes a cloud's
+  // shadow 1/uShadowFieldScale of the cloud's own size.
+  //
+  // It shipped at 3.5 (clear), 5.0 (overcast) and 7.0 (storm), on the argument
+  // written here before this commit: magnify the field so several patches fit
+  // inside the playable world instead of one giant blob. That argument was
+  // aimed at the wrong number. What decides how many patches are in view is
+  // uShadowTile, which is now 27 km; the magnification only shrinks the shadow
+  // away from its cloud. Measured at 3.5: 199 m ground patches under a 1844 m
+  // cloud field (src/tools/probes/shadowscale.mts).
+  //
+  // Everything below happens in field space, including the slant of the sun
   // ray, so the projection stays self consistent.
   vec2 xz = (vUv - 0.5) * uShadowTile * uShadowFieldScale;
   vec3 d = uSunDir;

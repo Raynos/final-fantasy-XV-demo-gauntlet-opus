@@ -258,6 +258,23 @@ export interface SkyPreset {
   overcast: number;
   exposureMul: number;
   godRays: number;
+  /**
+   * Magnification of the cloud field inside the ground-shadow bake. **1.0 is
+   * the only physically correct value and every preset now uses it**; the knob
+   * survives so the error is reproducible, not so it can be tuned.
+   *
+   * `Clouds.ts`'s `SHADOW_FRAG` evaluates the cloud field over
+   * `uShadowTile * shadowScale` metres, and `sky/MaterialPatch.ts` maps the
+   * result onto `uShadowTile` metres of ground. Any value but 1.0 is therefore
+   * a projection error of exactly that factor: a cloud's shadow comes out
+   * `1/shadowScale` of the cloud's own size. It shipped at 3.5 / 5.0 / 7.0.
+   *
+   * Measured before the fix (`src/tools/probes/shadowscale.mts`, clear):
+   * ground patches **199 m** under a **1844 m** cloud field. At 199 m a cloud
+   * shadow is not read as a cloud shadow — it is read as mottled ground — and
+   * a blind judge scored our frames as synthetic partly on "clouds casting no
+   * shadow whatsoever on the terrain below".
+   */
   shadowScale: number;
 /** Wind speed the cloud field scrolls at. */
   wind: number;
@@ -327,7 +344,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     // strong setting made distant ranges muddy.
     fogDensity: 0.00013, fogHeight: 200, haze: 0.00024, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
-    overcast: 0.0, skyDim: 1.0, shadowScale: 3.5,
+    overcast: 0.0, skyDim: 1.0, shadowScale: 1.0,
   },
   overcast: {
     // A stratiform lid, but stretched over a *wide* window so the deck keeps
@@ -339,7 +356,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     bottom: 1100, top: 3200, cirrus: 0.10, cloudShadow: 0.35,
     fogDensity: 0.00055, fogHeight: 260, haze: 0.00020, sunMul: 0.30,
     exposureMul: 1.02, godRays: 0.25, ambient: 1.2, wind: 12.0,
-    overcast: 0.80, skyDim: 0.60, shadowScale: 5.0,
+    overcast: 0.80, skyDim: 0.60, shadowScale: 1.0,
   },
   storm: {
     // Coverage deliberately short of a lid: the drama is in the gaps. `covLo`
@@ -349,7 +366,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     coverage: 1.0, density: 0.030, type: 0.52, detail: 0.62, anvil: 0.70,
     covLo: 0.14, covHi: 0.62, tower: 0.75, baseLift: 0.34, baseSag: 0.20, cloudHaze: 0.0000105,
     virga: 0.55, silver: 0.16, baseShade: 0.95,
-    bottom: 900, top: 6800, cirrus: 0.0, cloudShadow: 0.88, shadowScale: 7.0,
+    bottom: 900, top: 6800, cirrus: 0.0, cloudShadow: 0.88, shadowScale: 1.0,
     fogDensity: 0.00072, fogHeight: 320, haze: 0.00022, sunMul: 0.12,
     // A storm is *dark*. Printing it up a stop is what turned it into an empty
     // grey field; the drama comes from value range, not from lifting the floor.
@@ -368,7 +385,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     bottom: 1300, top: 3600, cirrus: 0.22, cloudShadow: 0.30,
     fogDensity: 0.0060, fogHeight: 70, haze: 0.00075, sunMul: 0.55,
     exposureMul: 1.06, godRays: 0.8, ambient: 1.2, wind: 9.0,
-    overcast: 0.35, skyDim: 0.78, shadowScale: 3.5,
+    overcast: 0.35, skyDim: 0.78, shadowScale: 1.0,
   },
 };
 
@@ -875,8 +892,30 @@ export class Sky {
       uVirga: { value: 0 },
       uVirgaFloor: { value: 260 },
 
-      uShadowTile: { value: 2700 },
-      uShadowFieldScale: { value: 30.0 },
+      // How many metres of GROUND one wrap of the 512^2 shadow tile covers.
+      //
+      // 27000 and not 2700, and 27000 exactly, because it is `uWeatherTile`:
+      // with `uShadowFieldScale` at its correct 1.0 the bake evaluates the
+      // cloud field over this same span, and the coverage channel is sampled
+      // at `(xz + wind) / uWeatherTile` with RepeatWrapping — so one full
+      // weather period lands in the tile and its two edges match. A 2700 m
+      // ground tile with a 9450 m field window in it wraps every 2.7 km with
+      // edges that do not meet at all; nobody saw the seam only because the
+      // patches inside it were 199 m of mottle.
+      //
+      // The price is resolution: 52.7 m per texel against 5.3 m. That is the
+      // right trade for a field whose features are now 700 m — the bake's own
+      // band limit is 0.82 texels either way, and a cloud shadow has no edge
+      // finer than tens of metres. What it costs is the fine dapple
+      // `zone_longwythe`'s flats used to carry, which was never terrain
+      // detail: it was this bug, and losing it exposes the tier-C mesorelief
+      // deficit rather than causing one.
+      uShadowTile: { value: 27000 },
+      // See `SkyPreset.shadowScale`. 1.0 is the only correct value; the
+      // constructor default was 30.0 and every preset overwrote it on the
+      // first `update()`, which is its own trap — read this uniform before a
+      // `settle()` and you get 30.
+      uShadowFieldScale: { value: 1.0 },
       uCloudShadowStrength: { value: 0.62 },
       uShadowStrength: { value: 0.38 },
 
@@ -1402,9 +1441,10 @@ export class Sky {
       this.clouds.marchUniforms.uSilver.value = p.silver;
       this.clouds.marchUniforms.uBaseShade.value = p.baseShade;
     }
-    // A storm's drama on the ground is the *patchiness* of the light.
-    // Magnifying the shadow field puts several cloud-sized patches inside
-    // the few hundred metres a low camera can actually see.
+    // A storm's drama on the ground is the *patchiness* of the light — but
+    // patchiness is `uShadowTile`'s business, not this one's. See
+    // `SkyPreset.shadowScale`: every preset is 1.0 because 1.0 is the only
+    // value at which a cloud's shadow is the size of the cloud.
     u.uShadowFieldScale.value = p.shadowScale;
     this._shadowDirty = true;
     u.uFogDensity.value = p.fogDensity;
