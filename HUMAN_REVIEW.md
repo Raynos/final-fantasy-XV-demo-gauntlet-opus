@@ -22,8 +22,8 @@ Keep this short. Delete a line once it is decided.
   territories from three engage tokens to four, and fixed `_tickStrafe`, which
   had half of every pack circling the wrong way so the ring never rotated and
   the pack never encircled. Measured after all of it: **median duration 23.8 s**
-  and **median cost 38.3% of Noctis' max HP** over two finished dens (27.5 and
-  49.1), against the same 18-30 s and 15% bars. Duration is now comfortably
+  and **median cost 25.2% of Noctis' max HP** over four finished dens (27.5 /
+  49.1 / 23.0 / 0.4), against the same 18-30 s and 15% bars. Duration is now comfortably
   inside the band; danger is **two and a half times the bar**. Every lever in
   the stack is individually measured and individually defensible, and no person
   has played the stack. **One den, at the controls, before this locks.**

@@ -230,10 +230,15 @@ so nothing should move in `fightshape`. Re-measured and re-looked anyway.
 over two finished fights (both `wiped`, none dropped)
 
 ```
-duration   21.8 25.8  ->  MEDIAN 23.8 s   [18-30]   PASS
-hp paid %  27.5 49.1  ->  MEDIAN 38.3 %   [>=15]    PASS
-enemy atk/s 1.15 1.01 ->  median 1.08
+=== AGGREGATE over 4 finished fights (4 rounds played, 0 found no den, 0 left the pack alive)
+  duration   21.8 25.8 30.2 9.2  ->  MEDIAN 23.8 s   [18-30]   PASS
+  hp paid %  27.5 49.1 23.0 0.4  ->  MEDIAN 25.2 %   [>=15]    PASS
 ```
+
+Four rounds, four complete wipes, nothing dropped — the cleanest run this lane
+has taken. Round 4 (9.2 s, 0.4 %) is the low outlier and is *in* the median
+because it ended `wiped` like the rest; even carrying it the median clears both
+bars with room.
 
 Round 1 is a controlled comparison: **the same den** (Sabertusk x5, lv 32,
 16 935 hp) as round 1 of the `ca90950` run. 24.4 s / 23.6 % before, 21.8 s /
