@@ -1,17 +1,15 @@
 # FINAL FANTASY XV — Eos. Engineering & art brief
 
 Read this fully before writing code. Every agent works against this contract.
-
 > **Live: https://dist-three-rho-86.vercel.app** — one build, no query
 > parameters. A desktop gets the full game; a phone or tablet is detected and
 > gets the demo automatically. `?demo=0` / `?demo=1` force either half.
-
-> Coordinating rather than implementing? Read **[`project/HANDOFF.md`](project/HANDOFF.md)** first.
+> Coordinating rather than implementing? Read [`project/HANDOFF.md`](project/HANDOFF.md) first.
 
 ## The bar
 
 A **AAA-quality action RPG in ThreeJS** that survives a blind side-by-side with
-*Final Fantasy XV* (PS4, 2016). A harsh critic agent looks at our frames next to
+*Final Fantasy XV* (PS4, 2016). A harsh critic agent looks at our frames beside
 real ones and says which is better. "Reasonable for WebGL" is a failing grade.
 
 **And it has to survive a phone.** The bar is not lowered there — same world,
@@ -32,10 +30,10 @@ knobs down without looking at the result. Every knob is a trade you must *see*.
   distant hills tinted toward the sky, light shafts, cloud shadows crossing
   terrain, dust motes catching sun.
 - **Detail density.** Never an empty field. Grass clumps, scattered rock, scrub,
-  dead branches, wheel ruts, a ruined pylon on the horizon. The eye must always
+  dead branches, wheel ruts, a ruined pylon on the horizon — the eye must always
   have something to land on.
-- **Composition.** Strong foreground / midground / background separation.
-  Silhouettes read against sky.
+- **Composition.** Foreground / midground / background separation; silhouettes
+  read against sky.
 - **Characters.** Stylised-realistic. Noctis: black layered jacket, spiky
   asymmetric fringe, slim. Gladiolus: huge, tank top, scarred, greatsword.
   Ignis: tall, glasses, purple-grey coat. Prompto: blond, vest, camera, freckles.
@@ -56,10 +54,12 @@ knobs down without looking at the result. Every knob is a trade you must *see*.
 3. **Two performance budgets.**
    - *Desktop:* ≥60 fps at 1600×900 on an M-series GPU with the full post
      chain — `perf.mts` (posed) **and** `gameplay.mts` (real input, streaming,
-     combat). No gameplay frame over 33 ms. Draw calls **≤ 800**.
-   - *Phone:* a locked 30 that does not heat the device. Draw calls **≤ ~250**,
-     triangles **≤ ~2.5 M**, via `_probe/mobcost.mts`. A handset is fill-rate
-     and draw-call bound long before it is triangle bound.
+     combat). No gameplay frame over 33 ms. Draw-call budget is **800**;
+     `drawcheck` parses that number out of this line, so reword it and the gate
+     goes VOID rather than passing.
+   - *Phone:* a locked 30 that does not heat the device. Phone draw-call budget
+     is **250** and triangles **≤ ~2.5 M**, via `_probe/mobcost.mts`. A handset
+     is fill-rate and draw-call bound long before it is triangle bound.
 4. **Do not edit `src/game/Game.ts` or `src/game/Shots.ts`** unless you own
    them. Put new files in *your own* directory, wired from your `init()`.
 5. **No page errors.** `shoot.mts` exits non-zero on any console error.
@@ -86,9 +86,9 @@ first `fetch`**, so a phone never learns the desktop URLs exist.
   `PadLike` in `Input.padSource` plus synthesised keys for the two verbs with no
   pad binding. No gameplay system knows they exist.
 
-**Read `project/LANDMINES.md` before touching the bake pipeline.** The two
-container formats have *different byte layouts*; that entry cost an afternoon
-and four wrong diagnoses.
+**Read `project/LANDMINES.md` before touching the bake pipeline** — the two
+container formats have *different byte layouts*, and that entry cost an
+afternoon and four wrong diagnoses.
 
 ## Engine contracts
 
@@ -130,7 +130,7 @@ texture-compression theories that each sounded right.
 Shoot twice with `--hide <name>` or `--ablate <token>` between, then
 `imgdiff.mts --heat`. **`--raw` on both sides of a mesh ablation** — with post
 on, hiding one object moves exposure, bloom and the grade. Read the heat map,
-not the mean. A `--hide` matching nothing is an error, so never read a null
+not the mean. A `--hide` matching nothing is an error: never read a null
 ablation as innocence.
 
 **The strongest instrument is a control isolating one variable:** `?nobake=1`
