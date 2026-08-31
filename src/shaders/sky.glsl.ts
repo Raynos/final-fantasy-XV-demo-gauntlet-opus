@@ -127,9 +127,16 @@ vec3 skyStars(vec3 dir, float bandBoost) {
    * in the same solid angle. Cut to a little over a third of that, with the
    * two sub-pixel layers cut hardest, because those are the ones that were
    * printing as texture rather than as objects.
+   *
+   * Looked at again after the first cut: 0.24/0.075 read as EMPTY in
+   * daycycle_night's clear quadrant, and BRIEF.md asks for "the Eos
+   * starfield", which is a rich sky. The two legible layers go back up a fifth;
+   * the two sub-pixel ones stay down, because the snowstorm was never about how
+   * many stars there were, it was about all of them being the same size and the
+   * same white.
    */
-  c += skyStarLayer(face, uv, 44.0,  0.24, 1.00, 0.0);
-  c += skyStarLayer(face, uv, 112.0, 0.075, 0.55, 13.0);
+  c += skyStarLayer(face, uv, 44.0,  0.29, 1.00, 0.0);
+  c += skyStarLayer(face, uv, 112.0, 0.095, 0.55, 13.0);
   c += skyStarLayer(face, uv, 250.0, 0.022, 0.30, 41.0);
   c += skyStarLayer(face, uv, 250.0, 0.14, 0.22, 77.0) * bandBoost;
   return c;
