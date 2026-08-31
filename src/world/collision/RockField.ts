@@ -79,20 +79,30 @@ export class RockField {
    * Proxies for one stream cell, built on first touch and cached against the
    * identity of the live array they came from.
    */
-  _cell(live: Map<number, unknown[]>, cx: number, cz: number): CellProxies | null {
-    const key = TileStream.key(cx, cz);
-    const arr = live.get(key);
+  _cell(live: Map<number, unknown[]>, which: number, cx: number, cz: number): CellProxies | null {
+    const raw = TileStream.key(cx, cz);
+    // **The two streams share a coordinate space and therefore share a key.**
+    // Boulder cell (2, 3) and outcrop cell (2, 3) both hash to the same
+    // `TileStream.key`, so a cache keyed on it alone has the two evicting each
+    // other on every alternating query: measured 2616 rebuilds of ~137 distinct
+    // cells in one sweep, nineteen apiece, all of them correct and all of them
+    // wasted. `which` is the stream.
+    const key = which * 0x80000000 + raw;
+    const arr = live.get(raw);
     if (!arr) { if (this._cells.has(key)) this._drop(key); return null; }
     const got = this._cells.get(key);
     if (got && got.arr === arr) return got;
     if (got) this._drop(key);
     const built = this._build(arr as RockLike[]);
+    built.raw = raw;
+    built.live = live;
     this._cells.set(key, built);
     this.proxies += built.count;
-    // The cache only ever holds what a character has stood next to, so it is
-    // small; this is a leak stop, not a policy. `live` is authoritative, so a
-    // stale key is simply one nobody has queried since the cell left.
-    if (this._cells.size > MAX_CELLS) this._prune(live);
+    // The cache only ever holds what something has walked past, so it is small;
+    // this is a leak stop, not a policy. Each record carries the `live` map it
+    // came from, because pruning one stream's cells against the other stream's
+    // live set is how the eviction storm above started.
+    if (this._cells.size > MAX_CELLS) this._prune();
     return built;
   }
 
@@ -101,9 +111,9 @@ export class RockField {
     if (old) { this.proxies -= old.count; this._cells.delete(key); }
   }
 
-  _prune(live: Map<number, unknown[]>) {
-    for (const key of [...this._cells.keys()]) {
-      if (!live.has(key)) this._drop(key);
+  _prune() {
+    for (const [key, rec] of [...this._cells]) {
+      if (rec.live && rec.live.get(rec.raw) !== rec.arr) this._drop(key);
     }
   }
 
@@ -166,7 +176,7 @@ export class RockField {
     for (const [k, list] of cells) grid.set(k, Int32Array.from(list));
     this.builds++;
     this.lastMs = performance.now() - t0;
-    return { arr, data: new Float32Array(data), count: n, grid, mark: new Int32Array(n), stamp: 0 };
+    return { arr, raw: 0, live: null, data: new Float32Array(data), count: n, grid, mark: new Int32Array(n), stamp: 0 };
   }
 
   /**
@@ -189,7 +199,7 @@ export class RockField {
       const cz0 = Math.floor((z - pad) / cell), cz1 = Math.floor((z + pad) / cell);
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cz = cz0; cz <= cz1; cz++) {
-          const c = this._cell(live, cx, cz);
+          const c = this._cell(live, s, cx, cz);
           if (!c || !c.count) continue;
           for (let ix = ix0; ix <= ix1; ix++) {
             for (let iz = iz0; iz <= iz1; iz++) {
@@ -304,8 +314,15 @@ export class RockField {
 const STRIDE = 18;
 /** Sub-cell for the per-stream-cell index, metres. */
 const SUB = 8;
-/** Cached stream cells before a prune sweep. Two streams, a few cells each. */
-const MAX_CELLS = 48;
+/**
+ * Cached stream cells before a prune sweep.
+ *
+ * Gameplay touches a handful — a character stands in one 56 m cell and one
+ * 176 m outcrop cell — so this is sized for the sweeps instead: a probe that
+ * grades a 560 m square touches ~137 of them and must not evict its way through
+ * the measurement it is taking.
+ */
+const MAX_CELLS = 192;
 /**
  * Smallest boulder worth colliding with — its LARGEST semi-axis, metres.
  *
@@ -331,6 +348,9 @@ const subKey = (ix: number, iz: number) => (ix + SUB_OFF) * 262144 + (iz + SUB_O
 interface CellProxies {
   /** The live array this was built from; cache validity is its identity. */
   arr: unknown[];
+  /** The `TileStream` key and the live map it came from, for the prune. */
+  raw: number;
+  live: Map<number, unknown[]> | null;
   data: Float32Array;
   count: number;
   grid: Map<number, Int32Array>;

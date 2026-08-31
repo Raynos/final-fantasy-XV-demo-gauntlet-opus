@@ -146,10 +146,15 @@ for (let i = 0; i < chosen.length; i++) {
       const hero = chestIn(p);
       if (hero) r.hero++;
       if (feetIn(p)) r.feet++;
+      // A `PartyMember` carries `root`, not `position` -- the first cut of this
+      // probe read `m.position`, found undefined on every member and reported a
+      // clean 0.00% off 0 ally-frames, which is the shape of a measurement that
+      // never ran. The playtest saw allies fighting inside geometry too.
       for (const m of (party?.members || [])) {
-        if (!m || !m.position) continue;
+        const mp = m && (m.root ? m.root.position : m.position);
+        if (!mp) continue;
         r.allyF++;
-        if (chestIn(m.position)) r.ally++;
+        if (chestIn(mp)) r.ally++;
       }
       // The frame to photograph is the one nearest the site's heart.
       const d = -Math.hypot(p.x - sx, p.z - sz);
