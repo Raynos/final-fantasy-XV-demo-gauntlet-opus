@@ -386,20 +386,44 @@ const results = await page.evaluate(async () => {
   probe('world', 'the interaction verb fires on E', () => {
     const ix = g.get('Interaction'); const town = g.get('Town');
     const player = g.get('Player')!; const menus = g.get('Menus')!;
-    const a = town && town.anchors && town.anchors.dinerCounter;
-    if (!ix || !a) return F('no interaction system or diner anchor');
-    const y = g.get('Terrain')!.heightAt(a.x - 1.3, a.z);
-    const h = Math.atan2(1, 0);
+    // `dinerDoor`, and the walk-up is checked against COLLISION before it is
+    // checked against the prompt.
+    //
+    // This probe used to stand at `dinerCounter.x - 1.3`. The Crow's Nest is a
+    // sealed box -- frontage stub wall, glass band, a solid door panel bolted
+    // on the outside, no opening cut -- and Hammerhead's merged meshes are
+    // collision, so that stand point is INSIDE the building. Writing
+    // `player.root.position` bypasses `CollisionWorld`, so the probe stood in
+    // a place no player can reach, selected the counter, and passed green over
+    // a shop a human could not open. A blind playtester stood in Hammerhead
+    // and pressed INTERACT ten times with nothing happening; this gate said
+    // the interaction verb fires. `tombreach`, `reachall` and `reaudit` all
+    // teleport the same way and owe the same fix.
+    const a = town && town.anchors && town.anchors.dinerDoor;
+    const o = town && town.origin;
+    if (!ix || !a || !o) return F('no interaction system or diner door anchor');
+    // 1.2 m further out from the town centre than the anchor, i.e. out on the
+    // apron a player walks in across, not in the wall behind it.
+    let ox = a.x - o.x, oz = a.z - o.z;
+    const L = Math.hypot(ox, oz) || 1;
+    ox /= L; oz /= L;
+    const stand = { x: a.x + ox * 1.2, z: a.z + oz * 1.2 };
+    const y = g.get('Terrain')!.heightAt(stand.x, stand.z);
+    const h = Math.atan2(a.x - stand.x, a.z - stand.z);
     const hold = () => {
-      player.root.position.set(a.x - 1.3, y, a.z);
+      player.root.position.set(stand.x, y, stand.z);
       player.heading = h; player.root.rotation.y = h;
       if (player.velocity) player.velocity.set(0, 0, 0);
     };
     const held = (n: number) => { for (let i = 0; i < n; i++) { hold(); g.frame(1 / 60); hold(); } };
     menus.setScreen(null);
     held(12);
+    const col = g.get('Collision');
+    if (col && col.blocked && col.blocked(stand.x, stand.z, player.root.position.y, 0.36, 1.72, 0.45)) {
+      return F(`the walk-up point for the diner is inside geometry — ${stand.x.toFixed(1)}, ${stand.z.toFixed(1)}`);
+    }
     const cur = ix.current;
-    if (!cur) return F('no prompt at the diner counter');
+    if (!cur) return F('no prompt on the diner apron');
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }));
     held(1);
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true }));

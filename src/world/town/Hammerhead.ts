@@ -1031,8 +1031,26 @@ export class Hammerhead {
       handler: () => ix.openScreen('hunts'),
     }));
 
+    // `A.dinerDoor`, not `A.dinerCounter`. The Crow's Nest is a sealed box:
+    // `_diner` builds a frontage stub wall, a glass band above it and a solid
+    // dark door PANEL bolted to the outside, with no opening cut anywhere --
+    // and Hammerhead's merged meshes are collision (`Harvest.ts` SOURCES lists
+    // `hammerhead`). The counter anchor sits 1.9 m INSIDE that wall, so with
+    // the player capsule's 0.36 m radius the closest a body can get is 2.41 m
+    // against a 2.6 m reach: 19 cm of margin, in a 1.9 m strip pressed flat
+    // against the glass, facing dead on. Step sideways and the prompt is gone.
+    // `dinerDoor` has been computed on the apron since the diner was built and
+    // nothing has ever registered against it.
+    //
+    // This is the `LANDMINES` "prompt whose reach is smaller than the distance
+    // to the thing" a third time, with a twist that matters for the probes:
+    // `tombreach`/`reachall`/`reaudit` all walk up by writing
+    // `player.root.position` directly, which bypasses `CollisionWorld` -- so
+    // they stood INSIDE the sealed diner, selected the counter, and passed.
+    // A walk-up that teleports cannot answer "is that a place a human can
+    // stand", which is the only question this defect was ever about.
     this._handles.push(ix.register({
-      id: 'hh_diner', pos: A.dinerCounter, radius: 2.6, priority: 1,
+      id: 'hh_diner', pos: A.dinerDoor, radius: 2.8, priority: 1,
       verb: 'Shop', label: "The Crow's Nest", hint: 'Provisions & ingredients',
       yOffset: 1.5,
       handler: () => openShop('crowsnest'),
