@@ -71,7 +71,13 @@ function isPhoneLike(): boolean {
   if (typeof navigator === 'undefined' || typeof screen === 'undefined') return false;
   const touch = (navigator.maxTouchPoints || 0) > 0;
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  const small = Math.min(screen.width, screen.height) <= 500;
+  // 560, not 500. The short edge of a phone in CSS px runs 375 (SE) to 440
+  // (Pro Max / large Android), and a browser in landscape with the chrome
+  // showing reports the *screen*, not the viewport -- but a foldable open, or
+  // a phone reporting a scaled display, can read higher than 500 and would
+  // have been served the desktop build with no controls at all. An iPad mini
+  // is 744 and still gets the full game, which is the intent.
+  const small = Math.min(screen.width, screen.height) <= 560;
   return touch && coarse && small;
 }
 
@@ -107,7 +113,13 @@ function resolveTouch(): boolean {
   // DOM and input only, it renders nothing into the world, and `touchcheck`
   // needs a way in. Every other gate's URL simply never carries the flag.
   if (asked === '1') return true;
-  return DEMO;
+  if (DEMO) return true;
+  // A belt-and-braces leg for the case that actually matters: a device with a
+  // touchscreen and a coarse pointer that somehow failed the demo's size test
+  // still gets controls. Being handed a game with no way to move is the one
+  // outcome worth being wrong in the other direction about, and a desktop
+  // fails `coarse` regardless of what else is plugged in.
+  return isPhoneLike();
 }
 
 const TOUCH = resolveTouch();

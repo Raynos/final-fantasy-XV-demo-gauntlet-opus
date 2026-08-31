@@ -6,6 +6,7 @@ import { ensureTouchCss } from './touch.css.ts';
 import { Stick } from './Stick.ts';
 import { TouchButton } from './TouchButton.ts';
 import { VirtualPad, mergePads } from './VirtualPad.ts';
+import { RotateGate } from './Rotate.ts';
 import { DPAD, MODES, PAD, SLOTS, type TouchMode } from './layouts.ts';
 
 /**
@@ -36,6 +37,7 @@ export class TouchControls {
   buttons: Map<string, TouchButton>;
   dpad: TouchButton[];
   mode: TouchMode;
+  rotate: RotateGate;
   _raf: number;
   _onVis: () => void;
 
@@ -57,11 +59,15 @@ export class TouchControls {
     ensureTouchCss();
     this.root = el('div', { id: 'touch' });
 
-    this.sticks = [new Stick(this.pad, 'left', 0), new Stick(this.pad, 'right', 2)];
+    // The left stick's rim is sprint — see `Stick.SPRINT_AT`. `Player` and
+    // `ChocoboSystem` both read pad 10, so one gesture sprints on foot and
+    // mounted, and no screen is spent on a pill the left thumb could not
+    // reach without letting go of the stick.
+    this.sticks = [new Stick(this.pad, 'left', 0, PAD.l3), new Stick(this.pad, 'right', 2)];
     for (const s of this.sticks) this.root.appendChild(s.root);
 
     const clusters: Record<string, HTMLElement> = {};
-    for (const name of ['right', 'left', 'top']) {
+    for (const name of ['fan', 'rail', 'top', 'left']) {
       const c = el(`div.tc-cluster.tc-${name}`);
       clusters[name] = c;
       this.root.appendChild(c);
@@ -69,7 +75,8 @@ export class TouchControls {
 
     for (const def of SLOTS) {
       const b = new TouchButton(this.pad, {
-        id: def.id, label: def.label, pad: def.pad, key: def.key, cls: def.cls, toggle: def.toggle,
+        id: def.id, label: def.label, pad: def.pad, key: def.key, cls: def.cls,
+        icon: def.icon, family: def.family, showLabel: def.showLabel,
       });
       b.node.style.left = `${def.left}px`;
       b.node.style.top = `${def.top}px`;
@@ -77,8 +84,8 @@ export class TouchControls {
       this.buttons.set(def.id, b);
     }
 
-    // The menu d-pad. It shares the left cluster with SPRINT, which is off in
-    // every mode the d-pad is on in, so the two never collide.
+    // The menu d-pad, in the left cluster, which nothing else occupies now
+    // that sprint is a stick gesture.
     const cross: Array<[string, number, number, number, string]> = [
       ['up', DPAD.up, 58, 0, '▲'],
       ['left', DPAD.left, 0, 58, '◀'],
@@ -86,7 +93,7 @@ export class TouchControls {
       ['down', DPAD.down, 58, 116, '▼'],
     ];
     for (const [name, idx, left, top, glyph] of cross) {
-      const b = new TouchButton(this.pad, { id: `dpad-${name}`, label: glyph, pad: idx, cls: 'tc-sm' });
+      const b = new TouchButton(this.pad, { id: `dpad-${name}`, label: glyph, pad: idx, cls: 'tc-sm', showLabel: true });
       b.node.style.left = `${left}px`;
       b.node.style.top = `${top}px`;
       clusters.left.appendChild(b.node);
@@ -94,9 +101,13 @@ export class TouchControls {
     }
 
     game.uiRoot.appendChild(this.root);
-    // The HUD has to give up the bottom-right corner and the key legend; the
-    // rules live in `touch.css.ts` behind this class so the touch layer owns
-    // its own layout consequences instead of editing six HUD modules.
+    // Portrait is not a layout to tune, it is a different design -- the HUD,
+    // the letterbox, the compass strip and the camera framing are all 16:9,
+    // and a portrait phone is 1:2.2. It gets an honest gate, with a way past.
+    this.rotate = new RotateGate(game.uiRoot);
+    // The HUD has to give up the bottom-centre and the key legend; the rules
+    // live in `touch.css.ts` behind this class so the touch layer owns its own
+    // layout consequences instead of editing six HUD modules.
     document.documentElement.classList.add('has-touch');
 
     // Take over input. `touchMode` kills the mouse path — a handset synthesises
@@ -115,6 +126,7 @@ export class TouchControls {
 
     const tick = () => { this._raf = requestAnimationFrame(tick); this.update(); };
     this._raf = requestAnimationFrame(tick);
+    this._applyMode('field');
     this.update();
   }
 
@@ -164,19 +176,19 @@ export class TouchControls {
       this._applyMode(mode);
     }
 
-    // In `ui` the sticks come off entirely: `Input.update` already zeroes
-    // `move`/`look` when `enabled` is false, but an invisible catcher over a
+    // In `ui` and `cine` the sticks come off entirely: `Input.update` already
+    // zeroes move/look when `enabled` is false, but an invisible catcher over a
     // menu still eats taps meant for the screen behind it.
     const wantSticks = mode !== 'ui' && mode !== 'cine';
     for (const s of this.sticks) {
       if (s.root.hidden === wantSticks) { s.root.hidden = !wantSticks; if (!wantSticks) s.reset(); }
     }
-    for (const b of this.dpad) b.node.hidden = mode !== 'ui';
+    for (const b of this.dpad) b.setShown(mode === 'ui');
 
     this._live(mode);
   }
 
-  /** Labels, pad indices and enabled-ness for a mode. Runs on mode change. */
+  /** Labels, glyphs, pad indices and presence for a mode. On mode change. */
   _applyMode(mode: TouchMode) {
     const over = MODES[mode] || {};
     for (const def of SLOTS) {
@@ -184,15 +196,17 @@ export class TouchControls {
       if (!b) continue;
       const st = over[def.id] || {};
       b.setLabel(st.label != null ? st.label : def.label);
+      b.setIcon(st.icon != null ? st.icon : (def.icon || ''));
       b.setPad(st.pad != null ? st.pad : def.pad);
-      b.setEnabled(!st.off);
-      b.node.hidden = !!st.off;
+      b.setSub('');
       b.setRing(-1);
+      b.setShown(!st.off);
+      b.setEnabled(!st.off, def.id === 'interact');
     }
   }
 
   /**
-   * The per-frame half: the three labels that follow live game state.
+   * The per-frame half: the labels that follow live game state.
    *
    * This is what makes the touch build read *better* than the keyboard one. On
    * a keyboard `Digit6` is one key doing three jobs and you have to remember
@@ -202,64 +216,72 @@ export class TouchControls {
   _live(mode: TouchMode) {
     const g = this.game;
 
-    // INTERACT takes its name from whatever it would actually do.
+    // INTERACT takes its name from whatever it would actually do, and is the
+    // one slot that dims in place rather than vanishing — the player has to
+    // know where the contextual verb will appear before there is one.
     const act = this.buttons.get('interact');
     if (act && (mode === 'field' || mode === 'ride')) {
       const ix = g.get('Interaction');
       const cur = ix ? ix.current : null;
       act.setLabel(cur ? String(cur.verb || 'Interact').toUpperCase() : 'INTERACT');
-      act.setEnabled(!!cur);
-      act.node.hidden = false;
+      act.setEnabled(!!cur, true);
     }
 
-    // ARMIGER is dark until the gauge can pay for it. `readArmiger` is the
-    // same accessor `CombatHUD` uses, so the button and the bar cannot
-    // disagree about whether the burst is available.
+    // ARMIGER is not on screen at all until the gauge can pay for it.
+    // `readArmiger` is the accessor `CombatHUD` uses, so the button and the bar
+    // cannot disagree about whether the burst is available.
     const arm = this.buttons.get('armiger');
     if (arm && mode === 'field') {
       const gauge = readArmiger(g);
-      arm.setEnabled(gauge != null && gauge > 0.995);
+      arm.setShown(gauge != null && gauge > 0.995);
     }
 
     // The chocobo button: four states, and a ring for the one that used to
     // leave a playtester standing still wondering whether it had worked.
     const cb = this.buttons.get('chocobo');
     const cho = g.get('Chocobo');
-    if (cb && cho && mode !== 'ui' && !cb.node.hidden) {
+    if (cb && cho && !cb.node.hidden) {
       const st = cho.state;
-      if (st === 'ridden') { cb.setLabel('DISMOUNT'); cb.setEnabled(true); cb.setRing(-1); }
-      else if (st === 'waiting') { cb.setLabel('DISMISS'); cb.setEnabled(true); cb.setRing(-1); }
+      if (st === 'ridden') { cb.setLabel('DISMOUNT'); cb.setSub(''); cb.setEnabled(true); cb.setRing(-1); }
+      else if (st === 'waiting') { cb.setLabel('DISMISS'); cb.setSub(''); cb.setEnabled(true); cb.setRing(-1); }
       else if (st === 'arriving') {
         // Disabled on purpose: the whistle key's `arriving` branch is
         // `dismiss()`, so a second impatient tap would send the bird away
         // again. The ring answers the impatience instead.
         cb.setLabel('COMING');
-        cb.setEnabled(false);
+        cb.setEnabled(false, true);
         const bird = cho.bird, player = g.get('Player');
         if (bird && player) {
           const d = Math.hypot(bird.root.position.x - player.position.x, bird.root.position.z - player.position.z);
+          cb.setSub(`${Math.round(d)} m`);
           cb.setRing(1 - Math.max(0, Math.min(1, (d - ARRIVE_DIST) / (SUMMON_DIST - ARRIVE_DIST))));
         }
-      } else { cb.setLabel('CHOCOBO'); cb.setEnabled(true); cb.setRing(-1); }
+      } else { cb.setLabel('CHOCOBO'); cb.setSub(''); cb.setEnabled(true); cb.setRing(-1); }
     }
 
     // The car button, the same shape. `KeyF` is enter *and* exit in
     // `RegaliaSystem._input`, so one button covers both — and without an EXIT
-    // a phone player who got in could never get out.
+    // a phone player who got in could never get out. Out of range it stays on
+    // screen and prints the distance, which is more use than a ghost disc.
     const carB = this.buttons.get('car');
     const car = g.get('Regalia');
     if (carB && car && !carB.node.hidden) {
-      if (mode === 'drive') { carB.setLabel('EXIT'); carB.setEnabled(true); }
+      if (mode === 'drive') { carB.setLabel('EXIT'); carB.setIcon('exit'); carB.setSub(''); carB.setKey('KeyF'); carB.setEnabled(true); }
       else {
-        const near = car.distanceToPlayer ? car.distanceToPlayer() < CAR_NEAR : false;
-        carB.setLabel(near ? 'DRIVE' : 'CAR');
-        carB.setEnabled(near);
+        const d = car.distanceToPlayer ? car.distanceToPlayer() : 1e5;
+        // Three states, and the far one is no longer dead. The car was the one
+        // thing in the world you had to walk back to; now the same button that
+        // gets you in also calls it, so it is never a dim disc taking up room.
+        if (d < CAR_NEAR) { carB.setLabel('DRIVE'); carB.setIcon('car'); carB.setSub(''); carB.setKey('KeyF'); }
+        else { carB.setLabel('CALL'); carB.setIcon('summon'); carB.setSub(`${d > 9999 ? '—' : Math.round(d)} m`); carB.setKey('Digit7'); }
+        carB.setEnabled(true);
       }
     }
   }
 
   dispose() {
     cancelAnimationFrame(this._raf);
+    this.rotate.dispose();
     document.removeEventListener('visibilitychange', this._onVis);
     this.game.input.padSource = null;
     this.game.input.touchMode = false;

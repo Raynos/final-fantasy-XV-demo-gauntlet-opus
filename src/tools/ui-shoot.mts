@@ -153,6 +153,13 @@ const SCENES: Record<string, Scene> = {
     `,
     then: 20,
   },
+  // Portrait, to see the rotate gate rather than to see a layout: the device
+  // report was that a portrait phone gets a scattered mess with no explanation.
+  touch_portrait: {
+    shot: 'hud_field', settle: 20,
+    after: `g.currentShot = null; g.settle(4); window.TOUCH && window.TOUCH.rotate.check();`,
+    then: 10,
+  },
   touch_chocobo: {
     shot: 'hud_field', settle: 30,
     after: `

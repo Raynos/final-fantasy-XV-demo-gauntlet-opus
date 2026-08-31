@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { demoActive } from './Device.ts';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
@@ -519,6 +520,23 @@ export class PostFX {
     // saving comes from the sample counts instead
     this.aoScale = low ? 0.5 : 1.0;
     this.cas.sharpness = ultra ? 0.38 : 0.45;
+
+    // The phone gets the chain cut to the scene pass and the grade, because on
+    // a handset a full-screen pass is not "cheap" the way it is on a desktop:
+    // fill rate is the scarce thing and every one of these reads and writes
+    // the whole target again.
+    //
+    //  - **TAA** resolves against a history buffer and needs the camera
+    //    jittered. `velocity` is already off at low, so it was reprojecting
+    //    with no motion vectors -- paying for a pass that could not do its job.
+    //  - **Bloom** is three mip levels down and back up, still ~2x the target
+    //    in reads for a glow nobody is looking for on a 390 px screen.
+    //  - **CAS** is a sharpen, and we are upsampling from 62% anyway.
+    if (demoActive()) {
+      this.setAA('none');
+      this.bloom.enabled = false;
+      this.cas.enabled = false;
+    }
   }
 
   setAA(mode: 'taa' | 'smaa' | 'none') {

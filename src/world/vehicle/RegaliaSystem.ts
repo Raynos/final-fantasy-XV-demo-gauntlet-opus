@@ -82,6 +82,16 @@ import { ROAMERS } from '../../game/encounters/SpawnTables.ts';
  */
 const KEY = {
   enter: 'KeyF',
+  /**
+   * Call the car to the nearest road.
+   *
+   * `Digit7`, not a letter: `ChocoboSystem` documents `Digit6`-`Digit0` as the
+   * one unclaimed run in the keymap, and it is the chocobo whistle's own
+   * neighbour, which is exactly the relationship the two verbs have. `KeyG`
+   * was the obvious pick and is Gladiolus' technique -- uxcheck's collision
+   * table said so within a minute of trying it.
+   */
+  summon: 'Digit7',
   camera: 'KeyV',
   auto: 'KeyI',
   typeD: 'KeyT',
@@ -338,6 +348,35 @@ export class RegaliaSystem {
     const p = this.game.get('Player');
     if (!p) return 1e5;
     return Math.hypot(p.position.x - this.body.pos.x, p.position.z - this.body.pos.z);
+  }
+
+  /**
+   * Call the Regalia to the nearest road.
+   *
+   * The chocobo has had a whistle since it shipped and the car has not, so the
+   * car was the one thing in the world you had to *walk back to* — and on a
+   * map this size that is a five-minute penalty for having got out. FFXV
+   * itself lets you call it; this is that, minus the cutscene.
+   *
+   * It parks on the near side of the carriageway pointing up the road, which
+   * is exactly what `init` does at the breakdown, so there is one definition
+   * of "parked correctly" rather than two. Refused while driving, and refused
+   * if the road is somehow unreachable rather than parking the car in a rock.
+   *
+   * @returns true if the car moved
+   */
+  summon(): boolean {
+    if (this.isDriving || !this.enabled) return false;
+    const p = this.game.get('Player');
+    if (!p || !this.path) return false;
+    const hit = this.path.nearest(p.position.x, p.position.z, this.path.makeHit());
+    if (!hit || !Number.isFinite(hit.x) || !Number.isFinite(hit.z)) return false;
+    const nx = -hit.tz, nz = hit.tx;
+    this.body.reset(hit.x + nx * 2.1, hit.z + nz * 2.1, Math.atan2(hit.tx, hit.tz));
+    this._sync(0);
+    this._wasNear = false;
+    window.dispatchEvent(new CustomEvent('regalia:summoned', { detail: { x: this.body.pos.x, z: this.body.pos.z } }));
+    return true;
   }
 
   /** Get in and start the engine. @param [autoDrive] */
@@ -688,11 +727,17 @@ export class RegaliaSystem {
       // `KeyI` — G is Gladiolus' technique. They are read off `KEY` now so a
       // rebind cannot leave them behind again.
       ? { key: KEY.enter.slice(3), label: 'Get out', extra: [[KEY.auto.slice(3), this.auto ? 'Take the wheel' : 'Let Ignis drive'], [KEY.camera.slice(3), 'Camera'], [KEY.radio.slice(3), 'Radio']] }
-      : near ? { key: KEY.enter.slice(3), label: 'Drive', extra: [] } : null;
+      : near ? { key: KEY.enter.slice(3), label: 'Drive', extra: [] }
+        : { key: KEY.summon.slice(5), label: 'Call the car', extra: [] };
     if (near && !this._wasNear) {
       this._wasNear = true;
       this.banter.trigger(this.auto ? 'autodrive' : 'takeover');
     } else if (!near) this._wasNear = false;
+
+    // Call it. Only on foot and only when it is not already within walking
+    // distance -- a summon that teleports a car you are standing next to is a
+    // way to lose it behind you.
+    if (inp.keyDown(KEY.summon) && !this.isDriving && this.distanceToPlayer() > 12) this.summon();
 
     if (inp.keyDown(KEY.enter) && this._enterCooldown <= 0) {
       this._enterCooldown = 0.4;
