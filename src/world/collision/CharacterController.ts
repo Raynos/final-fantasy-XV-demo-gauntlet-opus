@@ -173,8 +173,11 @@ export class CharacterController {
     if (dt <= 0) return pos;
     this._from.copy(pos);
     if (this.swim) return this._swimStep(pos, vx, vz, dt);
-    // How hard this character is trying, before the slope gets a vote.
+    // What this character ASKED for, before the slope gets a vote. Kept as a
+    // direction and not just a speed: see the refusal test at the end of the
+    // step, which is about the direction and nothing else.
     const wish = Math.hypot(vx, vz);
+    const wx = vx, wz = vz;
 
     // ---- 1. slope response --------------------------------------------
     //
@@ -220,24 +223,7 @@ export class CharacterController {
         this._slz += dz * GRAVITY * (1 - n.y) * dt;
       }
     }
-    // **The predicate is failure, not steepness** — and it took a measured
-    // negative to get here. Gating this on `grip <= 0` alone left one of
-    // fifteen `slopewalk` sites still silent: a 60 deg face whose local facets
-    // sat just INSIDE the fade band, where a heavily-damped uphill push and the
-    // per-frame downhill push still cancel. The dead zone is not a property of
-    // the 58 deg line; it is a property of a balance, and a balance can happen
-    // anywhere in the band. So this asks the question the player asks — *am I
-    // on steep ground, trying, and getting nowhere* — which is true in both
-    // cases and false on every hillside that is merely steep.
-    //
-    // `progress` is last step's. That is correct and not a lag bug: it is the
-    // only honest measure of whether the previous frame's effort arrived, and
-    // 16 ms of staleness against a 0.35 s counter is nothing.
-    const refusing = this.grounded && n.y < WALKABLE_Y
-      && wish > 0.6 && this.progress < 0.25;
-    this._refuseFor = refusing
-      ? Math.min(REFUSE_T * 3, this._refuseFor + dt)
-      : Math.max(0, this._refuseFor - dt * 2);
+
     // The slide is carried, clamped and braked here rather than inside the
     // branch above, so a character who slides off a cliff onto flat ground
     // keeps going for a moment instead of stopping dead on the line.
@@ -255,18 +241,6 @@ export class CharacterController {
       this._slx = 0;
       this._slz = 0;
     }
-    // Published for the HUD. Held for a moment so a character oscillating
-    // across the 58° contour does not flicker the message.
-    //
-    // **A refusal, not a steepness.** The first version published `1 - grip`,
-    // so the fade band raised it too — and `slopewalk` promptly showed 78% slip
-    // on a 41.6° hillside that climbed 12.3 m without complaint. Telling a
-    // player "too steep" while they are successfully climbing is worse than
-    // telling them nothing, because the next time it is true they will not
-    // believe it. This is 1 only where the ground genuinely will not hold.
-    if (this._refuseFor > REFUSE_T) this._slipFor = SLIP_HOLD;
-    else if (this._slipFor > 0) this._slipFor -= dt;
-    this.slip = this._slipFor > 0 ? 1 : 0;
 
     // ---- 2. horizontal move, substepped, then wall resolution ----------
     const want = Math.hypot(vx, vz) * dt;
@@ -311,6 +285,7 @@ export class CharacterController {
     }
 
     this._score(pos, vx, vz, want, dt);
+    this._scoreRefusal(pos, wx, wz, wish, dt);
 
     // ---- 4. the scramble allowance -------------------------------------
     // Grows only while a real effort to move is being stopped by a ledge, and
@@ -352,6 +327,59 @@ export class CharacterController {
     } else {
       this.progress = 1;
     }
+  }
+
+  /**
+   * Is the ground refusing this character, and for how long?
+   *
+   * **Three measured negatives are folded into this one predicate**, and each
+   * one changed the answer:
+   *
+   * 1. Publishing `1 - grip` made the 50-58° fade band raise the signal, and
+   *    `slopewalk` showed 78% slip on a 41.6° hillside that climbed 12.3 m
+   *    without complaint. Telling a player "too steep" while they are
+   *    succeeding is worse than telling them nothing, because the next time it
+   *    is true they will not believe it.
+   * 2. Gating on `grip <= 0` — the 58° line — left one of fifteen sites still
+   *    silent: a 60° face whose local facets sit just INSIDE the band, where a
+   *    heavily damped uphill push and the downhill push still cancel. The dead
+   *    zone was never a property of the line. It is a property of a *balance*,
+   *    and a balance can happen anywhere in the band.
+   * 3. Asking `progress < 0.25` scored **zero** refusals across all fifteen
+   *    sites, and undid the fix. `progress` is measured against the velocity
+   *    the slope response *produced*, not the one the player asked for, so a
+   *    character sliding smoothly backwards down a cliff scores a perfect 1:
+   *    he is going exactly where the physics intends. It is the right number
+   *    for the gait — the legs should match the ground covered — and precisely
+   *    the wrong one for this.
+   *
+   * So this measures displacement along **the wish direction as it was before
+   * the slope touched it**, which is the only vector that encodes what the
+   * player wanted. Under a quarter of the distance asked for, on steep ground,
+   * while genuinely pushing: that is a refusal, whichever side of 58° it
+   * happens on.
+   *
+   * @param wx pre-slope wish velocity X
+   * @param wz pre-slope wish velocity Z
+   * @param wish its magnitude, m/s
+   */
+  _scoreRefusal(pos: THREE.Vector3, wx: number, wz: number, wish: number, dt: number) {
+    let refusing = false;
+    if (wish > 0.6 && this.grounded && this.normal.y < WALKABLE_Y) {
+      const got = ((pos.x - this._from.x) * wx + (pos.z - this._from.z) * wz) / wish;
+      refusing = got < 0.25 * wish * dt;
+    }
+    // A leaky counter, not a debounce. `Terrain.normalAt` is a one-cell finite
+    // difference over an incised field, so a hillside that climbs perfectly
+    // well still clips sub-metre facets steeper than 58° for a good half of its
+    // frames; alternating facets have to hover near zero here while a face that
+    // keeps refusing crosses.
+    this._refuseFor = refusing
+      ? Math.min(REFUSE_T * 3, this._refuseFor + dt)
+      : Math.max(0, this._refuseFor - dt * 2);
+    if (this._refuseFor > REFUSE_T) this._slipFor = SLIP_HOLD;
+    else if (this._slipFor > 0) this._slipFor -= dt;
+    this.slip = this._slipFor > 0 ? 1 : 0;
   }
 
   /**
