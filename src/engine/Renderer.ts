@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { resolveQualityTier } from './Device.ts';
 
 /**
  * The four render quality tiers, worst to best.
@@ -42,12 +43,15 @@ export class Renderer {
   constructor(container: HTMLElement, opts: RendererOpts = {}) {
     this.container = container;
 
-    const params = new URLSearchParams(location.search);
-    // `?q=` and `opts.quality` are both untrusted strings, so an unrecognised
-    // tier lands on `'high'` rather than being carried around as a tier name
-    // that every `=== 'low'` test silently misses.
-    const want = opts.quality || params.get('q') || 'high';
-    this.quality = isQualityTier(want) ? want : 'high';
+    // `opts.quality` is an untrusted string, so an unrecognised tier lands on
+    // `'high'` rather than being carried around as a tier name that every
+    // `=== 'low'` test silently misses. With no override, `resolveQualityTier`
+    // is the single source of truth — it reads `?q=` and, failing that, asks
+    // whether this is the phone demo. `?q=` still wins over detection, so
+    // every harness URL means exactly what it did before.
+    this.quality = opts.quality
+      ? (isQualityTier(opts.quality) ? opts.quality : 'high')
+      : resolveQualityTier();
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: false,               // we resolve AA in post (SMAA/TAA)
@@ -60,7 +64,7 @@ export class Renderer {
     const gl = this.renderer.getContext();
     this.isWebGL2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
 
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality === 'ultra' ? 2 : 1.5));
+    this._applyTier(this.quality);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // The scene is only ever rendered into HDR float targets, so three never
@@ -69,7 +73,6 @@ export class Renderer {
     // auto-exposure multiplier so existing code that pokes it keeps working.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoft is deprecated in r185
     this.renderer.shadowMap.autoUpdate = true;
     this.renderer.info.autoReset = false;
@@ -140,10 +143,29 @@ export class Renderer {
    */
   setQuality(tier: QualityTier) {
     this.quality = tier;
+    this._applyTier(tier);
+    this.resize();
+  }
+
+  /**
+   * The two renderer-level settings a tier owns: how many pixels we draw, and
+   * whether we draw shadow maps at all.
+   *
+   * Extracted because the constructor and `setQuality` used to disagree, and
+   * the constructor was the one that mattered for a phone. It hard-coded
+   * `shadowMap.enabled = true` and a `ultra ? 2 : 1.5` pixel-ratio cap, so a
+   * page that booted at `low` — which is what a phone now does — got shadows
+   * on and dpr 1.5 anyway, and only picked the tier up if the player later
+   * walked into the settings screen and changed it. Those two are the largest
+   * wins the tier has on a handset, and both were dead on the boot path.
+   *
+   * Deliberately does not call `resize()`: the constructor runs this before
+   * the camera exists.
+   */
+  _applyTier(tier: QualityTier) {
     const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
     this.renderer.shadowMap.enabled = tier !== 'low';
-    this.resize();
   }
 
   resize() {

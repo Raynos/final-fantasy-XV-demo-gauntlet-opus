@@ -1,6 +1,8 @@
+import { resolveQualityTier } from '../Device.ts';
+
 /**
  * One answer to "how many MSAA samples will the scene target have", available
- * to anyone, importing nothing.
+ * to anyone. It imports only `Device`, which is itself a leaf.
  *
  * `PostFX.rtScene`'s sample count and `VegMaterial`'s `alphaToCoverage` are two
  * halves of a single mechanism — read the `rtScene` block in `PostFX.ts` for
@@ -23,13 +25,15 @@
  * come out a ramp-width fatter and every bit as hard. `low` therefore must not
  * set the flag at all, and this is what tells it so.
  *
- * It reads `?q=` because that is the only thing that ever sets the tier:
- * `Renderer` takes `opts.quality || params.get('q') || 'high'` and has exactly
- * one call site, in `Game.ts`, which passes no options. If a second call site
- * ever passes `opts.quality` this stops being exact — thread the tier through
- * rather than adding a second guess. `PostFX._wantSamples` warns at boot if the
- * two ever disagree, so the failure is loud instead of being a silhouette that
- * is subtly wrong on one tier and nobody's fault.
+ * It used to read `?q=` directly, on the reasoning that `?q=` was the only
+ * thing that ever set the tier. That stopped being true when the phone demo
+ * gained device detection: a detected phone resolves to `low` with no `?q=` in
+ * the URL at all, so this function would have returned 4 while `Renderer` ran
+ * at `low` — the exact disagreement the old comment here asked the next person
+ * to avoid. It now calls `resolveQualityTier()`, which is the single source of
+ * truth for both. `PostFX._wantSamples` still warns at boot if the two ever
+ * drift apart, so the failure stays loud rather than becoming a silhouette
+ * that is subtly wrong on one tier and nobody's fault.
  *
  * `?post=nomsaa` returns 0 from here as well as from `PostFX`, so the ablation
  * turns off *both* halves and measures the mechanism rather than one end of it.
@@ -39,7 +43,7 @@ export function sceneSamples(): number {
   const params = new URLSearchParams(location.search);
   const post = (params.get('post') || '').toLowerCase();
   if (post.split(',').some((t) => t.trim() === 'nomsaa')) return 0;
-  switch (params.get('q') || 'high') {
+  switch (resolveQualityTier()) {
     case 'low': return 0;
     case 'medium': return 2;
     case 'ultra': return 8;
