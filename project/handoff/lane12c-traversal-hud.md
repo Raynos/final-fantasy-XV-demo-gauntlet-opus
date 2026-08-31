@@ -3,7 +3,7 @@
 Playtest complaints #3 (silent slope refusal) and #4 (the tutorial card parks on
 top of every full-screen screen). Both are playability, both cheap.
 
-## Status: LANDED — 4 commits; `uxcheck` still to confirm at hand-off
+## Status: LANDED — 8 commits. `uxcheck` **95/95**. One `slopewalk` re-run owed.
 
 ## What the instruments say
 
@@ -77,11 +77,14 @@ top of every full-screen screen). Both are playability, both cheap.
    white. The HUD did not get shouty. **The minimap caption is still the least
    legible thing in the frame** and is filed — it is a self-contained `<style>`
    tag in `Minimap.ts` that does not use the ui.css tokens.
-   Confirmed **still present on the
-   post-`e848801` build**, so it is not the Float16 white-frame bug: in
-   `tmp/shots/l12c-after/hud_field.png` the top-right `M.E. 756 · DAY 1 ·
-   MIDDAY` line and the minimap caption are close to invisible over sunlit
-   scrub. Fixed by adding the `.bc::before` shade wash — the bottom-centre strip
+
+   The washout was confirmed **still present on the post-`e848801` build**
+   before any of this, so it is a contrast problem and *not* the Float16
+   white-frame bug the coordinator warned about: in
+   `tmp/shots/l12c-after/hud_field.png` — a normal midday field frame, not even
+   facing the sun — the top-right clock block and the minimap caption are close
+   to invisible over sunlit scrub. Fixed by adding the `.bc::before` shade wash
+   — the bottom-centre strip
    was the only corner with none, which is exactly why the control hints were
    the first thing the playtest lost — plus lane 10's `b3dbbdc` recipe on
    `.armiger .ar-note` (`--ink-4`, 8px, no text-shadow: the same defect one
