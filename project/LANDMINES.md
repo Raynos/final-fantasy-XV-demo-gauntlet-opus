@@ -2823,3 +2823,55 @@ not a hole — the fix is art (ink on the deltoid, or a contact-shadow term), no
 geometry. Recorded because the next person to see it will also think it is a
 hole.
 
+## The hint card is muted in every capture this project has ever taken
+
+A first-time player reported the tutorial card lying across **six of six**
+full-screen menus — over column headers, over the selected item's name, over a
+quest title, over a companion's entire header and portrait. Measured after the
+fact: **83 px of hint card inside the reading band on 16 of 16 screens.**
+
+Nobody had ever seen it because **`HUD.update` writes `hints.muted =
+!!game.currentShot` every frame, and `Hints._poll` returns early on
+`currentShot` too.** Every posed capture in this repository sets a shot. So the
+one element that covers every menu is switched **off** in every screenshot, every
+contact sheet and every judged round the project has ever produced.
+
+**An element that hides itself during capture is invisible to a capture-based
+process, permanently.** When a player reports something no frame has ever shown,
+check whether the frame is *allowed* to show it before doubting the player.
+
+## A projection bug whose error is exactly zero at the authoring resolution
+
+Every projection in `CombatHUD` — nameplates, reticle, damage numbers, call-out —
+was off by the HUD's `zoom` factor **at any viewport that is not 1600x900**. At
+1600x900 the error is **exactly zero**.
+
+Every capture, every gate and every corpus shot in this project is taken at the
+authoring size. So the bug was unreachable by the entire instrument suite, and it
+took **a human looking at their own window** to report "three HUD elements draw
+at the same screen point". Two lanes had independently filed HUD-stacking
+symptoms without finding this cause.
+
+**A defect that vanishes at your reference resolution is invisible to every
+reference-resolution instrument you own.** Vary the viewport deliberately, at
+least once, in any gate that reads screen-space positions.
+
+## A cliff you cannot climb is legitimate; a cliff you stand still on is a bug
+
+The playtest's *"you run at a slope and just stop dead — ten seconds of sprint
+moved me one metre, no slide, no stumble, no message"* was not a slope-limit
+problem. Raising the limit is a **measured negative**: `slopewalk` shows four of
+five sites between 47 and 58 degrees already climb.
+
+The real defect: the downhill push was recomputed every frame, and `Player`
+rebuilds `velocity` from heading and speed every frame too, so **the push could
+never accumulate**. The character slid until the push exactly cancelled his own
+effort and then **parked on that contour** — upright, `grounded` true,
+`progress` about 0, so the animator held the idle. A perfect, silent equilibrium.
+
+Fixed by giving the slide momentum (so equilibrium is unreachable) and by making
+the HUD state the rule. **6 of 15 hillsides DEAD-SILENT -> 0 of 15.** And note
+`longplay` had been printing *"gave up on N unreachable spot(s), turned away from
+being stuck N time(s)"* all night; the number was in the output the whole time
+and nobody read it as a defect.
+
