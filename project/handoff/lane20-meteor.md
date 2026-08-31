@@ -216,3 +216,54 @@ standing them proud as rectangles) — **not yet re-captured.**
 Both now straddle the drawn ground. `v4-landmark_meteor-on.png` confirms by eye:
 the two 260 m monoliths the un-burying first produced are gone and the Disc
 stands on a rocky skirt. **verified.**
+
+---
+
+## Where the lane stands (final for this session, `9e1989c`)
+
+### Landed and verified by eye
+
+1. **The glow exists and is seen.** From nothing — `visible = 0` from all five
+   stands at ×40 gain — to **104 lit vertex samples clearing every occluder
+   from `landmark_meteor` and 141 from `zone_mencemoor`** at gain 1. The
+   mechanism is a per-vertex `aEmissive` on the masses' own surface, so
+   occlusion is not a failure mode that exists for it.
+2. **The crater rim is above ground for the first time.** apron + rim median
+   −70 m → **+3 m**; ground fissures −79 m → **+11 m**.
+3. **The night read.** `tmp/shots/l20-n4/west_night.jpg` and `lest_night.jpg`:
+   the Disc sits on a dark horizon with cool crystal-blue light in it and one
+   crust fissure burning at its foot, over Lestallum's rooftops. The direction
+   — molten-blue crystal, visible at night — is on screen.
+4. **The judged frame moved.** `tmp/shots/l20-v7/landmark_meteor.jpg` against
+   the plate `tmp/shots/l20-base/landmark_meteor.jpg`: the plate is a grey-blue
+   dome with nothing in it; the current frame is a dark mass with cyan light
+   running down its crown and a rocky skirt under it.
+
+### The honest defect, stated plainly
+
+**The veins still read as glowing patches, not as fissures.** They are the right
+colour, the right value and in the right places, and there are runs of them
+descending each face — but the relief step-fracture terracing (a 7 m riser every
+seven metres, which is what makes these masses read as cleaved rock) chops the
+ribbon into lozenges. Four mechanisms have been tried and the fourth is the best
+of them; a fifth would have to make the vein *follow* the terraces instead of
+crossing them, i.e. band the field to `relief`'s own step index, which means
+`rockGeometry` returning that index as an attribute. **That is the next thing to
+try and it is not a tuning change.**
+
+### Next steps, in order
+
+1. Band `aEmissive` to `relief`'s step index so a vein runs along an arris
+   instead of across the terraces. Needs `Rocks.rockGeometry` to hand the step
+   index back; that is a shared file, so route it through the coordinator.
+2. Try `face = 1` (no up-face damping) once the banding is in — the damping is
+   what stopped the snow read, and the banding may make it unnecessary.
+3. The crust fissures deserve a stand that sees them. Only the Disc overlook,
+   40 m up, sees the crater at all (see the table above).
+
+### Residue that is not this lane's to fix
+
+- **`landmark_meteor` clears 0.09 of its own subject.** A foreground ridge eats
+  everything below the crown. No art inside the meteor group can put a crater in
+  that frame. This is a shot-corpus or terrain question and it is most of the
+  blind verdict.
