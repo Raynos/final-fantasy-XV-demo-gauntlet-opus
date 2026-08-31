@@ -92,49 +92,93 @@ const hiding = () => !!rig._hidBody;
 
 /* ------------------------------------------------------------- the Regalia */
 
+/**
+ * A ring of standing poses around the parked car, not a drive-and-exit.
+ *
+ * The drive-and-exit was the first cut and it is a **measured null**: 0.0% of
+ * 300 frames with the lens never closer than 5.5 m, both ways. `exit()` puts
+ * Noctis well clear of the door and `_first` re-seats the lens behind him, so
+ * that particular second never reproduces anything.
+ *
+ * The geometry in the complaint is simpler than the story around it. Noctis
+ * ends up standing beside the car facing away from it; the camera is 5.6 m
+ * BEHIND him; 5.6 m behind a man standing two metres off the bumper is the
+ * inside of the bonnet. `VehicleBody` reaches collision only through
+ * `groundAt`, so the car is not a wall to a walker either — he can stand
+ * anywhere, including in it. So: put him at a ring of offsets with his back to
+ * the car, which is the pose, and let the rig place the lens.
+ */
 const carRes = { on: null, off: null };
-if (!car || !car.enabled) {
+if (!car || !car.enabled || !car.root) {
   emit('Regalia: not enabled on this build (no road) — case skipped');
 } else {
-  const SECS = Number(window.__CS_CARSECS) || 5;
-  let shotAt = -1;
+  if (car.isDriving) car.exit();
+  step(60);
+  const cx = car.root.position.x, cy = car.root.position.y, cz = car.root.position.z;
+  /** Metres out from the car centre the player stands. */
+  const RINGS = [3.0, 4.5, 5.5, 6.5];
+  const NA = 12;
+  /**
+   * Pitch matters more than the ring here and the first cut had only one.
+   * At the resting 0.22 rad the lens rides 2.84 m over Noctis' feet and the
+   * car's body centre is 0.95 m over its own root, so the lens clears the roof
+   * by a metre at every ring and the answer is 0.0% for a reason that has
+   * nothing to do with the fix. A player looking slightly UP at the car — which
+   * is what you do when you have just got out of it — puts the lens at bumper
+   * height.
+   */
+  const PITCHES = [0.22, 0.0, -0.25, -0.5];
+  let shotAt = null;
   for (const dyn of [false, true]) {
     const key = dyn ? 'on' : 'off';
     occ.dynamic = dyn;
-    // Ride, then step out: the frame in the complaint is the one right after
-    // `exit()` puts Noctis beside the door with the camera still where the
-    // drive camera left it.
-    if (!car.isDriving) car.enter(true);
-    step(180);
-    car.exit();
-    rig._first = true;
     const r = { f: 0, inside: 0, hid: 0, minD: 9e9 };
-    for (let f = 0; f < SECS * 60; f++) {
-      g.frame(dt);
-      if (f % 120 === 0) await breathe();
-      r.f++;
-      if (inCar()) { r.inside++; if (shotAt < 0 && !dyn) shotAt = f; }
-      if (hiding()) r.hid++;
-      const d = rig.cam.position.distanceTo(car.root.position);
-      if (d < r.minD) r.minD = d;
+    for (const rad of RINGS) {
+     for (const pitch of PITCHES) {
+      for (let i = 0; i < NA; i++) {
+        const a = (i / NA) * Math.PI * 2;
+        const px = cx + Math.cos(a) * rad, pz = cz + Math.sin(a) * rad;
+        player.root.position.set(px, cy, pz);
+        player.velocity?.set?.(0, 0, 0);
+        // Back to the car: the camera yaw that looks FROM the car AT the player
+        // puts the lens on the far side of him, over the bodywork.
+        const yaw = Math.atan2(-(px - cx), -(pz - cz));
+        rig.yaw = yaw; rig.yawTarget = yaw;
+        rig.pitch = pitch; rig.pitchTarget = pitch;
+        rig._first = true;
+        step(20);
+        await breathe();
+        r.f++;
+        const inside = inCar();
+        if (inside) r.inside++;
+        if (hiding()) r.hid++;
+        const d = rig.cam.position.distanceTo(car.root.position);
+        if (d < r.minD) r.minD = d;
+        if (inside && !dyn && !shotAt) shotAt = { rad, a, pitch };
+      }
+     }
     }
     carRes[key] = r;
-    emit(`Regalia exit, dynamic ${dyn ? 'ON ' : 'OFF'}: lens inside the car body`
-      + ` ${(100 * r.inside / r.f).toFixed(1)}% of ${r.f} frames, closest approach ${r.minD.toFixed(2)} m`);
+    emit(`Regalia, ${r.f} standing poses around the parked car, dynamic ${dyn ? 'ON ' : 'OFF'}:`
+      + ` lens inside the car body ${(100 * r.inside / r.f).toFixed(1)}%,`
+      + ` closest approach to its centre ${r.minD.toFixed(2)} m`);
 
-    if (window.__shot && shotAt >= 0) {
-      if (!car.isDriving) car.enter(true);
-      step(180);
-      car.exit();
+    if (window.__shot && shotAt) {
+      const px = cx + Math.cos(shotAt.a) * shotAt.rad, pz = cz + Math.sin(shotAt.a) * shotAt.rad;
+      player.root.position.set(px, cy, pz);
+      player.velocity?.set?.(0, 0, 0);
+      const yaw = Math.atan2(-(px - cx), -(pz - cz));
+      rig.yaw = yaw; rig.yawTarget = yaw;
+      rig.pitch = shotAt.pitch; rig.pitchTarget = shotAt.pitch;
       rig._first = true;
-      step(shotAt + 1);
-      emit(`  shot car-${key} at frame ${shotAt}: lens inside the car ${inCar()},`
-        + ` ${rig.cam.position.distanceTo(car.root.position).toFixed(2)} m from its centre, arm ${rig.distance.toFixed(2)} m`);
+      step(20);
+      emit(`  shot car-${key}: Noctis ${shotAt.rad.toFixed(1)} m off the car with his back to it,`
+        + ` lens inside the body ${inCar()}, ${rig.cam.position.distanceTo(car.root.position).toFixed(2)} m`
+        + ` from its centre, arm ${rig.distance.toFixed(2)} m`);
       await window.__shot(`car-${key}`);
     }
-    if (car.isDriving) car.exit();
-    step(60);
   }
+  occ.dynamic = true;
 }
 
 /* ---------------------------------------------------------------- the pack */
@@ -196,7 +240,12 @@ for (let round = 0; round < ROUNDS; round++) {
     const b = inBeast();
     if (b) r.inside++;
     if (hiding()) r.hid++;
-    if (b && !shotDone && window.__shot) {
+    // The pair is photographed on the frames the FIX acts on, not on the ones
+    // this probe's fatter cylinder fires on. A cylinder includes the corners an
+    // ellipsoid excludes, so the two disagree at the margin, and a pair caught
+    // at the margin shows nothing: the first cut of this probe photographed a
+    // garula 2.89 m from its root with the rig not hiding anything, twice.
+    if (rig._hidBody && !shotDone && window.__shot) {
       // Photograph the SAME instant both ways: the hide is a per-frame
       // decision, so flipping the knob and re-rendering is the honest pair.
       shotDone = true;
@@ -204,8 +253,8 @@ for (let round = 0; round < ROUNDS; round++) {
         occ.dynamic = dyn;
         if (!dyn && rig._hidBody) { rig._hidBody.root.visible = true; rig._hidBody = null; }
         g.frame(dt);
-        emit(`  shot beast-${dyn ? 'on' : 'off'}: lens inside ${b.speciesId || b.name || 'a creature'},`
-          + ` ${rig.cam.position.distanceTo(b.root.position).toFixed(2)} m from its root, hiding ${hiding()}`);
+        emit(`  shot beast-${dyn ? 'on' : 'off'}: lens inside ${(b && (b.speciesId || b.name)) || 'a creature'},`
+          + ` ${b ? rig.cam.position.distanceTo(b.root.position).toFixed(2) : '?'} m from its root, hiding ${hiding()}`);
         await window.__shot(`beast-${dyn ? 'on' : 'off'}`);
       }
       occ.dynamic = true;

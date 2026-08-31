@@ -403,13 +403,17 @@ const _alive: SoftBody[] = [];
  * of its centre over the root.
  *
  * `world/props/Regalia.ts` builds it 6.4 m long and 2.3 m wide on 0.95 m
- * wheels. These INSCRIBE that box rather than bound it: the bounding ellipsoid
- * of a car is nine metres across its diagonal, and an arm that stopped at it
- * would stop dead in the open air beside the bonnet.
+ * wheels. These are the box's own half-extents, which is the LARGEST ellipsoid
+ * lying entirely inside it — it touches the middle of each face and misses only
+ * the corners, so the arm can never stop in open air beside the bonnet. The
+ * first cut used 2.5/0.95/0.62, a third smaller again for no reason, and
+ * `probes/camsolid.mts` priced the timidity: over 192 standing poses around the
+ * parked car it left the lens inside the bodywork on 19.3% against 44.8% with
+ * no proxy at all, and every one of those was between the ellipsoid and the box.
  */
-const CAR_LEN = 2.5;
-const CAR_WIDE = 0.95;
-const CAR_TALL = 0.62;
+const CAR_LEN = 3.2;
+const CAR_WIDE = 1.15;
+const CAR_TALL = 0.75;
 const CAR_MID = 0.95;
 /**
  * How much longer than wide a creature is.
