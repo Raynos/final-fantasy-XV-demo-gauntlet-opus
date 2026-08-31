@@ -851,7 +851,12 @@ export class Sky {
       uSunAngRadius: { value: 0.0075 },
       uSunDiscBrightness: { value: 10 },
 
-      uMoonAngRadius: { value: 0.031 },
+      // `BRIEF.md` asks for "the Eos starfield and a huge moon". 0.031 rad is a
+      // 3.6 deg disc — seven times life size and still only 75 px at the
+      // corpus's 46 deg fov, which is a bright speck rather than a presence.
+      // 0.042 is a 4.8 deg disc, ~100 px, and now that the surface is no longer
+      // clipped to white the extra area buys maria rather than more glare.
+      uMoonAngRadius: { value: 0.042 },
       uMoonPhase: { value: 0.72 },
       uMoonBright: { value: 0.5 },
       uMoonTint: { value: new THREE.Vector3(1.0, 0.99, 0.94) },
@@ -1067,7 +1072,19 @@ export class Sky {
     // the fill stays moonlit rather than floodlit.
     const moonUp = smoothstep(-0.06, 0.10, this.moonDir.y);
     const moonPower = 1.9 * moonUp * night * u.uMoonPhase.value;
-    u.uMoonBright.value = 3.4 * moonUp;
+    /**
+     * The DISC's brightness, not the moonlight — `moon.intensity` above is what
+     * lights the ground and is untouched here.
+     *
+     * At 3.4 the lit face computed to ~4.0 linear before tone mapping, so every
+     * pixel inside the limb clipped to white: the maria, the crater speckle and
+     * the phase falloff the shader goes to real trouble to compute were all
+     * invisible, and the playtest reported exactly that — "a blown-out white
+     * disc". 1.55 puts the sub-solar point a little over 1.0, which still
+     * blooms and still reads as the brightest thing in the sky, while the seas
+     * come back.
+     */
+    u.uMoonBright.value = 1.55 * moonUp;
     u.uMoonLight.value = 0.30 * moonUp * night;
 
     this.sun.color.copy(sunColor);

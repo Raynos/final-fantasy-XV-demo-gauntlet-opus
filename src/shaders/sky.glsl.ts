@@ -67,21 +67,47 @@ vec3 skyStarLayer(float face, vec2 uv, float scale, float density, float bright,
 
   vec2 o = 0.2 + 0.6 * vec2(h.y, h.z);
   float d = length(f - o);
-  float mag = pow(h.w, 4.0);
+  /**
+   * Magnitude, and it is the whole fix.
+   *
+   * A blind playtest called this sky "a snowstorm rather than stars" and a
+   * blind art critic independently named "uniform-magnitude star dots" as a
+   * tell in two separate pairs. Both are the same defect, and it had two
+   * halves.
+   *
+   * The first is that SIZE was doing the work brightness should do.
+   * radius = px * (1.15 + 2.4 * mag) made a bright star three times WIDER
+   * than a faint one, so every star arrived as a disc between 2.3 and 7.1
+   * pixels across. Real stars are point sources — the eye and the lens read
+   * magnitude as intensity within one fixed point-spread, never as diameter.
+   * The core is now near-constant at about one pixel and the tail carries the
+   * decision, which is also what lets the postfx glare pick out the few
+   * genuinely bright ones instead of smearing all of them.
+   *
+   * The second is that pow(h.w, 4.0) with an amplitude floor of 0.12 spans
+   * only 31:1, and against a night floor of ~0.01 that floor is already a
+   * fully saturated white dot. Every star therefore printed the same white.
+   * pow(h.w, 7.0) over 0.028 + 4.2 * mag spans 150:1, so half the field
+   * sits near the noise and the top decile is unmistakable.
+   */
+  float mag = pow(h.w, 7.0);
   // one screen pixel expressed in cell units (a cube face spans ~PI/2 radians)
   float px = max(uPixelAngle * scale / 1.5708, 1e-5);
-  float radius = px * (1.15 + 2.4 * mag);
-  float sigma = max(radius, px * 1.1);
+  float radius = px * (0.58 + 0.85 * mag);
+  float sigma = max(radius, px * 0.78);
+  // A star narrower than the sampling grid must LOSE energy as it shrinks,
+  // not merely get smaller — otherwise the sub-pixel layers all print at full
+  // amplitude, which is most of where the snowstorm came from.
   float amp = min(1.0, (radius * radius) / (sigma * sigma));
   float core = amp * exp(-(d * d) / (2.0 * sigma * sigma * 0.42));
 
   float ct = fract(h.x * 17.31);
   vec3 col;
-  if (ct < 0.18) col = vec3(0.70, 0.79, 1.0);
-  else if (ct < 0.74) col = vec3(0.97, 0.97, 1.0);
-  else col = mix(vec3(1.0, 0.88, 0.70), vec3(1.0, 0.70, 0.48), (ct - 0.74) / 0.26);
+  if (ct < 0.24) col = vec3(0.63, 0.75, 1.0);
+  else if (ct < 0.70) col = vec3(0.94, 0.96, 1.0);
+  else col = mix(vec3(1.0, 0.87, 0.68), vec3(1.0, 0.66, 0.42), (ct - 0.70) / 0.30);
 
-  return col * core * bright * (0.12 + mag * 3.6);
+  return col * core * bright * (0.028 + mag * 4.2);
 }
 
 vec3 skyStars(vec3 dir, float bandBoost) {
@@ -89,10 +115,23 @@ vec3 skyStars(vec3 dir, float bandBoost) {
   float face; vec2 uv;
   nCubeFace(sd, face, uv);
   vec3 c = vec3(0.0);
-  c += skyStarLayer(face, uv, 44.0,  0.34, 1.00, 0.0);
-  c += skyStarLayer(face, uv, 112.0, 0.14, 0.55, 13.0);
-  c += skyStarLayer(face, uv, 250.0, 0.06, 0.30, 41.0);
-  c += skyStarLayer(face, uv, 250.0, 0.30, 0.22, 77.0) * bandBoost;
+  /**
+   * Densities, counted rather than guessed.
+   *
+   * Star pixel size is fov-independent here (the radius is in cell units and a
+   * cell shrinks with the pixel angle), but the star COUNT per frame is not:
+   * at the corpus's 46 deg a scale-44 cell is ~40 px, at 18 deg it is ~102 px.
+   * That is why the field looked acceptable in a tight crop and like weather
+   * at gameplay fov, and why nobody caught it: 0.34/0.14/0.06/0.30 put about
+   * 2800 dots in a 1600x900 night frame against roughly 150 naked-eye stars
+   * in the same solid angle. Cut to a little over a third of that, with the
+   * two sub-pixel layers cut hardest, because those are the ones that were
+   * printing as texture rather than as objects.
+   */
+  c += skyStarLayer(face, uv, 44.0,  0.24, 1.00, 0.0);
+  c += skyStarLayer(face, uv, 112.0, 0.075, 0.55, 13.0);
+  c += skyStarLayer(face, uv, 250.0, 0.022, 0.30, 41.0);
+  c += skyStarLayer(face, uv, 250.0, 0.14, 0.22, 77.0) * bandBoost;
   return c;
 }
 
@@ -123,9 +162,16 @@ vec3 skyMoon(vec3 dir, vec3 sunDir, float ang) {
 
   vec3 outCol = vec3(0.0);
 
-  // tight aureole only: a wide halo turns the whole night sky brown
-  float halo = exp(-ang / (uMoonAngRadius * 1.6)) * 0.22 +
-               exp(-ang / (uMoonAngRadius * 6.0)) * 0.020;
+  /**
+   * Tight aureole only. The wide term used to reach angRadius * 6 — with a
+   * 1.8 deg angular radius that is a glow eleven degrees across, which the
+   * playtest read as "a blown-out white disc with a large halo" and which
+   * postfx glare then doubled. It is the moisture ring around a moon, not a
+   * light source: keep it inside three moon-radii and let the disc itself be
+   * the bright thing.
+   */
+  float halo = exp(-ang / (uMoonAngRadius * 1.3)) * 0.15 +
+               exp(-ang / (uMoonAngRadius * 3.2)) * 0.014;
   outCol += uMoonTint * halo * uMoonBright * 0.20;
 
   if (r2 < 1.0) {
