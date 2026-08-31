@@ -85,8 +85,19 @@ interface TombNode {
   claimed: boolean;
 }
 
-/** Metres the prompt appears within, before the kit is built and after. */
-const REACH_FAR = 15;
+/**
+ * Metres the prompt appears within, measured from the sarcophagus.
+ *
+ * There is no second, wider reach for the not-yet-built case any more, and the
+ * number is why. `PoiKits._tomb` puts the coffin at kit-local
+ * `z = cD / 2 + 2.6` under a `1.4` world scale -- **7.19 m from the POI pin,
+ * for every tomb**, only the bearing turning with the per-site yaw (measured
+ * across all ten in `src/tools/probes/tombreach.mts`: `dPin=7.19` on every
+ * row). A pin-anchored prompt with any reach under 7.19 m therefore *cannot*
+ * still be reachable from the pin once it re-anchors, so the first version of
+ * this file advertised a 15 m prompt on the pin and then moved it 7.19 m onto a
+ * 6.5 m reach that no longer covered the place it had just been offered.
+ */
 const REACH_NEAR = 6.5;
 
 export class Tombs {
@@ -139,10 +150,31 @@ export class Tombs {
       n.handle = ix.register({
         id: `tomb_${n.poiId}`,
         pos: n.pos,
-        // Wide until the temple is built and the sarcophagus anchor arrives:
-        // a prompt you cannot find is worse than one that is a little loose,
-        // and the pin is the centre of a 21 m building.
-        radius: REACH_FAR,
+        radius: REACH_NEAR,
+        // **Off until the coffin's position is known.** `pos` is a live
+        // reference that `update` moves onto the kit's `sarcophagus` anchor the
+        // first time the streamer builds the temple, and that move is 7.19 m --
+        // so while it is pending, this prompt is a `Claim` verb standing over
+        // seven metres of empty stylobate. `integration`'s own
+        // "no prompt is offered where its subject is not" is the rule, and the
+        // wide pin prompt broke it; it only escaped that row because the row
+        // scans `npc_` ids and the world origin.
+        //
+        // It also breaks a rule the picker depends on. `Interaction._pick`
+        // reads `pos` live, so a prompt that re-anchors while it is being
+        // offered teleports out from under whoever walked to where it was:
+        // `integration`'s "walking up to a thing selects that thing" caught
+        // exactly that on `tomb_rogue` -- the bind landed inside its
+        // eight-frame window, the coffin came to rest 6.05 m away and **107
+        // degrees** off the approach, outside the 100-degree half-cone, and the
+        // prompt vanished (`1/86 unreachable: tomb_tomb_rogue->nothing`).
+        // Gating on `anchored` makes the position immutable for as long as the
+        // prompt exists, which is the property the picker was written against.
+        //
+        // Nothing is lost in play: `PoiKits` builds a site when the camera
+        // comes within `BUILD_R` = 1500 m, so the anchor lands a kilometre
+        // before the player is inside 6.5 m of anything.
+        enabled: () => n.anchored,
         // Wide cone for the same reason `Deposits` uses one: this is a thing
         // you walk up to and stand over, not a face you address.
         cone: 200,
@@ -223,8 +255,12 @@ export class Tombs {
    * It has to be a late bind and not a table read at install: `PoiKits._make`
    * runs when the camera comes within `BUILD_R`, and the kit's yaw is random
    * per site, so at install time there is no answer to *where the coffin is* --
-   * only to where the pin is. Until the anchor arrives the prompt covers the
-   * whole building, which is the correct failure.
+   * only to where the pin is. Until the anchor arrives the prompt is switched
+   * off rather than parked on the pin: see `enabled` in {@link Tombs.install}
+   * for the two rules the parked version broke.
+   *
+   * The bind is one-way and once only -- `anchored` is never cleared -- so from
+   * the frame a tomb's prompt turns on, its position never moves again.
    */
   update(dt: number, game: Game) {
     if (!this._installed || !this.nodes.length) return;
@@ -238,8 +274,8 @@ export class Tombs {
       const a = kits.anchorAt(n.poiId, 'sarcophagus', this._v);
       if (!a) continue;
       n.pos.copy(a);
+      // Last write to `pos`, and the write that turns the prompt on.
       n.anchored = true;
-      n.handle?.set({ radius: REACH_NEAR });
     }
   }
 }
