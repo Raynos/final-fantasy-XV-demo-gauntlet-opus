@@ -133,7 +133,25 @@ if (NIGHT && sky && sky.setTimeOfDay) sky.setTimeOfDay(HOUR);
 if (NIGHT) step(2);
 const day = rpg ? rpg.day : null;
 const depthNow = () => (reg ? reg.nightDanger() : (day ? day.nightDepth : 0));
-const clockNow = () => (day ? day.clockString : (sky ? sky.hours.toFixed(2) : '??'));
+/**
+ * **Off the Sky, which owns it.** `DayCycle` is a follower: it starts at 09:00
+ * from its own constructor and does not catch up to the sky until its first
+ * `update`, so the banner below — printed before a single frame has run —
+ * reported a 14:00 session as "09:00" when it read `day.clockString`.
+ *
+ * 14:00 is where the session sits, for the record, and nobody knew: `applyShot`
+ * pushes `SHOTS[name].time` into the sky, and `hud_field.time` is 14.0. Nothing
+ * then moves it, so the default longplay is half an hour of one mid-afternoon
+ * hour. (`hud_night` exists at 22.4 and is the other way to get night out of
+ * this probe, but it drags a shot's HUD, weather and scenario along with it and
+ * fixes the hour at a depth of 0.68 — `setTimeOfDay` is the documented
+ * cross-system API and leaves the hour a knob.)
+ */
+const clockNow = () => {
+  const h = sky && typeof sky.hours === 'number' ? sky.hours : (day ? day.hour : -1);
+  if (h < 0) return '??';
+  return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
+};
 
 // What `_nightRoadDanger` did, counted from outside it. The instrument is two
 // instance-level wrappers -- no file this lane does not own is touched, and
@@ -434,7 +452,35 @@ for (let f = 0; f < FRAMES; f++) {
   }
 }
 inp.keys.clear();
-step(30);
+
+/**
+ * **Play the last fight out before asking whether fights end.**
+ *
+ * Measured: a 30-minute night run took its last roadside ambush at game minute
+ * 29.3 and then stopped, and reported `FAIL fights end — director state
+ * "combat"` and `FAIL the party is still with him — 168m 32m 161m`. Neither is
+ * a dead end; both are the shutter closing in the middle of a fight the probe
+ * itself started, with the party spread out across it. The questions those two
+ * checks exist to ask are *does the director come back out of combat* and *does
+ * the party regroup*, and a session that simply ends cannot ask either.
+ *
+ * Two minutes of game time is eight times the longest unbroken fight this probe
+ * has ever recorded, so a director still in `combat` after it is genuinely
+ * wedged. How long it actually took is reported either way.
+ */
+let settleS = 0;
+if (enc && enc.state === 'combat') {
+  for (let i = 0; i < 120 * 60 && enc.state === 'combat'; i++) {
+    if (i % 12 === 0) {
+      const live = enemies.list.filter((e) => !e.dead && e.inCombat);
+      if (live.length) combat._applyDamage(live[0], player.position, { motion: 18, poise: 120 });
+    }
+    g.frame(1 / 60);
+    settleS = (i + 1) / 60;
+  }
+}
+// and three seconds for the party to close back up on him
+step(180);
 
 // **Snapshot the clock HERE.** The dead-end checks below call
 // `rpg.camp({force:true})`, and camping sleeps until morning — so reading the
@@ -462,6 +508,8 @@ out.push(`  closest a forage spot ever got: ${minSpot === Infinity ? '-' : minSp
   + `prompt offered on ${forageOffered} frames`);
 out.push(`  in combat ${((inCombatFrames / FRAMES) * 100).toFixed(1)}% of frames, `
   + `longest unbroken fight ${(maxCombatRun / 60).toFixed(0)} s`);
+out.push(`  the session ended ${settleS > 0 ? `mid-fight; it took ${settleS.toFixed(0)} s `
+  + `of play to finish` : 'out of combat'}`);
 out.push(`  prompts met: ${[...seenPrompts].slice(0, 10).join(' | ') || 'NONE'}`);
 
 /* ------------------------------------------ what the night actually did */
