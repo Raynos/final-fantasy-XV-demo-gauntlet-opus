@@ -3244,3 +3244,48 @@ arm; the geometry is simply on both sides of the near plane.
 Also recorded: it is `Landmarks._haven`, not `PoiKits._haven`, and
 `Shots.ts:59`'s note about where `spawn_haven` is has gone stale.
 
+## An offset pinned to the root is not a socket
+
+`CombatSystem.hand` is a `Group` pinned at `(-0.30, 1.12, 0.12)` on
+`player.root`. On foot that lands where a hand is. **Mounted, the same offset is
+bird-local `(-0.30, 2.0, 0.12)` — the base of the chocobo's neck**, which is why
+a playtester saw *"Noctis's sword floating horizontally through the bird's
+neck"*.
+
+It will be wrong everywhere the root moves relative to the body: swimming,
+fishing and the haven poses all inherit it. **A weapon or prop attachment must
+hang off a bone socket, not off a root-space offset that happens to be right in
+one stance.**
+
+Two things found beside it. **A sheathed weapon at `reveal 0` still draws** — as
+a blue ghost — so "stowed" was not hidden; and a companion's stowed greatsword
+measured from **y 1.81 down to y −0.03**, i.e. through the entire bird and into
+the ground.
+
+## There was no T-pose: the pose was authored, running, and leaving the object
+
+A playtester reported *"anybody the game seats is frozen in a T-pose with their
+arms sticking out through the scenery"*, and the obvious reading — that the seat
+path never drives the animator, or that `Player.update` stamps over it — was
+**wrong**, and this codebase has enough real instances of that shape (a swimmer
+plays a walk cycle) to make it very tempting.
+
+Measured instead: `Occupants._applyPose` and `Saddle._applyPose` **run every
+frame**, every bone they name **exists**, and the live eulers **read back equal
+to the tables**. The pose was authored and applied; its limbs simply ended up
+outside the car and the bird. Worst bone outboard **0.338 m past the door card**;
+on the bird, hands **0.86 m apart and 0.43 m above the hips**, holding a rein
+that did not reach them.
+
+**"It looks like a T-pose" is a description of a silhouette, not a diagnosis of a
+pipeline.** Read the live bone values before believing the animator is absent.
+
+## The Regalia's cabin is half a metre too shallow to sit in
+
+Found while re-solving the passenger pose, and it bounds what any pose can do:
+**door top 1.106 m against an H-point of 1.055 m**, so an occupant's shoulders
+sit **0.26-0.31 m above the beltline** no matter how they are posed. *"An elbow
+on the sill" was never geometrically possible.* Recorded because the next person
+to look at seated characters will otherwise try to pose their way out of a
+modelling problem.
+
