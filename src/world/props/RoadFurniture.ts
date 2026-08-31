@@ -126,7 +126,26 @@ export function roadMaterials() {
     post: paintedMaterial(0xd7d2c4, 0.62, 0.15),
     rust: rustMaterial(0x8a5a38, 0.5),
     wood: woodMaterial(0x6f5c44),
-    dark: new THREE.MeshStandardMaterial({ color: 0x25262a, roughness: 0.78, metalness: 0.25 }),
+    /**
+     * Roadside rubber and the galvanised chevron/guardrail post.
+     *
+     * **It was `0x25262a` — 15% grey — and a blind judged round decided six of
+     * forty-three panels on it in under a second**, calling it "an untextured
+     * pure-black torus receiving no light". A second lane and a playtester
+     * filed the same object independently.
+     *
+     * It is not unlit. `_probe/tyrelight.mts` sweeps this material's albedo and
+     * reads the framebuffer back through a mask derived by ablation: at
+     * `0x25262a` the tyre renders **50,42,40**, at `0x4a4c54` **56,47,52**, at
+     * white **131,129,137**. The surface tracks its albedo, so the light path is
+     * alive — the albedo was simply four to five times darker than the ground it
+     * lies on (150-200), which is what "receives no light" looks like.
+     *
+     * Real tyre rubber is 5-8% linear reflectance, sRGB about `0x45`, and
+     * metalness on rubber is 0 — the 0.25 was suppressing the diffuse term that
+     * carries the form, leaving a flat cutout.
+     */
+    dark: new THREE.MeshStandardMaterial({ color: 0x45464b, roughness: 0.92, metalness: 0.0 }),
     reflect: glowMaterial(0xffb54a, 0.6, 0x2a1a08),
     skid: new THREE.MeshBasicMaterial({
       map: skidTexture(), transparent: true, opacity: 0.55, depthWrite: false,
@@ -149,7 +168,16 @@ function roadGeometry() {
     head: new THREE.BoxGeometry(0.12, 0.2, 0.065),
     gpost: new THREE.BoxGeometry(0.14, 1.05, 0.14),
     drum: new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12),
-    tyre: new THREE.TorusGeometry(0.42, 0.16, 6, 12),
+    /**
+     * A car tyre is **0.65 m** across. `TorusGeometry(0.42, 0.16)` is an outer
+     * diameter of **1.16 m** — a lorry tyre at double scale — which is why every
+     * observer who filed this object described it as "1-2 m across" and as a
+     * primitive rather than as litter. Twelve tubular segments also gave it a
+     * visibly twelve-sided silhouette at four metres. 0.23 + 0.10 is 0.66 m
+     * across with a 0.20 m tread; 18 segments round the silhouette for 96 extra
+     * triangles on a prop that appears once per ~55 m of road at 30% odds.
+     */
+    tyre: new THREE.TorusGeometry(0.23, 0.10, 6, 18),
     crate: new THREE.BoxGeometry(0.72, 0.5, 0.6),
     grit: new THREE.IcosahedronGeometry(0.16, 0).scale(1.4, 0.6, 1.1),
     plateBack: new THREE.BoxGeometry(0.26, 1.15, 0.18),
@@ -243,7 +271,21 @@ export class RoadFurniture {
     if (!trail && !track) this._guardrail(c, cast);
     this._markers(c, flat);
     if (!trail) this._culverts(c, flat);
-    this._litter(c, flat);
+    /**
+     * Litter is SOLID — an oil drum, a tyre, a crate — and it belongs in the
+     * casting builder with the guardrails, not in the flat one with the skid
+     * marks. It was in `flat`, which is what the judge saw as "casting no
+     * contact shadow": `castShadow` is toggled only over `children[0..castCount)`
+     * (see {@link RoadFurniture.update}) and every flat child is past that
+     * index, so a 1 m object sat on bare dirt with nothing under it. `flat`
+     * also stamps `renderOrder = 1` on its children, i.e. draws them as decals.
+     *
+     * This is close to free in draw calls: `cast` gains the `rust` and `wood`
+     * buckets and `flat` loses `rust`, `wood` and `dark`, so the group emits one
+     * mesh FEWER. It does add those buckets to the shadow pass inside `CAST`
+     * (110 m) — measured with `drawcheck` below.
+     */
+    this._litter(c, cast);
     this._gravel(c, flat);
     if (!trail && !track) this._skid(c, flat);
 
@@ -435,7 +477,8 @@ export class RoadFurniture {
           B.add(M.rust, g.drum, mat4([px, y + (fell ? 0.3 : 0.44), pz],
             fell ? [Math.PI / 2, rng.next() * 3, rng.gauss(0, 0.2)] : [rng.gauss(0, 0.06), rng.next() * 3, 0]));
         } else if (r < 0.72) {
-          B.add(M.dark, g.tyre, mat4([px, y + 0.15, pz], [Math.PI / 2 + rng.gauss(0, 0.25), rng.next() * 3, 0]));
+          // half-height of a tyre lying flat is its tube radius, now 0.10
+          B.add(M.dark, g.tyre, mat4([px, y + 0.1, pz], [Math.PI / 2 + rng.gauss(0, 0.25), rng.next() * 3, 0]));
         } else {
           B.add(M.wood, g.crate, mat4([px, y + 0.24, pz], [rng.gauss(0, 0.1), rng.next() * 3, rng.gauss(0, 0.1)]));
         }
