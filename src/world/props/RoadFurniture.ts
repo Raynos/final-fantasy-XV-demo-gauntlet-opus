@@ -461,6 +461,23 @@ export class RoadFurniture {
     const M = this.mats, eco = this.eco, g = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x6161);
     let acc = 1e9;
+    /**
+     * Where litter already went in this chunk, so a drop of three does not put
+     * two tyres inside each other.
+     *
+     * A drop is `n = 1 or 3` around one road sample with `gauss(0, 1.6)` on both
+     * axes, so a pair landing 0.17 m apart is ordinary, not unlucky — and the
+     * pair beside the party spawn was exactly that. Two interpenetrating tori
+     * do not read as two tyres; they read as one shapeless dark blob, which is
+     * half of why the object was filed as a placeholder primitive. 1.1 m clears
+     * the widest litter item (the 0.88 m drum lying down) with room to spare.
+     */
+    const placed: number[][] = [];
+    const clear = (x: number, z: number) => {
+      for (const [ox, oz] of placed) if ((x - ox) ** 2 + (z - oz) ** 2 < 1.1 * 1.1) return false;
+      placed.push([x, z]);
+      return true;
+    };
     for (const p of c.samples) {
       acc += 6;
       if (acc < 55) continue;
@@ -470,6 +487,7 @@ export class RoadFurniture {
         const off = rng.sign() * rng.range(7, 14);
         const q = this._side(p, off);
         const px = q.x + rng.gauss(0, 1.6), pz = q.z + rng.gauss(0, 1.6);
+        if (!clear(px, pz)) continue;
         const y = seatY(eco, px, pz, 0.7, DRAW);
         const r = rng.next();
         if (r < 0.42) {

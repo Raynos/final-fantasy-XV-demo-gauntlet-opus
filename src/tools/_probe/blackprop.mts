@@ -116,11 +116,12 @@ for (const name of names) {
     size: r.max.map((v, i) => +(v - r.min[i]).toFixed(2)),
     // fraction of the viewport the cluster's screen bbox covers
     screen: +(((r.sx[1] - r.sx[0]) / 2) * ((r.sy[1] - r.sy[0]) / 2)).toFixed(4),
+    ndc: [r.sx[0], r.sy[0], r.sx[1], r.sy[1]].map((v) => +v.toFixed(3)),
   })).sort((x, y) => y.screen - x.screen);
 
   out.push(`${name}  cam ${cam.position.x.toFixed(0)},${cam.position.y.toFixed(0)},${cam.position.z.toFixed(0)}  ${rows.length} dark clusters`);
   for (const r of rows.slice(0, 10)) {
-    out.push(`   ${(r.screen * 100).toFixed(2)}% scr  d=${r.near}m  ${r.size.join('x')}  ${r.hex} l=${r.lum} r=${r.rough} m=${r.metal}  cast=${r.cast}  ${r.mat}  ${r.path}  @${r.at.join(',')}`);
+    out.push(`   ${(r.screen * 100).toFixed(2)}% scr  d=${r.near}m  ndc[${r.ndc.join(' ')}]  ${r.size.join('x')}  ${r.hex} l=${r.lum} r=${r.rough} m=${r.metal}  cast=${r.cast}  ${r.mat}  ${r.path}  @${r.at.join(',')}`);
   }
 }
 return out.join("\n");
