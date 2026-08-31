@@ -997,3 +997,47 @@ is landed.
   unnormalised `UNSIGNED_SHORT` (`e848801`), and `zone_mencemoor` went from
   84.2% clipped pixels to 0.58% on the fix alone. **Re-shoot `MO_7` before
   spending an art round on it.** `white-frames`
+
+
+## From lane 12c (traversal and HUD stacking) — 2026-08-31
+
+- **The animator has no slide pose, which is the fourth of the playtest's four
+  slope complaints.** `Player.update` does `velocity.multiplyScalar(body.progress)`
+  and `_gaitWant = speed * progress`, so a character sliding down a face he
+  cannot climb scores `progress` ~0 and holds the *idle*: he now moves, but he
+  moves standing still. `CharacterController.slip` (0..1) is published and is
+  the hook. `src/characters/Player.ts` and the animator — not this lane's files.
+  `lane12c`
+- **The camera buries itself in a hillside on foot, not only in combat.**
+  `tmp/shots/l12c-after/slip_note.png` is the camera inside the ground at the
+  foot of a 60 deg face — the playtest's "camera buried" verbatim. Lane 11 filed
+  the same defect against the *encounter* camera; it is `CameraRig` generally.
+  `lane12c`/`lane11`
+- **The area/title card is a 54 px watermark across the middle of the frame.**
+  `.areacard` sits at `left:10.5%; top:40%` and fires on arrival regardless of
+  what else is on screen — over the party in `hud_field`, and the playtest read
+  two in a row as "giant overlapping watermarks across the combat HUD".
+  `src/ui/Layers.ts` now has a `feature` band and a `PRIORITY.areaCard` for
+  exactly this, but **nothing claims it yet**: the card should yield to a fight
+  and queue behind a victory. Half a lane's work, all inside `src/ui`. `lane12c`
+- **Two more same-band pairs, both across files this lane does not own.**
+  `.cine-line` (bottom 15.5%, `#cine`) and `.subs` (bottom 13.5%, `#hud`);
+  `.chapcard` (`top:40%`, `#cine`) and `.areacard` (`top:40%`, `#screenfx`).
+  Neither pair has any mutual gate. `lane12c`
+- **`Minimap` uses the offset text-shadow `ui.css:29-35` explicitly bans**
+  (`0 1px 2px …` at `Minimap.ts:479,484,489` — an offset shadow prints a
+  readable second copy of the glyph one pixel low) and `--ink-4` for
+  `.mm-scale`. It is a self-contained `<style>` tag that deliberately does not
+  use the ui.css tokens, and its caption is one of the least legible things in a
+  bright field frame. `lane12c`
+- **~30 menu-screen rules are still `--ink-4` with no text-shadow** — the same
+  defect lane 10 fixed on `.arm-gauge .d` and this lane fixed on
+  `.armiger .ar-note`. Over the menu scrim rather than over terrain, so lower
+  severity than the field ones, but it is the same one-line recipe each time.
+  `lane12c`
+- **`probes/slopewalk.mts` deserves a place in the suite.** Fixed seed, ~90 s,
+  and it is the only instrument that can catch the silent dead-stop coming back:
+  it censuses the field's slope and then walks fifteen real hillsides. Its
+  companion `probes/hudstack.mts` opens all sixteen screens with a tutorial card
+  up and measures the ink inside the reading band — it caught 83 px on 16 of 16.
+  `lane12c`/`lane16`
