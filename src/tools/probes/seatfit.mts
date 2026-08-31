@@ -150,9 +150,12 @@ if (cb) {
     if (!(cell.get(k) >= a)) cell.set(k, a);
   }
   const half2 = (z, y) => {
+    // widen in z (the barrel changes slowly fore-aft) but NEVER in y: reaching
+    // one cell up from a boot at y 1.29 finds the saddle line at y 1.65 and
+    // reports a leg in clear air as buried
     let best = 0;
-    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) {
-      const v2 = cell.get(`${Math.round(z / 0.15) + dz},${Math.round(y / 0.12) + dy}`);
+    for (let dz = -1; dz <= 1; dz++) {
+      const v2 = cell.get(`${Math.round(z / 0.15) + dz},${Math.round(y / 0.12)}`);
       if (v2 != null && v2 > best) best = v2;
     }
     return best;

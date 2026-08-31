@@ -222,6 +222,8 @@ export interface OccupantCtx {
 export class Occupants {
   _gaze!: THREE.Vector3[];
   _saved!: SavedWalkers | null;
+  /** Weapons this module has hidden, so `exit` can put them all back. */
+  _stowed!: Set<THREE.Object3D>;
   _t!: number;
   anchors!: Record<string, THREE.Object3D>;
   game!: Game;
@@ -239,6 +241,7 @@ export class Occupants {
     this.seated = false;
     this.anchors = {};
     this.rng = new Rng(60613);
+    this._stowed = new Set();
     this._t = 0;
     // one gaze target per rider, reused — `setLookTarget` only stores the
     // reference, so a fresh Vector3 a frame would be pure garbage
@@ -253,6 +256,44 @@ export class Occupants {
       tilt.add(o);
       this.anchors[s.id] = o;
     }
+  }
+
+  /**
+   * Stowed weapons, out of sight while the party are passengers.
+   *
+   * A companion's blade lives on `attach.back` or `attach.hip`, which are bones
+   * on the spine and the pelvis, so it swings with whatever the seat does to
+   * the torso — and 2.05 m of greatsword on a man sitting in a car goes through
+   * the boot lid, the seat squab and the man behind him, whatever angle it is
+   * stowed at. Four men on a road trip are not holding their weapons, so this
+   * puts them away for the drive and hands them back at the door.
+   *
+   * Hidden every frame rather than once, because `PartyAI._carry` can reparent
+   * a weapon into a hand mid-drive; anything that leaves these two sockets
+   * becomes visible again on its own. `_stowed` is what makes the restore
+   * exact: a blade that moved to a hand while it was hidden is still on the
+   * list, so it comes back when everybody gets out.
+   */
+  _hideProps() {
+    for (const r of this.riders) {
+      const a = r.char.attach as Record<string, THREE.Object3D> | undefined;
+      if (!a) continue;
+      for (const key of ['back', 'hip']) {
+        const sock = a[key];
+        if (!sock) continue;
+        for (const c of sock.children) {
+          if (!c.visible) continue;
+          c.visible = false;
+          this._stowed.add(c);
+        }
+      }
+    }
+  }
+
+  /** Give every hidden weapon back, wherever it has ended up. */
+  _showProps() {
+    for (const o of this._stowed) o.visible = true;
+    this._stowed.clear();
   }
 
   /** Wire up to Player and Party. Safe to call once at init. */
@@ -317,6 +358,7 @@ export class Occupants {
   /** Put everyone back on their feet beside the car. */
   exit(worldPos: THREE.Vector3, heading: number) {
     const p = this.player, party = this.party;
+    this._showProps();
     if (!p || !party || !this._saved) { this.seated = false; return; }
     p.terrain = this._saved.playerTerrain;
     party.terrain = this._saved.partyTerrain;
@@ -377,6 +419,7 @@ export class Occupants {
       this._applyPose(r, i, leanX, leanZ, jog, ctx);
       r.root.updateMatrixWorld(true);
     }
+    this._hideProps();
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */

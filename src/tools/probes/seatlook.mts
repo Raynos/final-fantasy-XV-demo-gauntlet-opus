@@ -68,6 +68,8 @@ if (reg) {
   await freelook('drive-front34', cx, cy, cz, f.x * 0.9 + rx * 0.7, 0.30, f.z * 0.9 + rz * 0.7, 5.8, 38);
   await freelook('drive-above', cx, cy + 0.2, cz, -f.x * 0.5 + rx * 0.45, 0.80, -f.z * 0.5 + rz * 0.45, 4.6, 44);
   await freelook('drive-rear', cx, cy, cz, -f.x, 0.30, -f.z, 5.4, 40);
+  // tight on the front row, which is where the wheel and the door cap are
+  await freelook('drive-cockpit', cx + f.x * 0.2, cy + 0.25, cz + f.z * 0.2, rx * 0.9 + f.x * 0.4, 0.35, rz * 0.9 + f.z * 0.4, 3.2, 24);
   inp.keys.clear();
   reg.exit();
   for (let i = 0; i < 30; i++) g.frame(1 / 60);
@@ -99,6 +101,12 @@ if (cb) {
   await freelook('ride-front34', cx, cy, cz, fx * 0.9 + rx * 0.7, 0.22, fz * 0.9 + rz * 0.7, 4.8, 38);
   await freelook('ride-rear34', cx, cy, cz, -fx * 0.9 + rx * 0.6, 0.30, -fz * 0.9 + rz * 0.6, 4.8, 38);
   await freelook('ride-above', cx, cy, cz, -fx * 0.4 + rx * 0.5, 0.75, -fz * 0.4 + rz * 0.5, 4.0, 44);
+  // tight on the rider: the legs, the stirrups and the hands on the reins are
+  // 20 cm details on a 2.3 m animal and a 38-degree lens does not resolve them
+  const sx = bp.x, sy = bp.y + 1.95, sz = bp.z;
+  await freelook('ride-rider-flank', sx, sy, sz, rx, 0.06, rz, 3.4, 20);
+  await freelook('ride-rider-front', sx, sy, sz, fx * 0.85 + rx * 0.5, 0.16, fz * 0.85 + rz * 0.5, 3.4, 20);
+  await freelook('ride-leg', sx + fx * 0.1, bp.y + 1.45, sz + fz * 0.1, rx, 0.10, rz, 2.6, 22);
   inp.keys.clear();
 }
 return out.join('\n');

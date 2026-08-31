@@ -97,6 +97,8 @@ export interface SaddleRider {
 
 export class Saddle {
   _saved!: SavedWalkers | null;
+  /** Everything this module has hidden, so `exit` can put it all back. */
+  _stowed!: Set<THREE.Object3D>;
   _t!: number;
   party!: Party | null;
   player!: Player | null;
@@ -107,7 +109,49 @@ export class Saddle {
     this.riders = [];
     this.seated = false;
     this._saved = null;
+    this._stowed = new Set();
     this._t = 0;
+  }
+
+  /**
+   * Stowed weapons, out of sight while somebody is being carried.
+   *
+   * A companion's blade lives on `attach.back` or `attach.hip`, which are bones
+   * on the spine and the pelvis, so it swings with whatever the seat does to the
+   * torso. Measured on the mount (`probes/seatfit.mts`): Gladio's greatsword
+   * hangs from `y 1.81` down to `y -0.03` — from his shoulder, through the whole
+   * bird beneath him, and into the ground. That is the playtest's "sword
+   * floating horizontally through the bird's neck", and there is no stow angle
+   * that fixes it, because 2.05 m of steel does not fit beside a seated man on
+   * an animal 2.3 m tall. It is put away instead, which is also what a party
+   * that is riding rather than fighting would do with it.
+   *
+   * Hidden every frame rather than once, because `PartyAI._carry` can reparent a
+   * weapon into a hand mid-ride; anything that leaves these two sockets becomes
+   * visible again on its own. `_shown` is what makes the restore exact: a blade
+   * that moved to a hand while it was hidden is still on the list, so it comes
+   * back when everyone gets off.
+   */
+  _hideProps() {
+    for (const r of this.riders) {
+      const a = r.char.attach as Record<string, THREE.Object3D> | undefined;
+      if (!a) continue;
+      for (const key of ['back', 'hip']) {
+        const sock = a[key];
+        if (!sock) continue;
+        for (const c of sock.children) {
+          if (!c.visible) continue;
+          c.visible = false;
+          this._stowed.add(c);
+        }
+      }
+    }
+  }
+
+  /** Give every hidden weapon back, wherever it has ended up. */
+  _showProps() {
+    for (const o of this._stowed) o.visible = true;
+    this._stowed.clear();
   }
 
   bind(player: Player | null, party: Party | null) {
@@ -165,6 +209,7 @@ export class Saddle {
   exit(worldPos: THREE.Vector3, heading: number) {
     const p = this.player, party = this.party;
     this.seated = false;
+    this._showProps();
     if (!p || !party || !this._saved) { this.riders.length = 0; return; }
     p.terrain = this._saved.playerTerrain;
     party.terrain = this._saved.partyTerrain;
@@ -218,6 +263,7 @@ export class Saddle {
       this._applyPose(r, i, bounce, lean);
       r.root.updateMatrixWorld(true);
     }
+    this._hideProps();
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */
