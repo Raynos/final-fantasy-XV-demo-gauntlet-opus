@@ -406,7 +406,10 @@ export class HuntBoardScreen {
     this.cVals[1].textContent = `Lv ${h.level}`;
     const tipster = h.tipster ? tips[h.tipster] : null;
     this.cVals[2].textContent = tipster ? `${tipster.name} · ${tipster.place}` : '—';
-    this.cVals[3].textContent = `${commas(rewards.gil || 0)} gil${itemNames ? `, ${itemNames}` : ''}`;
+    // Same zero-gil suppression as `QuestScreen._renderDetail`; this is the
+    // second copy of that line.
+    const gilPart = rewards.gil ? `${commas(rewards.gil)} gil` : '';
+    this.cVals[3].textContent = [gilPart, itemNames].filter(Boolean).join(', ') || '—';
     this.cVals[3].className = 'v gold';
     this.cVals[4].textContent = regions[h.region as keyof typeof regions] || h.region || '—';
     this.cVals[5].textContent = cond.join(' · ') || 'None';

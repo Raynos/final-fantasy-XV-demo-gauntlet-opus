@@ -148,7 +148,7 @@ export class QuestScreen {
     root.appendChild(this.cols);
 
     this.tally = el('div.q-tally', {}, [
-      el('div.k', { text: 'Quest Log' }),
+      el('div.k', { text: 'Quests Active' }),
       this.tallyV = el('div.v'),
       this.tallyD = el('div.d'),
     ]);
@@ -212,13 +212,31 @@ export class QuestScreen {
     const view = rows.slice(this.scroll, this.scroll + MAX_ROWS);
     for (const q of view) {
       const bg = el('div.mr-bg');
-      const done = (q.objectives || []).filter((o) => o.done).length;
+      /**
+       * This badge and the HUD objective are two different counts wearing one
+       * costume, and the playtest caught them in a single frame: the objective
+       * strip said "Collect Rusted Bits from the wastes (2/3)" while this row,
+       * for the same quest, said "0/2". Both were right. The HUD prints the
+       * ITEM progress of the current objective (2 of 3 bits, `Quests.view`
+       * bakes it into `o.label`); this printed OBJECTIVES COMPLETED over the
+       * objective count (0 of 2 steps, because collecting 2 of 3 bits finishes
+       * nothing). A player reads two bare `x/y` badges about one quest as the
+       * game not knowing its own state.
+       *
+       * Naming the unit is the fix, not changing the number: a step counter
+       * says "Step 1/2" and cannot be mistaken for a tally of bits.
+       */
+      const objs = q.objectives || [];
+      const doneN = objs.filter((o) => o.done).length;
       const node = el('div.qrow', {}, [
         bg,
         icon(q.type === 'hunt' ? 'armiger' : 'quests', { size: 16, stroke: 1.15 }),
         el('div.qn', { text: q.name }),
         q.id === tracked ? el('div.qflag', { text: 'Tracking' }) : null,
-        el('div.qp', { text: q.status === 'complete' ? 'Done' : `${done}/${(q.objectives || []).length}` }),
+        el('div.qp', {
+          text: q.status === 'complete' || !objs.length ? 'Done'
+            : `Step ${Math.min(doneN + 1, objs.length)}/${objs.length}`,
+        }),
       ]);
       if (q.id === tracked) node.classList.add('tracked');
       this.list.appendChild(node);
@@ -247,7 +265,14 @@ export class QuestScreen {
       .join(', ');
     this.specVals[0].textContent = REGION[q.region as keyof typeof REGION] || q.region || '—';
     this.specVals[1].textContent = q.level ? `Lv ${q.level}` : '—';
-    this.specVals[2].textContent = `${commas(rewards.gil || 0)} gil${items ? `, ${items}` : ''}`;
+    // "0 gil, Hi-Potion x2" was in the playtest's screenshot. Four quests in
+    // the table are authored `gil: 0` on purpose -- `main_ch1_pauper`, whose
+    // own summary is "repairs cost gil the prince does not have", is one of
+    // them -- so the zero is true and printing it is still wrong: a reward
+    // line lists what you get, and you do not get nothing. The item list
+    // already had this guard; gil did not.
+    const gilPart = rewards.gil ? `${commas(rewards.gil)} gil` : '';
+    this.specVals[2].textContent = [gilPart, items].filter(Boolean).join(', ') || '—';
     this.specVals[3].textContent = q.status === 'complete' ? 'Complete'
       : q.status === 'active' ? 'In progress' : 'Not yet accepted';
 
@@ -276,7 +301,17 @@ export class QuestScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q) => q.id + q.status + q.progress).join()}`;
+    /**
+     * `q.progress` is the fraction of objectives DONE, so picking up the third
+     * Rusted Bit moves `objectives[0].progress` and moves this signature by
+     * nothing at all: the row list and the detail pane below both keep
+     * rendering "(2/3)" after the bag says 3, while the HUD -- which has no
+     * cache -- updates immediately. That is a second, real way for the log and
+     * the objective strip to disagree, and it is invisible until you watch a
+     * counter tick. Fold the objective counters into the key.
+     */
+    const objSig = (v: QuestView) => (v.objectives || []).map((o) => `${o.progress}${o.done ? '!' : ''}`).join('.');
+    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q) => q.id + q.status + q.progress + objSig(q)).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows, tracked); this._cur = null; }
 
     this.empty.style.display = rows.length ? 'none' : '';
@@ -301,7 +336,7 @@ export class QuestScreen {
     }
 
     const q = rows[this.i];
-    const key = q ? `${q.id}|${q.status}|${q.progress}|${tracked === q.id}` : 'none';
+    const key = q ? `${q.id}|${q.status}|${q.progress}|${objSig(q)}|${tracked === q.id}` : 'none';
     if (this._cur !== key) {
       this._cur = key;
       this._age = 0;
@@ -318,6 +353,10 @@ export class QuestScreen {
       const act = r.quests.active.length;
       const done = r.quests.completed.length;
       const avail = r.quests.available.length;
+      // "QUEST LOG 4 · 3 available · 2 finished · chapter 2" over a body listing
+      // four ACTIVE quests reads as a total that ought to be nine. The number
+      // was never wrong; it was unlabelled, sitting under the screen's own
+      // name, beside three terms that all carry their unit. `k` names it now.
       this.tallyV.textContent = String(act);
       this.tallyD.textContent = `${avail} available  ·  ${done} finished  ·  chapter ${r.chapter}`;
     } else {

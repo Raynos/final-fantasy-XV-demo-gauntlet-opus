@@ -89,9 +89,18 @@ const CSS = `
   position: absolute; left: 50%; bottom: 19%; width: 58%; max-width: 860px;
   transform: translateX(-50%);
 }
+/* The scrim was an ellipse centred at 50% 60% of a box whose CHOICE LIST hangs
+ * below that centre, so by the time it reached the menu rows it had fallen to
+ * near zero -- and a camp conversation happens outdoors, in daylight, over
+ * sunlit sandstone. The playtest's "the meal options are dark grey text on
+ * sunlit sandstone and nearly unreadable" is that geometry. Drop the centre to
+ * 50% and add a flat vertical wash under it so the bottom of the panel is
+ * covered as well as the middle. */
 .dlg::before {
-  content: ''; position: absolute; left: -30%; right: -30%; top: -120px; bottom: -80px;
-  background: radial-gradient(ellipse 56% 100% at 50% 60%, rgba(3,6,12,.56), rgba(3,6,12,.20) 46%, rgba(3,6,12,0) 84%);
+  content: ''; position: absolute; left: -30%; right: -30%; top: -120px; bottom: -110px;
+  background:
+    radial-gradient(ellipse 60% 100% at 50% 50%, rgba(3,6,12,.60), rgba(3,6,12,.24) 52%, rgba(3,6,12,0) 86%),
+    linear-gradient(180deg, rgba(3,6,12,0), rgba(3,6,12,.30) 34%, rgba(3,6,12,.34) 82%, rgba(3,6,12,0));
   z-index: -1;
 }
 .dlg-head { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 12px; }
@@ -117,7 +126,20 @@ const CSS = `
   text-shadow: 0 2px 6px rgba(0,0,0,.92), 0 0 26px rgba(0,0,0,.7);
 }
 .dlg-choices { margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
-.dlg-ch { position: relative; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; }
+/* Every choice row carries its own plate. --ink-3 is rgba(210,224,246,.56):
+ * composited over a sunlit sandstone frame at roughly (200,175,140) that is
+ * (205,202,200) -- light grey on light sand, which is no contrast at all, and
+ * it is why five menu rows were invisible in a frame where the speaker's line
+ * one inch above them was perfectly legible (that line carries a 0.92-alpha
+ * shadow of its own). A text-shadow alone cannot save 56%-alpha ink over a
+ * bright ground; the row needs a dark ground under it. Same fix as b3dbbdc
+ * gave the Armiger caption, one step further because these rows are the
+ * interactive part of the screen. */
+.dlg-ch {
+  position: relative; display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px;
+  background: linear-gradient(90deg, rgba(4,8,15,.66), rgba(4,8,15,.40) 68%, rgba(4,8,15,.06));
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
 .dlg-ch .dlg-bg {
   position: absolute; left: 0; right: -8px; top: 0; bottom: 0; opacity: 0;
   background: linear-gradient(90deg, rgba(134,184,239,.26), rgba(134,184,239,.03) 62%, transparent);
@@ -127,10 +149,17 @@ const CSS = `
 .dlg-ch.on .dlg-dot { background: var(--accent-hot); box-shadow: 0 0 9px rgba(180,220,255,.9); }
 .dlg-ch .dlg-t {
   font-size: 12.5px; font-weight: 300; letter-spacing: .18em; text-transform: uppercase;
-  color: var(--ink-3); text-shadow: var(--sh-text);
+  color: var(--ink-2); text-shadow: var(--sh-text);
 }
 .dlg-ch.on .dlg-t { color: #fff; letter-spacing: .22em; }
-.dlg-ch .dlg-note { font-size: 8.5px; letter-spacing: .16em; color: var(--ink-4); margin-left: auto; text-transform: uppercase; }
+/* The note is what the meal is WORTH -- "+600 HP, +25 Vitality" -- which is the
+ * whole decision the camp asks the player to make, and it was 8.5px of
+ * --ink-4 (0.34 alpha) with no text-shadow at all: the exact shape b3dbbdc
+ * found on the Armiger caption. */
+.dlg-ch .dlg-note {
+  font-size: 9.5px; letter-spacing: .12em; color: var(--ink-2); margin-left: auto;
+  text-transform: uppercase; text-shadow: var(--sh-text); padding-right: 4px;
+}
 .dlg-foot { display: flex; align-items: center; gap: 9px; margin-top: 16px; justify-content: flex-end; }
 .dlg-foot .lb { font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
 .dlg-foot .btn-glyph { color: var(--ice); }
