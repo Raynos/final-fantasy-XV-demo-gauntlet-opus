@@ -2875,3 +2875,64 @@ the HUD state the rule. **6 of 15 hillsides DEAD-SILENT -> 0 of 15.** And note
 being stuck N time(s)"* all night; the number was in the output the whole time
 and nobody read it as a defect.
 
+## The cloud shadows were a tenth of the size of the clouds casting them
+
+Not a tuning problem — a **projection error**, and it had been read as "the
+shadows are too weak" for a long time. `SHADOW_FRAG` bakes over
+`uShadowTile x uShadowFieldScale` metres while `MaterialPatch.ts:120` maps that
+bake onto `uShadowTile` of ground, so **any scale other than 1.0 shrinks every
+cloud shadow by exactly that factor.**
+
+Measured with a purpose-built instrument (`probes/shadowscale.mts`, which
+autocorrelates both fields and converts through their own world spans, and
+validates itself every run against two synthetic gratings 3.5x apart —
+recovering 3.48): **a 199 m ground patch under an 1844 m cloud, ratio 9.24.**
+
+Fixed with two numbers. Worth two frames in twelve, honestly reported — and one
+of the twelve is instructive: **`zone_longwythe` lost its fine dapple, and that
+dapple *was* this bug**, not terrain detail anybody had authored.
+
+**When a projected effect reads as "too small" or "too weak", check the two
+world spans agree before you change a strength.**
+
+## `runnel` ruled parallel planes across the entire world
+
+The "diagonal weave" the blind judge saw across whole massifs — two crossing
+families at 12-13 px and 7.6 px, at 55 degrees — was **albedo**, attributed by
+ablation with every obvious suspect cleared: it survives `nogully`, `nomeso`,
+`nomacroh` and **`nostoch`** (whose positive control fired blank, ruling out tile
+repetition) and collapses under `gwhite`.
+
+The cause: each `runnel` octave dotted `P.xz` with a **fixed world azimuth**
+against a `P.y` term of ~0.005 — so each octave was a family of **parallel
+vertical planes ruled across the entire world**, at 19 / 6.5 / 59 m on three
+bearings. Every mountain in the game was wearing the same tartan.
+
+**Fixed with a bounded domain warp, not a rotation** — a fall-line rotation has
+derivative `|P|` and swings through thousands of cycles on a cone 10 km out,
+which is a trap the bedding comment in the same file already records.
+
+## A low periodicity score is not evidence of absence
+
+`weavestat` read **0.12 before and 0.11 after** a fix that visibly works — at 3x
+the tartan becomes fluting, and `imgdiff` against the ablation control reads
+**2.706/255 with 9.8% of pixels past 8/255** against a 0.39 floor.
+
+The instrument measures **local** periodicity; the defect was **global
+coherence** — one azimuth held across kilometres. Those are different
+quantities, and the tool now says so at the top of the file. **Do not read a
+low score from a periodicity metric as "no repetition"** any more than you would
+read a null from an instrument that cannot resolve the change (see the
+world-metres-versus-pixels entry above).
+
+## A leased probe page has not stepped a frame
+
+Uniforms read their **constructor defaults** until `g.settle()`. A lane spent
+half an hour concluding "the weather preset system is dead" from
+`uShadowFieldScale` reading 30 — its constructor value — on a page that had
+never rendered.
+
+**If a live value looks exactly like a default, settle the page before you
+believe it.** Related and recorded above: `applyShot` on a cold page returns a
+white rectangle until ~200 settle steps.
+
