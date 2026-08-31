@@ -75,8 +75,20 @@ const PORTRAIT_LAYER = 5;
 const W = 288;
 const H = 336;
 
-/** Mean luminance the normalisation aims the covered pixels at, pre-curve. */
-const TARGET_LUMA = 0.30;
+/**
+ * Mean luminance the normalisation aims the covered pixels at, pre-curve, and
+ * the ceiling on the gain that gets there.
+ *
+ * Chosen off the eight-plate sweep in `_probe/pfbake.mts` read at 288x336:
+ * ungraded (`gain = 1`) the heads come back a stop dark and the eyes close up;
+ * 0.30 with an unbounded gain blows the lit cheek and the hair highlight to
+ * paper on all four; 0.24 with the gain capped at 2 holds the specular on
+ * Gladiolus' brow and still lifts Ignis out of his own shadow. The cap matters
+ * more than the target — it is what stops a hero standing in shade from being
+ * pushed three stops and arriving as a white mask.
+ */
+const TARGET_LUMA = 0.24;
+const MAX_GAIN = 2.0;
 
 /** Roster ids in the order the party stack lists them. */
 const ORDER = ['noctis', 'gladio', 'ignis', 'prompto'] as const;
@@ -107,7 +119,7 @@ export interface BakeOpts {
 
 export const DEFAULT_BAKE: BakeOpts = {
   dist: 0.62, swing: 0.42, dip: 0.085, aimUp: 0.035,
-  fov: 26, targetLuma: TARGET_LUMA, maxGain: 6,
+  fov: 26, targetLuma: TARGET_LUMA, maxGain: MAX_GAIN,
 };
 
 let rt: THREE.WebGLRenderTarget | null = null;

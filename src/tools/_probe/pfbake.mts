@@ -11,8 +11,10 @@
  *   node src/tools/framecam.mts --probe src/tools/_probe/pfbake.mts \
  *     --out tmp/shots/pfbake > tmp/l12b/pf.json
  *
- * Evaluated as a function body in the page, so the top-level `return` is
- * correct and the file is excluded from the tools typecheck.
+ * Evaluated as a function body in the page with `new Function`, so the top-level
+ * `return` is correct and there are **no type annotations anywhere below**: the
+ * body is handed to the JS parser verbatim, never to esbuild, and a single `:`
+ * annotation fails it with `Missing initializer in const declaration`.
  */
 const g = window.GAME;
 const P = await import('/ui/Portraits.ts');
@@ -21,7 +23,7 @@ const D = P.DEFAULT_BAKE;
 /** `gain = 1` exactly: the plate as the renderer handed it over, ungraded. */
 const RAW = { ...D, targetLuma: 10, maxGain: 1 };
 
-const variants: Array<[string, Record<string, number>]> = [
+const variants = [
   ['raw', RAW],
   ['g24', { ...D, targetLuma: 0.24, maxGain: 2.0 }],
   ['g18', { ...D, targetLuma: 0.18, maxGain: 1.6 }],
@@ -33,7 +35,7 @@ const variants: Array<[string, Record<string, number>]> = [
   ['f_wide', { ...RAW, swing: 0.62 }],
 ];
 
-const out: Record<string, string> = {};
+const out = {};
 const ids = ['noctis', 'gladio', 'ignis', 'prompto'];
 for (const [vn, o] of variants) {
   for (const id of ids) {
