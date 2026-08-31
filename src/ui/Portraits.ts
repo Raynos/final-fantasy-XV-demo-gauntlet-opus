@@ -81,6 +81,35 @@ const TARGET_LUMA = 0.30;
 /** Roster ids in the order the party stack lists them. */
 const ORDER = ['noctis', 'gladio', 'ignis', 'prompto'] as const;
 
+/**
+ * Everything the framing and the grade are allowed to argue about.
+ *
+ * Named and overridable because tuning a portrait is a look-loop, and a boot
+ * per attempt is the wrong price: `src/tools/_probe/pfbake.mts` sweeps a dozen
+ * of these in one boot and hands back the plates.
+ */
+export interface BakeOpts {
+  /** metres from the eye midpoint to the lens. */
+  dist: number;
+  /** radians off dead-on, toward the character's left. */
+  swing: number;
+  /** metres the lens sits below the eye line. */
+  dip: number;
+  /** metres above the eye line the lens aims, i.e. headroom. */
+  aimUp: number;
+  /** vertical field of view, degrees. */
+  fov: number;
+  /** mean luminance the covered pixels are normalised onto, pre-curve. */
+  targetLuma: number;
+  /** ceiling on the normalisation gain, so a dark plate cannot blow out. */
+  maxGain: number;
+}
+
+export const DEFAULT_BAKE: BakeOpts = {
+  dist: 0.62, swing: 0.42, dip: 0.085, aimUp: 0.035,
+  fov: 26, targetLuma: TARGET_LUMA, maxGain: 6,
+};
+
 let rt: THREE.WebGLRenderTarget | null = null;
 let cam: THREE.PerspectiveCamera | null = null;
 let cursor = 0;
@@ -104,7 +133,7 @@ export function tickPortraits(game: Game): boolean {
   if (!ch) { armed = 4; return true; }
   cursor++;
   try {
-    const url = bake(game, ch);
+    const url = bake(game, ch, DEFAULT_BAKE);
     if (url) setPortrait(id, url);
   } catch (e) {
     // A portrait is decoration. Never let it take the frame loop down.
@@ -114,7 +143,7 @@ export function tickPortraits(game: Game): boolean {
   return cursor < ORDER.length;
 }
 
-function heroCharacter(game: Game, id: string): Character | null {
+export function heroCharacter(game: Game, id: string): Character | null {
   if (id === 'noctis') return game.get('Player')?.character ?? null;
   return game.get('Party')?.get(id)?.character ?? null;
 }
@@ -132,7 +161,11 @@ function plateMeshes(ch: Character): THREE.Object3D[] {
   return out;
 }
 
-function bake(game: Game, ch: Character): string | null {
+/**
+ * Render one head to a data URL. Exported for the tuning probe; the game
+ * itself only ever reaches it through `tickPortraits`.
+ */
+export function bake(game: Game, ch: Character, o: BakeOpts = DEFAULT_BAKE): string | null {
   const renderer = game.renderer;
   const scene = game.scene;
   if (!renderer || !scene || !ch.eyes) return null;
@@ -141,7 +174,9 @@ function bake(game: Game, ch: Character): string | null {
     rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, depthBuffer: true, stencilBuffer: false });
     rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
   }
-  if (!cam) cam = new THREE.PerspectiveCamera(26, W / H, 0.05, 12);
+  if (!cam) cam = new THREE.PerspectiveCamera(o.fov, W / H, 0.05, 12);
+  cam.fov = o.fov;
+  cam.updateProjectionMatrix();
   cam.layers.set(PORTRAIT_LAYER);
 
   const meshes = plateMeshes(ch);
@@ -150,7 +185,7 @@ function bake(game: Game, ch: Character): string | null {
   for (const m of meshes) m.layers.enable(PORTRAIT_LAYER);
   for (const l of lights) l.layers.enable(PORTRAIT_LAYER);
 
-  frameHead(ch, cam);
+  frameHead(ch, cam, o);
 
   const prevTarget = renderer.getRenderTarget();
   const prevClear = new THREE.Color();
@@ -179,7 +214,7 @@ function bake(game: Game, ch: Character): string | null {
   for (const m of meshes) m.layers.disable(PORTRAIT_LAYER);
   for (const l of lights) l.layers.disable(PORTRAIT_LAYER);
 
-  return encode(buf);
+  return encode(buf, o);
 }
 
 const _eye = new THREE.Vector3();
@@ -201,7 +236,7 @@ const _tgt = new THREE.Vector3();
  * the settled idle pose pitches the head down and the fringe hangs over the
  * brow, so a lens at or above eye height photographs the top of a head.
  */
-function frameHead(ch: Character, camera: THREE.PerspectiveCamera) {
+function frameHead(ch: Character, camera: THREE.PerspectiveCamera, o: BakeOpts) {
   ch.root.updateWorldMatrix(true, true);
   ch.eyes.getWorldPosition(_eye);
   // The character's own facing, so the three-quarter is theirs and not the
@@ -212,16 +247,14 @@ function frameHead(ch: Character, camera: THREE.PerspectiveCamera) {
   _fwd.normalize();
   _right.set(_fwd.z, 0, -_fwd.x);
 
-  const dist = 0.62;
-  const swing = 0.42;           // radians off dead-on: a three-quarter
-  const dip = 0.085;            // metres below the eye line
+  const { dist, swing, dip } = o;
   _pos.copy(_eye)
     .addScaledVector(_fwd, Math.cos(swing) * dist)
     .addScaledVector(_right, Math.sin(swing) * dist);
   _pos.y = _eye.y - dip;
   // Aim a little above the eyes so the frame carries hair, not neck.
   _tgt.copy(_eye).addScaledVector(_fwd, 0.02);
-  _tgt.y = _eye.y + 0.035;
+  _tgt.y = _eye.y + o.aimUp;
   camera.position.copy(_pos);
   camera.up.set(0, 1, 0);
   camera.lookAt(_tgt);
@@ -236,7 +269,7 @@ function frameHead(ch: Character, camera: THREE.PerspectiveCamera) {
  * so they are divided back out before encoding or the silhouette wears a dark
  * fringe — the same correction `VegTextures.bakeTreeImpostor` makes.
  */
-function encode(buf: Uint8Array): string {
+function encode(buf: Uint8Array, o: BakeOpts): string {
   let sum = 0; let n = 0;
   for (let i = 0; i < buf.length; i += 4) {
     if (buf[i + 3] < 128) continue;
@@ -245,8 +278,8 @@ function encode(buf: Uint8Array): string {
   }
   // Under ~2% coverage the frame missed the head; a gain read off that is
   // noise, so fall back to neutral rather than blowing the plate out.
-  const mean = n > W * H * 0.02 ? sum / n : TARGET_LUMA;
-  const gain = Math.min(6, Math.max(0.5, TARGET_LUMA / Math.max(1e-4, mean)));
+  const mean = n > W * H * 0.02 ? sum / n : o.targetLuma;
+  const gain = Math.min(o.maxGain, Math.max(0.5, o.targetLuma / Math.max(1e-4, mean)));
 
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
