@@ -125,7 +125,12 @@ export class ChocoboSystem {
   async init(game: Game) {
     this.game = game;
     this.collision = game.get('Collision') ?? null;
-    this.saddle.bind(game.get('Player') ?? null, game.get('Party') ?? null);
+    // The third argument is `CombatSystem.hand`, the group Noctis' weapons
+    // hang off — see `Saddle.weaponHand`. `Combat` boots before `Chocobo` in
+    // `Game`'s order, so it is there to be asked.
+    const combat = game.get('Combat');
+    this.saddle.bind(game.get('Player') ?? null, game.get('Party') ?? null,
+      (combat && combat.hand) || null);
     this.hub.init(game);
     this.races.init(game);
     // The geometry is NOT built here. A prototype costs real milliseconds and

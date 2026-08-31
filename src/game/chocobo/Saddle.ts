@@ -105,11 +105,29 @@ export class Saddle {
   riders!: SaddleRider[];
   /** True while anyone is up. */
   seated!: boolean;
+  /**
+   * `CombatSystem.hand`, if there is one.
+   *
+   * **This is where "Noctis's sword floating horizontally through the bird's
+   * neck" comes from, and it is not a socket.** `CombatSystem` parents all five
+   * weapon classes to a plain `Group` pinned at `(-0.30, 1.12, 0.12)` on
+   * `player.root` — an offset, not a bone — so it ignores the pose entirely. A
+   * rider's root sits at the soles, 0.875 m under the saddle line, which puts
+   * that group at bird-local `(-0.30, 2.0, 0.12)`: the base of the neck. The
+   * sheathed blades are at reveal 0 and still draw as a pale blue ghost, so
+   * what the player sees is a translucent sword lying through the bird.
+   *
+   * The real fix belongs in `CombatSystem` — the weapon should hang off
+   * `attach.handR` like every other weapon in the game — so this only puts it
+   * away while somebody is mounted, and reports the rest.
+   */
+  weaponHand!: THREE.Object3D | null;
   constructor() {
     this.riders = [];
     this.seated = false;
     this._saved = null;
     this._stowed = new Set();
+    this.weaponHand = null;
     this._t = 0;
   }
 
@@ -146,6 +164,8 @@ export class Saddle {
         }
       }
     }
+    const wh = this.weaponHand;
+    if (wh && wh.visible) { wh.visible = false; this._stowed.add(wh); }
   }
 
   /** Give every hidden weapon back, wherever it has ended up. */
@@ -154,9 +174,14 @@ export class Saddle {
     this._stowed.clear();
   }
 
-  bind(player: Player | null, party: Party | null) {
+  /**
+   * @param player @param party
+   * @param weaponHand `CombatSystem.hand` — see `_hideProps`
+   */
+  bind(player: Player | null, party: Party | null, weaponHand?: THREE.Object3D | null) {
     this.player = player;
     this.party = party;
+    this.weaponHand = weaponHand || null;
   }
 
   /**

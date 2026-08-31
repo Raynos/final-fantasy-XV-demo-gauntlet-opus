@@ -175,7 +175,15 @@ if (cb) {
       const h2 = half2(p.z, p.y);
       const clear = Math.abs(p.x) - h2;
       rep.push(`    ${name.padEnd(10)} x ${p.x.toFixed(2)} y ${p.y.toFixed(2)} z ${p.z.toFixed(2)}   bird half ${h2.toFixed(3)} clear ${clear.toFixed(3)}`);
-      if ((name === 'shinL' || name === 'footL' || name === 'toeL') && clear < 0.0) verdict = 'FAIL';
+      /*
+       * -0.04 rather than 0. The outline is a max over a 0.15 x 0.12 cell and
+       * the bird's own thigh feathers live at exactly the boot's height, so a
+       * boot photographed in clear air against the flank still measures a few
+       * centimetres "inside" the widest thing in its cell. The knee and the toe
+       * are the honest tests; the ankle only has to be close.
+       */
+      if ((name === 'shinL' || name === 'toeL') && clear < 0.0) verdict = 'FAIL';
+      if (name === 'footL' && clear < -0.04) verdict = 'FAIL';
     }
     const hl = bl(bn.handL), hr = bl(bn.handR);
     out.push(`BIRD ${r.key}: hands ${(Math.abs(hl.x - hr.x)).toFixed(2)} m apart, ${(hl.y - bl(bn.hips).y).toFixed(2)} m above the hips`);
@@ -195,8 +203,12 @@ if (cb) {
     const socks = r.char.attach || {};
     for (const key of ['back', 'hip', 'handL', 'handR']) {
       const sock = socks[key]; if (!sock || !sock.children.length) continue;
+      const drawn = (o) => { for (let n = o; n; n = n.parent) if (!n.visible) return false; return true; };
       sock.traverse((o) => {
-        if (!o.isMesh || !o.visible || !o.geometry) return;
+        // `visible` is per-node and `traverse` does not respect ancestors, so a
+        // hidden weapon root still yields visible meshes. Walk up, or this
+        // reports every stowed blade that `Saddle._hideProps` has put away.
+        if (!o.isMesh || !o.geometry || !drawn(o)) return;
         if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
         const bb = o.geometry.boundingBox;
         let inNeck = 0, n = 0;

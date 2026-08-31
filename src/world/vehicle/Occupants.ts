@@ -288,6 +288,18 @@ export class Occupants {
         }
       }
     }
+    /*
+     * And Noctis' own blade, which is not on a socket at all: `CombatSystem`
+     * parents all five weapon classes to a `Group` pinned at `(-0.30, 1.12,
+     * 0.12)` on `player.root`, an offset rather than a bone. Seated, the
+     * player's root is written onto the seat, so that group hangs in the air
+     * over the transmission tunnel. Sheathed weapons sit at reveal 0 and still
+     * draw as a pale blue ghost. The real fix is `attach.handR` and belongs to
+     * whoever owns `CombatSystem`; this puts it away for the drive.
+     */
+    const combat = this.game && this.game.get('Combat');
+    const wh = combat && combat.hand;
+    if (wh && wh.visible) { wh.visible = false; this._stowed.add(wh); }
   }
 
   /** Give every hidden weapon back, wherever it has ended up. */
