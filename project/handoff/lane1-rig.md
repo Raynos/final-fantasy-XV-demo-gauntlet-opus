@@ -931,3 +931,72 @@ about +21% of level and all of it where `dome` is low, because at `dome = 1` the
 term is still capped at its old value. Predicted: Prompto p50 -> ~85, p5 well
 over 10, p99.5 flat; Noctis p50 -> ~33. **Result pending in
 `tmp/shots/l1r4-fin`.**
+
+### Task 2 measured again at 0.45 / 0.58, and the next lever is NOT the coefficient
+
+`tmp/shots/l1r4-fin`, `facecheck --only prompto,noctis --shots`, tree `189fe2f`
+(commit `3dfb43c`, which contains `ea4fc24`). Same run for both heads.
+
+```
+              p5 / p50 / p99.5        plate 12.3
+  prompto     12 /  75 /  205         22 /  81 / 176
+  noctis       0 /  24 /  129         20 /  37 / 140
+```
+
+Prompto went 10 / 71 / 204 -> 12 / 75 / 205 across the retune, i.e. the +21% of
+*fill* level bought about +5% of *pixel* — the fill is a small addition beside
+the diffuse and the specular, and that ratio is worth knowing before anyone
+budgets another fill change.
+
+**And it says a coefficient raise is the wrong lever.** Blond is 6 Y under the
+plate at the median and **29 Y over at the top end**; black is 13 under at the
+median with no floor and is *under* at the top end. A global raise pushes the
+only number that is already hot. `3b19481` flattens the fill's **albedo weight**
+instead — `0.30 + 0.30 * lum` is 0.307 on Noctis and 0.45 on Prompto, a 1.47x
+spread against §12.3's finding that the plates' dark ends land 10 Y apart across
+an order of magnitude of albedo. `0.36 + 0.16 * lum` is +19% on Noctis and -2%
+on Prompto. Result in `tmp/shots/l1r4-fin2`.
+
+Also on that run: **Prompto is no longer VOID** (cheek 59.1 against the ceiling
+60; he had gone to 61.2 on the previous run). Noctis is 95.3 and still VOID —
+task 47, filed as a human decision.
+
+### The eye crescent — LOCALISED to the millimetre, not landed
+
+`tmp/l1r4/eyeprobe.mts` (scratch, not committed) marches the sculpted skull
+against the globe's own silhouette: for every screen (x, y) inside the disc it
+prints `globeZ - skullZ`, positive meaning the globe stands in front of the
+skull and its sclera is what draws there. Globe centre is `FACE.eye`
+(33.5, -6.0, 64.6) with R 10.70; the lower lid margin peaks at elevation
+-0.712 rad, i.e. **y = -13.0 mm**, and the globe runs to y = -16.7.
+
+```
+   y = -12    globe in front by 1..9 mm across x 26..42   (inside the fissure — correct)
+   y = -13    globe in front by 1..6 mm across x 26..41   <- THE CRESCENT
+   y = -14    globe in front by 1..3 mm across x 28..40
+   y = -15    skull in front everywhere — nothing shows
+```
+
+So the crescent is a band **1.5-2 mm tall and ~15 mm wide** immediately under
+the lower lid margin, and the skull needs **up to 6 mm** more z at y = -13 and
+3 mm at y = -14 to cover it. That is the number the previous respawn's
+overshoot test could not produce.
+
+**Not landed, deliberately, and here is the fork:**
+
+1. *A ledge under the lower lid* — a new brush at (33.5, -13.5), r about
+   [13, 7, 20], amt +4 mm. Anatomically it is the lower lid's own roll, which
+   this face lacks. But 4 mm through a 7 mm y-radius is a *rail*, and this
+   file's own history says a rail is what left the hard dark slash under the
+   eye that took two passes to remove. It would have to be judged on
+   `facefront_flat` before it is believed.
+2. *Sink the globe.* `FACE.eye`'s z from 0.0646 to ~0.0616. The lids are built
+   **on** the globe (`pt(a, e, R * EYE.lidR)`), so globe-to-lid geometry is
+   untouched and only globe-to-skull changes — which is exactly the defect. It
+   also answers the separate complaint that the globe "reads as a ball sitting
+   on the face, not set into it". Risk: 3 mm on a 21 mm globe may read sunken,
+   and the lid band has to still meet the skull cleanly at the canthi.
+
+Option 2 is the smaller, better-targeted change and is what I would try first.
+I did not land either: it is a highly visible sculpt change late in a session
+and neither can be believed without a `facefront_flat` capture to judge it on.
