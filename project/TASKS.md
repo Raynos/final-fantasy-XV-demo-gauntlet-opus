@@ -755,3 +755,10 @@ measured negative with two instruments agreeing. All of the below is
 - **`f-kill`'s radial motion blur is heavy enough that nothing in the frame is
   legible** except the HUD. Whoever owns the post stack / the kill camera.
   `lane11`
+- **Band the Meteor's `aEmissive` veins to `relief`'s step index**, so a fissure
+  runs ALONG an arris instead of across the terraces. Four mechanisms have been
+  through `meteorVeins` and the fourth still reads as glowing lozenges, because
+  the step-fracture relief chops the ribbon every 7 m. Needs
+  `Rocks.rockGeometry` to return the step index as an attribute — a shared file.
+  **Not a tuning change**; do not re-tune radiance instead. `lane20`
+

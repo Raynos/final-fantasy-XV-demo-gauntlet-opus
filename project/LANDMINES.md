@@ -2530,3 +2530,24 @@ one accident.
 **Before quoting an exit, run its command and confirm the output mentions the
 thing being tested.** A PASS that never names your subject has not tested it.
 
+## `PartBuilder.prep()` silently deletes any attribute not on `KEEP`
+
+Found 2026-08-31 by lane 20, after its emissive veins rendered dimmer than
+authored no matter what radiance it used. `prep()` drops every attribute absent
+from `PartBuilder.KEEP` at `B.add`, **with no warning**. `aEmissive` was not on
+the list.
+
+The failure mode is the expensive one: it does not error, it does not render
+black, it renders *the geometry without your channel* — which reads exactly like
+"the effect is too weak". Lane 20's own words: it would have read back as *"the
+veins are too dim" for as many rounds as anyone was willing to raise the
+radiance.* Four vein mechanisms went through that lane; the first one was fighting
+a deleted attribute.
+
+**When a new vertex attribute has no effect, check that it still exists on the
+geometry the frame draws** — `KEEP` lists, merge specs (`mergeGeometries` needs
+every input to agree on type *and* `normalized`), and bake round-trips are all
+places an attribute quietly stops existing between where you write it and where
+the shader reads it. Three separate instances of this shape are recorded in this
+file tonight.
+
