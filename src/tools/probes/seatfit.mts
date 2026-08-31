@@ -99,8 +99,30 @@ if (reg) {
     if (worst > worstAll) worstAll = worst;
   }
   out.push(`CAR VERDICT: worst outboard ${worstAll.toFixed(3)} m  ${worstAll <= 0.01 ? 'PASS' : 'FAIL'}`);
+
+  /*
+   * Everyone gets their weapons back. `Occupants`/`Saddle` hide the stowed
+   * blades every frame, so a broken restore does not fail visibly — it leaves
+   * the party permanently disarmed several minutes later, in a fight, with
+   * nothing in the log. Count them before and after.
+   */
+  const armed = () => {
+    let n = 0;
+    for (const m of (g.get('Party')?.members || [])) {
+      const a = m.character && m.character.attach;
+      if (!a) continue;
+      for (const key of ['back', 'hip']) {
+        const sock = a[key]; if (!sock) continue;
+        for (const c of sock.children) if (c.visible) n++;
+      }
+    }
+    return n;
+  };
+  const during = armed();
   reg.exit();
   for (let i = 0; i < 30; i++) g.frame(1 / 60);
+  const after = armed();
+  out.push(`CAR weapons: ${during} visible while seated, ${after} after getting out  ${during === 0 && after > 0 ? 'PASS' : 'FAIL'}`);
 }
 
 /* ================================================================= the bird */
@@ -190,6 +212,32 @@ if (cb) {
     out.push(rep.join('\n'));
   }
   out.push(`BIRD VERDICT: legs outside the barrel? ${verdict}`);
+  const armedUp = (() => {
+    let n = 0;
+    for (const r of cb.saddle.riders) {
+      const a = r.char.attach; if (!a) continue;
+      for (const key of ['back', 'hip']) {
+        const sock = a[key]; if (!sock) continue;
+        for (const c of sock.children) if (c.visible) n++;
+      }
+    }
+    return n;
+  })();
+  const handUp = cb.saddle.weaponHand ? cb.saddle.weaponHand.visible : null;
+  cb.dismount();
+  for (let i = 0; i < 30; i++) g.frame(1 / 60);
+  let back = 0;
+  for (const m of (g.get('Party')?.members || [])) {
+    const a = m.character && m.character.attach; if (!a) continue;
+    for (const key of ['back', 'hip']) {
+      const sock = a[key]; if (!sock) continue;
+      for (const c of sock.children) if (c.visible) back++;
+    }
+  }
+  const handBack = cb.saddle.weaponHand ? cb.saddle.weaponHand.visible : null;
+  out.push(`BIRD weapons: ${armedUp} visible while mounted (hand group ${handUp}), `
+    + `${back} after dismount (hand group ${handBack})  `
+    + `${armedUp === 0 && handUp === false && back > 0 && handBack === true ? 'PASS' : 'FAIL'}`);
 
   /*
    * What is hanging off every rider's weapon sockets, and where it ended up
