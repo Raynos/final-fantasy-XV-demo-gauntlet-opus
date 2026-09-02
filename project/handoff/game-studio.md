@@ -1,99 +1,86 @@
-# Game Studio — handoff
+# Game Studio — live state
 
-**Live: <https://ff15-xv-opus.vercel.app>** · `pnpm run check` **24/24** ·
-plan: `docs/plans/2026-09-02-opus-game-studio-v2.md` (v1's plan is superseded
-for architecture, intact for information architecture).
+**Plan: `docs/plans/2026-09-02-fable-game-studio-v3.md`.** v2's architecture
+stands verbatim — three boot profiles, no game in the studio — and v3 is the
+audit's order of work. v2 and v1 archived 2026-09-02.
 
-Deploy with **`node src/tools/deploy.mts`**, never a bare `vercel deploy` —
-read that file's header first.
+## Where it is
 
----
+**F1–F9 are landed.** `studiocheck` carries the instrument for each.
 
-## The one thing to understand
+| lane | what | instrument |
+|---|---|---|
+| F1 | the mobile menu draws | `#studio .st-item` >= 5 under an iPhone descriptor, before any section |
+| F2 | the front door is centred | bounding-box centre within 4 px, both descriptors |
+| F3 | enemies face the reviewer | `enemy.heading` == `stage.subjectYaw()` ± 0.01 |
+| F4 | towns, cities and dungeons are geometry | the world set is exactly `WORLD_SYSTEMS` (8), and Hammerhead's root holds > 20 meshes |
+| F5 | portrait framing, model lighting | `fitFactor()` fits the binding half-angle; contrast probe > 1.3x |
+| F6 | no placeholder over a viewport; mobile sections | drill in and back out, tapped through the DOM; every target >= 44 px; the gate fires on flight |
+| F7 | `showWorld()` stops guessing | World -> Models leaves no `terrain*`/`veg*` visible |
+| F8 | a ground under the menu; exit re-renders the door | `st-void` carries the door's gradient; `close()` calls `onExit` |
+| F9 | list engine, palette, thumbnails, tiles | scroll survives a redraw by construction; `⌘K` over ~400 entries |
 
-**The studio does not boot the game.** That is the whole architecture, and
-`studiocheck.mts` asserts it on a real page:
+## The five things that will bite
 
-| | booted |
-|---|---|
-| front door | **0 systems** |
-| Model Explorer | **0 systems** |
-| World Explorer | **exactly 5** — Sky, Terrain, Water, Vegetation, Props |
-| characters in either scene | **none** |
+1. **`Freecam.apply` is a no-op while `enabled` is false, and the Model
+   Explorer used to set it false.** `ModelStage.update` computed the turntable's
+   camera pose every selection and it was thrown away every frame, so the
+   audit's "the model sits in the bottom third" and "the lighting is flat" were
+   *the same bug* and neither was a framing or a lighting bug — the lens was
+   never moved. If a model ever looks wrongly placed again, check `fly()` first.
 
-v1 got this wrong in a way worth remembering: it promoted `src/dev/`'s *debug
-overlay* into a mode. An overlay is summoned while you play, so every assumption
-in it — spawn the enemy through the game's pool, hide the world by walking
-`scene.children`, steal the camera from `CameraRig` — is right for an overlay
-and wrong for a mode. The symptoms all followed from that: 6.5 s of boot before
-a two-row menu, the party standing in the menu shot, `holdWorld()` and
-`pumpWorld()` existing at all.
+2. **Auto-exposure cancels any change to the backdrop.** Metering runs on the
+   un-exposed HDR buffer and drives the frame toward `key`, so darkening the
+   backdrop sphere just makes the integrator open up and put it back, taking
+   the model with it — measured at 0.97x after a 0.42x albedo cut.
+   `pinExposure(true)` in the model profile is what actually decides it, and the
+   world sections turn it back on because there it is right.
 
-## What is built
+3. **None of the eight world systems has a single root.** `Terrain` adds
+   `clipmap.group`, `Water` four meshes at four points in its life, `Sky` a dome
+   *and* a probe light, `Props` from three builders, `Dungeons` one group per
+   entrance. `showWorld` hides every top-level scene child except the model
+   stage, and re-applies when the scene grows — `Props.mega`, `Hammerhead`'s
+   build-on-approach and `Water`'s streaming all arrive late.
 
-| lane | state |
-|---|---|
-| V1 boot profiles, front door before any boot | **done** `360d22f` |
-| V2 Model Explorer standalone (`ModelStage`, own factories) | **done** |
-| V3 World Explorer on the 5-system profile | **done** |
-| `studiocheck.mts` gate, in the suite | **done** |
-| V4 list engine — reconcile, search, scroll retention | **not started** |
-| V5 command palette (Cmd+K) | **not started** |
-| V6 thumbnails + tile view | **not started** |
-| V7 mobile shell over the new core | **skeleton only** |
-| V8 Shot Gallery, Look Lab, Device | **placeholders** |
+4. **`game-ready` is dispatched by `bootStudio` now.** Three systems defer real
+   work to it on the phone (`Props.mega` 624 ms of skyline, `Dungeons` 1061 ms
+   of entrance mouths, `TexBake`'s container fetch) and only `Game.init` used to
+   fire it. Invisible on a desktop, where `demoActive()` is false and all three
+   build inline — so a phone-only "the world is missing things" report starts
+   here.
 
-Shot Gallery is a must-have and is the largest hole. The mobile shell renders
-chrome but no section, so the studio is menu-only on a phone.
+5. **iOS Safari does not reliably fire `click` on a `<div>`.** The whole mobile
+   chrome shipped unresponsive because of it. Everything on that screen is a
+   `<button>`; `studiocheck`'s phone phase drives it through real taps rather
+   than through `window.__STUDIO`, precisely so a test cannot pass on a build a
+   thumb cannot use.
 
-## Six things that will bite you
+## What is not built
 
-1. **Nothing may be drawn mid-boot.** The studio renders on its own rAF from the
-   moment it opens; the game never does, because `Game.init()` finishes before
-   `Game.start()`. But `game.add()` registers a system *before* its `init()` is
-   awaited, so a frame drawn mid-boot caught `Sky` sampling a `Terrain` whose
-   height field was unallocated and `Field.rawHeightAt` threw every frame.
-   `StudioShell._booting` gates the loop. Found by the gate, not by looking.
-2. **`studiocheck` cannot be a probe.** `probe.mts` drives a `?shoot=1` page and
-   `?shoot=1` routes straight into the game, so a probe measures 33 systems its
-   own harness booted. The gate opens its own `?studio=1` page in play mode.
-   It is also the only thing that can screenshot the studio as a person sees it
-   (`--shot <dir>`).
-3. **`StudioBoot.ts` duplicates eight lines of `Game.init()`'s prologue.** BRIEF
-   rule 4 forbids editing `Game.ts` and `init()` has no seam. If that prologue
-   changes, the studio drifts silently. This is the plan's top risk.
-4. **The five-system subset works because every cross-dependency is guarded.**
-   `Vegetation` null-checks Player/Party/Enemies/Weather, `Water` checks Menus,
-   `Props` falls back to `new Ecology(...)`, `Sky` early-returns without
-   Terrain. Verified in source; the gate pins the set.
-5. **A rotation written once does not stick.** A held animation drives the root
-   every frame, like `EnemyBase.freeze` does from `heading`. `pinFacing()` runs
-   per frame. And the party rig faces **+Z** — measured off Noctis's eye meshes
-   at local z = +0.073, after two by-eye attempts contradicted each other.
-6. **Never write a registry count down.** Three sources said 8, 17 and 18 for
-   `NPC_CAST`. Everything counts at runtime.
+- **Notes** is dev-server only (`vite-plugin-review`), and correctly absent from
+  a deployed build rather than shipping a dead button.
+- **Thumbnails are captured, never rendered.** A tile appears the first time you
+  open that asset; a fresh session starts with an empty grid and fills in as the
+  pass goes. Rendering all 56 up front is seconds of frozen main thread to
+  decorate a list.
+- **The Shot Gallery offers the fixed shots only.** A `follow` shot is framed on
+  a character and there are none by construction; those rows are listed, dimmed
+  and say why. Standing in them would mean booting a party, which is the thing
+  v2 exists to have stopped.
 
-## Known gaps beyond the unbuilt lanes
+## Running it
 
-- **One scene per page.** `PostFX` binds its scene in its constructor, so
-  visiting World *then* Models leaves a world that must be hidden rather than
-  un-built. `showWorld(false)` toggles five system roots — cheap, and a no-op on
-  the common path where no world was ever made.
-- **Exit is still `location.reload()`.** With no game booted it could be a
-  front-door re-render; the reload is now merely lazy rather than necessary.
-- **The Signature twelve are a first draft picked off the map.** They are meant
-  to be chosen by flying there and looking. `_probe/studioworld.mts` writes the
-  contact sheet; nobody has judged it.
-- **Gladio is 289,294 triangles** — the heaviest asset, against BRIEF rule 3's
-  ~2.5 M phone budget. Not a studio bug; a finding the studio exists to surface.
+```
+node src/tools/studiocheck.mts            # the gate, 19 assertions
+node src/tools/studioshots.mts --out tmp/shots/studio    # desktop + phone frames
+node src/tools/phoneshots.mts  --out tmp/shots/phone     # door, title, play
+```
 
-## Tools
-
-- `src/tools/studiocheck.mts` — the gate. `--shot <dir>` for real frames.
-- `_probe/studiov2.mts` — pictures only. Its system counts are meaningless (see
-  gotcha 2) and it says so.
-- `_probe/studioworld.mts` — flies the Signature band.
-- `_probe/rigforward.mts` — which local axis is a rig's front, by eye-mesh
-  centroid. Re-run before believing anything about facing.
-- `_probe/studiodoor.mts`, `_probe/herofacing.mts` — v1-era, kept: the first
-  drives the old title flow, the second records why measurement replaced looking.
+`studiocheck`'s second half opens **its own browser on its own build server**,
+the way `devicecheck` does. The daemon's lease is one warm page in one context,
+and what decides every phone layout here is the context — `hasTouch`,
+`deviceScaleFactor`, and the `hover: none` / `pointer: coarse` queries
+`Device.ts` reads at module evaluation. None of that is changeable on a booted
+page, and emulating it through CDP would leave the shared page emulated for
+whatever leased it next.

@@ -6,7 +6,22 @@ import { TIMES, VIEW_MODES } from '../LookLab.ts';
 import { QUALITY_TIERS } from '../../engine/Renderer.ts';
 import { WEATHER_NAMES } from '../../world/Weather.ts';
 import { deviceRows, DOORS, doorHref } from '../DeviceReport.ts';
+import { StudioList, type ListRow } from '../List.ts';
+import { Palette, type Command } from '../Palette.ts';
 import type { StudioShell } from '../StudioShell.ts';
+
+/**
+ * One row, as the list engine sees it: how to build it, and how to update it.
+ *
+ * `make` runs once per key and `sync` runs on every draw, which is the whole
+ * reason the scroll survives a redraw — the element is not replaced, only its
+ * mutable parts are rewritten. @see List.ts
+ */
+interface Row {
+  group?: string;
+  make(): HTMLElement;
+  sync(node: HTMLElement): void;
+}
 
 /**
  * The desktop studio shell: dense, keyboard-first, side-by-side.
@@ -48,8 +63,53 @@ export function install(shell: StudioShell) {
     exit,
   ]));
 
+  /**
+   * The filter, and the list engine under it.
+   *
+   * `side` used to be cleared and rebuilt on every interaction — which lost the
+   * scroll offset every time a verdict was recorded, so a review pass over a
+   * 23-row family meant re-scrolling after each one. `StudioList` reconciles by
+   * key instead, so stepping an asset moves a highlight and nothing else.
+   * @see List.ts
+   */
+  const search = el('input.st-search.st-ui', {
+    type: 'text', placeholder: 'filter…  (-term excludes)', autocomplete: 'off', spellcheck: 'false',
+  }) as HTMLInputElement;
+  const searchWrap = el('div.st-searchwrap.st-ui', {}, [search, el('span.st-n', { text: '' })]);
+  root.appendChild(searchWrap);
+  const searchCount = searchWrap.querySelector('.st-n') as HTMLElement;
+
+  /**
+   * List or tiles.
+   *
+   * A roster is read two ways — by name when you know what you want, by
+   * silhouette when you are looking for the one that is wrong — and the second
+   * is what a review pass actually does. The toggle is per-session and lives
+   * next to the filter because they are the same kind of control.
+   */
+  let tiles = false;
+  const tileBtn = el('button.st-btn.st-ui', { text: 'tiles', title: 'List or tiles' });
+  tileBtn.addEventListener('click', () => {
+    tiles = !tiles;
+    tileBtn.classList.toggle('on', tiles);
+    side.classList.toggle('st-tiles', tiles);
+    render();
+  });
+  searchWrap.appendChild(tileBtn);
+
   const side = el('div.st-side.st-ui');
   root.appendChild(side);
+
+  /** One engine, re-pointed per section, so scroll and identity survive. */
+  const list = new StudioList<Row>(side, {
+    make: (r) => r.item.make(),
+    sync: (n, r) => r.item.sync(n),
+    group: (r) => r.item.group || null,
+  });
+  search.addEventListener('input', () => {
+    list.setQuery(search.value);
+    searchCount.textContent = list.summary();
+  });
 
   const info = el('div.st-info.st-ui');
   root.appendChild(info);
@@ -63,8 +123,16 @@ export function install(shell: StudioShell) {
   const statusFor = (id: SectionId | null) => {
     const n = shell.game.systems.length;
     const s = `${n} system${n === 1 ? '' : 's'} booted`;
-    if (id === 'model') return `Model Explorer — ${s}: no world, no characters, no simulation`;
-    if (id === 'world' || id === 'shots') return `World Explorer — ${s}: world geometry only, nobody in it`;
+    // What is TRUE, not what was true the first time. Systems are never torn
+    // down, so once the World Explorer has been opened the Model Explorer's
+    // count is eight and the old copy — "no world" — was a lie the status line
+    // told with a straight face. The world is hidden, not absent, and saying so
+    // is the difference between a truthful readout and a decorative one.
+    if (id === 'model') {
+      return `Model Explorer — ${s}: ${shell.worldBooted ? 'the world is built and hidden' : 'no world'}`
+        + ', no characters, no simulation';
+    }
+    if (id === 'world' || id === 'shots' || id === 'look') return `World Explorer — ${s}: world geometry only, nobody in it`;
     return `Game Studio — ${s}`;
   };
 
@@ -121,21 +189,95 @@ export function install(shell: StudioShell) {
     render();
   }
 
-  /** Redraw the list and the readout for whatever is open. */
+  /**
+   * Redraw the list and the readout for whatever is open.
+   *
+   * `info` and `hint` are rebuilt because they are three elements; `side` is
+   * not, because it is up to 170 and the scroll offset inside it is state a
+   * person is holding. `list.render` reconciles by key. @see List.ts
+   */
   function render() {
-    side.textContent = '';
     info.textContent = '';
-    hint.innerHTML = '<b>1–6</b> section &nbsp; <b>Esc</b> back';
+    hint.innerHTML = '<b>1-6</b> section &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
+    // The filter belongs to the lists, not to the knob panels.
+    const listed = shell.section === 'model' || shell.section === 'world' || shell.section === 'shots';
+    searchWrap.style.display = listed && shell.section ? '' : 'none';
 
     if (shell.section === 'model') { renderModel(); return; }
     if (shell.section === 'world') { renderWorld(); return; }
     if (shell.section === 'shots') { renderShots(); return; }
     if (shell.section === 'look') { renderLook(); return; }
     if (shell.section === 'device') { renderDevice(); return; }
+    list.render([]);
     if (!shell.section) return;
 
     const s = SECTIONS.find((x) => x.id === shell.section);
-    info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} — no screen for this yet.` }));
+    info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} - no screen for this yet.` }));
+  }
+
+  /** Feed the engine, then report what the filter did. */
+  function feed(rows: Array<ListRow<Row>>) {
+    list.render(rows);
+    searchCount.textContent = list.summary();
+  }
+
+  /**
+   * The row every list uses: a plate with a name and a right-hand tag.
+   *
+   * One builder rather than four, because the four lists differ only in what
+   * goes in the tag — and `sync` has to touch exactly the mutable parts or the
+   * reconcile is doing nothing for us.
+   */
+  function plainRow(
+    label: string, tag: string, on: boolean, off: boolean, title: string, click: () => void,
+  ): Row {
+    return {
+      make() {
+        const n = el('button.st-row.st-ui', {}, [el('span', {}), el('span.st-n', {})]);
+        n.addEventListener('click', click);
+        return n;
+      },
+      sync(n) {
+        (n.children[0] as HTMLElement).textContent = label;
+        (n.children[1] as HTMLElement).textContent = tag;
+        n.classList.toggle('on', on);
+        n.classList.toggle('off', off);
+        n.title = title;
+      },
+    };
+  }
+
+  /**
+   * A model row, which in tile mode is a picture.
+   *
+   * The same element either way — the class decides the layout and the `<img>`
+   * is simply empty until a frame has been captured for that key. Two element
+   * shapes would mean the reconcile could not keep a node across the toggle,
+   * which is the one thing it is for. @see Thumbs
+   */
+  function assetRow(id: string, label: string, mark: string, on: boolean, click: () => void): Row {
+    return {
+      make() {
+        const n = el('button.st-row.st-asset.st-ui', {}, [
+          el('img.st-thumb', { alt: '' }),
+          el('span', {}),
+          el('span.st-n', {}),
+        ]);
+        n.addEventListener('click', click);
+        return n;
+      },
+      sync(n) {
+        const img = n.children[0] as HTMLImageElement;
+        const src = shell.thumbs.get(id);
+        // Only when it changes: writing an identical `src` re-decodes the data
+        // URL, and this runs for every visible row on every redraw.
+        if (src && img.src !== src) img.src = src;
+        img.classList.toggle('none', !src);
+        (n.children[1] as HTMLElement).textContent = label;
+        (n.children[2] as HTMLElement).textContent = mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '';
+        n.classList.toggle('on', on);
+      },
+    };
   }
 
   /* ------------------------------------------------------ shot gallery -- */
@@ -145,35 +287,34 @@ export function install(shell: StudioShell) {
    *
    * A `follow` shot is framed on a character and the studio has none by
    * construction, so those rows are listed and dimmed with the reason rather
-   * than hidden — a gallery that quietly dropped a third of the corpus would
+   * than hidden - a gallery that quietly dropped a third of the corpus would
    * misrepresent what is judged. @see ShotGallery
    */
   function renderShots() {
     const g = shell.gallery;
     const c = g.counts();
-    let group = '';
-    for (const row of g.shots()) {
-      if (row.group !== group) {
-        group = row.group;
-        side.appendChild(el('div.st-group', { text: group }));
-      }
-      const r = el('button.st-row.st-ui', {}, [
-        el('span', { text: row.name }),
-        el('span.st-n', { text: row.standable ? `${row.time.toFixed(1)}h` : '—' }),
-      ]);
-      r.classList.toggle('on', g.at === row.name);
-      r.classList.toggle('off', !row.standable);
-      r.title = row.standable ? row.doc : (row.why || '');
-      r.addEventListener('click', () => { if (g.stand(row)) render(); });
-      side.appendChild(r);
-    }
+    feed(g.shots().map((row) => ({
+      key: `shot/${row.name}`,
+      text: `${row.name} ${row.doc} ${row.group}`,
+      item: {
+        group: row.group,
+        ...plainRow(
+          row.name,
+          row.standable ? `${row.time.toFixed(1)}h` : '-',
+          g.at === row.name,
+          !row.standable,
+          row.standable ? row.doc : (row.why || ''),
+          () => { if (g.stand(row)) render(); },
+        ),
+      },
+    })));
     const at = g.shots().find((x) => x.name === g.at);
     info.appendChild(el('div.st-nums', {
       text: at
         ? `${at.name}  ·  ${at.doc}  ·  ${at.time.toFixed(1)}h  ·  ${at.fov}°  ·  camera ${shell.world.where()}`
         : `${c.standable} of ${c.total} framings can be stood in with no characters booted`,
     }));
-    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>Esc</b> back';
+    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
   }
 
   /* ---------------------------------------------------------- look lab -- */
@@ -181,6 +322,8 @@ export function install(shell: StudioShell) {
   /** Four knobs you can see the result of, and nothing you cannot. */
   function renderLook() {
     const L = shell.look;
+    list.render([]);
+    side.textContent = '';
     const chips = (label: string, names: readonly string[], on: string | null, pick: (n: string) => void) => {
       side.appendChild(el('div.st-group', { text: label }));
       const row = el('div.st-chips');
@@ -197,7 +340,7 @@ export function install(shell: StudioShell) {
       const t = TIMES.find((x) => x.label === label);
       if (t) { L.setTime(t.h); render(); }
     });
-    chips(L.hasWeather() ? 'Weather' : 'Weather — boots on first use',
+    chips(L.hasWeather() ? 'Weather' : 'Weather - boots on first use',
       [...WEATHER_NAMES], L.hasWeather() ? L.weather() : null,
       (n) => { void L.setWeather(n as typeof WEATHER_NAMES[number]).then(render); });
     chips('Quality tier', [...QUALITY_TIERS], L.tier(), (t) => { L.setTier(t as typeof QUALITY_TIERS[number]); render(); });
@@ -213,6 +356,8 @@ export function install(shell: StudioShell) {
 
   /** What this build decided at boot, read from the running module. */
   function renderDevice() {
+    list.render([]);
+    side.textContent = '';
     for (const r of deviceRows(shell.game)) {
       side.appendChild(el('div.st-kv', {}, [
         el('div.st-kv-k', { text: r.k }),
@@ -220,7 +365,7 @@ export function install(shell: StudioShell) {
         r.note ? el('div.st-kv-n', { text: r.note }) : null,
       ]));
     }
-    side.appendChild(el('div.st-group', { text: 'The way back — reloads the page' }));
+    side.appendChild(el('div.st-group', { text: 'The way back - reloads the page' }));
     for (const d of DOORS) {
       const row = el('button.st-row.st-ui', {}, [
         el('span', { text: d.label }),
@@ -244,18 +389,14 @@ export function install(shell: StudioShell) {
     // Grouped, in the order `places()` emits: Signature first, then each type
     // band largest-first, then zones. A shell that re-sorted here would undo
     // the one thing the list is for.
-    let group = '';
-    for (const p of places) {
-      if (p.group !== group) {
-        group = p.group;
-        side.appendChild(el('div.st-group', { text: group }));
-      }
-      const row = el('button.st-row.st-ui', {}, [el('span', { text: p.name })]);
-      row.classList.toggle('on', w.at?.id === p.id);
-      if (p.does) row.title = p.does;
-      row.addEventListener('click', () => { w.arrive(p); render(); });
-      side.appendChild(row);
-    }
+    feed(places.map((p) => ({
+      key: `place/${p.group}/${p.id}`,
+      text: `${p.name} ${p.does || ''} ${p.group}`,
+      item: {
+        group: p.group,
+        ...plainRow(p.name, '', w.at?.id === p.id, false, p.does || '', () => { w.arrive(p); render(); }),
+      },
+    })));
 
     const at = w.at;
     info.appendChild(el('div.st-nums', {
@@ -275,7 +416,7 @@ export function install(shell: StudioShell) {
     }
     info.appendChild(ctl);
 
-    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>wheel</b> speed &nbsp; <b>Esc</b> back';
+    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>wheel</b> speed &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
   }
 
   /* ----------------------------------------------------- model explorer -- */
@@ -283,39 +424,52 @@ export function install(shell: StudioShell) {
   function renderModel() {
     const m = shell.model;
     const fams = m.families_();
+    const rows: Array<ListRow<Row>> = [];
 
     // Families first, always visible. A drill-down that hides the family list
     // would cost a click every time you want the next family, and stepping
     // between families is the most common move in a review pass.
-    side.appendChild(el('div.st-group', { text: 'Families' }));
     fams.forEach((f, i) => {
-      const row = el('button.st-row.st-ui', {}, [
-        el('span', { text: f.title }),
-        el('span.st-n', { text: String(f.count) }),
-      ]);
-      row.classList.toggle('on', m.familyAt === i);
-      row.addEventListener('click', () => { m.openFamily(i); render(); });
-      side.appendChild(row);
+      rows.push({
+        key: `fam/${f.id}`,
+        text: `${f.title} family`,
+        item: {
+          group: 'Families',
+          ...plainRow(f.title, String(f.count), m.familyAt === i, false, '',
+            () => { m.openFamily(i); render(); }),
+        },
+      });
     });
+
+    if (m.familyAt != null) {
+      const keys = m.keys();
+      const cur = m.current();
+      const band = fams[m.familyAt].title;
+      keys.forEach((k, i) => {
+        const mark = m.markOf(k);
+        const id = `${fams[m.familyAt!].id}/${k}`;
+        rows.push({
+          key: `asset/${id}`,
+          text: `${k} ${band} ${mark}`,
+          item: {
+            group: band,
+            ...assetRow(id, k, mark, k === cur, () => { m.select(i); render(); }),
+          },
+        });
+      });
+    }
+    feed(rows);
 
     if (m.familyAt == null) {
       info.appendChild(el('div.st-item-d', { text: 'Pick a family.' }));
       return;
     }
-
-    const keys = m.keys();
     const cur = m.current();
-    side.appendChild(el('div.st-group', { text: fams[m.familyAt].title }));
-    keys.forEach((k, i) => {
-      const mark = m.markOf(k);
-      const row = el('button.st-row.st-ui', {}, [
-        el('span', { text: k }),
-        el('span.st-n', { text: mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '' }),
-      ]);
-      row.classList.toggle('on', k === cur);
-      row.addEventListener('click', () => { m.select(i); render(); });
-      side.appendChild(row);
-    });
+    if (cur) {
+      list.reveal(`asset/${fams[m.familyAt].id}/${cur}`);
+      // The frame about to be drawn is this asset's tile. @see Thumbs
+      shell.wantThumb(`${fams[m.familyAt].id}/${cur}`);
+    }
 
     /* ------------------------------------------------------- the readout */
 
@@ -357,8 +511,64 @@ export function install(shell: StudioShell) {
     controls.appendChild(flag);
     info.appendChild(controls);
 
-    hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>o</b> ok &nbsp; <b>f</b> flag &nbsp; <b>Esc</b> back';
+    hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>o</b> ok &nbsp; <b>f</b> flag &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
   }
+
+  /* ------------------------------------------------------------ palette -- */
+
+  /**
+   * Everything the studio can reach, as one flat list for `⌘K`.
+   *
+   * Built on demand rather than kept: the model roster is read live from the
+   * registries, the destination list changes with the build, and a cached copy
+   * would be the fourth place in this project where a count went stale.
+   * @see Palette.ts
+   */
+  const palette = new Palette(root, (): Command[] => {
+    const out: Command[] = [];
+    for (const s of avail) {
+      out.push({ id: s.id, label: s.title, group: 'Section', hint: s.desc, run: () => show(s.id) });
+    }
+    const m = shell.model;
+    m.families_().forEach((f, fi) => {
+      for (const k of shell.model.families[fi].keys()) {
+        out.push({
+          id: `${f.id}/${k}`,
+          label: k,
+          group: `Models · ${f.title}`,
+          run: () => {
+            void shell.setSection('model').then(() => {
+              m.openFamily(fi);
+              m.select(Math.max(0, m.keys().indexOf(k)));
+              render();
+            });
+          },
+        });
+      }
+    });
+    for (const p of shell.world.places()) {
+      out.push({
+        id: p.id,
+        label: p.name,
+        group: `World · ${p.group}`,
+        hint: p.does,
+        run: () => { void shell.setSection('world').then(() => { shell.world.arrive(p); render(); }); },
+      });
+    }
+    for (const row of shell.gallery.shots()) {
+      if (!row.standable) continue;
+      out.push({
+        id: row.name,
+        label: row.name,
+        group: `Shots · ${row.group}`,
+        hint: row.doc,
+        run: () => { void shell.setSection('shots').then(() => { shell.gallery.stand(row); render(); }); },
+      });
+    }
+    return out;
+  });
+  void palette;
+
 
   /* ---------------------------------------------------------------- keys -- */
 

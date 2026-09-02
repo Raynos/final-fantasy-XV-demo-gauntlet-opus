@@ -7,6 +7,7 @@ import { ModelExplorer } from './ModelExplorer.ts';
 import { WorldExplorer } from './WorldExplorer.ts';
 import { ShotGallery } from './ShotGallery.ts';
 import { LookLab } from './LookLab.ts';
+import { Thumbs } from './Thumbs.ts';
 import { SECTIONS, type SectionId } from './Sections.ts';
 import type { Game } from '../game/Game.ts';
 
@@ -67,6 +68,16 @@ export class StudioShell {
   gallery: ShotGallery;
   /** Time, weather, tier and the material overrides. @see LookLab */
   look: LookLab;
+  /** Model tiles, copied out of the frames already drawn. @see Thumbs */
+  thumbs: Thumbs;
+  /**
+   * The model key whose frame is worth keeping, set on selection.
+   *
+   * A frame, not a promise: the capture has to run inside the render loop
+   * because the drawing buffer is not readable once the browser has composited
+   * it. @see Thumbs
+   */
+  _wantThumb: string | null;
   /** Has the five-system world profile been booted? */
   worldBooted: boolean;
   /** Redraw hook, installed by whichever shell is drawing. @see setSection */
@@ -111,6 +122,8 @@ export class StudioShell {
     this.world = new WorldExplorer(game, this.cam);
     this.gallery = new ShotGallery(game, this.cam);
     this.look = new LookLab(game);
+    this.thumbs = new Thumbs();
+    this._wantThumb = null;
     this.onSection = null;
     this.onBusy = null;
     this.onExit = null;
@@ -177,6 +190,12 @@ export class StudioShell {
 
       g.post.update(g.time);
       g.post.render();
+      // Immediately after the draw and before the browser composites it, which
+      // is the only moment the drawing buffer can be read. @see Thumbs
+      if (this._wantThumb && this.section === 'model') {
+        this.thumbs.capture(this._wantThumb, g.renderer.domElement);
+        this._wantThumb = null;
+      }
       g.input.endFrame();
     };
     this._raf = requestAnimationFrame(loop);
@@ -227,13 +246,27 @@ export class StudioShell {
       }
       this.showWorld(true);
       this.fly(true);
+      this.pinExposure(false);
     } else if (id === 'model') {
       this.showWorld(false);
       this.model.enter();
-      this.fly(false);
+      // **`true`, not `false`.** `ModelStage.update` computes the turntable's
+      // camera pose and writes it onto the FREECAM -- and `Freecam.apply` is a
+      // no-op while `enabled` is false, so with flight off the stage's framing
+      // was computed every selection and thrown away every frame. The camera
+      // stayed wherever it happened to be, which is why the audit found the
+      // model "in the bottom third" and the lighting "flat": neither was a
+      // framing bug or a lighting bug, the lens was simply never moved.
+      //
+      // Caught by the contrast probe in `studiocheck`, which read the subject
+      // at 0.2 luminance against an 11.1 backdrop -- a model somewhere off
+      // frame, not a model that was too dark.
+      this.fly(true);
+      this.pinExposure(true);
     } else {
       this.showWorld(true);
       this.fly(false);
+      this.pinExposure(false);
     }
 
     if (this.onSection) this.onSection(id);
@@ -290,6 +323,66 @@ export class StudioShell {
     if (!this.worldBooted) return;
     if (this.game.scene.children.length === this._sceneCount) return;
     this.showWorld(this._worldShown);
+  }
+
+  /**
+   * Keep the next frame as this model's tile.
+   *
+   * Called by whichever shell just changed the selection. Two frames of grace,
+   * not one: `ModelStage.update` writes the camera on the frame after `show()`
+   * sets `_needFrame`, so capturing on the very next draw would photograph the
+   * previous model's framing.
+   */
+  wantThumb(key: string) {
+    this._wantThumb = null;
+    requestAnimationFrame(() => requestAnimationFrame(() => { this._wantThumb = key; }));
+  }
+
+  /**
+   * Pin the lens while a model is on the turntable.
+   *
+   * ## Why the backdrop change alone could not work
+   *
+   * Metering runs on the un-exposed HDR buffer and drives the frame toward
+   * `key`, so **darkening the backdrop sphere cannot make it darker relative to
+   * the subject** — the integrator opens up and puts it back at middle grey,
+   * taking the model with it. Measured: after a 0.42x albedo cut the subject
+   * still came back at 0.97x the backdrop's luminance. That is the audit's
+   * finding 7 and it is a lens problem, not a lighting one.
+   *
+   * ## Why it pins the BAND and does not disable the integrator
+   *
+   * The first attempt set `exposure.enabled = false`. That does not fix the
+   * exposure at a known value — it freezes whatever multiplier happened to be
+   * in the adapt texture, which after a visit to the World Explorer is a sunlit
+   * outdoor scene's. The measured result was a model frame four times too dark
+   * (subject 29.0 -> 7.6) and a probe that failed for a completely different
+   * reason than the one it was written for.
+   *
+   * `bounds` is `[max(min, base*rangeLo), min(max, ceiling, base*rangeHi)]`, so
+   * a band of exactly 1.0 around a base of 1.0 clamps the target to 1.0 no
+   * matter what `avg` is. The integrator keeps running and converges there from
+   * wherever it was, which is a fixed exposure arrived at honestly.
+   *
+   * A turntable is the one view in this project where auto-exposure is wrong on
+   * purpose. It exists so a player walking out of a cave is not blinded; here
+   * the frame is one model on a fixed backdrop under a fixed three-point rig,
+   * and a lens that re-meters per subject means two creatures photographed a
+   * minute apart cannot be compared — which is the entire job of the section.
+   */
+  pinExposure(on: boolean) {
+    const exp = this.game.post?.exposure;
+    if (!exp) return;
+    exp.enabled = true;
+    // The constructor's own band on the way back out. `Sky` publishes `base`
+    // in the world sections and adaptation resumes around it.
+    // 1.6, not 1.0. The band it replaces is [0.62, 1.65] around a base of 1,
+    // and on a dark backdrop with one subject the integrator was settling at
+    // the top of it — so pinning at 1.0 is not "no change", it is 1.65x darker
+    // than the frame everybody has been reviewing. Measured on `bloodhorn`, the
+    // darkest asset in the roster: at 1.0 the animal is a silhouette.
+    if (on) exp.setSceneExposure(1.6, { lo: 1, hi: 1 });
+    else exp.setSceneExposure(1, { lo: 0.62, hi: 1.65 });
   }
 
   /** Hand the camera to the freecam, adopting the current pose. */

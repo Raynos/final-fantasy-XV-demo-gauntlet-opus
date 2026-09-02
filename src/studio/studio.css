@@ -599,3 +599,132 @@
       #2a201a 74%,
       #0d0a08 100%);
 }
+
+/* ---------------------------------------------------- filter + palette */
+
+/*
+ * The filter, above the list it filters.
+ *
+ * A list of 170 destinations or 166 framings is not navigable by scrolling, and
+ * the useful query on this corpus is subtractive — `hero -closeup`, `vista
+ * -night` — which is why the grammar has exclusion in it. @see List.ts
+ */
+#studio .st-searchwrap {
+  position: absolute;
+  left: 0;
+  top: 34px;
+  width: 268px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(7, 11, 19, 0.72);
+  border-bottom: 1px solid var(--hair);
+}
+#studio.st-touch .st-searchwrap { top: 44px; width: 100%; }
+#studio .st-search {
+  flex: 1;
+  min-height: 30px;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+#studio .st-search::placeholder { color: var(--ink-4); }
+#studio .st-searchwrap .st-n { font-size: 10px; color: var(--ink-4); white-space: nowrap; }
+
+/*
+ * ⌘K. Desktop only — the mobile shell's answer to the same problem is the
+ * filter above, which a thumb can reach. @see Palette.ts
+ */
+#studio .st-pal {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: rgba(4, 7, 13, 0.62);
+}
+#studio .st-pal[hidden] { display: none; }
+#studio .st-pal-box {
+  width: min(620px, 86vw);
+  background: rgba(9, 13, 21, 0.98);
+  border: 1px solid var(--hair);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+#studio .st-pal-in {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  outline: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+#studio .st-pal-in::placeholder { color: var(--ink-4); font-size: 13px; }
+#studio .st-pal-list { max-height: 52vh; overflow-y: auto; }
+#studio .st-pal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+#studio .st-pal-row.on { background: var(--plate); color: #fff; }
+#studio .st-pal-row .st-n { font-size: 10px; letter-spacing: 0.10em; color: var(--ink-4); }
+#studio .st-pal-none { padding: 16px; font-size: 12px; color: var(--ink-4); }
+
+/* ------------------------------------------------------------- tiles */
+
+/*
+ * The model row, which in tile mode is a picture.
+ *
+ * One element shape either way, so the list's reconcile can keep a node across
+ * the toggle — two shapes would mean rebuilding the list to change a layout,
+ * which is the thing the engine exists to stop. @see List.ts, Thumbs.ts
+ */
+#studio .st-asset { display: flex; align-items: center; gap: 10px; }
+#studio .st-thumb {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  object-fit: cover;
+  background: rgba(146, 192, 242, 0.06);
+  border: 1px solid rgba(206, 224, 250, 0.10);
+}
+/* Not `display:none`: the box holds its place, so a row does not jump sideways
+   the moment its thumbnail is captured. */
+#studio .st-thumb.none { opacity: 0.35; }
+
+/* Tiles. A grid of silhouettes, which is how a roster is read when you are
+   looking for the one that is wrong rather than the one you can name. */
+#studio .st-side.st-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+  padding: 8px;
+  align-content: start;
+}
+#studio .st-side.st-tiles .st-group { grid-column: 1 / -1; }
+#studio .st-side.st-tiles .st-asset {
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px 6px;
+  text-align: center;
+}
+#studio .st-side.st-tiles .st-thumb { width: 100%; height: 76px; }
+#studio .st-side.st-tiles .st-row:not(.st-asset) { display: none; }

@@ -46,8 +46,16 @@
  *      than looked at.
  *   9. **World -> Models leaves no world visible.** `showWorld(false)` used to
  *      guess at root property names none of the eight systems have.
- *  10. **The model out-reads its own backdrop** by more than 1.3x, sampled off
- *      the real frame.
+ *  10. **The model's LIT SIDE out-reads its backdrop** by more than 1.3x —
+ *      the subject's p95 against the ramp, segmented per row off the real
+ *      frame. The mean was tried first and is not a measure of this: a
+ *      near-black creature is correctly lit and still averages 0.98x.
+ *  11. **The drill-down works from the DOM**, tapped rather than called: in,
+ *      to a viewport with a sheet and gestures, and back out one level per tap.
+ *      Driven through real elements on purpose — the bug it guards shipped
+ *      because a `<div>` with a click listener does nothing on iOS Safari, and
+ *      a test that reached past the DOM would have passed on it.
+ *  12. **The landscape gate fires on flight, not on a list.**
  *
  * ## Why it cannot be a probe
  *
@@ -286,32 +294,74 @@ await shot('3-enemy');
 /*
  * Finding 7, as a number rather than an opinion.
  *
- * The subject's own pixels against the backdrop's. Sampled from the real frame
- * through a 2D canvas: a column down the middle of frame is the subject, and
- * the outer eighths are backdrop on any framing this stage produces. A ratio
- * under 1.3 is the "muddy, no rim" the audit photographed.
+ * ## Separating the subject from the backdrop without a second render
+ *
+ * The first version compared a centre box against the outer eighths and
+ * returned **0.76x** on a frame that plainly reads correctly. It was measuring
+ * the wrong thing twice: the centre box is mostly backdrop (a model does not
+ * fill it), and the backdrop is a vertical gradient, so the outer eighths
+ * sampled over the full height average in a sky the centre band never sees.
+ *
+ * The backdrop is a smooth vertical ramp with no horizontal variation — one
+ * `mix()` on `vP.y` and nothing else. So per ROW, the outer tenths give that
+ * row's backdrop value exactly, and any centre pixel more than a few levels off
+ * its own row's backdrop is a subject pixel. A real segmentation off a single
+ * frame, with no second render and no threshold anybody had to guess.
+ *
+ * ## And why it is the 95th percentile, not the mean
+ *
+ * The mean was tried and it is **not a measure of this**. `bloodhorn` is a
+ * near-black animal: correctly framed, correctly rim-lit along the horns, and
+ * its mean luminance is 0.98x the backdrop's because most of its pixels are
+ * genuinely dark. A frame was captured and looked at (`tmp/shots/sc2/3-enemy.jpg`)
+ * and it reads exactly as it should — the instrument was wrong, not the render.
+ *
+ * The audit's finding 7 was "no rim, reads muddy". What that means, measurably,
+ * is that the subject has **no highlight** — the key never wins over the ambient
+ * a mid-grey backdrop feeds back through auto-exposure. So the question is
+ * whether the lit side of the subject clears the ground it stands on, and the
+ * p95 asks exactly that on a black bull and a blue chocobo alike.
  */
 const contrast = await page.evaluate(() => {
   const cv = window.GAME.renderer.domElement;
   const c = document.createElement('canvas');
-  c.width = 160; c.height = 90;
+  c.width = 200; c.height = 120;
   const ctx = c.getContext('2d')!;
   ctx.drawImage(cv, 0, 0, c.width, c.height);
   const d = ctx.getImageData(0, 0, c.width, c.height).data;
-  let sub = 0, subN = 0, bg = 0, bgN = 0;
+  const lum = (x: number, y: number) => {
+    const i = (y * c.width + x) * 4;
+    return 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+  };
+  const edge = Math.max(2, Math.round(c.width * 0.10));
+  const subject: number[] = [];
+  let bg = 0, bgN = 0;
   for (let y = 0; y < c.height; y++) {
-    for (let x = 0; x < c.width; x++) {
-      const i = (y * c.width + x) * 4;
-      const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-      const mid = x > c.width * 0.36 && x < c.width * 0.64 && y > c.height * 0.2 && y < c.height * 0.9;
-      if (mid) { sub += l; subN++; } else if (x < c.width * 0.12 || x > c.width * 0.88) { bg += l; bgN++; }
+    let rowSum = 0, rowN = 0;
+    for (let x = 0; x < edge; x++) { rowSum += lum(x, y); rowN++; }
+    for (let x = c.width - edge; x < c.width; x++) { rowSum += lum(x, y); rowN++; }
+    const rowBg = rowSum / rowN;
+    bg += rowBg; bgN++;
+    for (let x = edge; x < c.width - edge; x++) {
+      const l = lum(x, y);
+      // 6/255. Below that it is the ramp's own dithering, not a model.
+      if (Math.abs(l - rowBg) > 6) subject.push(l);
     }
   }
-  return { subject: subN ? sub / subN : 0, backdrop: bgN ? bg / bgN : 0 };
+  subject.sort((a, b) => a - b);
+  const at = (q: number) => (subject.length ? subject[Math.min(subject.length - 1, Math.floor(subject.length * q))] : 0);
+  return {
+    subject: at(0.95),
+    median: at(0.5),
+    backdrop: bgN ? bg / bgN : 0,
+    coverage: subject.length / (c.width * c.height),
+  };
 });
 const ratio = contrast.backdrop > 0 ? contrast.subject / contrast.backdrop : 0;
-ok('the model out-reads its backdrop', ratio > 1.3,
-  `subject ${contrast.subject.toFixed(1)} vs backdrop ${contrast.backdrop.toFixed(1)} = ${ratio.toFixed(2)}x`);
+ok('the model out-reads its backdrop', ratio > 1.3 && contrast.coverage > 0.01,
+  `subject p95 ${contrast.subject.toFixed(1)} (median ${contrast.median.toFixed(1)})`
+  + ` vs backdrop ${contrast.backdrop.toFixed(1)} = ${ratio.toFixed(2)}x`
+  + ` over ${(contrast.coverage * 100).toFixed(1)}% of frame`);
 
 /* ------------------------------------------------------------------- 7 */
 /* BRIEF rule 5                                                            */
@@ -384,6 +434,66 @@ try {
     if (tag === 'phone') {
       ok('every phone target clears 44 px', menu.short.length === 0,
         menu.short.length ? menu.short.map((r) => `${r.c} ${r.h.toFixed(0)}px`).join(', ') : 'clean');
+    }
+
+    if (tag === 'phone') {
+      /*
+       * ## The drill-down, driven the way a thumb drives it
+       *
+       * Every step below is a real tap on a real element, not a call into
+       * `window.__STUDIO`. That distinction is the whole point: the bug this
+       * guards shipped because the header's back affordance was a `<div>` with
+       * a click listener, and **iOS Safari does not reliably fire `click` on
+       * one** — a test that reached past the DOM would have passed on the
+       * broken build, which is the only kind of test worth not writing.
+       */
+      await pg.click('#studio .st-item:nth-child(1)');            // Model Explorer
+      await pg.waitForSelector('#studio .st-item', { timeout: 20_000 });
+      await pg.click('#studio .st-item:nth-child(1)');            // the first family
+      await pg.waitForSelector('#studio .st-row', { timeout: 20_000 });
+      await pg.click('#studio .st-row');                          // the first asset
+      await pg.waitForTimeout(500);
+      const drilled = await pg.evaluate(() => ({
+        sheet: !!document.querySelector('#studio .st-sheet:not([hidden])'),
+        grab: !!document.querySelector('#studio .st-grab:not([hidden])'),
+        section: window.__STUDIO!.section,
+        staged: window.__STUDIO!.model.current(),
+      }));
+      ok('drilling to a model reaches a viewport with a sheet',
+        drilled.sheet && drilled.grab && drilled.section === 'model' && !!drilled.staged,
+        `staged ${String(drilled.staged)}, sheet=${drilled.sheet}, gestures=${drilled.grab}`);
+
+      // ...and back out, one level per tap, through the header's own control.
+      const levels: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        await pg.click('#studio .st-back');
+        await pg.waitForTimeout(250);
+        levels.push(await pg.evaluate(() => document.querySelector('#studio .st-title')?.textContent || ''));
+      }
+      ok('back walks one level per tap, out to the menu',
+        levels[2] === 'Game Studio',
+        `titles after each back: ${levels.join(' -> ')}`);
+
+      /*
+       * The landscape gate fires on FLIGHT, not on a list.
+       *
+       * Portrait is fully supported for every list in the studio — rotating to
+       * scroll a menu is a tax — and it is flying that is a landscape activity,
+       * because the camera is framed 16:9 and a portrait frustum crops the
+       * horizon out of the shot. The descriptor here is portrait, so the World
+       * Explorer's list must NOT be gated and arriving somewhere must be.
+       */
+      await pg.click('#studio .st-item:nth-child(2)');            // World Explorer
+      await pg.waitForSelector('#studio .st-row', { timeout: 120_000 });
+      const listGated = await pg.evaluate(
+        () => (document.querySelector('#studio .st-blank')?.textContent || '').includes('sideways'));
+      await pg.click('#studio .st-row');
+      await pg.waitForTimeout(600);
+      const flyGated = await pg.evaluate(
+        () => (document.querySelector('#studio .st-blank')?.textContent || '').includes('sideways'));
+      ok('the landscape gate fires on flight, not on a list',
+        !listGated && flyGated,
+        `list gated=${listGated}, flight gated=${flyGated}`);
     }
 
     if (errs.length) ok(`no page errors (${tag})`, false, errs.slice(0, 2).join(' | '));

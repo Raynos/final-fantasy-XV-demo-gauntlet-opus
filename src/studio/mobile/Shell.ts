@@ -7,6 +7,7 @@ import { QUALITY_TIERS } from '../../engine/Renderer.ts';
 import { WEATHER_NAMES } from '../../world/Weather.ts';
 import { deviceRows, DOORS, doorHref } from '../DeviceReport.ts';
 import type { GalleryShot } from '../ShotGallery.ts';
+import { StudioList, type ListRow } from '../List.ts';
 import type { StudioShell } from '../StudioShell.ts';
 
 /**
@@ -50,6 +51,18 @@ import type { StudioShell } from '../StudioShell.ts';
  * horizon out of the shot you came to judge — so the gate sits on that
  * threshold and nowhere else.
  */
+/**
+ * One row, as the list engine sees it. @see List.ts
+ *
+ * `make` runs once per key, `sync` on every draw. That split is what keeps the
+ * scroll offset through a redraw: the element is moved, never replaced.
+ */
+interface Row {
+  group?: string;
+  make(): HTMLElement;
+  sync(node: HTMLElement): void;
+}
+
 export function install(shell: StudioShell) {
   const root = shell.root;
   const avail = shell.available();
@@ -72,8 +85,88 @@ export function install(shell: StudioShell) {
   ]);
   root.appendChild(top);
 
+  /**
+   * The filter, and the list engine under it.
+   *
+   * The phone's lists are the long ones — 170 destinations, 166 framings — and
+   * scrolling is the only way through them on a device with no keyboard, so a
+   * filter is not a convenience here. Same grammar as the desktop's and the
+   * palette's, because a tool with two search syntaxes has one nobody knows.
+   */
+  const search = el('input.st-search.st-ui', {
+    type: 'text', placeholder: 'filter…  (-term excludes)', autocomplete: 'off', spellcheck: 'false',
+  }) as HTMLInputElement;
+  const searchWrap = el('div.st-searchwrap.st-ui', {}, [search, el('span.st-n', { text: '' })]);
+  searchWrap.hidden = true;
+  root.appendChild(searchWrap);
+  const searchCount = searchWrap.querySelector('.st-n') as HTMLElement;
+
   const body = el('div.st-side.st-ui');
   root.appendChild(body);
+
+  const list = new StudioList<Row>(body, {
+    make: (r) => r.item.make(),
+    sync: (n, r) => r.item.sync(n),
+    group: (r) => r.item.group || null,
+  });
+  search.addEventListener('input', () => {
+    list.setQuery(search.value);
+    searchCount.textContent = list.summary();
+  });
+
+  /**
+   * A model row with its tile, where one has been captured.
+   *
+   * The phone gets tiles by default rather than behind a toggle: a 393 px row
+   * of type is a poor way to recognise a creature and a thumbnail is a good
+   * one, and there is no hover here to reveal anything else. @see Thumbs
+   */
+  function thumbRow(id: string, label: string, mark: string, click: () => void): Row {
+    return {
+      make() {
+        const n = el('button.st-row.st-asset.st-ui', {}, [
+          el('img.st-thumb', { alt: '' }),
+          el('span', {}),
+          el('span.st-n', {}),
+        ]);
+        n.addEventListener('click', click);
+        return n;
+      },
+      sync(n) {
+        const img = n.children[0] as HTMLImageElement;
+        const src = shell.thumbs.get(id);
+        if (src && img.src !== src) img.src = src;
+        img.classList.toggle('none', !src);
+        (n.children[1] as HTMLElement).textContent = label;
+        (n.children[2] as HTMLElement).textContent = mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '';
+      },
+    };
+  }
+
+  /** Feed the engine, then report what the filter did. */
+  function feed(rows: Array<ListRow<Row>>) {
+    searchWrap.hidden = false;
+    body.classList.add('st-listed');
+    list.render(rows);
+    searchCount.textContent = list.summary();
+  }
+
+  /** A plain row: a name, a right-hand tag, and the whole thing is the target. */
+  function plainRow(label: string, tag: string, on: boolean, off: boolean, click: () => void): Row {
+    return {
+      make() {
+        const n = el('button.st-row.st-ui', {}, [el('span', {}), el('span.st-n', {})]);
+        n.addEventListener('click', click);
+        return n;
+      },
+      sync(n) {
+        (n.children[0] as HTMLElement).textContent = label;
+        (n.children[1] as HTMLElement).textContent = tag;
+        n.classList.toggle('on', on);
+        n.classList.toggle('off', off);
+      },
+    };
+  }
 
   /**
    * The gesture catcher, over the render and under the chrome.
@@ -153,7 +246,12 @@ export function install(shell: StudioShell) {
 
   function draw() {
     const id = shell.section;
-    body.textContent = '';
+    // NOT `body.textContent = ''`. The list engine owns `body`'s children and
+    // clearing them would throw away the very nodes the reconcile exists to
+    // keep — along with the scroll offset, which is the state a person is
+    // actually holding. A section that draws its own controls calls `clearBody`
+    // and takes the list down with it.
+    searchWrap.hidden = true;
     sheet.textContent = '';
     foot.textContent = '';
     const viewing = level === 'view';
@@ -171,9 +269,17 @@ export function install(shell: StudioShell) {
     drawUnbuilt(id);
   }
 
+  /** Hand `body` back from the list engine, for a section that is not a list. */
+  function clearBody() {
+    list.render([]);
+    body.classList.remove('st-listed');
+    body.textContent = '';
+  }
+
   /* --------------------------------------------------------------- menu -- */
 
   function drawMenu() {
+    clearBody();
     title.textContent = 'Game Studio';
     back.style.visibility = 'hidden';
     for (const s of avail) {
@@ -196,6 +302,7 @@ export function install(shell: StudioShell) {
    * frame contradicts it.
    */
   function drawUnbuilt(id: SectionId) {
+    clearBody();
     const s = SECTIONS.find((x) => x.id === id);
     title.textContent = s ? s.title : id;
     back.style.visibility = '';
@@ -217,12 +324,17 @@ export function install(shell: StudioShell) {
     if (level === 'view') {
       const cur = m.current();
       title.textContent = cur || 'Model';
+      // The frame about to be drawn is this asset's tile in the list you came
+      // from, so the grid fills in as the pass goes. @see Thumbs
+      if (cur && m.familyAt != null) shell.wantThumb(`${fams[m.familyAt].id}/${cur}`);
       drawModelSheet();
       return;
     }
 
+
     if (familyList || m.familyAt == null) {
       title.textContent = 'Model Explorer';
+      clearBody();
       fams.forEach((f, i) => {
         const item = el('button.st-item.st-ui', {}, [
           el('div.st-item-t', { text: f.title }),
@@ -236,16 +348,15 @@ export function install(shell: StudioShell) {
     }
 
     title.textContent = fams[m.familyAt].title;
-    const keys = m.keys();
-    keys.forEach((k, i) => {
+    const band = fams[m.familyAt].id;
+    feed(m.keys().map((k, i) => {
       const mark = m.markOf(k);
-      const row = el('button.st-row.st-ui', {}, [
-        el('span', { text: k }),
-        el('span.st-n', { text: mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '' }),
-      ]);
-      row.addEventListener('click', () => { m.select(i); level = 'view'; draw(); });
-      body.appendChild(row);
-    });
+      return {
+        key: `asset/${band}/${k}`,
+        text: `${k} ${mark}`,
+        item: thumbRow(`${band}/${k}`, k, mark, () => { m.select(i); level = 'view'; draw(); }),
+      };
+    }));
     foot.appendChild(fbtn('Families', () => { familyList = true; draw(); }));
     foot.appendChild(fbtn(m.unreviewedOnly ? 'Unreviewed' : 'All', () => {
       m.unreviewedOnly = !m.unreviewedOnly;
@@ -307,19 +418,14 @@ export function install(shell: StudioShell) {
     }
 
     title.textContent = s ? s.title : 'World';
-    let group = '';
-    for (const p of w.places()) {
-      if (p.group !== group) {
-        group = p.group;
-        body.appendChild(el('div.st-group', { text: group }));
-      }
-      const row = el('button.st-row.st-ui', {}, [
-        el('span', { text: p.name }),
-        el('span.st-n', { text: p.does ? '›' : '' }),
-      ]);
-      row.addEventListener('click', () => goTo(p));
-      body.appendChild(row);
-    }
+    feed(w.places().map((p) => ({
+      key: `place/${p.group}/${p.id}`,
+      text: `${p.name} ${p.does || ''} ${p.group}`,
+      item: {
+        group: p.group,
+        ...plainRow(p.name, p.does ? '›' : '', w.at?.id === p.id, false, () => goTo(p)),
+      },
+    })));
     foot.appendChild(fbtn('Back', up));
   }
 
@@ -341,7 +447,7 @@ export function install(shell: StudioShell) {
     body.hidden = false;
     sheet.hidden = true;
     grab.hidden = true;
-    body.textContent = '';
+    clearBody();
     body.appendChild(el('div.st-blank', {}, [
       el('div.st-item-t', { text: 'Turn your phone sideways' }),
       el('div.st-item-d', { text: 'The world is framed 16:9. Portrait crops the horizon out of the shot.' }),
@@ -526,26 +632,21 @@ export function install(shell: StudioShell) {
 
     const c = g.counts();
     title.textContent = 'Shot Gallery';
-    body.appendChild(el('div.st-group', { text: `${c.standable} of ${c.total} standable here` }));
-    let group = '';
-    for (const row of g.shots()) {
-      if (row.group !== group) {
-        group = row.group;
-        body.appendChild(el('div.st-group', { text: group }));
-      }
-      const r = el('button.st-row.st-ui', {}, [
-        el('span', { text: row.name }),
-        el('span.st-n', { text: row.standable ? `${row.time.toFixed(1)}h` : '\u2014' }),
-      ]);
-      r.classList.toggle('off', !row.standable);
-      r.addEventListener('click', () => {
-        if (!row.standable) { note(row.why || ''); return; }
-        g.stand(row);
-        level = 'view';
-        draw();
-      });
-      body.appendChild(r);
-    }
+    feed(g.shots().map((row) => ({
+      key: `shot/${row.name}`,
+      text: `${row.name} ${row.doc} ${row.group}`,
+      item: {
+        group: row.group,
+        ...plainRow(row.name, row.standable ? `${row.time.toFixed(1)}h` : '—',
+          g.at === row.name, !row.standable, () => {
+            if (!row.standable) { note(row.why || ''); return; }
+            g.stand(row);
+            level = 'view';
+            draw();
+          }),
+      },
+    })));
+    searchCount.textContent = `${c.standable} of ${c.total} standable`;
     foot.appendChild(fbtn('Back', up));
   }
 
@@ -553,7 +654,7 @@ export function install(shell: StudioShell) {
     const g = shell.gallery;
     const row = g.shots().find((s) => s.name === g.at) as GalleryShot | undefined;
     sheet.appendChild(el('div.st-nums', {
-      text: row ? `${row.doc || row.name}  \u00b7  ${row.time.toFixed(1)}h  \u00b7  ${row.fov}\u00b0 fov` : shell.world.where(),
+      text: row ? `${row.doc || row.name}  ·  ${row.time.toFixed(1)}h  ·  ${row.fov}° fov` : shell.world.where(),
     }));
     sheet.appendChild(el('div.st-nums', { text: shell.world.where() }));
     foot.appendChild(fbtn('Shots', () => { level = 'list'; draw(); }));
@@ -567,13 +668,14 @@ export function install(shell: StudioShell) {
     const L = shell.look;
     back.style.visibility = '';
     title.textContent = 'Look Lab';
+    clearBody();
 
     if (level === 'view') {
       // The same chips, in the sheet, so a knob can be turned WHILE you look at
       // what it does. That is the whole section, and it is impossible from a
       // list one level up.
       sheet.appendChild(el('div.st-nums', {
-        text: `${L.timeLabel() || `${L.time().toFixed(1)}h`}  \u00b7  ${L.weather()}  \u00b7  ${L.tier()}  \u00b7  ${L.view()}`,
+        text: `${L.timeLabel() || `${L.time().toFixed(1)}h`}  ·  ${L.weather()}  ·  ${L.tier()}  ·  ${L.view()}`,
       }));
       sheet.appendChild(chips(TIMES.map((t) => t.label), L.timeLabel(), (label) => {
         const t = TIMES.find((x) => x.label === label);
@@ -592,7 +694,7 @@ export function install(shell: StudioShell) {
     }));
 
     body.appendChild(el('div.st-group', {
-      text: L.hasWeather() ? 'Weather' : 'Weather \u2014 boots on first use',
+      text: L.hasWeather() ? 'Weather' : 'Weather — boots on first use',
     }));
     body.appendChild(chips([...WEATHER_NAMES], L.hasWeather() ? L.weather() : null, (name) => {
       void L.setWeather(name as typeof WEATHER_NAMES[number]).then(draw);
@@ -627,6 +729,7 @@ export function install(shell: StudioShell) {
 
   /** What this build decided at boot, and the documented ways back. */
   function drawDevice() {
+    clearBody();
     back.style.visibility = '';
     title.textContent = 'Device';
     for (const r of deviceRows(shell.game)) {
@@ -636,7 +739,7 @@ export function install(shell: StudioShell) {
         r.note ? el('div.st-kv-n', { text: r.note }) : null,
       ]));
     }
-    body.appendChild(el('div.st-group', { text: 'The way back \u2014 reloads the page' }));
+    body.appendChild(el('div.st-group', { text: 'The way back — reloads the page' }));
     for (const d of DOORS) {
       const row = el('button.st-row.st-ui', {}, [
         el('span', { text: d.label }),
