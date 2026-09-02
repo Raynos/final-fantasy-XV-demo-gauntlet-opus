@@ -1,6 +1,6 @@
 # Phone demo — handoff
 
-**Live, shipped and green: <https://dist-three-rho-86.vercel.app>**
+**Live, shipped and green: <https://ff15-xv-opus.vercel.app>**
 
 One build, **no query parameters**. A desktop gets the full game; a phone or
 tablet is detected and gets the demo. That is the link to hand a person.
