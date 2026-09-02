@@ -1,8 +1,9 @@
 # Game Studio v2 — the studio is not the game
 
-Status: **LOCKED (2026-09-02, opus)** — supersedes the architecture of
-`2026-09-02-opus-game-studio.md`, whose §3–§6 information architecture survives
-intact. v1 shipped and is live; this is the rebuild of what is underneath it.
+Status: **IN-PROGRESS (2026-09-02, opus)** — supersedes the architecture of
+`2026-09-02-opus-game-studio.md`, whose information architecture survives
+intact. **V1-V3 and the gate are built, shipped and green** (`pnpm run check`
+24/24); V4-V8 are open. `project/handoff/game-studio.md` is the live state.
 
 ---
 

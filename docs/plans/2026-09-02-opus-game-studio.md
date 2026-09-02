@@ -1,6 +1,8 @@
 # Game Studio — the second half of the build
 
-Status: **IN-PROGRESS (2026-09-02, opus)** — twelve decisions in §12. L1, L2a
+Status: **SUPERSEDED (2026-09-02, opus)** by `2026-09-02-opus-game-studio-v2.md`,
+which replaced the architecture; this plan's sections 3-6 (what the studio
+contains) are still the reference. Originally: **IN-PROGRESS** — twelve decisions in §12. L1, L2a
 and L2b are built, shipped and green (`pnpm run check` 23/23); L3–L7 and four of
 the six sections are open. **`project/handoff/game-studio.md` is the live
 state** — read it before picking this up.
