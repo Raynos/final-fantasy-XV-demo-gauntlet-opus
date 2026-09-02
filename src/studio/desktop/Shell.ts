@@ -25,7 +25,7 @@ export function install(shell: StudioShell) {
   const tabs = el('div.st-tabs');
   const tabEls = new Map<SectionId, HTMLElement>();
   for (const s of avail) {
-    const t = el('div.st-tab.st-ui', { text: s.title.replace(' Explorer', '').replace(' Gallery', '').replace(' Lab', '') });
+    const t = el('div.st-tab.st-ui', { text: s.short });
     t.title = s.desc;
     t.addEventListener('click', () => show(s.id));
     tabEls.set(s.id, t);

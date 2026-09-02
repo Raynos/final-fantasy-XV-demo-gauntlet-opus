@@ -86,6 +86,21 @@
 /* ------------------------------------------------------------------- menu */
 
 /*
+ * The world behind the studio is the *subject*, so it is never hidden -- but a
+ * noon sky is white and 11 px pale-blue type on white is not type. A radial
+ * scrim under the menu buys contrast where the words are and leaves the frame
+ * legible everywhere else. Measured against the first capture of this shell,
+ * where the section list over a bright Leide horizon was unreadable.
+ */
+#studio .st-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(56% 62% at 50% 50%, rgba(4, 7, 13, 0.80), rgba(4, 7, 13, 0.42) 62%, rgba(4, 7, 13, 0.10) 100%),
+    linear-gradient(180deg, rgba(4, 7, 13, 0.34), transparent 22%, transparent 78%, rgba(4, 7, 13, 0.34));
+}
+
+/*
  * The studio's own front page: the section list, centred, in the same rhythm
  * as the title screen's menu so entering the studio does not feel like leaving
  * the product.
@@ -121,12 +136,17 @@
 
 #studio .st-item + .st-item { margin-top: 3px; }
 
+/*
+ * The plate is always on, not hover-only. A row that only gets a background
+ * under the cursor is a row that cannot be read until you point at it, and on
+ * a coarse pointer it never gets one at all.
+ */
 #studio .st-item::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--plate-2);
-  opacity: 0;
+  background: var(--plate);
+  opacity: 0.72;
   transition: opacity 120ms linear;
 }
 #studio .st-item:hover::before,
@@ -143,12 +163,19 @@
 #studio .st-item:hover .st-item-t,
 #studio .st-item.on .st-item-t { color: #fff; }
 
+/*
+ * `--ink-3`, not `--ink-4`. At 0.34 alpha the description lines disappeared
+ * against the party silhouettes standing in the world behind the menu — legible
+ * on a dark sky and not on a mid-tone one, which is the failure mode a fixed
+ * palette choice has to survive.
+ */
 #studio .st-item-d {
   position: relative;
   margin-top: 4px;
   font-size: 11px;
   letter-spacing: 0.06em;
-  color: var(--ink-4);
+  color: var(--ink-3);
+  text-shadow: var(--sh-text);
 }
 
 /* ------------------------------------------------------------------ lists */

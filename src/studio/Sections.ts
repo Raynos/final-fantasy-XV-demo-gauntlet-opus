@@ -17,6 +17,14 @@ export interface Section {
   id: SectionId;
   /** Menu label. */
   title: string;
+  /**
+   * Tab-bar label, where there is no room for the full title.
+   *
+   * Authored rather than derived. Trimming `title` with string surgery gave
+   * "Shot" for Shot Gallery, which reads as a single photograph rather than the
+   * corpus of them — the sort of wrong that only shows up in a screenshot.
+   */
+  short: string;
   /** One line under it, saying what you would come here for. */
   desc: string;
   /**
@@ -47,36 +55,42 @@ function reviewServerPresent(): boolean {
 export const SECTIONS: Section[] = [
   {
     id: 'model',
+    short: 'Models',
     title: 'Model Explorer',
     desc: 'Every character, creature, weapon and vehicle, alone on a stage',
     available: () => true,
   },
   {
     id: 'world',
+    short: 'World',
     title: 'World Explorer',
     desc: 'Fly the real world — 139 places, 19 zones, 48 landforms',
     available: () => true,
   },
   {
     id: 'shots',
+    short: 'Shots',
     title: 'Shot Gallery',
     desc: 'The 166 framings every nightly gate judges',
     available: () => true,
   },
   {
     id: 'look',
+    short: 'Look',
     title: 'Look Lab',
     desc: 'Time of day, weather, quality tier, and how the geometry reads',
     available: () => true,
   },
   {
     id: 'notes',
+    short: 'Notes',
     title: 'Notes',
     desc: 'File what you see, and read back what is still open',
     available: reviewServerPresent,
   },
   {
     id: 'device',
+    short: 'Device',
     title: 'Device',
     desc: 'What this build decided at boot, and the way back',
     available: () => true,

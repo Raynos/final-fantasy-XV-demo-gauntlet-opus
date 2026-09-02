@@ -58,6 +58,8 @@ export class StudioShell {
 
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
+    // First child, so everything a shell appends draws over it. @see studio.css
+    this.root.appendChild(el('div.st-scrim'));
     document.body.appendChild(this.root);
 
     this._onResize = () => this._scale();
@@ -89,12 +91,32 @@ export class StudioShell {
     g.paused = true;
 
     const story = g.get('Story');
-    if (story) { story.hideTitle?.(); story.onStudio = null; }
+    if (story) {
+      story.hideTitle?.();
+      story.onStudio = null;
+      // `hideTitle()` only clears `shown`; the screen keeps drawing while its
+      // fade amount runs down, and its root is only display:none'd once that
+      // reaches zero. Entering from `?studio=1` gives it no frames to do that
+      // in, so the crest sits over the studio menu -- measured, in the first
+      // capture of this shell. Put it down now rather than waiting for a fade
+      // nobody is going to watch.
+      const t = story.title;
+      if (t) { t.a = 0; t.t = 0; t.chosen = null; t.root.style.display = 'none'; }
+    }
     g.get('Cinematics')?.stop?.({ skipped: true });
     g.get('Menus')?.setScreen?.(null);
 
     const hud = g.get('HUD');
-    if (hud) { hud.setVisible?.(false); hud.setMenuOpen?.(false); }
+    if (hud) {
+      hud.setVisible?.(false);
+      hud.setMenuOpen?.(false);
+      // `setVisible(false)` does not reach the hint cards, which own their own
+      // layer and their own queue -- so "A Better Engine Blade..." was still
+      // sitting over the studio menu. Mute the source and drain what is queued;
+      // `holdWorld()` keeps it muted, because a hint can re-arm.
+      if (hud.hints) { hud.hints.muted = true; hud.hints.cur = null; hud.hints.a = 0; hud.hints.queue.length = 0; }
+      hud.toasts?.clear?.();
+    }
 
     // Encounters re-arm on a timer, so pushing the timer out is not enough on
     // its own -- `holdWorld()` runs every frame for as long as the studio is
@@ -117,6 +139,8 @@ export class StudioShell {
    */
   holdWorld() {
     const g = this.game;
+    const hints = g.get('HUD')?.hints;
+    if (hints) hints.muted = true;
     const enc = g.get('Encounters');
     if (enc) {
       if (enc.packs) enc.packs.length = 0;
