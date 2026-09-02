@@ -4,8 +4,10 @@
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`. `docs/plans/` holds exactly one open plan:
-`2026-09-02-fable-game-studio-v3.md` (LOCKED), whose F1 and F2 are landed.**
+**`main`. `docs/plans/` is EMPTY — no plan is open.** Game Studio v3 closed
+2026-09-02: all nine lanes built, `studiocheck` **20/20**, deployed and looked
+at on a real phone. `project/handoff/game-studio.md` is the live state and
+carries the five things that will bite.
 
 `2026-08-30-fable-to-nine.md` archived DONE on 09-02 — all 20 lanes closed
 across 35 agent-lifetimes. Its five open calls were never lane work and now sit

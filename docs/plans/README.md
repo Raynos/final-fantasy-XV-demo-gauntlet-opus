@@ -82,6 +82,12 @@ are the three parallel plans that ran beside it.
                                               2026-09-02-fable-game-studio-v3;
                                               its architecture stands verbatim,
                                               v3 replaces its order of work
+  2026-09-02-fable-game-studio-v3             DONE 09-02 -> archive/plans/
+                                              F1-F9, studiocheck 20/20. Read it
+                                              before touching the studio: F5 and
+                                              F7 turned out to be ONE bug and it
+                                              was neither of the two the plan
+                                              describes
                     |                           8 of 10 closed the same night;
                     v                           5 of those as NEGATIVE results
   2026-08-26-opus-the-standing-backlog §WS-12   the two that were builds:
