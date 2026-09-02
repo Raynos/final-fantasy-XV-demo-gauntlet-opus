@@ -82,7 +82,19 @@ async function route() {
 
   // The harness, a named scene, and a resumed save all land in the game with no
   // menu in front of them — same as v1.
-  if (shoot || qs.has('scene') || qs.has('continue')) return playGame();
+  //
+  // **`?play=1` is here because the door silently broke two gates.** A lease
+  // that boots the game and waits for `GAME.ready` matches none of the other
+  // four flags, so `uxcheck` and `touchcheck` sat on the front door for their
+  // full 300 s timeout with **0 systems booted, no console error, and the boot
+  // label still reading "Loading"** — which is what a page waiting politely for
+  // a click looks like from the outside, and is indistinguishable from a hang.
+  // They have been red since the door landed in v2.
+  //
+  // A flag rather than reusing `?continue`, which is a real gameplay request:
+  // making the harness resume a save to get past a menu would have every play
+  // gate measuring a loaded game instead of a new one.
+  if (shoot || qs.has('play') || qs.has('scene') || qs.has('continue')) return playGame();
 
   // Otherwise: ask, before booting anything.
   const pick = await askDoor();

@@ -1663,9 +1663,19 @@ function pageKey(build: BuildId, w: number, h: number, query: string, prod = fal
   return `${build}${prod ? '#prod' : ''}|${w}x${h}|${query}`;
 }
 
+/**
+ * The URL a lease boots.
+ *
+ * `play` means "the real game, not a posed capture", and since the studio's v2
+ * front door landed that needs saying **explicitly**: without `?play=1` the
+ * router shows the door and waits for a click, so the page never reaches
+ * `GAME.ready` and `preparePage` times out after 300 s with no error to name.
+ * `uxcheck` and `touchcheck` were red for exactly that reason and nothing in
+ * the failure said so. @see src/main.ts's `route`
+ */
 function queryOf(opts: PageOpts): string {
   const { q = 'ultra', nobake = false, post = '', play = false, extra = '' } = opts;
-  return `?q=${q}${play ? '' : '&shoot=1'}${nobake ? '&nobake=1' : ''}`
+  return `?q=${q}${play ? '&play=1' : '&shoot=1'}${nobake ? '&nobake=1' : ''}`
     + `${post ? `&post=${encodeURIComponent(post)}` : ''}${extra ? `&${extra}` : ''}`;
 }
 
