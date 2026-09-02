@@ -1,6 +1,9 @@
 import './studio.css';
 import { demoActive, touchActive } from '../engine/Device.ts';
 import { el, uiScale } from '../ui/UIKit.ts';
+import { Freecam } from '../dev/Freecam.ts';
+import { Stage } from '../dev/Stage.ts';
+import { ModelExplorer } from './ModelExplorer.ts';
 import { SECTIONS, type SectionId } from './Sections.ts';
 import type { Game } from '../game/Game.ts';
 
@@ -49,12 +52,26 @@ export class StudioShell {
   _onResize: () => void;
   /** `game.paused` as it was before the studio took over. */
   _pausedWas: boolean;
+  /**
+   * The studio's camera. Every section that shows the world flies it.
+   *
+   * One `Freecam` for the whole studio rather than one per section, because
+   * `CameraRig` is not running and something has to own the transform — two
+   * owners would fight for it on the frame a section changes.
+   */
+  cam: Freecam;
+  /** The isolation stage. Only the Model Explorer enters it. */
+  stage: Stage;
+  model: ModelExplorer;
 
   constructor(game: Game) {
     this.game = game;
     this.touch = touchActive();
     this.section = null;
     this._pausedWas = !!game.paused;
+    this.cam = new Freecam();
+    this.stage = new Stage();
+    this.model = new ModelExplorer(game, this.stage);
 
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
@@ -173,8 +190,51 @@ export class StudioShell {
    * `game.paused` skips `update()` — a studio ticked from `update()` would
    * freeze itself along with the world it is freezing.
    */
-  lateUpdate(_dt: number, _game: Game) {
+  lateUpdate(dt: number, game: Game) {
     this.holdWorld();
+    // Order matters and is the same order `DevSuite` uses: the stage may move
+    // the camera (turntable, or a re-frame after a selection), then flight
+    // integrates on top of that, then the pose is written to the real camera.
+    // Writing before flight would make the turntable win every frame and
+    // manual orbiting would do nothing.
+    this.stage.update(dt, this.cam, game);
+    // After the stage has moved the camera, so the pin reads this frame's yaw
+    // rather than last frame's. @see ModelExplorer.pinFacing
+    if (this.section === 'model') this.model.pinFacing();
+    this.cam.update(dt, game.input);
+    this.cam.apply(game.camera);
+  }
+
+  /**
+   * Point the camera at the world and let it be flown.
+   *
+   * `adopt` first, so flight continues from wherever the frame already was
+   * rather than snapping to an arbitrary pose — the same reason `DevSuite`'s
+   * eject does it.
+   */
+  fly(on: boolean) {
+    this.cam.setEnabled(on, this.game.camera);
+  }
+
+  /* ------------------------------------------------------------- sections */
+
+  /**
+   * Enter or leave a section's world state.
+   *
+   * Sections are mutually exclusive by construction: the Model Explorer owns
+   * the stage, which hides every scene child, so leaving it has to restore the
+   * world before anything else can show it. Routing calls this on both edges.
+   */
+  setSection(id: SectionId | null) {
+    if (this.section === id) return;
+    if (this.section === 'model') this.model.exit();
+    this.section = id;
+    // The scrim is heavy behind the menu and almost gone inside a section, so
+    // a model on a turntable is not judged through a vignette. @see studio.css
+    this.root.classList.toggle('st-in-section', !!id);
+    if (id === 'model') { this.model.enter(); this.fly(true); }
+    else if (id === 'world' || id === 'shots') this.fly(true);
+    else this.fly(false);
   }
 
   /* ------------------------------------------------------------ sections -- */

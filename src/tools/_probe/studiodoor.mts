@@ -62,11 +62,71 @@ out.push(`studio touch=${shell.touch} sections=${shell.available().map((s) => s.
 out.push(`paused=${g.paused} pointerLocked=${g.input && g.input.pointerLocked}`);
 await window.__shot('3-studio');
 
-// One section open, to prove the routing and the chrome, not the content.
+/* ------------------------------------------------------- model explorer */
+
 const first = shell.available()[0];
 document.querySelectorAll('#studio .st-item').forEach((n, i) => { if (i === 0) n.click(); });
 await settle(1.0);
 out.push(`opened section=${shell.section} (expected ${first && first.id})`);
-await window.__shot('4-section');
+out.push('families: ' + shell.model.families().map((f) => `${f.title}=${f.count}`).join(' '));
+await window.__shot('4-modelfamilies');
+
+// Enemies, then a specific one, so the frame is a model and not a family list.
+// Counted from the registry rather than indexed by a number written here: this
+// is the assertion that `AssetBrowser`'s stale "eight townspeople" comment
+// would have failed.
+// Driven by CLICKING, not by calling the model directly. Calling `openFamily`
+// changes state the shell has not been told to redraw from, which is exactly
+// what the first capture of this section showed: a correctly staged bloodhorn
+// next to a list still saying "Pick a family". Clicking is also what a person
+// does, so it is the path worth testing.
+const fams = shell.model.families();
+const rows = () => [...document.querySelectorAll('#studio .st-side .st-row')];
+const clickRow = async (text, settleFor = 1.2) => {
+  const hit = rows().find((r) => r.textContent.startsWith(text));
+  if (!hit) throw new Error(`no row starting "${text}" in [${rows().map((r) => r.textContent).join(' | ')}]`);
+  hit.click();
+  await settle(settleFor);
+};
+
+await clickRow('Enemies');
+await clickRow('bloodhorn', 1.5);
+out.push(`staged ${shell.model.current()} pose=${shell.model.pose()} err=${shell.model.error() || 'none'}`);
+out.push('cost: ' + JSON.stringify(shell.model.cost()));
+await window.__shot('5-model');
+
+// A verdict, which is the thing that makes this a review tool rather than a
+// viewer -- and the only piece of studio state that outlives the page.
+document.querySelectorAll('#studio .st-btn').forEach((b) => { if (b.textContent === 'Flag') b.click(); });
+await settle(0.4);
+out.push(`verdict on ${shell.model.current()} = ${shell.model.markOf(shell.model.current())}`);
+
+// And a hero, which exercises a different `make` branch and a different pose
+// registry -- a family that builds is not evidence that the next one does.
+await clickRow('Party');
+await clickRow('gladio', 1.5);
+out.push(`staged ${shell.model.current()} pose=${shell.model.pose()} err=${shell.model.error() || 'none'}`);
+out.push('cost: ' + JSON.stringify(shell.model.cost()));
+await window.__shot('6-hero');
+
+/* --------------------------------------- every family builds every key */
+
+// BRIEF rule 5: a family that fails to build must report, not throw. This is
+// the sweep that says whether any of them do -- and it is the check that
+// belongs in `studiocheck.mts` when that lands.
+const failures = [];
+for (let fi = 0; fi < fams.length; fi++) {
+  shell.model.openFamily(fi);
+  const ks = shell.model.keys();
+  for (let i = 0; i < ks.length; i++) {
+    shell.model.select(i);
+    step(2);
+    const err = shell.model.error();
+    if (err) failures.push(err);
+  }
+  await breathe();
+}
+out.push(`sweep: ${fams.reduce((n, f) => n + f.count, 0)} assets, ${failures.length} failed`);
+for (const f of failures.slice(0, 10)) out.push(`  FAIL ${f}`);
 
 return { report: out.join('\n') };

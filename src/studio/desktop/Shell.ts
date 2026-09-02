@@ -7,14 +7,15 @@ import type { StudioShell } from '../StudioShell.ts';
  * The desktop studio shell: dense, keyboard-first, side-by-side.
  *
  * A cursor, a wheel, a middle button and a full keyboard are all available, so
- * this shell shows the list *and* the thing at once — a persistent tab bar
- * across the top and a section that owns everything under it. Nothing is one
- * screen at a time, because there is no reason for it to be.
+ * this shell shows the list *and* the thing at once — a persistent tab bar and
+ * a left list that stays put while the viewport behind it changes. Nothing is
+ * one screen at a time, because there is no reason for it to be.
  *
- * Keys are primary, not a shortcut layer over the mouse: `1`–`6` pick a
- * section, `Esc` steps back toward the menu and then out of the studio. Every
- * one of them is also a thing you can click, so the keyboard is an accelerator
- * rather than the only door — the same rule the mobile shell inverts.
+ * Keys are primary rather than a shortcut layer: `1`–`6` pick a section, `↑↓`
+ * step the list, `[` `]` step the animation state, `o`/`f` set a verdict, `Esc`
+ * steps back one level at a time. Every one of them is also clickable, so the
+ * keyboard accelerates rather than gatekeeps — the rule the mobile shell has to
+ * invert because it has no keyboard at all.
  */
 export function install(shell: StudioShell) {
   const root = shell.root;
@@ -32,35 +33,29 @@ export function install(shell: StudioShell) {
     tabs.appendChild(t);
   }
 
-  const bar = el('div.st-bar.st-ui', {}, [
+  const exit = el('div.st-tab.st-ui', { text: 'Exit' });
+  exit.addEventListener('click', () => shell.close());
+  root.appendChild(el('div.st-bar.st-ui', {}, [
     el('div.st-brand', { text: 'Game Studio' }),
     tabs,
     el('div.st-spacer'),
     el('div.st-build', { text: demoActive() ? 'phone build' : 'full build' }),
-    el('div.st-tab.st-ui', { text: 'Exit' }),
-  ]);
-  // The Exit row is the last child of the bar and is wired here rather than
-  // built with a handler, so the bar reads as one declaration.
-  bar.lastChild?.addEventListener('click', () => shell.close());
-  root.appendChild(bar);
+    exit,
+  ]));
 
-  const body = el('div.st-body');
-  root.appendChild(body);
+  const side = el('div.st-side.st-ui');
+  root.appendChild(side);
 
-  const status = el('div.st-status', {}, [
-    el('div', { text: 'game paused — the world renders, nothing plays' }),
-  ]);
-  root.appendChild(status);
+  const info = el('div.st-info.st-ui');
+  root.appendChild(info);
+
+  const statusText = el('div', { text: 'game paused — the world renders, nothing plays' });
+  root.appendChild(el('div.st-status', {}, [statusText]));
 
   const hint = el('div.st-hint');
-  hint.innerHTML = '<b>1–6</b> section &nbsp; <b>Esc</b> back &nbsp; <b>`</b> console';
   root.appendChild(hint);
 
-  /* --------------------------------------------------------------- menu -- */
-
-  const menu = el('div.st-menu.st-ui', {}, [
-    el('div.st-menu-h', { text: 'Game Studio' }),
-  ]);
+  const menu = el('div.st-menu.st-ui', {}, [el('div.st-menu-h', { text: 'Game Studio' })]);
   for (const s of avail) {
     const item = el('button.st-item', {}, [
       el('div.st-item-t', { text: s.title }),
@@ -73,24 +68,108 @@ export function install(shell: StudioShell) {
 
   /* ------------------------------------------------------------ routing -- */
 
-  /**
-   * Open a section, or the studio menu when passed null.
-   *
-   * Sections are placeholders until their own lanes land; routing is wired
-   * first on purpose, so that every later lane plugs into a shell that already
-   * knows how to reach it rather than each inventing its own way in.
-   */
   function show(id: SectionId | null) {
-    shell.section = id;
+    shell.setSection(id);
     menu.style.display = id ? 'none' : '';
-    body.textContent = '';
+    side.style.display = id ? '' : 'none';
+    info.style.display = id ? '' : 'none';
     for (const [k, t] of tabEls) t.classList.toggle('on', k === id);
-    if (!id) return;
-    const s = SECTIONS.find((x) => x.id === id);
-    body.appendChild(el('div.st-menu', {}, [
-      el('div.st-menu-h', { text: s ? s.title : id }),
-      el('div.st-item-d', { style: 'text-align:center', text: 'Not built yet — this lane is next.' }),
-    ]));
+    render();
+  }
+
+  /** Redraw the list and the readout for whatever is open. */
+  function render() {
+    side.textContent = '';
+    info.textContent = '';
+    hint.innerHTML = '<b>1–6</b> section &nbsp; <b>Esc</b> back';
+
+    if (shell.section === 'model') { renderModel(); return; }
+    if (!shell.section) return;
+
+    const s = SECTIONS.find((x) => x.id === shell.section);
+    info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} — not built yet, this lane is next.` }));
+  }
+
+  /* ----------------------------------------------------- model explorer -- */
+
+  function renderModel() {
+    const m = shell.model;
+    const fams = m.families();
+
+    // Families first, always visible. A drill-down that hides the family list
+    // would cost a click every time you want the next family, and stepping
+    // between families is the most common move in a review pass.
+    side.appendChild(el('div.st-group', { text: 'Families' }));
+    fams.forEach((f, i) => {
+      const row = el('button.st-row.st-ui', {}, [
+        el('span', { text: f.title }),
+        el('span.st-n', { text: String(f.count) }),
+      ]);
+      row.classList.toggle('on', m.familyAt === i);
+      row.addEventListener('click', () => { m.openFamily(i); render(); });
+      side.appendChild(row);
+    });
+
+    if (m.familyAt == null) {
+      info.appendChild(el('div.st-item-d', { text: 'Pick a family.' }));
+      return;
+    }
+
+    const keys = m.keys();
+    const cur = m.current();
+    side.appendChild(el('div.st-group', { text: fams[m.familyAt].title }));
+    keys.forEach((k, i) => {
+      const mark = m.markOf(k);
+      const row = el('button.st-row.st-ui', {}, [
+        el('span', { text: k }),
+        el('span.st-n', { text: mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '' }),
+      ]);
+      row.classList.toggle('on', k === cur);
+      row.addEventListener('click', () => { m.select(i); render(); });
+      side.appendChild(row);
+    });
+
+    /* ------------------------------------------------------- the readout */
+
+    const err = m.error();
+    if (err) {
+      // Reported, never thrown: BRIEF rule 5 exits a capture non-zero on a page
+      // error, and one broken family must not take the studio down with it.
+      info.appendChild(el('div.st-err', { text: err }));
+      return;
+    }
+
+    const c = m.cost();
+    const pose = m.pose();
+    const bits: string[] = [];
+    if (cur) bits.push(cur);
+    if (c) {
+      bits.push(`${c.tris.toLocaleString()} tris`);
+      bits.push(`${c.meshes} mesh${c.meshes === 1 ? '' : 'es'}`);
+      bits.push(`${c.materials} mat${c.materials === 1 ? '' : 's'}`);
+      bits.push(`${c.size.toFixed(2)} m`);
+    }
+    info.appendChild(el('div.st-nums', { text: bits.join('  ·  ') }));
+
+    const controls = el('div.st-ctl');
+    if (pose) {
+      const prev = el('button.st-btn.st-ui', { text: '◂' });
+      const next = el('button.st-btn.st-ui', { text: '▸' });
+      prev.addEventListener('click', () => { m.stepPose(-1); render(); });
+      next.addEventListener('click', () => { m.stepPose(1); render(); });
+      controls.appendChild(prev);
+      controls.appendChild(el('span.st-pose', { text: pose }));
+      controls.appendChild(next);
+    }
+    const ok = el('button.st-btn.st-ui', { text: 'OK' });
+    const flag = el('button.st-btn.st-ui', { text: 'Flag' });
+    ok.addEventListener('click', () => { m.mark('ok'); render(); });
+    flag.addEventListener('click', () => { m.mark('flag'); render(); });
+    controls.appendChild(ok);
+    controls.appendChild(flag);
+    info.appendChild(controls);
+
+    hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>o</b> ok &nbsp; <b>f</b> flag &nbsp; <b>Esc</b> back';
   }
 
   /* ---------------------------------------------------------------- keys -- */
@@ -98,16 +177,26 @@ export function install(shell: StudioShell) {
   const onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.key === 'Escape') {
-      // Step back one level at a time. Escaping straight out of the studio from
-      // inside a section would make a mis-hit cost a 6.5 s reload.
-      if (shell.section) show(null); else shell.close();
+      // One level at a time. Escaping straight out of the studio from inside a
+      // section would make a mis-hit cost a 6.5 s reload.
+      if (shell.section === 'model' && shell.model.familyAt != null) { shell.model.familyAt = null; render(); }
+      else if (shell.section) show(null);
+      else shell.close();
       return;
     }
     const n = Number(e.key);
-    if (n >= 1 && n <= avail.length) show(avail[n - 1].id);
+    if (n >= 1 && n <= avail.length) { show(avail[n - 1].id); return; }
+
+    if (shell.section !== 'model' || shell.model.familyAt == null) return;
+    const m = shell.model;
+    if (e.key === 'ArrowDown') { m.step(1); render(); }
+    else if (e.key === 'ArrowUp') { m.step(-1); render(); }
+    else if (e.key === ']') { m.stepPose(1); render(); }
+    else if (e.key === '[') { m.stepPose(-1); render(); }
+    else if (e.key === 'o') { m.mark('ok'); render(); }
+    else if (e.key === 'f') { m.mark('flag'); render(); }
   };
   window.addEventListener('keydown', onKey);
-  shell.root.addEventListener('studio:dispose', () => window.removeEventListener('keydown', onKey));
 
   show(null);
 }

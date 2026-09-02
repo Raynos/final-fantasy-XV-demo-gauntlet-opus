@@ -213,6 +213,62 @@
   color: var(--ink-4);
 }
 
+/* ------------------------------------------------------- the readout strip */
+
+/*
+ * Bottom-left, above the status line and clear of the left list: the numbers
+ * for whatever is on the stage. This is the studio's most direct service to
+ * BRIEF rule 3's phone budget -- 250 draw calls and ~2.5 M triangles -- because
+ * until now the only way to learn what one model cost was `_probe/mobcost.mts`.
+ */
+#studio .st-info {
+  position: absolute;
+  left: 244px;
+  right: 16px;
+  bottom: 30px;
+}
+
+#studio .st-nums {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  color: var(--ink-2);
+  text-shadow: var(--sh-text);
+}
+
+#studio .st-err {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  text-shadow: var(--sh-text);
+}
+
+#studio .st-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#studio .st-btn {
+  padding: 5px 11px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--plate);
+  cursor: pointer;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+#studio .st-btn:hover { color: #fff; background: rgba(24, 38, 60, 0.72); }
+
+#studio .st-pose {
+  min-width: 92px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ice);
+}
+
 /* ------------------------------------------------------------------ status */
 
 #studio .st-status {
@@ -333,6 +389,17 @@
   letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--ink-2);
+}
+
+/*
+ * Inside a section the world IS the subject, so the scrim pulls almost all the
+ * way back -- a model on a turntable judged through a 0.80 vignette is a model
+ * you cannot judge. Only the edges keep enough to hold the chrome legible.
+ */
+#studio.st-in-section .st-scrim {
+  background:
+    linear-gradient(180deg, rgba(4, 7, 13, 0.62), transparent 14%, transparent 86%, rgba(4, 7, 13, 0.62)),
+    linear-gradient(90deg, rgba(4, 7, 13, 0.52), transparent 22%);
 }
 
 /* Desktop keeps the tab bar; mobile keeps the stack. Never both. */
