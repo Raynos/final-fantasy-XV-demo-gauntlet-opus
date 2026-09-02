@@ -260,6 +260,7 @@
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
 #studio .st-btn:hover { color: #fff; background: rgba(24, 38, 60, 0.72); }
+#studio .st-btn.on { color: var(--accent-hot); background: rgba(30, 52, 84, 0.86); }
 
 #studio .st-pose {
   min-width: 92px;

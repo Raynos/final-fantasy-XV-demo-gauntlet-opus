@@ -1,6 +1,7 @@
 import { demoActive } from '../../engine/Device.ts';
 import { el } from '../../ui/UIKit.ts';
 import { SECTIONS, type SectionId } from '../Sections.ts';
+import { SPEEDS } from '../WorldExplorer.ts';
 import type { StudioShell } from '../StudioShell.ts';
 
 /**
@@ -68,8 +69,13 @@ export function install(shell: StudioShell) {
 
   /* ------------------------------------------------------------ routing -- */
 
-  function show(id: SectionId | null) {
-    shell.setSection(id);
+  // Any change of section redraws, whoever made it -- a click, a key, or a
+  // probe reaching in. @see StudioShell.setSection
+  shell.onSection = (id) => draw(id);
+
+  function show(id: SectionId | null) { shell.setSection(id); }
+
+  function draw(id: SectionId | null) {
     menu.style.display = id ? 'none' : '';
     side.style.display = id ? '' : 'none';
     info.style.display = id ? '' : 'none';
@@ -84,10 +90,54 @@ export function install(shell: StudioShell) {
     hint.innerHTML = '<b>1–6</b> section &nbsp; <b>Esc</b> back';
 
     if (shell.section === 'model') { renderModel(); return; }
+    if (shell.section === 'world') { renderWorld(); return; }
     if (!shell.section) return;
 
     const s = SECTIONS.find((x) => x.id === shell.section);
     info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} — not built yet, this lane is next.` }));
+  }
+
+  /* ----------------------------------------------------- world explorer -- */
+
+  function renderWorld() {
+    const w = shell.world;
+    const places = w.places();
+
+    // Grouped, in the order `places()` emits: Signature first, then each type
+    // band largest-first, then zones. A shell that re-sorted here would undo
+    // the one thing the list is for.
+    let group = '';
+    for (const p of places) {
+      if (p.group !== group) {
+        group = p.group;
+        side.appendChild(el('div.st-group', { text: group }));
+      }
+      const row = el('button.st-row.st-ui', {}, [el('span', { text: p.name })]);
+      row.classList.toggle('on', w.at?.id === p.id);
+      if (p.does) row.title = p.does;
+      row.addEventListener('click', () => { w.arrive(p); render(); });
+      side.appendChild(row);
+    }
+
+    const at = w.at;
+    info.appendChild(el('div.st-nums', {
+      text: at
+        ? `${at.name}  ·  ${at.does || at.group}  ·  camera ${w.where()}${w.settled() ? '' : '  ·  streaming…'}`
+        : `${places.length} destinations — pick one`,
+    }));
+
+    // The speed decade. Buttons rather than a slider: there is no wheel on a
+    // phone, and the useful values span two orders of magnitude.
+    const ctl = el('div.st-ctl', {}, [el('span.st-pose', { text: 'speed' })]);
+    for (const v of SPEEDS) {
+      const b = el('button.st-btn.st-ui', { text: `${v}` });
+      b.classList.toggle('on', w.speed() === v);
+      b.addEventListener('click', () => { w.setSpeed(v); render(); });
+      ctl.appendChild(b);
+    }
+    info.appendChild(ctl);
+
+    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>wheel</b> speed &nbsp; <b>Esc</b> back';
   }
 
   /* ----------------------------------------------------- model explorer -- */

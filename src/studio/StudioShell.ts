@@ -4,6 +4,7 @@ import { el, uiScale } from '../ui/UIKit.ts';
 import { Freecam } from '../dev/Freecam.ts';
 import { Stage } from '../dev/Stage.ts';
 import { ModelExplorer } from './ModelExplorer.ts';
+import { WorldExplorer } from './WorldExplorer.ts';
 import { SECTIONS, type SectionId } from './Sections.ts';
 import type { Game } from '../game/Game.ts';
 
@@ -63,6 +64,13 @@ export class StudioShell {
   /** The isolation stage. Only the Model Explorer enters it. */
   stage: Stage;
   model: ModelExplorer;
+  world: WorldExplorer;
+  /**
+   * Installed by whichever shell is drawing, called on every section change.
+   *
+   * @see setSection for why this is the setter's job and not the caller's.
+   */
+  onSection: ((id: SectionId | null) => void) | null;
 
   constructor(game: Game) {
     this.game = game;
@@ -72,6 +80,8 @@ export class StudioShell {
     this.cam = new Freecam();
     this.stage = new Stage();
     this.model = new ModelExplorer(game, this.stage);
+    this.world = new WorldExplorer(game, this.cam);
+    this.onSection = null;
 
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
@@ -158,6 +168,7 @@ export class StudioShell {
     const g = this.game;
     const hints = g.get('HUD')?.hints;
     if (hints) hints.muted = true;
+    this.hideGameUi();
     const enc = g.get('Encounters');
     if (enc) {
       if (enc.packs) enc.packs.length = 0;
@@ -165,6 +176,58 @@ export class StudioShell {
       enc._roamTimer = 1e9;
     }
     g.get('Enemies')?.clear?.();
+  }
+
+  /**
+   * Stream the world around the camera without running the game.
+   *
+   * "The world renders, nothing plays" has to include the world *loading*, and
+   * it did not. `Props.update` is where POI sites are built and packed — "at
+   * most one site is built per frame" — and `Game.frame` skips every `update()`
+   * while `paused`. So with the studio holding the pause, teleporting three
+   * kilometres put the camera in front of geometry that would never be built,
+   * and `WorldExplorer.settled()` sat at false forever waiting for a counter
+   * nothing was advancing. The first fly of the Signature band hit its ten
+   * second hold at all twelve destinations for exactly this reason.
+   *
+   * Calling the streamers directly is the narrow fix: they are the systems
+   * whose job is "make the world near the camera exist", and none of them is
+   * gameplay. `Terrain` and `Vegetation` go first because props are placed
+   * against ground that has to be there, and each is optional because the
+   * phone build does not necessarily have all three.
+   *
+   * Only while a world-facing section is open. The Model Explorer hides the
+   * world behind `Stage`, and streaming into a hidden scene is pure cost.
+   *
+   * `Terrain` is absent from the list because `Terrain.update()` is empty — it
+   * builds from `heightAt` on demand rather than on a tick, so there is nothing
+   * to pump.
+   */
+  pumpWorld(dt: number, game: Game) {
+    game.get('Vegetation')?.update?.(dt, game);
+    game.get('Props')?.update?.(dt, game);
+  }
+
+  /**
+   * Put the game's own DOM layers down, every frame.
+   *
+   * `hud.setVisible(false)` reaches the HUD and nothing else: hints, toasts,
+   * the minimap, the interact prompt and the key legend each own a root, and
+   * the legend — "SELECT / CONFIRM / BACK / PAUSE" — was printing across the
+   * world in the World Explorer's first capture.
+   *
+   * Re-asserted every frame rather than once, because `Stage.exit` **restores**
+   * these roots: it hides them on entry and puts back whatever `display` they
+   * had. So leaving the Model Explorer for any other section would hand the
+   * game's UI back on top of the studio. Rather than fight over who owns the
+   * saved value, the studio simply keeps re-hiding for as long as it is open —
+   * and since exit is a reload, nothing needs restoring.
+   */
+  hideGameUi() {
+    for (const id of ['ui', 'title', 'hints']) {
+      const node = document.getElementById(id);
+      if (node && node.style.display !== 'none') node.style.display = 'none';
+    }
   }
 
   /** Leave the studio. @see the class header — this is deliberately a reload. */
@@ -197,6 +260,7 @@ export class StudioShell {
     // integrates on top of that, then the pose is written to the real camera.
     // Writing before flight would make the turntable win every frame and
     // manual orbiting would do nothing.
+    if (this.section === 'world' || this.section === 'shots') this.pumpWorld(dt, game);
     this.stage.update(dt, this.cam, game);
     // After the stage has moved the camera, so the pin reads this frame's yaw
     // rather than last frame's. @see ModelExplorer.pinFacing
@@ -223,7 +287,15 @@ export class StudioShell {
    *
    * Sections are mutually exclusive by construction: the Model Explorer owns
    * the stage, which hides every scene child, so leaving it has to restore the
-   * world before anything else can show it. Routing calls this on both edges.
+   * world before anything else can show it.
+   *
+   * **This is the only way in, and it tells the shell.** Twice during L2 a
+   * capture came back showing correct world state under stale chrome — a staged
+   * bloodhorn beside a list still reading "Pick a family", and Hammerhead with
+   * the studio menu printed over it — both because something changed the
+   * section without the shell being told to redraw. Making the notification
+   * part of the setter rather than the caller's responsibility is what stops
+   * that being possible a third time.
    */
   setSection(id: SectionId | null) {
     if (this.section === id) return;
@@ -235,6 +307,7 @@ export class StudioShell {
     if (id === 'model') { this.model.enter(); this.fly(true); }
     else if (id === 'world' || id === 'shots') this.fly(true);
     else this.fly(false);
+    if (this.onSection) this.onSection(id);
   }
 
   /* ------------------------------------------------------------ sections -- */

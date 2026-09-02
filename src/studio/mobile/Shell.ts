@@ -59,8 +59,11 @@ export function install(shell: StudioShell) {
    * Android's own back gesture both land here, so there is exactly one way up
    * and it cannot get out of step with the header.
    */
-  function show(id: SectionId | null) {
-    shell.section = id;
+  shell.onSection = (id) => draw(id);
+
+  function show(id: SectionId | null) { shell.setSection(id); }
+
+  function draw(id: SectionId | null) {
     body.textContent = '';
     foot.textContent = '';
 
