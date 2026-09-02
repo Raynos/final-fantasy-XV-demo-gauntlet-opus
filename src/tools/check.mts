@@ -224,9 +224,20 @@ const GATES: Gate[] = [
   { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
   { name: 'touchcheck', pixelBlind: true, gate: true, script: 'touchcheck.mts', expect: '20/20', kind: 'browser', cost: 14 },
   // Asserts the Game Studio boots no game: 0 systems for models, exactly the
-  // five geometry ones for the world, and no character object in either scene.
+  // EIGHT geometry ones for the world, and no character object in either scene.
   // An architecture is a claim, and an unmeasured claim rots.
-  { name: 'studiocheck', pixelBlind: true, gate: true, script: 'studiocheck.mts', expect: '8/8', kind: 'browser', cost: 22 },
+  //
+  // It also drives the phone shell under a real iPhone descriptor -- the drill
+  // down and back out, the 44 px floor, the landscape gate, and whether a drag
+  // in the middle of the viewport reaches the gesture catcher. That half opens
+  // its own browser, so this row is dearer than a lease-only gate.
+  //
+  // **The expect string said `8/8` while the gate ran 22 assertions**, which is
+  // the exact failure mode `check.mts` exists to stop: a second copy of a count,
+  // kept somewhere else, quietly disagreeing. It grew from 8 to 22 across the
+  // studio v3 lanes and nothing updated it, so the suite would have passed a
+  // gate that had lost fourteen of its assertions.
+  { name: 'studiocheck', pixelBlind: true, gate: true, script: 'studiocheck.mts', expect: '22/22', kind: 'browser', cost: 40 },
   { name: 'devicecheck', pixelBlind: true, gate: true, script: 'devicecheck.mts', expect: '10/10', kind: 'browser', cost: 12 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
   { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '35/35', kind: 'browser', cost: 45 },
