@@ -66,6 +66,14 @@ export class StorySystem {
   seen!: Set<string>;
   talk!: Conversation;
   title!: TitleScreen;
+  /**
+   * What to run when the title's GAME STUDIO row is picked.
+   *
+   * Injected by `src/main.ts`, which owns the dynamic import, so the story
+   * system holds no reference into `src/studio/` and a page built without one
+   * still runs. Null means the row is inert, not an error.
+   */
+  onStudio!: (() => void) | null;
   triggers!: Triggers;
   async init(game: Game) {
     this.game = game;
@@ -75,6 +83,7 @@ export class StorySystem {
     this.talk = new Conversation();
     this.title = new TitleScreen(game.uiRoot, game);
     this.title.onChoose = (pick: TitleChoice) => this._titleChoice(pick);
+    this.onStudio = null;
 
     // Losing the WebGL context costs a reload, and on a phone the ordinary
     // cause is the player taking a call — so the reload has to land back where
@@ -109,7 +118,11 @@ export class StorySystem {
     this.headless = params.has('shoot');
     const scene = params.get('scene');
     if (scene) { this.playScene(scene); this._started = true; }
-    else if (!this.headless) {
+    // `?studio=1` is a direct door into the Game Studio, so the title must not
+    // be shown and then hidden a frame later -- that flashes the crest on every
+    // studio open and, worse, runs the title's golden-hour `setTimeOfDay` over
+    // whatever the studio was about to set up.
+    else if (!this.headless && !params.has('studio')) {
       if (params.has('continue')) this._resume();
       else this.showTitle();
     }
@@ -359,17 +372,11 @@ export class StorySystem {
   }
 
   _titleChoice(pick: TitleChoice) {
-    // The only row that is not a destination inside this page. Everything the
-    // demo changes is decided during boot, so the way in is a reload, not a
-    // branch -- and `touch=1` rides along because a desktop asking for the
-    // phone build is asking to see the phone build, controls included.
-    if (pick === 'demo') {
-      const p = new URLSearchParams(location.search);
-      p.set('demo', '1');
-      p.set('touch', '1');
-      location.search = p.toString();
-      return;
-    }
+    // The studio is a different mode over the same world, not a scene and not
+    // a save. `main.ts` owns the import and hands the callback in, so this file
+    // never reaches into `src/studio/` -- if nobody wired one, the row simply
+    // does nothing rather than throwing on a page that has no studio in it.
+    if (pick === 'studio') { if (this.onStudio) this.onStudio(); return; }
     if (pick === 'continue') {
       const rpg = this.rpg;
       if (rpg && rpg.loadGame) rpg.loadGame('auto');

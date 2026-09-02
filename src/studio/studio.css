@@ -1,0 +1,316 @@
+/*
+ * The Game Studio.
+ *
+ * BRIEF's UI voice, denser: thin pale-blue type, generous letterspacing,
+ * low-opacity dark panels, angular corner cuts. It reuses `ui.css`'s custom
+ * properties rather than redefining any colour, so the studio can never drift
+ * away from the game's palette -- it will end up in screenshots next to it.
+ *
+ * Denser than the HUD on purpose. A HUD is glanced at; this is read. Rows are
+ * tighter, type is smaller, and more fits on a screen -- except on a coarse
+ * pointer, where `.st-touch` puts every target back above 44 px because a thumb
+ * is not a cursor.
+ */
+
+#studio {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  font-family: var(--ui-font);
+  color: var(--ink);
+  pointer-events: none;
+  /* The world renders behind this. Only the panels take the pointer. */
+  background: none;
+}
+
+#studio * { box-sizing: border-box; }
+#studio button { font: inherit; color: inherit; background: none; border: 0; }
+
+/* Anything a person actually touches opts back in. */
+#studio .st-ui { pointer-events: auto; }
+
+/* ------------------------------------------------------------------ chrome */
+
+#studio .st-bar {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, rgba(7, 11, 19, 0.86), rgba(7, 11, 19, 0.42) 70%, transparent);
+}
+
+#studio .st-brand {
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--ice);
+  text-shadow: var(--sh-text);
+  white-space: nowrap;
+}
+
+#studio .st-build {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-4);
+  text-transform: uppercase;
+}
+
+#studio .st-spacer { flex: 1; }
+
+/* ------------------------------------------------------------------- tabs */
+
+#studio .st-tabs { display: flex; gap: 2px; }
+
+#studio .st-tab {
+  padding: 6px 13px;
+  font-size: 11px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+#studio .st-tab:hover { color: var(--ink); }
+#studio .st-tab.on { color: var(--accent-hot); }
+#studio .st-tab.on::after {
+  content: '';
+  position: absolute;
+  left: 10px; right: 10px; bottom: 0;
+  height: 1px;
+  background: var(--accent);
+}
+
+/* ------------------------------------------------------------------- menu */
+
+/*
+ * The studio's own front page: the section list, centred, in the same rhythm
+ * as the title screen's menu so entering the studio does not feel like leaving
+ * the product.
+ */
+#studio .st-menu {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 460px;
+  max-width: 88vw;
+}
+
+#studio .st-menu-h {
+  font-size: 11px;
+  letter-spacing: 0.48em;
+  text-transform: uppercase;
+  color: var(--ice);
+  text-align: center;
+  margin-bottom: 26px;
+  text-shadow: var(--sh-text);
+}
+
+#studio .st-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 13px 18px;
+  cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+#studio .st-item + .st-item { margin-top: 3px; }
+
+#studio .st-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--plate-2);
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+#studio .st-item:hover::before,
+#studio .st-item.on::before { opacity: 1; }
+
+#studio .st-item-t {
+  position: relative;
+  font-size: 15px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-shadow: var(--sh-text);
+}
+#studio .st-item:hover .st-item-t,
+#studio .st-item.on .st-item-t { color: #fff; }
+
+#studio .st-item-d {
+  position: relative;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-4);
+}
+
+/* ------------------------------------------------------------------ lists */
+
+#studio .st-side {
+  position: absolute;
+  left: 0; top: 40px; bottom: 26px;
+  width: 232px;
+  overflow-y: auto;
+  padding: 8px 0;
+  background: linear-gradient(90deg, rgba(7, 11, 19, 0.72), rgba(7, 11, 19, 0.30));
+}
+
+#studio .st-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 14px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  cursor: pointer;
+  text-align: left;
+}
+#studio .st-row:hover { color: var(--ink); background: var(--plate-2); }
+#studio .st-row.on { color: var(--accent-hot); background: var(--plate); }
+#studio .st-row .st-n { margin-left: auto; font-size: 10px; color: var(--ink-4); }
+
+#studio .st-group {
+  padding: 12px 14px 4px;
+  font-size: 10px;
+  letter-spacing: 0.30em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* ------------------------------------------------------------------ status */
+
+#studio .st-status {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  background: linear-gradient(0deg, rgba(7, 11, 19, 0.80), transparent);
+}
+#studio .st-taint { color: var(--gold); margin-left: auto; }
+
+/* ------------------------------------------------------------------- hint */
+
+#studio .st-hint {
+  position: absolute;
+  right: 16px;
+  bottom: 26px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  text-align: right;
+  line-height: 1.7;
+}
+#studio .st-hint b { font-weight: 400; color: var(--ice); }
+
+/* =========================================================== mobile shell */
+
+/*
+ * `hover: none` is not a small screen. Every rule below is about the absence
+ * of a keyboard, a wheel and a cursor -- one screen at a time, controls in the
+ * thumb arc at the bottom, and nothing that needs a hover to be discoverable.
+ */
+
+#studio.st-touch .st-menu {
+  position: absolute;
+  inset: 44px 0 64px;
+  transform: none;
+  left: 0;
+  top: 44px;
+  width: 100%;
+  max-width: none;
+  overflow-y: auto;
+  padding: 0 12px;
+}
+
+#studio.st-touch .st-item {
+  /* 44 px is the floor, and the whole row is the target -- never a chevron. */
+  min-height: 58px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+#studio.st-touch .st-item::before { opacity: 1; }
+#studio.st-touch .st-item-t { font-size: 14px; letter-spacing: 0.20em; }
+
+#studio.st-touch .st-side {
+  inset: 44px 0 64px;
+  width: 100%;
+  background: none;
+}
+#studio.st-touch .st-row { min-height: 48px; padding: 10px 18px; font-size: 13px; }
+
+/* The back affordance and the section controls sit where a thumb reaches. */
+#studio .st-foot {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  min-height: 56px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  background: linear-gradient(0deg, rgba(7, 11, 19, 0.92), rgba(7, 11, 19, 0.62));
+}
+
+#studio .st-fbtn {
+  flex: 1;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+#studio .st-fbtn:active { background: var(--plate); color: #fff; }
+#studio .st-fbtn.on { color: var(--accent-hot); }
+
+#studio .st-top {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 8px 0 4px;
+  background: linear-gradient(180deg, rgba(7, 11, 19, 0.90), transparent);
+}
+#studio .st-back {
+  min-width: 48px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--ice);
+  cursor: pointer;
+}
+#studio .st-title {
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* Desktop keeps the tab bar; mobile keeps the stack. Never both. */
+#studio.st-touch .st-bar,
+#studio.st-touch .st-hint,
+#studio.st-touch .st-status { display: none; }
+#studio.st-desk .st-top,
+#studio.st-desk .st-foot { display: none; }

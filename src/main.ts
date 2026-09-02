@@ -49,6 +49,27 @@ game.init().then(() => {
       .catch((err) => console.error('[touch] controls failed to load', err));
   }
 
+  // The Game Studio: a mode entered *instead of* the game, from the title
+  // screen's front door or straight from `?studio=1`.
+  //
+  // `?shoot=1` is checked first and independently of everything else. The
+  // capture harness loads `?q=ultra&shoot=1` and BRIEF rule 2 makes two runs
+  // byte-identical, so no front door, no studio and no menu may ever appear on
+  // a page it drives -- a combined `?shoot=1&studio=1` opens nothing.
+  //
+  // A dynamic import, so a page that never opens the studio never parses it,
+  // and `orphans.mts` still counts it as reachable.
+  if (!qs.has('shoot')) {
+    const enter = () => import('./studio/StudioShell.ts')
+      .then((m) => m.openStudio(game))
+      .catch((err) => console.error('[studio] failed to open', err));
+    // Injected rather than imported by the story system, which therefore holds
+    // no reference into `src/studio/`. @see StorySystem.onStudio
+    const story = game.get('Story');
+    if (story) story.onStudio = enter;
+    if (qs.has('studio')) enter();
+  }
+
   // In-game developer / review suite. A dynamic import keeps it in its own
   // async chunk, so it loads after the game is up rather than delaying boot --
   // one build, no drift, you review the bundle you actually ship.
