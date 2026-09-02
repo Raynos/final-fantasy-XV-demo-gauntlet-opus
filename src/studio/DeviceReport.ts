@@ -66,6 +66,29 @@ export function deviceRows(game: Game): DeviceRow[] {
     },
     { k: 'systems booted', v: String(game.systems.length) },
   ];
+
+  /*
+   * Whether the browser's own chrome is on screen, and what to do about it.
+   *
+   * A landscape iPhone spends about a quarter of its short edge on the address
+   * bar, and **nothing a page can do reclaims it in a tab**: iPhone Safari does
+   * not implement the Fullscreen API, and the toolbar only auto-hides on a page
+   * that scrolls, which a game must not. Installed to the home screen there is
+   * no chrome at all, and `display-mode: standalone` is how the page knows
+   * which of the two it is in — so this row is a readout when it is already
+   * fullscreen, and an instruction when it is not.
+   */
+  const standalone = mq('(display-mode: standalone)')
+    || mq('(display-mode: fullscreen)')
+    || !!(navigator as unknown as { standalone?: boolean }).standalone;
+  rows.push({
+    k: 'display',
+    v: standalone ? 'fullscreen — installed' : 'in a browser tab',
+    note: standalone
+      ? 'no browser chrome; the whole screen is the game'
+      : 'Share → Add to Home Screen for the full screen. Safari keeps the address bar in a tab and no page can hide it.',
+  });
+
   const r = game.renderer;
   if (r && r.info) {
     rows.push({

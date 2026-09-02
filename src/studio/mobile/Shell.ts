@@ -250,6 +250,30 @@ export function install(shell: StudioShell) {
 
   back.addEventListener('click', up);
 
+  /**
+   * Rotating the phone has to redraw, and nothing was listening.
+   *
+   * The landscape gate is decided inside `draw()`, and `draw()` only runs on an
+   * interaction — so turning the phone sideways left "TURN YOUR PHONE SIDEWAYS"
+   * sitting over a perfectly good landscape frame, with the two buttons under
+   * it the only way out. Which is the report, and it is the same shape in the
+   * other direction: rotating to portrait mid-flight left the sticks live over
+   * a frame that should have been gated.
+   *
+   * `orientationchange` as well as `resize`, because iOS Safari fires the two
+   * at different moments and the one that arrives first is not the one whose
+   * `innerWidth` is right. The frame of delay is deliberate: on iOS the resize
+   * event lands *before* the viewport metrics update, so reading them
+   * synchronously answers with the old orientation.
+   */
+  let rotT: ReturnType<typeof setTimeout> | null = null;
+  const onRotate = () => {
+    if (rotT) clearTimeout(rotT);
+    rotT = setTimeout(() => { rotT = null; draw(); }, 120);
+  };
+  window.addEventListener('resize', onRotate);
+  window.addEventListener('orientationchange', onRotate);
+
   /** A footer action, as a real button. @see the header */
   function fbtn(label: string, onClick: () => void, on = false): HTMLElement {
     const b = el('button.st-fbtn.st-ui', { text: label });

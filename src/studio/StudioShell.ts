@@ -1,4 +1,5 @@
 import './studio.css';
+import * as THREE from 'three';
 import { demoActive, touchActive } from '../engine/Device.ts';
 import { el, uiScale } from '../ui/UIKit.ts';
 import { Freecam } from '../dev/Freecam.ts';
@@ -110,6 +111,14 @@ export class StudioShell {
   _worldShown: boolean;
   /** `scene.children.length` when it was told. @see _reapplyWorld */
   _sceneCount: number;
+  /**
+   * World objects lifted out of the scene while the Model Explorer is open.
+   *
+   * Held, never disposed: going back to the World Explorer is a `scene.add`
+   * per entry, and re-building eight systems to return from a turntable would
+   * be the v1 mistake in a new place. @see showWorld
+   */
+  _parked: THREE.Object3D[];
   _onResize: () => void;
 
   constructor(game: Game) {
@@ -132,6 +141,7 @@ export class StudioShell {
     this._booting = false;
     this._worldShown = true;
     this._sceneCount = 0;
+    this._parked = [];
 
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
@@ -273,65 +283,83 @@ export class StudioShell {
   }
 
   /**
-   * Show or hide the world, when there is one.
+   * Take the world out of the scene, or put it back.
    *
-   * ## It used to guess, and the guess was wrong
+   * ## Two versions of this were wrong, and the second one is instructive
    *
-   * The first version walked the eight systems and toggled `visible` on
-   * whichever of `group | root | mesh | dome | sky` each happened to have. Not
-   * one of the eight has a single root: `Terrain` adds `clipmap.group`, `Water`
-   * adds four separate meshes at four points in its life, `Sky` adds a dome
-   * *and* a probe light, `Props` adds outposts, megastructures and landmarks
-   * from three different builders, and `Dungeons` adds one group per entrance.
-   * So going World → Models left most of the world standing behind the
-   * turntable, which is the v2 audit's finding 8 — filed as "unverified"
-   * because nothing tested that path.
+   * The first toggled `visible` on whichever of `group | root | mesh | dome |
+   * sky` each system happened to have — and not one of the eight has a single
+   * root, so most of the world stayed on screen. The second hid every
+   * top-level scene child except the model stage, which is exact about *what*
+   * the world is and still shipped a bug: the phone kept showing a band of
+   * terrain through the studio backdrop, and the Model Explorer was reported
+   * slow "with the world loaded behind".
    *
-   * ## What it does instead
+   * Both of those are the same mistake in different clothes. `visible = false`
+   * is a *rendering* hint on an object that is still in the graph: three.js
+   * still walks it every frame to build the render list, anything that re-shows
+   * a child re-shows it for good, and a subtree added after the toggle has
+   * never heard of it. It is a guess that has to be re-made every frame and
+   * re-made correctly, and it was neither.
    *
-   * Hides **every top-level object in the scene except the model stage**. The
-   * studio owns this scene outright — it booted everything in it and there is
-   * no game to have put anything else there — so "not the stage" is an exact
-   * description of "the world", and it needs no getter added to five world
-   * files owned by other lanes.
+   * **So the world is removed from the scene instead.** `scene.remove` is
+   * exact: an object that is not in the graph cannot be drawn by accident, and
+   * cannot be traversed either — which is the half that answers "slow". Nothing
+   * is disposed, so coming back is `scene.add` and costs nothing; the geometry,
+   * the textures and the systems are all still resident and still correct.
    *
-   * It is also the only version that survives late arrivals. `Props.mega` and
-   * `Dungeons`'s entrances both defer to the `game-ready` beat on the phone,
-   * `Hammerhead` builds on approach, and `Water` adds meshes as it streams — a
-   * root captured once at boot would miss all four. Hence `_sceneCount`: one
-   * integer compare per frame, and the moment the scene grows the answer is
-   * re-applied.
+   * Late arrivals are the reason `_parkStrays` exists rather than this being a
+   * one-shot: `Props.mega` and `Dungeons`'s entrances both build on the
+   * `game-ready` beat, `Hammerhead` builds on approach, and `Water` adds meshes
+   * as it streams. Any of those can land while the Model Explorer is open.
    */
   showWorld(on: boolean) {
     if (!this.worldBooted) return;
     this._worldShown = on;
+    if (on) {
+      for (const o of this._parked) this.game.scene.add(o);
+      this._parked.length = 0;
+    } else {
+      this._parkStrays();
+    }
     this._sceneCount = this.game.scene.children.length;
+  }
+
+  /**
+   * Move everything that is not the model stage out of the scene.
+   *
+   * Iterates a copy, because `scene.remove` splices `children` and a live
+   * for-of over it would skip every second object — which is exactly the shape
+   * of "some of the world disappeared and some of it did not".
+   */
+  _parkStrays() {
     const keep = this.model.stage.group;
-    for (const o of this.game.scene.children) {
+    for (const o of [...this.game.scene.children]) {
       if (o === keep) continue;
-      o.visible = on;
+      this.game.scene.remove(o);
+      this._parked.push(o);
     }
   }
 
   /**
-   * Re-apply the world's visibility if the scene has grown since it was set.
+   * Catch anything the world added to the scene since the last decision.
    *
-   * Called once a frame from the loop. @see showWorld for why anything can be
-   * added to the scene after the section that hid it was opened.
+   * One integer compare per frame, and a park only when the count actually
+   * moved. @see showWorld for what can arrive late and why.
    */
   _reapplyWorld() {
-    if (!this.worldBooted) return;
+    if (!this.worldBooted || this._worldShown) return;
     if (this.game.scene.children.length === this._sceneCount) return;
-    this.showWorld(this._worldShown);
+    this._parkStrays();
+    this._sceneCount = this.game.scene.children.length;
   }
 
   /**
    * Keep the next frame as this model's tile.
    *
-   * Called by whichever shell just changed the selection. Two frames of grace,
-   * not one: `ModelStage.update` writes the camera on the frame after `show()`
-   * sets `_needFrame`, so capturing on the very next draw would photograph the
-   * previous model's framing.
+   * Two frames of grace, not one: `ModelStage.update` writes the camera on the
+   * frame after `show()` sets `_needFrame`, so capturing on the very next draw
+   * would photograph the previous model's framing. @see Thumbs
    */
   wantThumb(key: string) {
     this._wantThumb = null;

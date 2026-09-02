@@ -54,7 +54,27 @@ export class ModelStage {
    * face and no body at all — so this is set from the bounds, not fixed.
    */
   faceOffset: number;
+  /**
+   * The subject's yaw, fixed at selection.
+   *
+   * **Not `yaw + faceOffset` read live**, which is what it used to be and what
+   * made it impossible to orbit anything except an enemy. `pinFacing` writes
+   * this onto the subject every frame; when it tracked the camera's own yaw the
+   * subject turned exactly as fast as the camera did, so a drag moved the lens
+   * and the model together and the silhouette never changed. Enemies were the
+   * only family that worked, and only because `pinFacing` skips them.
+   *
+   * Captured once in `show()`, so the three-quarter is chosen relative to
+   * wherever the camera was when the subject was staged — and after that the
+   * camera is free to go anywhere around it, which is the entire point of a
+   * turntable.
+   */
+  facing: number;
   _lights: THREE.Object3D[];
+  /** The cyclorama floor. @see enter */
+  _floor: THREE.Mesh | null;
+  /** The contact shadow, resized per subject. @see show */
+  _shadow: THREE.Mesh | null;
   _needFrame: boolean;
 
   constructor() {
@@ -68,7 +88,10 @@ export class ModelStage {
     this.spin = false;
     this.rate = 0.35;
     this.faceOffset = 0.7;
+    this.facing = Math.PI + 0.7;
     this._lights = [];
+    this._floor = null;
+    this._shadow = null;
     this._needFrame = false;
   }
 
@@ -117,15 +140,20 @@ export class ModelStage {
         fragmentShader: `varying vec3 vP;
           void main(){
             float h = clamp(vP.y / 400.0 * 0.5 + 0.5, 0.0, 1.0);
-            // Roughly 0.42x what these were. A backdrop is a GROUND, not a
-            // light: at the old values it filled most of the frame at a
-            // mid-grey, auto-exposure keyed off it, and every model came back
-            // muddy with no rim to read the silhouette against. Dark enough
-            // that the key wins, light enough that a model's own dark values
-            // are still separable from it — which is the thing a black
-            // background destroys and the reason this sphere exists at all.
-            vec3 lo = vec3(0.023, 0.026, 0.032);
-            vec3 hi = vec3(0.068, 0.081, 0.100);
+            // Lifted about 1.6x from the values that fixed the audit's
+            // "muddy, no rim" finding, and it is the EXPOSURE PIN that makes
+            // that safe: with metering frozen -- StudioShell.pinExposure -- a
+            // brighter ground no longer drags the whole frame down to meet it,
+            // so the backdrop can be a room rather than a void. The measured
+            // subject-to-backdrop ratio has the headroom -- 2.50x against a
+            // bar of 1.3 -- and studiocheck holds it there.
+            //
+            // Still a GROUND and not a light. Dark enough that the key wins,
+            // light enough that a model's own dark values are separable from
+            // it, which is the thing a black background destroys and the whole
+            // reason this sphere exists.
+            vec3 lo = vec3(0.038, 0.044, 0.055);
+            vec3 hi = vec3(0.108, 0.126, 0.155);
             gl_FragColor = vec4(mix(lo, hi, pow(h, 0.85)), 1.0);
           }`,
       }),
@@ -133,6 +161,107 @@ export class ModelStage {
     backdrop.name = 'studioBackdrop';
     backdrop.frustumCulled = false;
     this.group.add(backdrop);
+
+    /*
+     * The floor, and why the model was floating without it.
+     *
+     * A subject on a gradient with nothing under it reads as a cut-out, not as
+     * an object: there is no scale, no contact, and no way to tell a creature
+     * standing from a creature hovering — which is precisely what a review pass
+     * is meant to catch. A photographer's answer to this is an infinity cove,
+     * and that is what this is: a floor whose brightness falls off with
+     * distance until it is indistinguishable from the wall behind it, so there
+     * is a surface underfoot and no horizon line anywhere in frame.
+     *
+     * A disc rather than a plane, so the falloff is radial from the subject and
+     * the same at every camera azimuth — a square floor shows its corners the
+     * moment you orbit past 45 degrees.
+     *
+     * `RADIUS` is 60 m against a roster whose largest subject is a Titan: far
+     * enough that the fade completes off-frame at every dolly distance
+     * `fitFactor` produces, near enough that it never z-fights the 400 m
+     * backdrop sphere.
+     */
+    const RADIUS = 60;
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(RADIUS, 64),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: { uFade: { value: 0.16 } },
+        vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+        fragmentShader: /* glsl */`
+          varying vec2 vP;
+          uniform float uFade;
+          void main(){
+            // Distance from the subject, normalised on the disc's radius.
+            float d = length(vP) / ${RADIUS.toFixed(1)};
+            // Two falloffs multiplied: a tight one that keeps the pool of light
+            // near the subject, and a wide one that carries the last of it to
+            // the rim so the disc's edge never becomes a visible line.
+            float near = 1.0 - smoothstep(0.0, 0.10, d);
+            float far  = 1.0 - smoothstep(0.05, 1.0, d);
+            float a = clamp(near * 0.55 + far * 0.45, 0.0, 1.0);
+            // The disc has to DISSOLVE, not end. Without this the alpha never
+            // reaches zero and the rim draws a hard straight line across the
+            // frame -- a horizon, in the one kind of picture that must not have
+            // one. An infinity cove is defined by the absence of that seam.
+            float rim = 1.0 - smoothstep(0.42, 0.95, d);
+            // Warmer than the wall by a hair. A neutral floor under a warm key
+            // reads as grey card; a trace of the key's own colour in the bounce
+            // is what makes it read as a floor in a room.
+            vec3 lit  = vec3(0.150, 0.150, 0.152);
+            vec3 cold = vec3(0.040, 0.046, 0.058);
+            gl_FragColor = vec4(mix(cold, lit, a), (a * uFade + 0.55) * rim);
+          }`,
+      }),
+    );
+    floor.name = 'studioFloor';
+    floor.rotation.x = -Math.PI / 2;
+    floor.renderOrder = -1;
+    this._floor = floor;
+    this.group.add(floor);
+
+    /*
+     * The contact shadow, which is a painted ellipse and not a shadow map.
+     *
+     * A real shadow needs `renderer.shadowMap` on, and the studio inherits the
+     * quality tier the page booted with — `?q=low` on a phone, where
+     * `mobile-10x` recorded that shadows had been switched *off* for the
+     * project's whole life. A stage whose contact shadow appears only on a
+     * desktop is a stage that answers "is it touching the ground" differently
+     * on the two devices it is reviewed on.
+     *
+     * So it is drawn: a radial falloff, scaled per subject from its own
+     * footprint in `show()`. Deterministic, one draw call, identical at every
+     * tier, and for a single object on a flat floor it is what a real shadow
+     * would have looked like anyway.
+     */
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 48),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: {},
+        vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+        fragmentShader: /* glsl */`
+          varying vec2 vP;
+          void main(){
+            float d = length(vP);
+            // Dense and small under the body, thinning fast: a contact shadow
+            // is an occlusion term, not a silhouette projected onto the floor,
+            // and a soft even disc reads as a stain rather than as contact.
+            float a = (1.0 - smoothstep(0.0, 1.0, d));
+            a = pow(a, 1.9) * 0.62;
+            gl_FragColor = vec4(0.004, 0.006, 0.010, a);
+          }`,
+      }),
+    );
+    shadow.name = 'studioContact';
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.renderOrder = 0;
+    this._shadow = shadow;
+    this.group.add(shadow);
   }
 
   exit(scene: THREE.Scene) {
@@ -179,6 +308,25 @@ export class ModelStage {
       return { size: 1, centre: this.pivot.clone(), radius: 1 };
     }
 
+    /*
+     * Put the floor under the subject's feet, and the shadow under its
+     * footprint.
+     *
+     * `box.min.y` rather than 0: most rigs are authored with the feet at the
+     * origin, but a weapon is not, and a floor at 0 under a sword posed at
+     * chest height would put the blade through it. The subject's own lowest
+     * point is the only definition that is right for all five families.
+     */
+    const floorY = box.min.y;
+    if (this._floor) this._floor.position.set(centre.x, floorY, centre.z);
+    if (this._shadow) {
+      // 0.62 of the wider horizontal axis. A quadruped's shadow should be the
+      // length of the animal, not of a circle drawn around its diagonal, so it
+      // is scaled per axis rather than uniformly.
+      this._shadow.position.set(centre.x, floorY + 0.004, centre.z);
+      this._shadow.scale.set(Math.max(0.2, size.x * 0.62), Math.max(0.2, size.z * 0.62), 1);
+    }
+
     this.pivot.copy(centre);
     // On a tall viewport, aim slightly BELOW the subject's centre so it sits
     // higher in frame. The chrome is asymmetric on a phone — a 44 px header
@@ -191,11 +339,17 @@ export class ModelStage {
     this._needFrame = true;
     const quadruped = size.z > size.y * 1.3 || size.x > size.y * 1.3;
     this.faceOffset = quadruped ? 1.25 : 0.7;
+    // Fixed here, and not moved again by an orbit. @see facing
+    this.facing = this.yaw + this.faceOffset;
     return { size: Math.max(size.x, size.y, size.z), centre, radius };
   }
 
-  /** The yaw that turns the subject to a three-quarter for this camera. */
-  subjectYaw() { return this.yaw + this.faceOffset; }
+  /**
+   * The yaw that turns the subject to a three-quarter, as chosen at selection.
+   *
+   * A constant between selections, deliberately. @see facing
+   */
+  subjectYaw() { return this.facing; }
 
   /**
    * Advance the turntable and park the camera.

@@ -2,11 +2,59 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<!--
+  `viewport-fit=cover` is the half of this that works in a tab: without it iOS
+  insets the page out of the notch and the home-indicator band and hands back a
+  smaller viewport, which on a landscape iPhone is a visible letterbox on both
+  short edges. With it the page owns the glass, and `env(safe-area-inset-*)` —
+  which several rules across the studio and the touch layer already use — is
+  what keeps a control out from under the notch.
+
+  `user-scalable=no` is kept for the browsers that still honour it. **iOS Safari
+  has ignored it since iOS 10**, deliberately, which is why zoom suppression is
+  three real mechanisms in `ui/touch/nozoom.ts` rather than this attribute.
+-->
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
+<!--
+  And the half that actually removes the address bar: **installed to the home
+  screen, there is no browser chrome at all.** Nothing a page can do reclaims
+  that band inside a tab — iPhone Safari does not implement the Fullscreen API,
+  and the toolbar only auto-hides on a page that scrolls, which a game must not.
+  So the honest answer is to be installable, and the Device section says so in
+  words a person holding the phone can act on.
+
+  `black-translucent` puts the status bar over the page rather than above it,
+  which is the whole point on a 16:9 world.
+-->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="FFXV Eos" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#05060a" />
+<!--
+  **No `<link rel="manifest">`, and the reason is a repo constraint rather than
+  a preference.** vite's `publicDir` here is `src/public/`, which is the
+  generated bake cache and is gitignored — `CLAUDE.md` says so — so a static
+  file cannot live there without being deleted by the next clean or excluded
+  from the commit. The manifest is also not what does the work on the device
+  that was reported: iOS reads `apple-mobile-web-app-capable`, not a manifest,
+  and Android Chrome honours `mobile-web-app-capable` above. If a manifest is
+  ever wanted for an install banner it has to be emitted by a build step, not
+  dropped in a directory whose contents are disposable.
+-->
 <title>FINAL FANTASY XV — Eos</title>
 <style>
   :root { color-scheme: dark; }
+  /*
+    `100dvh` before `100%`: with `viewport-fit=cover` the visible height on iOS
+    changes as the toolbar collapses, and a percentage of a fixed-height root
+    does not track it — the page ends up either short by the toolbar or long by
+    it, and on a landscape iPhone that band is a quarter of the screen. `dvh` is
+    the unit that means "whatever is actually visible right now". The `100%`
+    line stays as the fallback for anything that does not know `dvh`.
+  */
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
+  html, body { height:100dvh; }
   body { font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
   #app { position:fixed; inset:0; }
   canvas { display:block; width:100%; height:100%; }
