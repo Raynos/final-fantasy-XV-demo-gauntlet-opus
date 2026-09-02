@@ -50,8 +50,19 @@ export function install(shell: StudioShell) {
   const info = el('div.st-info.st-ui');
   root.appendChild(info);
 
-  const statusText = el('div', { text: 'game paused — the world renders, nothing plays' });
+  // The status line reports what is actually booted, per section. v1's line —
+  // "game paused, the world renders, nothing plays" — described a game being
+  // suppressed, and in v2 there is no game to suppress. The count is the
+  // interesting fact, and it is the same number `studiocheck` asserts.
+  const statusText = el('div', { text: '' });
   root.appendChild(el('div.st-status', {}, [statusText]));
+  const statusFor = (id: SectionId | null) => {
+    const n = shell.game.systems.length;
+    const s = `${n} system${n === 1 ? '' : 's'} booted`;
+    if (id === 'model') return `Model Explorer — ${s}: no world, no characters, no simulation`;
+    if (id === 'world' || id === 'shots') return `World Explorer — ${s}: world geometry only, nobody in it`;
+    return `Game Studio — ${s}`;
+  };
 
   const hint = el('div.st-hint');
   root.appendChild(hint);
@@ -73,9 +84,10 @@ export function install(shell: StudioShell) {
   // probe reaching in. @see StudioShell.setSection
   shell.onSection = (id) => draw(id);
 
-  function show(id: SectionId | null) { shell.setSection(id); }
+  function show(id: SectionId | null) { void shell.setSection(id); }
 
   function draw(id: SectionId | null) {
+    statusText.textContent = statusFor(id);
     menu.style.display = id ? 'none' : '';
     side.style.display = id ? '' : 'none';
     info.style.display = id ? '' : 'none';
@@ -144,7 +156,7 @@ export function install(shell: StudioShell) {
 
   function renderModel() {
     const m = shell.model;
-    const fams = m.families();
+    const fams = m.families_();
 
     // Families first, always visible. A drill-down that hides the family list
     // would cost a click every time you want the next family, and stepping
@@ -181,7 +193,7 @@ export function install(shell: StudioShell) {
 
     /* ------------------------------------------------------- the readout */
 
-    const err = m.error();
+    const err = m.error;
     if (err) {
       // Reported, never thrown: BRIEF rule 5 exits a capture non-zero on a page
       // error, and one broken family must not take the studio down with it.

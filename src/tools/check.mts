@@ -223,6 +223,10 @@ const GATES: Gate[] = [
   { name: 'integration', pixelBlind: true, gate: true, script: 'integration.mts', expect: '26 pass, 1 wired, 0 fail', kind: 'browser', cost: 45 },
   { name: 'uxcheck', pixelBlind: true, gate: true, script: 'uxcheck.mts', expect: '93/93', kind: 'browser', cost: 60 },
   { name: 'touchcheck', pixelBlind: true, gate: true, script: 'touchcheck.mts', expect: '20/20', kind: 'browser', cost: 14 },
+  // Asserts the Game Studio boots no game: 0 systems for models, exactly the
+  // five geometry ones for the world, and no character object in either scene.
+  // An architecture is a claim, and an unmeasured claim rots.
+  { name: 'studiocheck', pixelBlind: true, gate: true, script: 'studiocheck.mts', expect: '8/8', kind: 'browser', cost: 22 },
   { name: 'devicecheck', pixelBlind: true, gate: true, script: 'devicecheck.mts', expect: '10/10', kind: 'browser', cost: 12 },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures', kind: 'browser', cost: 17 },
   { name: 'combatloop', pixelBlind: true, gate: true, script: 'combatloop.mts', expect: '35/35', kind: 'browser', cost: 45 },

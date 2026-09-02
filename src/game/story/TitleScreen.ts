@@ -18,22 +18,7 @@ import type { Game } from '../Game.ts';
  * it loops forever with no seam and no state to reset.
  */
 /** What the title screen's menu can answer with. */
-export type TitleChoice = 'play' | 'studio' | 'new' | 'continue' | 'extras';
-
-/**
- * Which menu the screen is currently showing.
- *
- * `front` is the pre-main-menu: two rows, play or explore. `main` is the game's
- * own menu, reached by picking PLAY.
- *
- * They are two *menus*, not two screens, which is the whole reason this is a
- * field rather than a second class. The crest lockup, the attract camera and
- * the 96-second cosine keep running across the transition, so choosing PLAY
- * swaps four rows for three and nothing else moves. A separate front-door
- * screen would have to fade out, tear down and re-run the entire 3.4 s title
- * animation to show a menu that sits in the same place in the same typeface.
- */
-export type TitleStage = 'front' | 'main';
+export type TitleChoice = 'new' | 'continue' | 'extras';
 
 /** One menu row as authored. */
 interface TitleItem {
@@ -78,12 +63,10 @@ export class TitleScreen {
   game!: Game;
   index!: number;
   items!: TitleItem[];
-  /** Which menu is showing. @see TitleStage */
-  stage!: TitleStage;
   /**
    * Seconds the current menu has been up, for its own slide-in.
    *
-   * Separate from `this.t` so that swapping stages re-runs the menu animation
+   * Separate from `this.t` so a menu rebuild re-runs the rows' slide-in
    * without re-running the crest lockup behind it.
    */
   menuAt!: number;
@@ -122,17 +105,16 @@ export class TitleScreen {
     this.root.appendChild(this.mark);
 
     // ---- menu ------------------------------------------------------------
-    // `setStage` fills both of these, and it writes the key legend too, so the
+    // `_build` fills both of these, and it writes the key legend too, so the
     // footer has to exist before it runs.
     this.menu = el('div.ti-menu');
     this.root.appendChild(this.menu);
     this.foot = el('div.ti-foot');
     this.root.appendChild(this.foot);
-    this.stage = 'front';
     this.items = [];
     this.rows = [];
     this.menuAt = 0;
-    this.setStage('front');
+    this._build();
 
     this.root.appendChild(el('div.ti-ver', { text: 'Eos build — Leide' }));
 
@@ -162,7 +144,7 @@ export class TitleScreen {
   /* --------------------------------------------------------------- menu -- */
 
   /**
-   * The rows for one stage.
+   * The game's own menu.
    *
    * **There is no Phone Demo row any more.** The demo is a BOOT mode, not a
    * menu mode: the render tier, the touch layer and which texture container a
@@ -170,21 +152,15 @@ export class TitleScreen {
    * after it — so the row was never a destination, it set `?demo=1&touch=1` and
    * reloaded the page. On a phone it was suppressed anyway, and on a desktop it
    * was a row on the front page of the game offering to make the game worse.
-   * That hatch lives in the studio's Device section now, next to the other
-   * things that can only be changed by a reload, and `?demo=0` / `?demo=1`
-   * remain the documented doors.
+   * That hatch lives in the studio's Device section now, and `?demo=0` /
+   * `?demo=1` remain the documented doors.
+   *
+   * **There is no Game Studio row either.** The studio is reached from the
+   * front door, *before* anything is booted — by the time this screen exists
+   * the whole game has been built, and the studio does not want it.
+   * @see studio/FrontDoor.ts
    */
-  _itemsFor(stage: TitleStage): TitleItem[] {
-    if (stage === 'front') {
-      return [
-        {
-          id: 'play',
-          title: 'Play',
-          desc: demoActive() ? 'All of Eos, cut to fit a handset' : 'Chapter I — Departure',
-        },
-        { id: 'studio', title: 'Game Studio', desc: 'Explore the models and the world' },
-      ];
-    }
+  _items(): TitleItem[] {
     return [
       { id: 'new', title: 'New Game', desc: demoActive() ? 'Start the phone build' : 'Chapter I — Departure' },
       { id: 'continue', title: 'Continue', desc: 'Load the last save' },
@@ -192,17 +168,9 @@ export class TitleScreen {
     ];
   }
 
-  /**
-   * Swap which menu is showing, rebuilding the rows in place.
-   *
-   * The lockup, the fade and the attract camera are untouched: `this.t` keeps
-   * running, so the crest does not re-animate and the camera does not jump.
-   * Only `menuAt` is reset, which re-runs the menu block's own 1.0 s slide so
-   * the new rows arrive rather than snapping in.
-   */
-  setStage(stage: TitleStage) {
-    this.stage = stage;
-    this.items = this._itemsFor(stage);
+  /** Build the menu rows. */
+  _build() {
+    this.items = this._items();
     this.menu.textContent = '';
     this.rows = this.items.map((it): TitleRow => {
       const row = el('div.ti-row');
@@ -216,22 +184,11 @@ export class TitleScreen {
       this.menu.appendChild(row);
       return { row, bg, ml, mr, t, d, it };
     });
-    // Land on the first row that can actually be picked: on `main` that is
-    // Continue when a save exists, and New Game when one does not.
-    this.index = 0;
-    for (let i = 0; i < this.items.length; i++) {
-      if (this._enabled(i)) { this.index = stage === 'main' && this.canContinue() ? 1 : i; break; }
-    }
+    // Land on Continue when a save exists, New Game when one does not.
+    this.index = this.canContinue() ? 1 : 0;
     this.menuAt = 0;
-    this._footFor(stage);
-  }
-
-  /** The key legend under the menu, which gains a Back row off the front. */
-  _footFor(stage: TitleStage) {
     this.foot.textContent = '';
-    const keys: Array<[string, string]> = [['↑↓', 'Select'], ['Enter', 'Confirm']];
-    if (stage === 'main') keys.push(['Esc', 'Back']);
-    for (const [k, label] of keys) {
+    for (const [k, label] of [['↑↓', 'Select'], ['Enter', 'Confirm']] as Array<[string, string]>) {
       this.foot.appendChild(el('div.fk', {}, [el('b', { text: k }), label]));
     }
   }
@@ -242,9 +199,7 @@ export class TitleScreen {
     this.t = 0;
     this.chosen = null;
     this.fadeOut = 0;
-    // Always come back to the front door, never to whichever menu was up when
-    // the screen was last dismissed.
-    this.setStage('front');
+    this._build();
     this.root.style.display = '';
     this.root.style.pointerEvents = 'none';
     // Golden hour, always. The title screen is the one frame every player sees,
@@ -299,12 +254,6 @@ export class TitleScreen {
       this.index = i;
     }
     if (down('Enter') || down('Space') || edge('a', gp(0))) this.choose();
-    // Back out of the game's menu to the front door. Only from `main` — there
-    // is nothing behind the front door, and a Back that quietly does nothing is
-    // worse than no Back at all, which is why the legend only offers it there.
-    if (this.stage === 'main' && (down('Escape') || down('Backspace') || edge('b', gp(1)))) {
-      this.setStage('front');
-    }
   }
 
   _enabled(i: number) {
@@ -314,20 +263,12 @@ export class TitleScreen {
     return true;
   }
 
-  /**
-   * Commit the highlighted item.
-   *
-   * `play` is the one pick that is **not** a commit: it opens the game's own
-   * menu behind the same lockup, so it swaps the rows and returns rather than
-   * arming the fade to black. Everything else is a real destination and leaves
-   * through `update`'s commit block.
-   */
+  /** Commit the highlighted item. */
   choose(id?: TitleChoice) {
     const pick = id || this.items[this.index].id;
     if (!id && !this._enabled(this.index)) return;
     const audio = this.game.get('Audio');
     if (audio && audio.play) audio.play('ui');
-    if (pick === 'play') { this.setStage('main'); return; }
     this.chosen = pick;
   }
 
@@ -362,7 +303,7 @@ export class TitleScreen {
 
     // ---- menu -------------------------------------------------------------
     // Held off until the lockup has landed on a first show, then driven by the
-    // menu's own clock so a stage swap re-slides the rows without touching the
+    // menu's own clock so a rebuild re-slides the rows without touching the
     // crest. `menuAt` only starts counting once the lockup is 2.8 s in.
     this.menuAt += this.t > 2.8 ? dt : 0;
     const menuIn = clamp(this.menuAt / 1.0, 0, 1);

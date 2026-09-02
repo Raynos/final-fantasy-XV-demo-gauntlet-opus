@@ -30,6 +30,14 @@ declare global {
     /** The in-page dev suite. Present by default; absent under `?debug=0` and `?shoot=1`. */
     DEV?: DevSuite;
     /**
+     * The Game Studio shell, when the studio is what this page opened.
+     *
+     * `studiocheck.mts` drives the studio through this: it asserts how many
+     * systems are booted per section, which is a claim only a running page can
+     * answer. Absent on a page that went to the game.
+     */
+    __STUDIO?: import('./studio/StudioShell.ts').StudioShell;
+    /**
      * The on-screen control layer. Present only on a phone or under `?touch=1`,
      * which is exactly the condition `touchcheck.mts` waits on before it starts
      * poking at sticks and buttons.

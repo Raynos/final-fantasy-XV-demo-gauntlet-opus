@@ -61,7 +61,7 @@ export function install(shell: StudioShell) {
    */
   shell.onSection = (id) => draw(id);
 
-  function show(id: SectionId | null) { shell.setSection(id); }
+  function show(id: SectionId | null) { void shell.setSection(id); }
 
   function draw(id: SectionId | null) {
     body.textContent = '';

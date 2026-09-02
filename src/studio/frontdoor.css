@@ -1,0 +1,228 @@
+/*
+ * The front door — the first thing painted, before anything is booted.
+ *
+ * Everything here has to render with no WebGL context, no scene and no assets,
+ * because it is drawn while the engine has not started. So the backdrop is two
+ * CSS gradients standing in for a Leide dusk: warm low sun on the right, cool
+ * sky above, the horizon a little under the middle. BRIEF rule 1 forbids a
+ * binary asset and this needs none.
+ *
+ * The voice comes from `ui.css` custom properties, the same ones the game's HUD
+ * and title read, so the door cannot drift away from the product's palette.
+ */
+
+#door {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  font-family: var(--ui-font);
+  color: var(--ink);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 520ms ease-out;
+}
+#door.in { opacity: 1; }
+#door.going { opacity: 0; transition: opacity 260ms ease-in; pointer-events: none; }
+
+#door * { box-sizing: border-box; }
+#door button { font: inherit; color: inherit; background: none; border: 0; }
+
+/* ------------------------------------------------------------- the sky */
+
+/*
+ * A dusk, in gradients. Not a photograph of one -- a warm sun low and right,
+ * a cool band above it, and the ground falling into shadow under the horizon.
+ * It exists to be something other than black behind the crest for the half
+ * second before a choice is made.
+ */
+#door .fd-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 42% at 78% 62%, rgba(255, 214, 150, 0.42), transparent 62%),
+    radial-gradient(90% 60% at 50% 96%, rgba(58, 42, 34, 0.92), transparent 70%),
+    linear-gradient(180deg,
+      #0a1626 0%,
+      #16283f 26%,
+      #2d3f52 48%,
+      #6a5a4c 58%,
+      #3a2c24 70%,
+      #150f0c 100%);
+}
+
+/* Film grain, per BRIEF's grade. A repeating-gradient moiré rather than an
+   image, for the same no-binary-assets reason. */
+#door .fd-grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.9) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.9) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------- the lockup */
+
+#door .fd-mark {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  width: 520px;
+  max-width: 92vw;
+  text-align: center;
+  color: var(--ink);
+}
+
+#door .fd-crest {
+  width: 168px;
+  height: 104px;
+  color: var(--ice);
+  filter: drop-shadow(0 0 12px rgba(2, 5, 10, 0.6));
+  animation: fd-crest-in 1400ms 120ms both ease-out;
+}
+@keyframes fd-crest-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+
+#door .fd-ff {
+  margin-top: 10px;
+  font-size: 15px;
+  letter-spacing: 0.86em;
+  text-indent: 0.86em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-shadow: var(--sh-text);
+  animation: fd-up 1100ms 420ms both ease-out;
+}
+
+#door .fd-xv {
+  font-size: 64px;
+  font-weight: 200;
+  letter-spacing: 0.20em;
+  text-indent: 0.20em;
+  line-height: 1.05;
+  text-shadow: var(--sh-text-lg);
+  animation: fd-up 1100ms 640ms both ease-out;
+}
+
+#door .fd-rule {
+  width: 300px;
+  height: 1px;
+  margin: 14px auto 0;
+  background: linear-gradient(90deg, transparent, var(--hair-hot), transparent);
+  animation: fd-up 900ms 900ms both ease-out;
+}
+
+#door .fd-tag {
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  animation: fd-up 900ms 1050ms both ease-out;
+}
+
+@keyframes fd-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ------------------------------------------------------------ the menu */
+
+#door .fd-menu {
+  position: absolute;
+  left: 50%;
+  top: 64%;
+  transform: translateX(-50%);
+  width: 380px;
+  max-width: 90vw;
+  animation: fd-up 900ms 1200ms both ease-out;
+}
+
+#door .fd-row {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 14px 20px;
+  text-align: center;
+  cursor: pointer;
+  /* BRIEF: angular corner cuts, never a rounded rectangle. */
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+#door .fd-row + .fd-row { margin-top: 4px; }
+
+#door .fd-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--plate);
+  opacity: 0;
+  transition: opacity 140ms linear;
+}
+#door .fd-row.on::before { opacity: 0.9; }
+
+/* The two marks that slide out either side of the highlighted row, which is
+   the title screen's signature and the one piece of its motion worth copying. */
+#door .fd-row::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  background: var(--ice);
+  transform: rotate(45deg) scale(0);
+  transition: transform 180ms ease-out, left 180ms ease-out;
+}
+#door .fd-row.on::after { transform: rotate(45deg) scale(1); left: -12px; }
+
+#door .fd-row-t {
+  position: relative;
+  font-size: 17px;
+  letter-spacing: 0.40em;
+  text-indent: 0.40em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-shadow: var(--sh-text);
+  transition: color 140ms linear, letter-spacing 180ms ease-out;
+}
+#door .fd-row.on .fd-row-t { color: #fff; letter-spacing: 0.46em; text-indent: 0.46em; }
+
+#door .fd-row-d {
+  position: relative;
+  margin-top: 5px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  text-shadow: var(--sh-text);
+}
+#door .fd-row.on .fd-row-d { color: var(--ink-3); }
+
+/* ------------------------------------------------------------ the foot */
+
+#door .fd-foot {
+  position: absolute;
+  left: 0; right: 0; bottom: 26px;
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  animation: fd-up 900ms 1500ms both ease-out;
+}
+#door .fd-foot .fk b { font-weight: 400; color: var(--ice); margin-right: 8px; }
+
+/*
+ * Coarse pointer: no hover, a thumb instead of a cursor, and a hand over the
+ * bottom third. Rows get the 44 px floor and both are plated by default,
+ * because a highlight that only exists under a cursor never appears here.
+ */
+@media (hover: none) {
+  #door .fd-menu { top: auto; bottom: 84px; transform: translateX(-50%); }
+  #door .fd-row { min-height: 62px; padding: 16px 20px; }
+  #door .fd-row::before { opacity: 0.66; }
+  #door .fd-row::after { display: none; }
+  #door .fd-foot { display: none; }
+}

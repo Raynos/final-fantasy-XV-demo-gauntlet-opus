@@ -30,13 +30,68 @@ const game = new Game({
 window.GAME = game;
 installBootProfile(game);
 
-game.init().then(() => {
+const qs = new URLSearchParams(location.search);
+
+/**
+ * Which door opens, and — the point of this file in v2 — **when anything is
+ * booted at all**.
+ *
+ * v1 called `game.init()` first and decided afterwards. That meant thirty
+ * systems, a terrain build, a vegetation pass and a shader compile all ran
+ * before a person could read a two-row menu: **6.5 seconds to reach a crest and
+ * two labels.** And it meant the studio inherited a fully running game it then
+ * had to suppress — pausing the simulation, clearing encounters every frame,
+ * hiding a party that had just been spawned.
+ *
+ * So the choice comes first and the boot follows it:
+ *
+ *   - **Play** boots the game exactly as before. The attract camera lands where
+ *     it belongs, behind the title, during a load a game should be filling with
+ *     a vista anyway.
+ *   - **Game Studio** boots to a *profile* — nothing for models, five geometry
+ *     systems for the world. @see studio/StudioBoot.ts
+ *
+ * Three URLs bypass the door entirely, and `?shoot=1` is checked first and
+ * independently of everything else: the capture harness loads `?q=ultra&shoot=1`
+ * and BRIEF rule 2 makes two runs byte-identical, so no door, no title and no
+ * studio may ever appear on a page it drives. `?shoot=1&studio=1` opens nothing.
+ */
+async function route() {
+  const shoot = qs.has('shoot');
+
+  // Straight to the studio, skipping the door. This is the door an agent and
+  // the gate use, and it is what makes the studio testable at all.
+  if (!shoot && qs.has('studio')) return openStudio();
+
+  // The harness, a named scene, and a resumed save all land in the game with no
+  // menu in front of them — same as v1.
+  if (shoot || qs.has('scene') || qs.has('continue')) return playGame();
+
+  // Otherwise: ask, before booting anything.
+  const { FrontDoor } = await import('./studio/FrontDoor.ts');
+  const door = new FrontDoor();
+  // The boot bar belongs to whatever comes next, not to the door, which has
+  // nothing to load. Hide it now and let the chosen path bring it back.
+  boot.style.display = 'none';
+  const pick = await door.ask(document.body);
+  // Let the door's own fade run under the first frames of whatever boots next
+  // rather than blocking on it: a 260 ms transition inside a 6.5 s load is
+  // 260 ms nobody gets back.
+  setTimeout(() => door.dispose(), 400);
+  if (pick === 'studio') return openStudio();
+  boot.style.display = '';
+  return playGame();
+}
+
+/** The full game: thirty systems, the title screen, and play. */
+async function playGame() {
+  await game.init();
   boot.classList.add('done');
   setTimeout(() => boot.remove(), 900);
+
   // Under the capture harness the page must not free-run: any wall-clock frame
   // between "ready" and the harness taking over would advance TAA history, the
   // exposure integrator and enemy AI by a nondeterministic amount.
-  const qs = new URLSearchParams(location.search);
   if (!qs.has('shoot')) game.start();
 
   // On-screen controls. A dynamic import so a desktop bundle never parses the
@@ -49,27 +104,6 @@ game.init().then(() => {
       .catch((err) => console.error('[touch] controls failed to load', err));
   }
 
-  // The Game Studio: a mode entered *instead of* the game, from the title
-  // screen's front door or straight from `?studio=1`.
-  //
-  // `?shoot=1` is checked first and independently of everything else. The
-  // capture harness loads `?q=ultra&shoot=1` and BRIEF rule 2 makes two runs
-  // byte-identical, so no front door, no studio and no menu may ever appear on
-  // a page it drives -- a combined `?shoot=1&studio=1` opens nothing.
-  //
-  // A dynamic import, so a page that never opens the studio never parses it,
-  // and `orphans.mts` still counts it as reachable.
-  if (!qs.has('shoot')) {
-    const enter = () => import('./studio/StudioShell.ts')
-      .then((m) => m.openStudio(game))
-      .catch((err) => console.error('[studio] failed to open', err));
-    // Injected rather than imported by the story system, which therefore holds
-    // no reference into `src/studio/`. @see StorySystem.onStudio
-    const story = game.get('Story');
-    if (story) story.onStudio = enter;
-    if (qs.has('studio')) enter();
-  }
-
   // In-game developer / review suite. A dynamic import keeps it in its own
   // async chunk, so it loads after the game is up rather than delaying boot --
   // one build, no drift, you review the bundle you actually ship.
@@ -78,14 +112,29 @@ game.init().then(() => {
   // build is for; hiding it behind a flag meant it was mostly not running when
   // somebody looked at the game, which is the one moment it is worth having.
   //
-  // The `!shoot` guard stays a hard determinism gate: the capture harness loads
-  // `?q=ultra&shoot=1`, so the suite can never appear in a screenshot.
+  // The `!shoot` guard stays a hard determinism gate.
   if (!qs.has('shoot') && qs.get('debug') !== '0') {
     import('./dev/DevSuite.ts')
       .then((m) => m.installDevSuite(game))
       .catch((err) => console.error('[dev] suite failed to load', err));
   }
-}).catch((err) => {
+}
+
+/**
+ * The studio, which boots a profile rather than a game.
+ *
+ * Nothing is booted here: `openStudio` stands up the renderer and an empty
+ * scene, and each section asks for what *it* needs when it is opened. The
+ * Model Explorer never causes a world to exist.
+ */
+async function openStudio() {
+  boot.style.display = 'none';
+  const m = await import('./studio/StudioShell.ts');
+  await m.openStudio(game);
+}
+
+route().catch((err) => {
+  boot.style.display = '';
   label.textContent = 'ERROR';
   console.error(err);
   const pre = document.createElement('pre');
