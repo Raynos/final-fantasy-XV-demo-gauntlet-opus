@@ -90,8 +90,9 @@ export interface SystemRegistry {
   /** Registered by `Player`, which builds the collision world it needs. */
   Collision: import('../world/collision/CollisionWorld.ts').CollisionWorld;
   /**
-   * The `?debug` suite, registered by `installDevSuite` when the flag is on --
-   * a type-only import, so the dev code stays out of a production bundle.
+   * The dev suite, registered by `installDevSuite` -- which `src/main.ts` runs
+   * by default now, so this is present on any page except `?shoot=1` and
+   * `?debug=0`. A type-only import, so the dev code stays out of the bundle.
    */
   Dev: import('../dev/DevSuite.ts').DevSuite;
   // aliases -- callers grew up using the class name as well as the short label
@@ -200,7 +201,11 @@ export class Game {
     this._rafTicks = 0;
     this.state = 'boot';           // boot | field | combat | menu | cutscene
     const qs = new URLSearchParams(location.search);
-    this.debug = qs.has('debug');
+    // NOT the same switch as the dev suite, which `src/main.ts` now installs by
+    // default. This one is the verbose-console flag the world systems log
+    // behind, and it stays opt-in: `?debug` / `?debug=1` turns the logging on,
+    // and the bare default page -- suite and all -- keeps a quiet console.
+    this.debug = qs.has('debug') && qs.get('debug') !== '0';
     /**
      * `?fps=` is a console/debugging hatch (`?fps=0` free-runs, `?fps=30`
      * halves it) and deliberately NOT a harness door. No gate sets it: `perf`

@@ -50,11 +50,16 @@ game.init().then(() => {
   }
 
   // In-game developer / review suite. A dynamic import keeps it in its own
-  // async chunk, so it ships in the production build (one build, no drift --
-  // you review the bundle you actually ship) without loading on the normal
-  // path. The `!shoot` guard is a hard determinism gate: the capture harness
-  // loads `?q=ultra&shoot=1`, so the suite can never appear in a screenshot.
-  if (qs.has('debug') && !qs.has('shoot')) {
+  // async chunk, so it loads after the game is up rather than delaying boot --
+  // one build, no drift, you review the bundle you actually ship.
+  //
+  // It is ON BY DEFAULT and `?debug=0` opts out. The suite is part of what this
+  // build is for; hiding it behind a flag meant it was mostly not running when
+  // somebody looked at the game, which is the one moment it is worth having.
+  //
+  // The `!shoot` guard stays a hard determinism gate: the capture harness loads
+  // `?q=ultra&shoot=1`, so the suite can never appear in a screenshot.
+  if (!qs.has('shoot') && qs.get('debug') !== '0') {
     import('./dev/DevSuite.ts')
       .then((m) => m.installDevSuite(game))
       .catch((err) => console.error('[dev] suite failed to load', err));

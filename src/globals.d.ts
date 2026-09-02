@@ -3,7 +3,7 @@
  *
  * The harness reaches for every one of these from `page.evaluate()`: it is how
  * a capture waits for `GAME.ready`, how `bootprof.mts` reads a boot breakdown
- * out of a page it did not build, and how `?debug` turns the dev suite on. They
+ * out of a page it did not build, and how `?debug=0` turns the dev suite off. They
  * are a contract with `src/tools/**`, not incidental state, so they are declared
  * rather than cast away at each use.
  */
@@ -27,7 +27,7 @@ declare global {
     GAME: Game;
     /** Boot timing record, filled in as boot proceeds. `installBootProfile()`. */
     BOOT_PROFILE?: BootProfile;
-    /** `?debug` -- the in-page dev suite. Absent without the flag. */
+    /** The in-page dev suite. Present by default; absent under `?debug=0` and `?shoot=1`. */
     DEV?: DevSuite;
     /**
      * The on-screen control layer. Present only on a phone or under `?touch=1`,

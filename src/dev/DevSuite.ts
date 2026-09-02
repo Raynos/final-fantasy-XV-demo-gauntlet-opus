@@ -16,7 +16,8 @@ import { QUALITY_TIERS, isQualityTier } from '../engine/Renderer.ts';
 import { WEATHER_NAMES, isWeatherName } from '../world/Weather.ts';
 
 /**
- * In-game developer / review suite. Loaded only under `?debug`.
+ * In-game developer / review suite. Loaded by default; `?debug=0` opts out,
+ * and `?shoot=1` can never load it.
  *
  * Registered as the **last** system, which is the whole trick: `Game.frame()`
  * runs every `update()` then every `lateUpdate()`, so a system appended last
