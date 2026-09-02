@@ -146,3 +146,22 @@ html.has-touch #title .ti-ver { display: none; }
   html.has-touch #title .ti-menu { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); width: min(440px, 90vw); }
   html.has-touch #title .ti-row { min-height: 68px; }
 }
+
+/* A landscape handset is 393 px tall, and the first pass put a 200 px lockup
+   and a 192 px menu into it: NEW GAME landed on top of XV. The lockup is what
+   gives way -- you are here to touch the menu -- so the crest halves, the tag
+   goes, and XV comes down to something that still reads as the logo without
+   owning the frame. */
+@media (orientation: landscape) {
+  html.has-touch #title .ti-mark { top: 22%; }
+  html.has-touch #title .ti-crest { width: 62px; height: 38px; margin-bottom: 8px; }
+  html.has-touch #title .ti-ff { font-size: 10px; letter-spacing: 0.5em; padding-left: .5em; }
+  html.has-touch #title .ti-xv { margin-top: 4px; font-size: 34px; }
+  html.has-touch #title .ti-rule { margin-top: 8px; }
+  html.has-touch #title .ti-tag { display: none; }
+  html.has-touch #title .ti-menu { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(400px, 62vw); }
+  html.has-touch #title .ti-row { min-height: 52px; padding: 9px 16px; }
+  html.has-touch #title .ti-row + .ti-row { margin-top: 5px; }
+  html.has-touch #title .ti-row .tr-t { font-size: 16px; }
+  html.has-touch #title .ti-row .tr-d { font-size: 9px; margin-top: 3px; }
+}

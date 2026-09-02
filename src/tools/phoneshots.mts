@@ -46,9 +46,18 @@ await mkdir(OUT, { recursive: true });
  * `hover: none` / `html.has-touch` branch off a shared stylesheet, and the way
  * that goes wrong is by leaking into the build 99% of the corpus is shot on.
  */
+/**
+ * `deviceScaleFactor: 1`, overriding the descriptor's 3.
+ *
+ * Everything this tool looks at is a CSS-pixel layout question, and the
+ * viewport in CSS px is what the descriptor is here for. Keeping the real 3x
+ * meant asking a software rasteriser to fill 1179x1977 of deferred-ish forward
+ * pass per frame, and `page.screenshot` timed out at 30 s on the first frame
+ * with a WebGL context in it. The layout under test is identical either way.
+ */
 const PROFILES: Array<{ tag: string, ctx: Record<string, unknown> }> = [
-  { tag: 'port', ctx: { ...devices['iPhone 15 Pro'] } },
-  { tag: 'land', ctx: { ...devices['iPhone 15 Pro landscape'] } },
+  { tag: 'port', ctx: { ...devices['iPhone 15 Pro'], deviceScaleFactor: 1 } },
+  { tag: 'land', ctx: { ...devices['iPhone 15 Pro landscape'], deviceScaleFactor: 1 } },
   { tag: 'desk', ctx: { viewport: { width: 1600, height: 900 } } },
 ];
 
@@ -61,12 +70,25 @@ try {
   for (const prof of PROFILES) {
     const ctx = await browser.newContext(prof.ctx);
     const page = await ctx.newPage();
+    // 120 s, not Playwright's 30. Same reason `harness.lease` sets it: this
+    // shares a Metal GPU with whatever else is running, and a `screenshot` of a
+    // live WebGL page that is merely slow surfaced here as a hard timeout on
+    // the first frame with a context in it.
+    page.setDefaultTimeout(120_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]));
     const shot = async (name: string) => {
       const file = path.join(OUT, `${prof.tag}-${name}.jpg`);
-      await writeFile(file, await page.screenshot({ type: 'jpeg', quality: 82 }));
-      console.log(`[shot] ${file}`);
+      try {
+        await writeFile(file, await page.screenshot({ type: 'jpeg', quality: 82 }));
+        console.log(`[shot] ${file}`);
+      } catch (e) {
+        // `page.screenshot` waits on `document.fonts.ready`, and a page whose
+        // font set never resolves hangs there rather than failing. One profile
+        // missing a frame is worth strictly less than the other five, so this
+        // says so and carries on.
+        console.log(`[shot] SKIPPED ${file} — ${(e as Error).message.split('\n')[0]}`);
+      }
     };
 
     // ---- the front door, before anything boots
@@ -83,9 +105,20 @@ try {
       undefined,
       { timeout: 180000 },
     );
-    // 3.4 s is when the title's own footer finishes fading in, so this is the
-    // screen at rest rather than mid-lockup.
-    await settle(4200);
+    // Wait on the title's OWN clock, not the wall's.
+    //
+    // `TitleScreen.update` accumulates `t` from the frame delta, and `Game`
+    // clamps that delta -- so on a page rendering the world through a software
+    // rasteriser at one or two frames a second, four seconds of wall clock buys
+    // a couple of tenths of lockup animation. The first pass settled 4.2 s and
+    // photographed a screen 0.2 s into its fade-in: an almost-invisible crest
+    // and no menu at all, which reads exactly like a broken layout and is not
+    // one. 4.5 is past every stagger in the file (the footer starts at 3.4).
+    await page.waitForFunction(
+      () => (window.GAME?.get('Story')?.title?.t ?? 0) > 4.5,
+      undefined,
+      { timeout: 300000 },
+    );
     await shot('2-title');
     console.log(`      ${prof.tag}: touch layer `
       + `${await page.evaluate(() => (window.TOUCH ? (window.TOUCH.root.hidden ? 'hidden' : 'SHOWING') : 'absent'))}`

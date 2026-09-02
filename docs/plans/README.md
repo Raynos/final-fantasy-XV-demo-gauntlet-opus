@@ -71,6 +71,17 @@ are the three parallel plans that ran beside it.
   2026-08-28-opus-the-100x-map                SUPERSEDED 08-28 — it was a RECORD
   2026-08-28-opus-close-out                   DONE 08-28 -> archive/plans/
   2026-08-31-opus-mobile-10x                  DONE 08-31 -> archive/plans/
+  2026-08-30-fable-to-nine                    DONE 09-02 -> archive/plans/
+                                              20 lanes, 35 agent-lifetimes; the
+                                              five human decisions it was being
+                                              held open for live in
+                                              HUMAN_REVIEW.md, which is where
+                                              things that need the human live
+  2026-09-02-opus-game-studio                 SUPERSEDED 09-02 by v2
+  2026-09-02-opus-game-studio-v2              SUPERSEDED 09-02 by
+                                              2026-09-02-fable-game-studio-v3;
+                                              its architecture stands verbatim,
+                                              v3 replaces its order of work
                     |                           8 of 10 closed the same night;
                     v                           5 of those as NEGATIVE results
   2026-08-26-opus-the-standing-backlog §WS-12   the two that were builds:

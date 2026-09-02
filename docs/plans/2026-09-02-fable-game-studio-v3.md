@@ -1,8 +1,15 @@
 # Game Studio v3 — fix what the audit found, then finish the shells
 
 Status: **LOCKED (2026-09-02, fable)** — builds on
-`2026-09-02-opus-game-studio-v2.md`, whose architecture (three boot profiles,
-no game in the studio) stands. This plan is the audit's order of work, made into
+`project/archive/plans/2026-09-02-opus-game-studio-v2.md` (archived 2026-09-02
+as SUPERSEDED by this plan), whose architecture (three boot profiles, no game
+in the studio) stands.
+
+**F1 and F2 are landed** — see the mobile-UI commit of 2026-09-02. F2 took the
+keyframe route rather than the inner wrapper this plan names: `fd-up-c` carries
+the `translateX(-50%)` the centring needs, which is one rule instead of one
+more node. Their instruments (`studiocheck` under the iPhone descriptor, the
+bounding-box centre assertion) are **not** built and are still this plan's. This plan is the audit's order of work, made into
 lanes with instruments. Audit: `project/audits/2026-09-02-studio-v2-audit.md`.
 
 ## 0. Where v2 left it

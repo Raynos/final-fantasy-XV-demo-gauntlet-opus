@@ -4,11 +4,18 @@
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`. `docs/plans/2026-08-30-fable-to-nine.md` is BUILT** — all 20 lanes
-closed across 35 agent-lifetimes. It archives once the human rules on the five
-decisions in `HUMAN_REVIEW.md`. Read `project/handoff/2026-08-30-coordinator.md`
-first (the six decisions taken at dispatch, the endgame sequence) and
+**`main`. `docs/plans/` holds exactly one open plan:
+`2026-09-02-fable-game-studio-v3.md` (LOCKED), whose F1 and F2 are landed.**
+
+`2026-08-30-fable-to-nine.md` archived DONE on 09-02 — all 20 lanes closed
+across 35 agent-lifetimes. Its five open calls were never lane work and now sit
+where they belong, at the top of `HUMAN_REVIEW.md`, numbers attached; plan task
+47 stays unlanded until one of them is ruled. Read
+`project/handoff/2026-08-30-coordinator.md` (the six decisions taken at
+dispatch, the endgame sequence) and
 `project/journal/2026-08-31-round17-and-playtest.md` for every judged number.
+The two opus Game Studio plans archived the same day: v1 SUPERSEDED by v2, v2
+SUPERSEDED by fable's v3, which keeps v2's architecture verbatim.
 
 ## Where the gates stand
 

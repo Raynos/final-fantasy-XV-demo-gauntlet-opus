@@ -1,9 +1,17 @@
 # Game Studio v2 — the studio is not the game
 
-Status: **IN-PROGRESS (2026-09-02, opus)** — supersedes the architecture of
-`2026-09-02-opus-game-studio.md`, whose information architecture survives
-intact. **V1-V3 and the gate are built, shipped and green** (`pnpm run check`
-24/24); V4-V8 are open. `project/handoff/game-studio.md` is the live state.
+Status: **SUPERSEDED (2026-09-02, opus)** by
+`docs/plans/2026-09-02-fable-game-studio-v3.md`, which keeps this plan's
+architecture verbatim — three boot profiles, no game in the studio — and
+replaces its remaining order of work with the audit's. Archived 2026-09-02.
+
+It supersedes the architecture of `2026-09-02-opus-game-studio.md` (also
+archived), whose information architecture survives intact. **V1-V3 and the gate
+were built, shipped and green** (`pnpm run check` 24/24) and measured on the
+live path by `studioshots.mts`: front door interactive in 129/135 ms, 0 systems
+for the door and models, exactly 5 for the world, 56/56 models, 0 characters in
+either scene. V4-V8 were open when it handed over and are v3's lanes now.
+`project/handoff/game-studio.md` is the live state.
 
 ---
 

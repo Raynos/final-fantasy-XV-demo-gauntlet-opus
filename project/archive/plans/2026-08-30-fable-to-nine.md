@@ -1,6 +1,22 @@
 # To nine — the one plan
 
-Status: **BUILT — awaiting the human's ruling on five decisions, then archives.**
+Status: **DONE (2026-09-02) — archived.** Every lane closed, the mechanical
+Definition of Done met, and both §4 bars resolved: polish plateaued at 0% over
+three judged rounds, which is §4's own stopping condition, and playable reached
+3 broken-feels.
+
+**The five open decisions did not close with the plan, and were never the
+plan's to close.** They are art-direction and design calls that need the human,
+and they live where such things live — the top of `HUMAN_REVIEW.md`, each with
+its numbers already attached: combat difficulty (a den at 25% of Noctis's HP
+median, 49% worst — measured, unplayed); the `fightshape` trade boulder
+collision created (duration into PASS, danger out of it); task 47's
+`CONTROL_CEILING`; the camera's slope lift trading horizon for arm; and
+Noctis's hair hue, where the plate table and `Cast.ts` disagree in writing.
+Holding a 163 kB plan open as their container told an `ls` of `docs/plans/`
+that twenty lanes were still in flight, which is exactly the lie the
+directory's own README says the `Status:` line exists to prevent. Task 47 stays
+unlanded until its ruling; that is recorded in `HUMAN_REVIEW.md` too.
 Built overnight 2026-08-30/31 by a coordinator session; see
 `project/handoff/2026-08-30-coordinator.md` for the six decisions taken at
 dispatch and the endgame sequence, and
