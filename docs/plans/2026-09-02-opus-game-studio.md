@@ -1,8 +1,9 @@
 # Game Studio — the second half of the build
 
-Status: **LOCKED (2026-09-02, opus)** — twelve decisions taken with the human on
-2026-09-02 and recorded in §12. Building now, lane by lane, each shipped to
-<https://ff15-xv-opus.vercel.app> as it lands.
+Status: **IN-PROGRESS (2026-09-02, opus)** — twelve decisions in §12. L1, L2a
+and L2b are built, shipped and green (`pnpm run check` 23/23); L3–L7 and four of
+the six sections are open. **`project/handoff/game-studio.md` is the live
+state** — read it before picking this up.
 
 The debug suite stopped being behind `?debug` in `6098da8`. That commit changed
 a condition; this plan changes what the thing *is*. Today the suite is an
