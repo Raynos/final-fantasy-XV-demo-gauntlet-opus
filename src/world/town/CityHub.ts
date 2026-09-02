@@ -87,6 +87,15 @@ interface CityDef {
  */
 export class CityHub {
   _bound!: Set<string>;
+  /**
+   * Cities whose festoon is strung.
+   *
+   * Separate from {@link _bound} because they answer different questions: this
+   * one is "is the light built", that one is "are the verbs registered". They
+   * become true on the same frame in the game and only this one becomes true in
+   * the Game Studio, which boots the world as geometry and no gameplay at all.
+   */
+  _lit!: Set<string>;
   _camPos!: THREE.Vector3;
   /** Interaction registrations, kept so they could be disposed. */
   _handles!: InteractableHandle[];
@@ -105,6 +114,7 @@ export class CityHub {
     this.root = new THREE.Group();
     this.root.name = 'cityhub';
     this._bound = new Set();
+    this._lit = new Set();
     this._handles = [];
     this._camPos = new THREE.Vector3();
     this.lights = [];
@@ -160,6 +170,17 @@ export class CityHub {
     const props = game.get('Props');
     const kits = props && props.poiKits;
     if (!kits || !kits.anchorAt(city.poi, 'plaza')) return false;
+
+    // The festoon is GEOMETRY, and it is strung whether or not anything can be
+    // pressed. It used to hang off the end of this method, behind the
+    // `Interaction` guard below -- so the Game Studio, which boots the world
+    // as geometry and no gameplay at all, showed Lestallum's square with its
+    // lights missing and nothing to say they were meant to be there. `_lit`
+    // rather than `_bound` because the two answer different questions: this
+    // one is "is the light built", that one is "are the verbs registered", and
+    // in the game they still both become true on the same frame.
+    if (!this._lit.has(city.poi)) { this._festoon(city, kits); this._lit.add(city.poi); }
+
     const ix = game.get('Interaction');
     if (!ix) return false;
 
@@ -190,7 +211,6 @@ export class CityHub {
       }));
     }
 
-    this._festoon(city, kits);
     return true;
   }
 

@@ -1,5 +1,4 @@
 import './studio.css';
-import * as THREE from 'three';
 import { demoActive, touchActive } from '../engine/Device.ts';
 import { el, uiScale } from '../ui/UIKit.ts';
 import { Freecam } from '../dev/Freecam.ts';
@@ -74,6 +73,13 @@ export class StudioShell {
   onSection: ((id: SectionId | null) => void) | null;
   /** Progress hook while a section boots what it needs. */
   onBusy: ((label: string | null, t: number) => void) | null;
+  /**
+   * What to do instead of reloading on exit. @see close
+   *
+   * Set by `main.ts`, which owns the front door. Null falls back to a reload,
+   * so a studio opened by a probe or a gate still has a way out.
+   */
+  onExit: (() => void) | null;
   _raf: number;
   _last: number;
   /**
@@ -89,6 +95,10 @@ export class StudioShell {
    * drawing anyway, and not drawing it gives the boot the main thread.
    */
   _booting: boolean;
+  /** What `showWorld` was last told. @see _reapplyWorld */
+  _worldShown: boolean;
+  /** `scene.children.length` when it was told. @see _reapplyWorld */
+  _sceneCount: number;
   _onResize: () => void;
 
   constructor(game: Game) {
@@ -103,9 +113,12 @@ export class StudioShell {
     this.look = new LookLab(game);
     this.onSection = null;
     this.onBusy = null;
+    this.onExit = null;
     this._raf = 0;
     this._last = 0;
     this._booting = false;
+    this._worldShown = true;
+    this._sceneCount = 0;
 
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
@@ -154,6 +167,9 @@ export class StudioShell {
       if (this.worldBooted && WORLD_SECTIONS.has(this.section as string)) {
         for (const s of g.systems) if (s.update) s.update(dt, g);
       }
+      // Anything the world added to the scene since the last decision has to
+      // obey it. @see _reapplyWorld
+      this._reapplyWorld();
 
       if (this.section === 'model') this.model.update(dt, this.cam);
       this.cam.update(dt, g.input);
@@ -189,6 +205,12 @@ export class StudioShell {
     if (this.section === 'model') this.model.exit();
     this.section = id;
     this.root.classList.toggle('st-in-section', !!id);
+    // The menu and the section screens that boot nothing sit in front of an
+    // EMPTY scene -- the `none` profile is a renderer and a camera -- so
+    // without this they float on the page's black. The class carries the front
+    // door's own dusk gradient through, so the studio opens on the same sky the
+    // door closed on rather than on a void. @see studio.css
+    this.root.classList.toggle('st-void', id == null || id === 'notes' || id === 'device');
 
     if (WORLD_SECTIONS.has(id as string)) {
       if (!this.worldBooted) {
@@ -220,22 +242,54 @@ export class StudioShell {
   /**
    * Show or hide the world, when there is one.
    *
-   * A no-op on the common path, because a studio that only ever opened Models
-   * has no world to hide. When there is one, it toggles the five systems' roots
-   * rather than walking `scene.children` — `dev/Stage` had to do the latter
-   * because it could not know what was in the scene; here we booted it and we
-   * know exactly.
+   * ## It used to guess, and the guess was wrong
+   *
+   * The first version walked the eight systems and toggled `visible` on
+   * whichever of `group | root | mesh | dome | sky` each happened to have. Not
+   * one of the eight has a single root: `Terrain` adds `clipmap.group`, `Water`
+   * adds four separate meshes at four points in its life, `Sky` adds a dome
+   * *and* a probe light, `Props` adds outposts, megastructures and landmarks
+   * from three different builders, and `Dungeons` adds one group per entrance.
+   * So going World → Models left most of the world standing behind the
+   * turntable, which is the v2 audit's finding 8 — filed as "unverified"
+   * because nothing tested that path.
+   *
+   * ## What it does instead
+   *
+   * Hides **every top-level object in the scene except the model stage**. The
+   * studio owns this scene outright — it booted everything in it and there is
+   * no game to have put anything else there — so "not the stage" is an exact
+   * description of "the world", and it needs no getter added to five world
+   * files owned by other lanes.
+   *
+   * It is also the only version that survives late arrivals. `Props.mega` and
+   * `Dungeons`'s entrances both defer to the `game-ready` beat on the phone,
+   * `Hammerhead` builds on approach, and `Water` adds meshes as it streams — a
+   * root captured once at boot would miss all four. Hence `_sceneCount`: one
+   * integer compare per frame, and the moment the scene grows the answer is
+   * re-applied.
    */
   showWorld(on: boolean) {
     if (!this.worldBooted) return;
-    for (const name of WORLD_SYSTEMS) {
-      const sys = this.game.get(name as never) as unknown as Record<string, unknown> | null;
-      if (!sys) continue;
-      for (const k of ['group', 'root', 'mesh', 'dome', 'sky']) {
-        const o = sys[k];
-        if (o instanceof THREE.Object3D) o.visible = on;
-      }
+    this._worldShown = on;
+    this._sceneCount = this.game.scene.children.length;
+    const keep = this.model.stage.group;
+    for (const o of this.game.scene.children) {
+      if (o === keep) continue;
+      o.visible = on;
     }
+  }
+
+  /**
+   * Re-apply the world's visibility if the scene has grown since it was set.
+   *
+   * Called once a frame from the loop. @see showWorld for why anything can be
+   * added to the scene after the section that hid it was opened.
+   */
+  _reapplyWorld() {
+    if (!this.worldBooted) return;
+    if (this.game.scene.children.length === this._sceneCount) return;
+    this.showWorld(this._worldShown);
   }
 
   /** Hand the camera to the freecam, adopting the current pose. */
@@ -243,13 +297,23 @@ export class StudioShell {
     this.cam.setEnabled(on, this.game.camera);
   }
 
-  /** Leave the studio: back to the front door, with no reload. */
+  /**
+   * Leave the studio: back to the front door, with no reload.
+   *
+   * The comment above this used to say exactly that and the line under it said
+   * `location.reload()`. A full page load only to re-render two rows of text
+   * throws away the renderer, every compiled program and — after the World
+   * Explorer — a whole streamed world, so going out and back in cost seconds
+   * for nothing.
+   *
+   * `onExit` is `main.ts`'s hook, because the door belongs to the router and
+   * not to the studio. The fallback stays a reload: a studio opened directly by
+   * `?studio=1`, by a probe or by a gate has no router to hand back to.
+   */
   close() {
     this.stop();
     this.dispose();
-    // A full page load only to re-render two rows of text would throw away the
-    // renderer and every compiled program for nothing. v1 reloaded because it
-    // had a whole game to unwind; there is nothing here to unwind.
+    if (this.onExit) { this.onExit(); return; }
     location.reload();
   }
 
@@ -262,6 +326,16 @@ export class StudioShell {
   available() {
     return SECTIONS.filter((s) => s.available());
   }
+
+  /**
+   * The world profile's system names, as the module defines them.
+   *
+   * Exposed so `studiocheck` can assert the booted set against the **single
+   * source of truth** rather than a list retyped in the gate. A second copy is
+   * exactly how a gate comes to pass while the thing it guards is broken, and
+   * the list just grew from five to eight.
+   */
+  worldSystems(): readonly string[] { return WORLD_SYSTEMS; }
 }
 
 /**

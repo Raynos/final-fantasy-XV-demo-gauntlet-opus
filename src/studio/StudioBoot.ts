@@ -8,6 +8,9 @@ import { Terrain } from '../world/Terrain.ts';
 import { Water } from '../world/Water.ts';
 import { Vegetation } from '../world/Vegetation.ts';
 import { Props } from '../world/Props.ts';
+import { Hammerhead } from '../world/town/Hammerhead.ts';
+import { CityHub } from '../world/town/CityHub.ts';
+import { Dungeons } from '../world/dungeons/Dungeons.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -27,32 +30,52 @@ import type { Game } from '../game/Game.ts';
  * | profile | systems | who |
  * |---|---|---|
  * | `none`  | **0**   | the front door, and the Model Explorer |
- * | `world` | **5**   | the World Explorer — geometry, nothing else |
+ * | `world` | **8**   | the World Explorer — geometry, nothing else |
  * | `full`  | 30      | the game, via `Game.init()`, unchanged |
  *
  * The front door needing nothing is worth ~6.2 of the 6.5 seconds a person
  * used to wait before they could press a key.
  *
- * ## Why the five, and why it is safe
+ * ## Why eight, and why it is safe
  *
- * `Sky`, `Terrain`, `Water`, `Vegetation`, `Props` are the systems that build
- * *the world as geometry*. Everything else is a game: a player, a party, an
- * enemy pool, combat, a camera rig, a story, a HUD.
+ * `Sky`, `Terrain`, `Water`, `Vegetation`, `Props`, `Town`, `Cities`,
+ * `Dungeons` are the systems that build *the world as geometry*. Everything
+ * else is a game: a player, a party, an enemy pool, combat, a camera rig, a
+ * story, a HUD.
  *
- * Booting a subset only works because every cross-dependency those five have on
- * a system outside the set is **already guarded** — checked line by line in the
- * source on 2026-09-02, and quoted in the v2 plan's §3.3:
+ * **It was five, and five was wrong.** The v2 audit photographed Hammerhead in
+ * the World Explorer and found one red-roofed shed and a pole where the game
+ * has a garage complex, because the settlement is not props — it is the
+ * `Hammerhead` system. Cities are `CityHub` and dungeon mouths are `Dungeons`,
+ * and "just the geometry of the world" was missing all three. Each was audited
+ * the way the first five were, line by line, on 2026-09-02:
  *
- *   - `Vegetation` reads `Player`, `Party`, `Enemies` and `Weather`, and every
- *     one is behind a null or `Array.isArray` check;
- *   - `Water` reads `Menus` behind `if (menus && menus.name …)`;
- *   - `Props` falls back to `new Ecology(...)` when `Vegetation` has none, and
- *     returns 0 night when `Sky` has no sun;
- *   - `Sky` returns `camera.near` when `Terrain` has no `heightAt`.
+ *   - **`Hammerhead`** already splits cleanly. `init` builds geometry and then
+ *     calls `_registerScreens` and `_registerInteractables`, and both begin
+ *     with a guard (`if (!menus …) return`, `if (!ix) { warn; return; }`), so
+ *     the gameplay half no-ops and the town is built. Its `update` reads only
+ *     `game.camera` and `Sky` through `_night`, both guarded.
+ *   - **`CityHub`** needed one change, made in its own file. `bind()` returned
+ *     early on a missing `Interaction` *before* stringing the festoon, so a
+ *     city square in the studio had its lights unstrung. The festoon is
+ *     geometry and is now bound whether or not anything can be pressed; the
+ *     game reaches it on the same frame it always did.
+ *   - **`Dungeons`** requires `Terrain` and throws without it, which is
+ *     satisfied here; `Sky`, `Audio`, `Interaction`, `Player`, `Party` and
+ *     `HUD` are every one of them behind a null check. `_buildEntrances` is
+ *     pure geometry against the terrain, and interiors are built on `enter()`,
+ *     which nothing in the studio calls.
+ *
+ * The original five were audited the same way and are quoted in the v2 plan's
+ * §3.3: `Vegetation` reads `Player`, `Party`, `Enemies` and `Weather` behind
+ * null or `Array.isArray` checks; `Water` reads `Menus` behind
+ * `if (menus && menus.name …)`; `Props` falls back to `new Ecology(...)` when
+ * `Vegetation` has none and returns 0 night when `Sky` has no sun; `Sky`
+ * returns `camera.near` when `Terrain` has no `heightAt`.
  *
  * Nothing throws on a missing system. The subset is a supported configuration
- * by accident of good defensive style, and `studiocheck` asserts the exact set
- * so it stays one.
+ * by good defensive style rather than by luck, and `studiocheck` asserts the
+ * exact set so it stays one.
  *
  * ## Why this duplicates eight lines of `Game.init()`
  *
@@ -75,7 +98,13 @@ export type StudioProfile = 'none' | 'world';
  * against a list retyped in the gate — a second copy of this array is exactly
  * how it would come to disagree with reality.
  */
-export const WORLD_SYSTEMS = ['Sky', 'Terrain', 'Water', 'Vegetation', 'Props'] as const;
+export const WORLD_SYSTEMS = [
+  'Sky', 'Terrain', 'Water', 'Vegetation', 'Props',
+  // The three the v2 audit found missing, and the reason Hammerhead was one
+  // red-roofed shed in the World Explorer while the game had a garage complex.
+  // @see the "Why eight, and not five" section of the file header.
+  'Town', 'Cities', 'Dungeons',
+] as const;
 
 /** What `bootStudio` reports while it works, for a progress bar. */
 export type Progress = (t: number, label: string | null) => void;
@@ -106,7 +135,7 @@ function prologue(game: Game) {
  * put one model in front of one camera, and enough for the front door to have
  * something to fade over. No world, no characters, no simulation.
  *
- * `world` adds the five geometry systems. It is idempotent and additive, so
+ * `world` adds the eight geometry systems. It is idempotent and additive, so
  * opening the Model Explorer first and the World Explorer second costs the
  * world boot once and the renderer never twice.
  */
@@ -116,12 +145,21 @@ export async function bootStudio(game: Game, profile: StudioProfile, p: Progress
   prologue(game);
 
   if (profile === 'world') {
+    // Order is a dependency order, not a preference. `Hammerhead` reads
+    // `Props.ecology` (falling back to `Vegetation.ecology`) to find the rest
+    // stop it replaces; `CityHub` binds against `Props.poiKits`; `Dungeons`
+    // requires `Terrain` and throws without it. Registered under the same names
+    // `Game.init` uses -- `Town`, `Cities` -- because `game.get('Town')` is a
+    // contract those systems' own callers already speak.
     const order: Array<[string, () => { init?(g: Game): unknown }]> = [
       ['Sky', () => new Sky()],
       ['Terrain', () => new Terrain()],
       ['Water', () => new Water()],
       ['Vegetation', () => new Vegetation()],
       ['Props', () => new Props()],
+      ['Town', () => new Hammerhead()],
+      ['Cities', () => new CityHub()],
+      ['Dungeons', () => new Dungeons()],
     ];
     for (let i = 0; i < order.length; i++) {
       const [name, make] = order[i];
@@ -148,6 +186,14 @@ export async function bootStudio(game: Game, profile: StudioProfile, p: Progress
   p(1.0, 'Ready');
   game.post.render();
   game.ready = true;
+  // The same beat `Game.init` fires at the end of its own boot, and three
+  // systems listen for it: `Props.mega` defers 624 ms of skyline to it on the
+  // phone, `Dungeons` defers 1061 ms of entrance mouths, and `TexBake` defers
+  // its container fetch. Without it the studio on a handset showed a world with
+  // no distant city and no dungeon doorways, and nothing said why -- the
+  // deferral is invisible on a desktop, where `demoActive()` is false and all
+  // three build inline.
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('game-ready'));
 }
 
 /**

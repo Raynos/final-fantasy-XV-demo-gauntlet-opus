@@ -77,6 +77,20 @@ async function route() {
   if (shoot || qs.has('scene') || qs.has('continue')) return playGame();
 
   // Otherwise: ask, before booting anything.
+  const pick = await askDoor();
+  if (pick === 'studio') return openStudio();
+  boot.style.display = '';
+  return playGame();
+}
+
+/**
+ * Draw the front door and wait for a choice.
+ *
+ * Its own function because it is asked **twice**: once before anything boots,
+ * and again when somebody leaves the studio. That second call is what stops
+ * `StudioShell.close()` being a page reload — see its docblock.
+ */
+async function askDoor(): Promise<'play' | 'studio'> {
   const { FrontDoor } = await import('./studio/FrontDoor.ts');
   const door = new FrontDoor();
   // The boot bar belongs to whatever comes next, not to the door, which has
@@ -87,9 +101,7 @@ async function route() {
   // rather than blocking on it: a 260 ms transition inside a 6.5 s load is
   // 260 ms nobody gets back.
   setTimeout(() => door.dispose(), 400);
-  if (pick === 'studio') return openStudio();
-  boot.style.display = '';
-  return playGame();
+  return pick;
 }
 
 /** The full game: thirty systems, the title screen, and play. */
@@ -139,7 +151,29 @@ async function playGame() {
 async function openStudio() {
   boot.style.display = 'none';
   const m = await import('./studio/StudioShell.ts');
-  await m.openStudio(game);
+  const shell = await m.openStudio(game);
+
+  /**
+   * Exit re-draws the door rather than reloading the page.
+   *
+   * Coming back to the studio then costs nothing at all — the renderer, every
+   * compiled program and any world already streamed are still there.
+   *
+   * **Play still reloads, and that is not laziness.** `Game.init()` has its own
+   * renderer prologue and builds thirty systems against a scene the studio has
+   * already populated with a partial world; running it over the top would boot
+   * a second renderer into the same container. A page load is the honest way to
+   * get from a half-built world to a game, and it is the rarer direction.
+   */
+  shell.onExit = () => {
+    void askDoor().then((pick) => {
+      if (pick === 'studio') return openStudio();
+      const u = new URL(location.href);
+      u.searchParams.delete('studio');
+      location.href = u.toString();
+      return undefined;
+    });
+  };
 }
 
 route().catch((err) => {

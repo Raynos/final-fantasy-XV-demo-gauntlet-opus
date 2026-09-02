@@ -577,3 +577,25 @@
 /* A row that names something this profile cannot do. Dim, still tappable —
    tapping says why rather than doing nothing. @see ShotGallery */
 #studio .st-row.off { opacity: 0.42; }
+
+/*
+ * The studio's ground, when there is no world under it.
+ *
+ * The `none` profile is a renderer, a camera and an empty scene, so the menu
+ * and the sections that boot nothing were floating on the page's black — the
+ * v2 audit's finding 9. This is the front door's own dusk gradient carried
+ * through, so the studio opens on the sky the door closed on rather than on a
+ * void. Behind the scrim, in front of nothing.
+ */
+#studio.st-void .st-scrim {
+  background:
+    radial-gradient(58% 42% at 78% 62%, rgba(255, 214, 150, 0.16), transparent 62%),
+    radial-gradient(90% 60% at 50% 96%, rgba(58, 42, 34, 0.86), transparent 70%),
+    linear-gradient(180deg,
+      #0a1626 0%,
+      #16283f 26%,
+      #24374a 48%,
+      #4a4038 62%,
+      #2a201a 74%,
+      #0d0a08 100%);
+}

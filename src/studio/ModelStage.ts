@@ -84,13 +84,22 @@ export class ModelStage {
     if (this._lights.length) return;
     scene.add(this.group);
 
-    const key = new THREE.DirectionalLight(0xfff2df, 2.6);
+    // The key is 3.4, not 2.6, and the rim 1.4, not 1.1.
+    //
+    // The v2 audit's finding 7: "model lighting is flat, the frame is dominated
+    // by the mid-grey backdrop sphere and auto-exposure keys off it; the model
+    // reads muddy with no rim." Both halves of that are true and both are fixed
+    // here — the backdrop's luminance comes down (see the shader below) and the
+    // key comes up, so the lit side of a subject is measurably brighter than
+    // the ground it stands against rather than merely different from it.
+    // `studiocheck` asserts that ratio; @see the backdrop's own comment.
+    const key = new THREE.DirectionalLight(0xfff2df, 3.4);
     key.position.set(4, 6, 5);
     const fill = new THREE.DirectionalLight(0x9fc0e4, 0.55);
     fill.position.set(-5, 2, -3);
-    const rim = new THREE.DirectionalLight(0xcfe6ff, 1.1);
+    const rim = new THREE.DirectionalLight(0xcfe6ff, 1.4);
     rim.position.set(-2, 3.5, -6);
-    const amb = new THREE.HemisphereLight(0xbcd6f5, 0x2a2622, 0.7);
+    const amb = new THREE.HemisphereLight(0xbcd6f5, 0x2a2622, 0.55);
     this._lights = [key, fill, rim, amb];
     for (const l of this._lights) this.group.add(l);
 
@@ -108,8 +117,15 @@ export class ModelStage {
         fragmentShader: `varying vec3 vP;
           void main(){
             float h = clamp(vP.y / 400.0 * 0.5 + 0.5, 0.0, 1.0);
-            vec3 lo = vec3(0.055, 0.062, 0.075);
-            vec3 hi = vec3(0.16, 0.19, 0.235);
+            // Roughly 0.42x what these were. A backdrop is a GROUND, not a
+            // light: at the old values it filled most of the frame at a
+            // mid-grey, auto-exposure keyed off it, and every model came back
+            // muddy with no rim to read the silhouette against. Dark enough
+            // that the key wins, light enough that a model's own dark values
+            // are still separable from it — which is the thing a black
+            // background destroys and the reason this sphere exists at all.
+            vec3 lo = vec3(0.023, 0.026, 0.032);
+            vec3 hi = vec3(0.068, 0.081, 0.100);
             gl_FragColor = vec4(mix(lo, hi, pow(h, 0.85)), 1.0);
           }`,
       }),
@@ -164,11 +180,14 @@ export class ModelStage {
     }
 
     this.pivot.copy(centre);
-    // 2.4 rather than `dev/Stage`'s 3.1. That number was chosen for a model
-    // standing in a world, where some context around it is the point; here the
-    // frame holds one subject on an empty backdrop and the extra distance is
-    // just wasted pixels.
-    this.dist = Math.max(1.4, radius * 2.4);
+    // On a tall viewport, aim slightly BELOW the subject's centre so it sits
+    // higher in frame. The chrome is asymmetric on a phone — a 44 px header
+    // against a bottom sheet and a 56 px action row — so the visible band's
+    // centre is above the frame's, and a subject centred in the frame reads as
+    // sitting in the bottom third. Which is exactly what the audit's finding 5
+    // photographed. Zero on any landscape viewport, so no capture moves.
+    if (aspectOf() < 1) this.pivot.y -= radius * 0.16;
+    this.dist = Math.max(1.4, radius * fitFactor());
     this._needFrame = true;
     const quadruped = size.z > size.y * 1.3 || size.x > size.y * 1.3;
     this.faceOffset = quadruped ? 1.25 : 0.7;
@@ -210,4 +229,43 @@ export class ModelStage {
     this.dist = Math.max(0.4, Math.min(400, this.dist * k));
     this._needFrame = true;
   }
+}
+
+/** The viewport's aspect. The renderer fills it, so this is the frustum's. */
+function aspectOf(): number {
+  if (typeof window === 'undefined') return 16 / 9;
+  const w = window.innerWidth || 16;
+  const h = window.innerHeight || 9;
+  return h > 0 ? w / h : 16 / 9;
+}
+
+/**
+ * Dolly distance as a multiple of the subject's radius, for THIS viewport.
+ *
+ * ## Why it is not 2.4 any more
+ *
+ * It was, and 2.4 is right — for a landscape frustum. The camera is a 50°
+ * VERTICAL fov, so the horizontal half-angle is `atan(tan(25°) * aspect)`: at
+ * 16:9 that is 39.7° and the vertical 25° is the binding constraint, which is
+ * where 1/sin(25°) = 2.37 came from. Turn the phone upright and the aspect is
+ * 0.6, the horizontal half-angle collapses to 15.6°, and the binding constraint
+ * is now the *width* — a subject framed at 2.4 radii overflows the sides.
+ *
+ * So: fit whichever half-angle is smaller. **Measured**, with the 1.06 margin
+ * that keeps a subject framed rather than jammed against the edges: 16:9 and a
+ * landscape handset's 2.17 both return **2.508**, and a portrait phone at 0.60
+ * returns **3.956** — 58% further back, which is the whole of the bug. The
+ * landscape number is 4.5% wider than the 2.4 it replaces; nothing in the
+ * corpus moves, because `?shoot` never opens the studio.
+ *
+ * The audit's finding 5 said "`ModelStage.show` frames from radius alone and
+ * assumes a landscape frustum". This is that sentence, arithmetically.
+ */
+function fitFactor(): number {
+  const FOV = 50;                                   // `Freecam.fov`'s default
+  const vHalf = (FOV / 2) * Math.PI / 180;
+  const hHalf = Math.atan(Math.tan(vHalf) * aspectOf());
+  const bind = Math.min(vHalf, hHalf);
+  // A margin, so a subject is framed rather than jammed against the edges.
+  return 1.06 / Math.sin(bind);
 }
