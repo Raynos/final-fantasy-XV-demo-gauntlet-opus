@@ -205,6 +205,7 @@ export function install(shell: StudioShell) {
     const listed = shell.section === 'model' || shell.section === 'world' || shell.section === 'shots';
     searchWrap.hidden = !(listed && shell.section);
     side.classList.toggle('st-listed', !!(listed && shell.section));
+    tileBtn.style.display = shell.section === 'model' ? '' : 'none';
 
     if (shell.section === 'model') { renderModel(); return; }
     if (shell.section === 'world') { renderWorld(); return; }
@@ -220,6 +221,10 @@ export function install(shell: StudioShell) {
 
   /** Feed the engine, then report what the filter did. */
   function feed(rows: Array<ListRow<Row>>) {
+    // The previous level may have appended straight into this container -- the
+    // family rows do -- and the reconcile will not remove what it did not
+    // create. @see StudioList.sweepForeign
+    list.sweepForeign();
     list.render(rows);
     searchCount.textContent = list.summary();
   }
@@ -506,12 +511,22 @@ export function install(shell: StudioShell) {
       controls.appendChild(el('span.st-pose', { text: pose }));
       controls.appendChild(next);
     }
-    const ok = el('button.st-btn.st-ui', { text: 'OK' });
-    const flag = el('button.st-btn.st-ui', { text: 'Flag' });
-    ok.addEventListener('click', () => { m.mark('ok'); render(); });
-    flag.addEventListener('click', () => { m.mark('flag'); render(); });
-    controls.appendChild(ok);
-    controls.appendChild(flag);
+    // The verdict is what makes this a review tool rather than a viewer: a pass
+    // over 56 assets does not finish unless something remembers which ones you
+    // have already looked at. `OK` and `Flag` were labelled and explained
+    // nowhere, so the state they set is now printed beside them.
+    const mark = m.markOf(cur || '');
+    const keys2 = m.keys();
+    const done = keys2.filter((k) => m.markOf(k) !== 'unreviewed').length;
+    const okB = el('button.st-btn.st-ui', { text: mark === 'ok' ? '✓ Looks right' : 'Looks right' });
+    const flagB = el('button.st-btn.st-ui', { text: mark === 'flag' ? '⚑ Flagged' : 'Flag it' });
+    okB.classList.toggle('on', mark === 'ok');
+    flagB.classList.toggle('on', mark === 'flag');
+    okB.addEventListener('click', () => { m.mark(mark === 'ok' ? null : 'ok'); render(); });
+    flagB.addEventListener('click', () => { m.mark(mark === 'flag' ? null : 'flag'); render(); });
+    controls.appendChild(okB);
+    controls.appendChild(flagB);
+    controls.appendChild(el('span.st-pose', { text: `${done}/${keys2.length} reviewed` }));
     info.appendChild(controls);
 
     hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>o</b> ok &nbsp; <b>f</b> flag &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';

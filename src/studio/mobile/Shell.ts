@@ -63,6 +63,9 @@ interface Row {
   sync(node: HTMLElement): void;
 }
 
+/** Rows below which a filter field is noise rather than navigation. */
+const FILTER_AT = 12;
+
 export function install(shell: StudioShell) {
   const root = shell.root;
   const avail = shell.available();
@@ -145,7 +148,15 @@ export function install(shell: StudioShell) {
 
   /** Feed the engine, then report what the filter did. */
   function feed(rows: Array<ListRow<Row>>) {
-    searchWrap.hidden = false;
+    // The previous level may have appended straight into this container -- the
+    // family rows do -- and the reconcile will not remove what it did not
+    // create. @see StudioList.sweepForeign
+    list.sweepForeign();
+    // A filter over six chocobo colours is furniture. It appears when the list
+    // is long enough that scrolling is the alternative -- which is the two
+    // that are actually long, 170 destinations and 166 framings -- and stays
+    // once a query is typed, so it cannot vanish out from under a correction.
+    searchWrap.hidden = rows.length <= FILTER_AT && !list.query.trim();
     // The list starts below the filter. Without this they are both pinned to
     // the top of the content area and the first row prints under the field.
     body.classList.add('st-listed');
@@ -360,7 +371,7 @@ export function install(shell: StudioShell) {
       };
     }));
     foot.appendChild(fbtn('Families', () => { familyList = true; draw(); }));
-    foot.appendChild(fbtn(m.unreviewedOnly ? 'Unreviewed' : 'All', () => {
+    foot.appendChild(fbtn(m.unreviewedOnly ? 'Unreviewed only' : 'Show all', () => {
       m.unreviewedOnly = !m.unreviewedOnly;
       m.select(0);
       draw();
@@ -398,10 +409,32 @@ export function install(shell: StudioShell) {
       sheet.appendChild(row);
     }
 
-    const mark = m.markOf(m.current() || '');
+    /*
+     * The verdict, in words, above two buttons that were labelled `OK` and
+     * `Flag` and explained nowhere.
+     *
+     * They are the whole reason this is a review tool rather than a viewer: a
+     * pass over 56 assets does not finish unless something remembers which ones
+     * you have already looked at. The line says what this asset is marked as
+     * and how far through the family you are, so the buttons have a subject.
+     */
+    const key = m.current() || '';
+    const mark = m.markOf(key);
+    const keys = m.keys();
+    const done = keys.filter((k) => m.markOf(k) !== 'unreviewed').length;
+    sheet.appendChild(el('div.st-verdict', {}, [
+      el('span', {
+        text: mark === 'ok' ? 'marked as looking right'
+          : mark === 'flag' ? 'flagged for attention'
+            : 'not reviewed yet',
+      }),
+      el('span.st-n', { text: `${done}/${keys.length} reviewed in this family` }),
+    ]));
     foot.appendChild(fbtn('‹ Prev', () => { m.step(-1); draw(); }));
-    foot.appendChild(fbtn('OK', () => { m.mark(mark === 'ok' ? null : 'ok'); draw(); }, mark === 'ok'));
-    foot.appendChild(fbtn('Flag', () => { m.mark(mark === 'flag' ? null : 'flag'); draw(); }, mark === 'flag'));
+    foot.appendChild(fbtn(mark === 'ok' ? '✓ Looks right' : 'Looks right',
+      () => { m.mark(mark === 'ok' ? null : 'ok'); draw(); }, mark === 'ok'));
+    foot.appendChild(fbtn(mark === 'flag' ? '⚑ Flagged' : 'Flag it',
+      () => { m.mark(mark === 'flag' ? null : 'flag'); draw(); }, mark === 'flag'));
     foot.appendChild(fbtn('Next ›', () => { m.step(1); draw(); }));
   }
 

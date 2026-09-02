@@ -207,6 +207,27 @@ export class StudioList<T> {
   }
 
   /**
+   * Remove children this list did not create.
+   *
+   * The reconcile only ever removes keys it is tracking, which is correct — it
+   * must not touch a sibling somebody else put there deliberately. But a shell
+   * that renders one level of a drill-down by appending straight into the same
+   * container and the next level through the engine leaves the first level's
+   * nodes behind forever: the Model Explorer's family rows sat underneath the
+   * asset list, and the model rendered through both.
+   *
+   * So it is the caller's job to say "this container is mine now", and this is
+   * that call. Cheap: it walks the children once and the list is at most a
+   * window's worth.
+   */
+  sweepForeign() {
+    const mine = new Set<Node>([...this._nodes.values(), ...this._heads.values()]);
+    for (const child of [...this.root.childNodes]) {
+      if (!mine.has(child)) child.remove();
+    }
+  }
+
+  /**
    * Scroll a row into view without stealing the scroll from a person mid-drag.
    *
    * `nearest`, never `center`: the common case is stepping to the next asset

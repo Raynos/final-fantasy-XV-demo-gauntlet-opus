@@ -463,6 +463,41 @@ try {
         drilled.sheet && drilled.grab && drilled.section === 'model' && !!drilled.staged,
         `staged ${String(drilled.staged)}, sheet=${drilled.sheet}, gestures=${drilled.grab}`);
 
+      /*
+       * A gesture catcher that exists is not the same as one a finger reaches.
+       *
+       * `#studio` is `pointer-events: none` with children opting back in, the
+       * scrim and the busy overlay both span the whole shell, and the sheet
+       * and the footer are pinned over the bottom of it. Any of them landing on
+       * top means the drag that should orbit the turntable is eaten by
+       * something invisible — reported as "can't spin the camera", which is
+       * exactly what it looks like from the outside.
+       *
+       * So this asks the DOM the question a finger asks: at the middle of the
+       * viewport, what is on top?
+       */
+      const hit = await pg.evaluate(() => {
+        const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        return { cls: el?.className || String(el?.tagName), grab: !!el?.classList?.contains('st-grab') };
+      });
+      ok('a drag in the middle of the viewport reaches the gesture catcher',
+        hit.grab, `topmost element is .${String(hit.cls).split(' ').join('.')}`);
+
+      // And it actually turns the turntable. Driven as a real drag rather than
+      // by calling `orbit`, for the same reason the taps above are real taps.
+      const yawBefore = await pg.evaluate(() => window.__STUDIO!.model.stage.yaw);
+      const cx = 0, cy = 0;
+      void cx; void cy;
+      await pg.mouse.move(200, 300);
+      await pg.mouse.down();
+      await pg.mouse.move(320, 300, { steps: 8 });
+      await pg.mouse.up();
+      await pg.waitForTimeout(300);
+      const yawAfter = await pg.evaluate(() => window.__STUDIO!.model.stage.yaw);
+      ok('dragging the viewport turns the turntable',
+        Math.abs(yawAfter - yawBefore) > 0.05,
+        `yaw ${yawBefore.toFixed(3)} -> ${yawAfter.toFixed(3)}`);
+
       // ...and back out, one level per tap, through the header's own control.
       const levels: string[] = [];
       for (let i = 0; i < 3; i++) {

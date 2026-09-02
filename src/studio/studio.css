@@ -752,3 +752,75 @@
  */
 #studio .st-side.st-listed { top: 82px; }
 #studio.st-touch .st-side.st-listed { top: 90px; }
+
+/*
+ * A list on a phone is opaque, because there is a live render behind it.
+ *
+ * `.st-touch .st-side` had `background: none` — authored when the studio menu
+ * sat on an empty scene and there was nothing to see through to. With a model
+ * on the turntable behind it the asset list read as text floating over a
+ * chocobo, which is exactly what it looked like in the report. The desktop list
+ * keeps its gradient: it is a 232 px column against a 1600 px frame and seeing
+ * the world beside it is the point.
+ */
+#studio.st-touch .st-side.st-listed {
+  background: linear-gradient(90deg, rgba(6, 9, 16, 0.96), rgba(6, 9, 16, 0.92));
+}
+
+/*
+ * No empty box before a thumbnail exists.
+ *
+ * Tiles are captured from frames you have already opened (@see Thumbs.ts), so a
+ * fresh session's list has none — and a 34 px hollow square in front of every
+ * row reads as a checkbox somebody forgot to wire up. The row is just its name
+ * until there is a picture, and gains one the first time you look at the asset.
+ */
+#studio.st-touch .st-thumb.none { display: none; }
+
+/*
+ * Nothing in the studio is text you select.
+ *
+ * A drag across the viewport is an orbit, and iOS Safari read it as a text
+ * selection instead — the numbers under the model highlighted, the
+ * Copy / Find Selection bar appeared over the frame, and the gesture that
+ * should have turned the turntable never reached it. Reported as "camera
+ * controls seem fucked, can't spin the camera", and the camera was fine.
+ *
+ * `-webkit-touch-callout` is the second half: a long press on a model or a row
+ * otherwise raises the share sheet, which is the same gesture as an orbit that
+ * started slowly.
+ *
+ * The two real text fields opt back in, because a filter you cannot select
+ * inside is a filter you cannot correct.
+ */
+#studio, #studio * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#studio input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The same, for the door and the title screen: both are menus a thumb drags
+   across, and neither has a word anybody wants on their clipboard. */
+#door, #door *, #title, #title * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The verdict line: what this asset is marked as, and how far through the
+   family you are. The two buttons under it had no subject without it. */
+#studio .st-verdict {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+#studio .st-verdict .st-n { font-size: 10px; color: var(--ink-4); }

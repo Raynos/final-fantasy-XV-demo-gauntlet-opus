@@ -39,7 +39,15 @@ const qs = new URLSearchParams(location.search);
 // arrives a chunk-load later means the first paint of the title is the desktop
 // layout scaled onto a handset. `TouchControls` still adds it (idempotent), so
 // `?touch=1` on a desktop and this path agree.
-if (touchActive()) document.documentElement.classList.add('has-touch');
+if (touchActive()) {
+  document.documentElement.classList.add('has-touch');
+  // Double-tap zoom, pinch zoom and the 300 ms tap delay, off before anything
+  // renders. It used to live inside `TouchControls`, which meant it only
+  // applied once the GAME had booted — so the front door, the title screen and
+  // the whole Game Studio could all be zoomed by a stray double tap.
+  // @see ui/touch/nozoom.ts
+  void import('./ui/touch/nozoom.ts').then((m) => m.installNoZoom());
+}
 
 /**
  * Which door opens, and — the point of this file in v2 — **when anything is

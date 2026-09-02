@@ -7,6 +7,7 @@ import { Stick } from './Stick.ts';
 import { TouchButton } from './TouchButton.ts';
 import { VirtualPad, mergePads } from './VirtualPad.ts';
 import { RotateGate } from './Rotate.ts';
+import { installNoZoom } from './nozoom.ts';
 import { DPAD, MODES, PAD, SLOTS, type TouchMode } from './layouts.ts';
 
 /**
@@ -136,23 +137,14 @@ export class TouchControls {
     this._onVis = () => { if (document.hidden) this.releaseAll(); };
     document.addEventListener('visibilitychange', this._onVis);
 
-    // The other half of stopping iOS zoom. `touch-action` handles double-tap;
-    // pinch arrives as Safari's non-standard `gesture*` events, which no CSS
-    // reaches. Both are meaningless here -- there is nothing on this page to
-    // zoom into -- and a game that zooms out from under a thumb mid-fight is
-    // the most annoying possible bug.
-    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
-      document.addEventListener(type, (e: Event) => e.preventDefault(), { passive: false });
-    }
-    // Belt and braces for the double-tap that slips past `touch-action` on
-    // older iOS: a second tap inside 320 ms at the same spot is a zoom
-    // gesture, and never something this game wants.
-    let lastTap = 0;
-    document.addEventListener('touchend', (e: TouchEvent) => {
-      const now = performance.now();
-      if (now - lastTap < 320) e.preventDefault();
-      lastTap = now;
-    }, { passive: false });
+    // Zoom suppression moved to `ui/touch/nozoom.ts` and is installed by
+    // `main.ts` before anything boots. It was here, and that meant it only
+    // applied once the GAME had loaded this layer -- so the front door, the
+    // title screen and the entire Game Studio could all be double-tap-zoomed,
+    // which is where it was reported. It is a property of this page on a phone,
+    // not of the control layer. Idempotent, so this call is a belt-and-braces
+    // for anything that installs the layer without going through `main.ts`.
+    installNoZoom();
 
     const tick = () => { this._raf = requestAnimationFrame(tick); this.update(); };
     this._raf = requestAnimationFrame(tick);
