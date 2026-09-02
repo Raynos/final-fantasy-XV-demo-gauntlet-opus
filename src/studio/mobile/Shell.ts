@@ -8,6 +8,7 @@ import { WEATHER_NAMES } from '../../world/Weather.ts';
 import { deviceRows, DOORS, doorHref } from '../DeviceReport.ts';
 import type { GalleryShot } from '../ShotGallery.ts';
 import { StudioList, type ListRow } from '../List.ts';
+import { FlyRig } from './Fly.ts';
 import type { StudioShell } from '../StudioShell.ts';
 
 /**
@@ -268,9 +269,13 @@ export function install(shell: StudioShell) {
     sheet.textContent = '';
     foot.textContent = '';
     const viewing = level === 'view';
+    const world = id === 'world' || id === 'shots';
     body.hidden = viewing;
     sheet.hidden = !viewing;
-    grab.hidden = !viewing;
+    // The turntable's catcher is for the Model Explorer only; the world is
+    // flown with two sticks that own their own hit zones. @see mobile/Fly.ts
+    grab.hidden = !viewing || world;
+    flying(viewing && world && !(isPortrait() && !rotateOk));
     root.classList.toggle('st-viewing', viewing);
 
     if (!id) { drawMenu(); return; }
@@ -504,31 +509,29 @@ export function install(shell: StudioShell) {
         ? `${at.does || at.group}  ·  ${w.where()}${w.settled() ? '' : '  ·  streaming…'}`
         : w.where(),
     }));
-    const ctl = el('div.st-ctl', {}, [el('span.st-pose', { text: 'm/s' })]);
-    for (const v of SPEEDS) {
-      const b = el('button.st-btn.st-ui', { text: `${v}` });
-      b.classList.toggle('on', w.speed() === v);
-      b.addEventListener('click', () => { w.setSpeed(v); draw(); });
-      ctl.appendChild(b);
-    }
-    sheet.appendChild(ctl);
+    // Speed reads as one number with a step either side, not five buttons
+    // competing for a glance: at 400 m/s the useful question is "slower", and
+    // the decade is what answers it. @see WorldExplorer.SPEEDS
+    const i = Math.max(0, SPEEDS.indexOf(w.speed()));
+    const step = (d: number) => {
+      const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + d))];
+      if (next !== w.speed()) { w.setSpeed(next); draw(); }
+    };
+    const slower = el('button.st-btn.st-ui', { text: '−', 'aria-label': 'Slower' });
+    const faster = el('button.st-btn.st-ui', { text: '+', 'aria-label': 'Faster' });
+    slower.addEventListener('click', () => step(-1));
+    faster.addEventListener('click', () => step(1));
+    sheet.appendChild(el('div.st-ctl', {}, [
+      slower,
+      el('span.st-pose', { text: `${w.speed()} m/s` }),
+      faster,
+      // The one line that says what the two thumbs do. It is here rather than
+      // in a help screen because nobody opens a help screen, and the controls
+      // it names were reported as unreadable without it.
+      el('span.st-hintline', { text: 'left thumb moves · right half looks · rim boosts' }),
+    ]));
     foot.appendChild(fbtn('Places', () => { level = 'list'; draw(); }));
-    foot.appendChild(fbtn('Up', () => {}, false));
-    foot.appendChild(fbtn('Down', () => {}, false));
-    // The two lift buttons are press-and-hold, not click, so they are wired
-    // below rather than through `fbtn`'s click.
-    const [, upB, downB] = [...foot.children] as HTMLElement[];
-    hold(upB, (on) => { shell.cam.axes.lift = on ? 1 : 0; });
-    hold(downB, (on) => { shell.cam.axes.lift = on ? -1 : 0; });
-  }
-
-  /** Press-and-hold, released on every way a finger can leave. */
-  function hold(node: HTMLElement, set: (on: boolean) => void) {
-    const off = () => set(false);
-    node.addEventListener('pointerdown', (e) => { e.preventDefault(); set(true); });
-    node.addEventListener('pointerup', off);
-    node.addEventListener('pointercancel', off);
-    node.addEventListener('pointerleave', off);
+    foot.appendChild(fbtn('Look Lab', () => show('look')));
   }
 
   /* ---------------------------------------------------------- gestures -- */
@@ -562,19 +565,20 @@ export function install(shell: StudioShell) {
 
     if (pointers.size >= 2) {
       const now = spread();
-      if (pinchAt > 0 && now > 0) {
-        const k = pinchAt / now;
-        if (shell.section === 'model') shell.model.stage.zoom(k);
-        // In the world a pinch is throttle, not a dolly: there is nothing to
-        // dolly toward, and the speed decade is the control that matters.
-        else nudgeSpeed(k < 1 ? 1 : -1);
+      if (pinchAt > 0 && now > 0 && shell.section === 'model') {
+        // Models only. A pinch used to step the world's speed decade -- two
+        // orders of magnitude, changed by the one gesture whose hand covers the
+        // readout saying what it now is. Speed is a labelled control in the
+        // sheet and nothing else touches it.
+        shell.model.stage.zoom(pinchAt / now);
         pinchAt = now;
       }
       return;
     }
 
+    // Models only. The world's look lives on the right stick now, which is a
+    // rate rather than a delta and can be held. @see mobile/Fly.ts
     if (shell.section === 'model') shell.model.stage.orbit(-dx * 0.006, -dy * 0.005);
-    else shell.cam.look(dx * 1.6, dy * 1.6);
   });
 
   const lift = (e: PointerEvent) => {
@@ -589,36 +593,24 @@ export function install(shell: StudioShell) {
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   }
 
-  /** Step the speed decade, which a pinch in the world drives. */
-  function nudgeSpeed(d: number) {
-    const w = shell.world;
-    const i = SPEEDS.indexOf(w.speed());
-    const at = i < 0 ? 2 : i;
-    const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, at + d))];
-    if (next !== w.speed()) { w.setSpeed(next); draw(); }
-  }
-
   /* -------------------------------------------------------------- travel */
 
   /**
-   * A tap-and-hold anywhere on the world viewport flies forward.
+   * Flying is two thumbs, and it is the game's own control layer.
    *
-   * Not a joystick. A phone flying a review camera wants one verb — *go where I
-   * am looking* — and the direction is already in the drag that got you here.
-   * `Freecam.axes` sums with the keyboard's, so nothing about the desktop path
-   * changes.
+   * There was a hold-anywhere-to-fly gesture here, on the same finger as look,
+   * with a 260 ms timer. @see mobile/Fly.ts for what that cost and what it is
+   * now. Built on first flight and kept, because it owns a `requestAnimationFrame`
+   * and rebuilding it per redraw would leak one per draw.
    */
-  let holdT: ReturnType<typeof setTimeout> | null = null;
-  grab.addEventListener('pointerdown', () => {
-    if (shell.section === 'model') return;
-    holdT = setTimeout(() => { shell.cam.axes.fwd = 1; }, 260);
-  });
-  const stop = () => {
-    if (holdT) { clearTimeout(holdT); holdT = null; }
-    shell.cam.axes.fwd = 0;
-  };
-  grab.addEventListener('pointerup', stop);
-  grab.addEventListener('pointercancel', stop);
+  let fly: FlyRig | null = null;
+  function flying(on: boolean) {
+    if (on && !fly) fly = new FlyRig(root, shell.cam);
+    if (fly) {
+      fly.root.hidden = !on;
+      if (!on) fly.release();
+    }
+  }
 
   /* ------------------------------------------------------------ redraws -- */
 

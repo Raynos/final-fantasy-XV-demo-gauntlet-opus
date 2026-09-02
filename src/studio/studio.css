@@ -824,3 +824,70 @@
   color: var(--ink-3);
 }
 #studio .st-verdict .st-n { font-size: 10px; color: var(--ink-4); }
+
+/* =====================================================================
+   Flying the World Explorer. @see mobile/Fly.ts
+   ===================================================================== */
+
+/*
+ * The rig sits under the studio's own chrome and over the render.
+ *
+ * `#studio-fly` is a sibling of `#studio`'s panels rather than a child of the
+ * scrim, so the sticks are never dimmed by it. `z-index: 2` puts it above the
+ * viewport and below the sheet, the footer and the busy overlay — a stick must
+ * never sit on top of the control that stops you flying.
+ */
+#studio-fly {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+#studio-fly[hidden] { display: none !important; }
+#studio-fly .tc-zone { pointer-events: auto; }
+
+/*
+ * The zones stop short of the sheet and the footer.
+ *
+ * `touch.css.ts` runs them to the bottom of the screen, which is right for the
+ * game — the HUD gives that corner up. Here the bottom 116 px is the sheet and
+ * the action row, and a thumbstick that swallowed taps on "Places" would strand
+ * you in flight.
+ */
+#studio-fly .tc-zone { top: 46px; bottom: 118px; }
+#studio-fly .tc-rest-left { bottom: calc(126px + env(safe-area-inset-bottom, 0px)); }
+
+/* Climb and descend, on the rail a right thumb reaches without leaving the
+   look half. Deliberately narrow: they are held, not aimed at. */
+#studio-fly .sf-rail {
+  position: absolute;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+#studio-fly .sf-lift {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--ink-2);
+  background: rgba(7, 11, 19, 0.55);
+  border: 1px solid var(--hair);
+  border-radius: 50%;
+}
+#studio-fly .sf-lift:active { background: rgba(182, 214, 248, 0.22); color: #fff; }
+
+/* The one line that says what the two thumbs do, in the sheet where you are
+   already reading the speed. Nobody opens a help screen. */
+#studio .st-hintline {
+  flex: 1 0 100%;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+}

@@ -62,6 +62,16 @@ export class Freecam {
    * able to use both, and the sum is clamped to the unit box below.
    */
   axes!: { fwd: number, strafe: number, lift: number };
+  /**
+   * Speed multiplier applied to analogue travel only.
+   *
+   * The keyboard's boost is Shift and its crawl is Ctrl, neither of which a
+   * phone has. The studio's left stick pushed to its rim is the same gesture
+   * that sprints in the game, and `axes` is clamped to the unit box — so the
+   * extra travel has to arrive as a multiplier rather than a bigger axis.
+   * 1 when nothing is boosting.
+   */
+  boostMul!: number;
   constructor() {
     this.enabled = false;
     this.pos = new THREE.Vector3();
@@ -79,6 +89,7 @@ export class Freecam {
 
     this._vel = new THREE.Vector3();
     this.axes = { fwd: 0, strafe: 0, lift: 0 };
+    this.boostMul = 1;
     this._dx = 0;
     this._dy = 0;
     this._look = false;
@@ -182,6 +193,8 @@ export class Freecam {
     let mul = this.speed;
     if (input.key('ShiftLeft') || input.key('ShiftRight')) mul *= this.boost;
     if (input.key('ControlLeft') || input.key('ControlRight')) mul *= this.crawl;
+    // The analogue path's own boost, for a device with no Shift. @see boostMul
+    if (this.boostMul !== 1 && (this.axes.fwd || this.axes.strafe)) mul *= this.boostMul;
 
     this._e.set(this.pitch, this.yaw, 0, 'YXZ');
     this._q.setFromEuler(this._e);
