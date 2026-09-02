@@ -143,12 +143,16 @@ export class DevSuite {
 
     reg.cvar({
       name: 'sky.time', category: 'world', help: 'time of day, hours 0-24',
+      // The day cycle owns this and moves it every frame. @see Cvar.live
+      live: true,
       min: 0, max: 24,
       get: () => { const s = game.get('Sky'); return s ? s.hours : 12; },
       set: (v: number) => { const s = game.get('Sky'); if (s) s.setTimeOfDay(v); },
     });
     reg.cvar({
       name: 'sky.weather', category: 'world', help: 'clear | overcast | storm | fog',
+      // `Weather` rolls its own transitions; the title screen forces 'clear'.
+      live: true,
       choices: [...WEATHER_NAMES],
       get: () => { const w = game.get('Weather'); return w ? w.name : 'clear'; },
       set: (v: unknown) => { const w = game.get('Weather'); if (w && isWeatherName(v)) w.set(v); },

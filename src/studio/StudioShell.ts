@@ -100,7 +100,14 @@ export class StudioShell {
   _scale() {
     // A tool wants more per screen than a HUD does, so it takes the game's
     // scale pulled back toward 1 rather than the scale itself.
-    this.root.style.zoom = (1 + (uiScale(demoActive()) - 1) * 0.45).toFixed(4);
+    //
+    // **Except on a phone, where it takes nothing at all.** `uiScale` answers
+    // "how do I fit a 1280x720 HUD onto this screen", and on a 390x740 portrait
+    // handset that is 0.30 -- which put this shell at zoom 0.69 and took the
+    // 58 px rows `studio.css` authors for a thumb down to 40 real pixels, under
+    // the 44 px floor the same file's comment claims. `.st-touch` is already
+    // written in real screen px for exactly this device; scaling it is the bug.
+    this.root.style.zoom = this.touch ? '1' : (1 + (uiScale(demoActive()) - 1) * 0.45).toFixed(4);
   }
 
   /* --------------------------------------------------------------- frames */

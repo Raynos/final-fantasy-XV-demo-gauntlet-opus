@@ -124,9 +124,25 @@
 }
 
 @keyframes fd-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* The centred variant: same motion, keeps the -50% it is positioned with. */
+@keyframes fd-up-c {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
 
 /* ------------------------------------------------------------ the menu */
 
+/*
+ * NOTE the animation, and why it is not `fd-up`.
+ *
+ * `fd-up` ends on `transform: none`, and an animation's own transform beats the
+ * rule's. With `both` fill the menu therefore sat at `transform: none` forever
+ * after 2.1 s -- so `translateX(-50%)` was silently thrown away and the menu's
+ * LEFT EDGE landed on the screen's centre line. Invisible on a desktop, where
+ * a 380 px box half off a 1600 px screen still reads as "a menu, slightly
+ * right"; unmissable on a phone, where it is most of the viewport. Anything
+ * centred with a transform needs a keyframe that carries the centring.
+ */
 #door .fd-menu {
   position: absolute;
   left: 50%;
@@ -134,7 +150,7 @@
   transform: translateX(-50%);
   width: 380px;
   max-width: 90vw;
-  animation: fd-up 900ms 1200ms both ease-out;
+  animation: fd-up-c 900ms 1200ms both ease-out;
 }
 
 #door .fd-row {
@@ -220,9 +236,50 @@
  * because a highlight that only exists under a cursor never appears here.
  */
 @media (hover: none) {
-  #door .fd-menu { top: auto; bottom: 84px; transform: translateX(-50%); }
-  #door .fd-row { min-height: 62px; padding: 16px 20px; }
-  #door .fd-row::before { opacity: 0.66; }
+  /* No `zoom` here -- see `FrontDoor._scale`. Every number below is a real
+     screen pixel on the handset, which is the only way a 44 px floor means
+     anything. */
+  #door .fd-mark { top: 30%; width: auto; left: 0; right: 0; max-width: none; transform: translateY(-50%); padding: 0 16px; }
+  #door .fd-crest { width: 132px; height: 82px; }
+  #door .fd-ff { font-size: 13px; letter-spacing: 0.62em; text-indent: 0.62em; }
+  #door .fd-xv { font-size: 58px; }
+  #door .fd-rule { width: min(260px, 70vw); }
+  #door .fd-tag { font-size: 9px; letter-spacing: 0.24em; }
+
+  #door .fd-menu {
+    top: auto;
+    left: 0; right: 0;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: none;
+    padding: 0 16px;
+    transform: none;
+    animation: fd-up 900ms 1200ms both ease-out;
+  }
+  /* A thumb, so: the whole row is the target, it is plated by default because
+     there is no cursor to reveal a highlight, and the type is sized to be read
+     at arm's length rather than to be elegant at 1600 px. */
+  #door .fd-row { min-height: 76px; padding: 18px 20px; }
+  #door .fd-row + .fd-row { margin-top: 10px; }
+  #door .fd-row::before { opacity: 0.72; }
   #door .fd-row::after { display: none; }
+  #door .fd-row-t { font-size: 20px; letter-spacing: 0.30em; text-indent: 0.30em; }
+  #door .fd-row.on .fd-row-t { letter-spacing: 0.30em; text-indent: 0.30em; }
+  #door .fd-row-d { font-size: 11px; letter-spacing: 0.12em; margin-top: 7px; }
   #door .fd-foot { display: none; }
+}
+
+/* A phone held upright has room above the menu and none beside it; a phone on
+   its side has the opposite problem, and 76 px rows plus a 58 px XV do not both
+   fit in 390 px of height. The lockup gives way, because the menu is the thing
+   you came here to touch. */
+@media (hover: none) and (orientation: landscape) {
+  #door .fd-mark { top: 26%; }
+  #door .fd-crest { width: 84px; height: 52px; }
+  #door .fd-xv { font-size: 38px; }
+  #door .fd-rule { margin-top: 8px; }
+  #door .fd-tag { display: none; }
+  #door .fd-menu { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; right: auto; width: min(460px, 70vw); transform: translateX(-50%); animation-name: fd-up-c; }
+  #door .fd-row { min-height: 62px; padding: 12px 20px; }
+  #door .fd-row + .fd-row { margin-top: 8px; }
 }

@@ -102,5 +102,12 @@ export function install(shell: StudioShell) {
     if (shell.section) show(null); else shell.close();
   });
 
-  show(null);
+  // `draw`, NOT `show`. `setSection(null)` returns early when the section is
+  // already null -- which it is, straight out of the constructor -- so
+  // `onSection` never fires and the first paint never happens. The desktop
+  // shell hides the same bug because it builds its list in `install()`; here
+  // every row is built in `draw()`, so the studio came up as a header over a
+  // black screen on a phone. The first paint is this file's job, not the
+  // shell's.
+  draw(null);
 }

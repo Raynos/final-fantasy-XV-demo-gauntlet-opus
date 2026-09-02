@@ -1,5 +1,5 @@
 import './title.css';
-import { demoActive } from '../../engine/Device.ts';
+import { demoActive, touchActive } from '../../engine/Device.ts';
 import * as THREE from 'three';
 import { clamp, easeOut, easeOutQuint, el, lerp, letters, svg, uiScale } from '../../ui/UIKit.ts';
 import { Noise } from '../../util/Noise.ts';
@@ -136,8 +136,19 @@ export class TitleScreen {
     this.root.style.display = 'none';
   }
 
+  /**
+   * The lockup's scale — and none of it on a phone.
+   *
+   * `uiScale` exists to keep a HUD authored at 1280x720 registered with the
+   * world behind it. A title screen has nothing to stay registered with, and on
+   * a landscape handset (852x393) the honest fit is 0.546 — which took the menu
+   * rows' 13.5 px type down to **7 real pixels** and their 44 px-ish height to
+   * 24. That is the screenshot the phone came back with. On touch the screen is
+   * authored in real pixels instead, by the `html.has-touch` block in
+   * `title.css`.
+   */
   _scale() {
-    const s = uiScale(demoActive());
+    const s = touchActive() ? 1 : uiScale(demoActive());
     this.root.style.zoom = s.toFixed(4);
   }
 
@@ -172,7 +183,7 @@ export class TitleScreen {
   _build() {
     this.items = this._items();
     this.menu.textContent = '';
-    this.rows = this.items.map((it): TitleRow => {
+    this.rows = this.items.map((it, i): TitleRow => {
       const row = el('div.ti-row');
       const bg = el('div.tr-bg');
       const ml = el('div.tr-m.l');
@@ -181,6 +192,18 @@ export class TitleScreen {
       const d = el('div.tr-d', { text: it.desc });
       row.appendChild(bg); row.appendChild(ml); row.appendChild(mr);
       row.appendChild(t); row.appendChild(d);
+      // A row is a control, not a caption. Without this the only way to pick
+      // anything here was an on-screen d-pad the touch layer had to draw over
+      // the game — three fake buttons standing in for the tap the row could
+      // have taken itself. `title.css` opts the rows back into pointer events;
+      // `#title` as a whole stays transparent to them so the attract camera is
+      // never covered by an invisible sheet.
+      row.addEventListener('pointerdown', () => { if (this._enabled(i)) this.index = i; });
+      row.addEventListener('click', () => {
+        if (!this.shown || this.chosen || !this._enabled(i)) return;
+        this.index = i;
+        this.choose();
+      });
       this.menu.appendChild(row);
       return { row, bg, ml, mr, t, d, it };
     });
@@ -201,7 +224,10 @@ export class TitleScreen {
     this.fadeOut = 0;
     this._build();
     this.root.style.display = '';
-    this.root.style.pointerEvents = 'none';
+    // `pointer-events` is CSS's now: `#title` is transparent to the pointer and
+    // `.ti-row` opts back in, so the rows can be tapped. An inline `none` here
+    // beat the rule and made every row inert. @see title.css
+    this.root.style.pointerEvents = '';
     // Golden hour, always. The title screen is the one frame every player sees,
     // and Leide only looks like itself with the sun on the deck.
     const sky = this.game.get('Sky');

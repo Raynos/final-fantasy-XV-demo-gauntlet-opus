@@ -1,4 +1,5 @@
 import type { Game } from '../game/Game.ts';
+import { touchActive } from '../engine/Device.ts';
 /**
  * Frame-cost readout: the `stat unit` equivalent.
  *
@@ -26,16 +27,33 @@ export class StatsHud {
   /** Ring buffer of frame times, ms. */
   samples!: number[];
   visible!: boolean;
+  /**
+   * One line instead of a panel, on a phone.
+   *
+   * The full readout is a 132 px graph over six rows — roughly 150x120. On a
+   * 1600 px desktop that is a corner; on an 852 px handset it is a sixth of the
+   * frame, sitting over the part of the picture the build is being judged on,
+   * and five of its six numbers are things nobody can act on from a phone. What
+   * survives is the number a device report is actually about: is it holding the
+   * frame rate. The rest is one flag away — `?stats=full`.
+   */
+  compact!: boolean;
   constructor(root: HTMLElement) {
+    this.compact = touchActive()
+      && new URLSearchParams(location.search).get('stats') !== 'full';
+
     this.node = document.createElement('div');
-    this.node.className = 'dev-stats';
-    this.node.innerHTML = `
+    this.node.className = this.compact ? 'dev-stats dev-stats-min' : 'dev-stats';
+    this.node.innerHTML = this.compact
+      ? '<div class="dev-stat-rows"></div>'
+      : `
       <canvas class="dev-graph" width="${W}" height="${H}"></canvas>
       <div class="dev-stat-rows"></div>`;
     root.appendChild(this.node);
 
     this.canvas = this.node.querySelector('canvas');
-    this.ctx = this.canvas!.getContext('2d')!;
+    // No canvas in compact mode, so no context. `_draw` bails on a null one.
+    this.ctx = (this.canvas ? this.canvas.getContext('2d') : null) as CanvasRenderingContext2D;
     this.rows = this.node.querySelector('.dev-stat-rows')!;
     this.samples = new Array(W).fill(0);
     this.head = 0;
@@ -70,6 +88,12 @@ export class StatsHud {
     for (const s of this.samples) if (s > worst) worst = s;
 
     const row = (k: string, v: string | number) => `<div><span>${k}</span><b>${v}</b></div>`;
+    if (this.compact) {
+      // fps, and the frame time that explains it. @see compact
+      this.rows.innerHTML = row('fps', (game.time.fps || 0).toFixed(0))
+        + row('ms', ms.toFixed(0));
+      return;
+    }
     this.rows.innerHTML = [
       row('fps', (game.time.fps || 0).toFixed(1)),
       row('frame', `${ms.toFixed(1)} ms`),
@@ -83,6 +107,7 @@ export class StatsHud {
 
   _draw() {
     const c = this.ctx;
+    if (!c) return;   // compact mode draws no graph
     c.clearRect(0, 0, W, H);
     // 16.7 ms and 33.3 ms rules: the 60 fps target and the hitch threshold
     // `src/tools/gameplay.mts` fails on. Scale pins 33.3 ms to two-thirds height so

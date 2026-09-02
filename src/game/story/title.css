@@ -82,3 +82,67 @@
 }
 #title .ti-foot .fk b { font-weight: 400; color: var(--ice); margin-right: 8px; }
 #title .ti-ver { position: absolute; right: 40px; bottom: 22px; font-size: 8px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-4); }
+
+/* ---------- touch ------------------------------------------------------
+   A phone, and no `zoom` on the root (see `TitleScreen._scale`) -- so every
+   number below is a real screen pixel.
+
+   The rows ARE the menu here. There is no cursor to reveal a highlight and no
+   arrow keys to move one, so each row is plated by default, sized past the
+   44 px floor, and takes the tap itself. That is what lets the touch layer
+   stay off this screen entirely rather than drawing a d-pad over the attract
+   camera to drive a menu the finger was already on.
+
+   The lockup gives way rather than the menu: a landscape handset is 393 px
+   tall and a 112 px XV plus three 56 px rows do not both fit. */
+#title { pointer-events: none; }
+html.has-touch #title .ti-row {
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.has-touch #title .ti-mark { top: 27%; }
+html.has-touch #title .ti-crest { width: 108px; height: 67px; margin-bottom: 14px; }
+html.has-touch #title .ti-ff { font-size: 12px; letter-spacing: 0.58em; padding-left: .58em; }
+html.has-touch #title .ti-xv { margin-top: 10px; font-size: 62px; }
+html.has-touch #title .ti-rule { margin-top: 14px; }
+html.has-touch #title .ti-tag { margin-top: 12px; font-size: 8px; letter-spacing: 0.3em; padding-left: .3em; }
+
+html.has-touch #title .ti-menu {
+  top: auto;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  width: min(440px, 84vw);
+}
+html.has-touch #title .ti-row {
+  min-height: 60px;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+html.has-touch #title .ti-row + .ti-row { margin-top: 6px; }
+/* A pool of light with no edge reads as nothing at all under a thumb, so the
+   untouched rows get a real plate and the highlight keeps the pool on top. */
+html.has-touch #title .ti-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--plate);
+  opacity: 0.6;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+html.has-touch #title .ti-row .tr-t { position: relative; font-size: 18px; letter-spacing: 0.28em; padding-left: .28em; }
+html.has-touch #title .ti-row .tr-d { position: relative; font-size: 10px; letter-spacing: 0.16em; padding-left: .16em; margin-top: 5px; }
+html.has-touch #title .ti-row.off::before { opacity: 0.3; }
+/* Keyboard legends and a build stamp, on a device with no keyboard. */
+html.has-touch #title .ti-foot,
+html.has-touch #title .ti-ver { display: none; }
+
+/* Portrait has the height to keep the lockup, and no width to spare. */
+@media (orientation: portrait) {
+  html.has-touch #title .ti-mark { top: 30%; }
+  html.has-touch #title .ti-menu { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); width: min(440px, 90vw); }
+  html.has-touch #title .ti-row { min-height: 68px; }
+}

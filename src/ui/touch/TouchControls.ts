@@ -192,7 +192,15 @@ export class TouchControls {
     // harness. The whole layer comes off so no posed frame can ever contain
     // it. A *played* cutscene is a different thing and keeps one button — see
     // the `cine` mode.
-    const hidden = !!g.currentShot;
+    // ...and the same for the title screen. Its rows are real controls now
+    // (`title.css` gives them `pointer-events`), so the d-pad this layer used
+    // to draw over the attract camera was three fake buttons standing in for a
+    // tap the menu could take itself -- and the sticks, the fan and the rail
+    // were live over a screen with nothing to steer. A main menu should look
+    // like a main menu.
+    const story = g.get('Story');
+    const titleUp = !!(story && story.title && story.title.shown);
+    const hidden = !!g.currentShot || titleUp;
     if (hidden !== this.root.hidden) {
       this.root.hidden = hidden;
       if (hidden) this.releaseAll();

@@ -32,6 +32,15 @@ installBootProfile(game);
 
 const qs = new URLSearchParams(location.search);
 
+// The touch marker goes on the root element NOW, not when `TouchControls`
+// finishes its dynamic import after `game.start()`. Three stylesheets key phone
+// layouts off `html.has-touch` -- `title.css` among them -- and the title
+// screen is shown by `StorySystem` during that same boot, so a class that
+// arrives a chunk-load later means the first paint of the title is the desktop
+// layout scaled onto a handset. `TouchControls` still adds it (idempotent), so
+// `?touch=1` on a desktop and this path agree.
+if (touchActive()) document.documentElement.classList.add('has-touch');
+
 /**
  * Which door opens, and — the point of this file in v2 — **when anything is
  * booted at all**.

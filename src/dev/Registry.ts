@@ -53,6 +53,21 @@ export interface Cvar<T extends CvarValue = CvarValue> {
   choices?: readonly string[];
   /** Hidden unless cheats are on. */
   cheat?: boolean;
+  /**
+   * The simulation owns this value and moves it on its own.
+   *
+   * `deltas()` compares a live value against the one snapshotted at
+   * registration, which is the right question for a toggle and the wrong one
+   * for a clock. `sky.time` is the day cycle's own hour: it advances every
+   * frame, so within a second of boot it differed from its snapshot and the
+   * DEBUG STATE MODIFIED watermark came on and stayed on -- in every session,
+   * on every device, having modified nothing. A watermark that is always lit
+   * says nothing, which cost this exact bug the one thing it was for.
+   *
+   * A `live` cvar counts as changed only once somebody has actually assigned
+   * it through the registry. @see Registry.touched
+   */
+  live?: boolean;
 }
 /** A console command. */
 export interface Command {
@@ -82,9 +97,12 @@ export class Registry {
   defaults!: Map<string, CvarValue>;
   /** Ring buffer of executed command lines. */
   history!: string[];
+  /** Cvars a human has assigned through `set`. @see Cvar.live */
+  touched!: Set<string>;
   constructor() {
     this.cvars = new Map();
     this.cmds = new Map();
+    this.touched = new Set();
     this.defaults = new Map();
     /** Ring buffer of executed command lines; rides along in every review note. */
     this.history = [];
@@ -136,6 +154,7 @@ export class Registry {
       if (!Number.isFinite(v)) throw new Error(`${name}: not a number`);
     }
     c.set(v);
+    this.touched.add(name);
     return v;
   }
 
@@ -180,6 +199,9 @@ export class Registry {
   deltas(): Record<string, CvarDelta> {
     const out: Record<string, CvarDelta> = {};
     for (const [name, c] of this.cvars) {
+      // A value the simulation drives is not evidence of tampering until
+      // somebody has driven it. @see Cvar.live
+      if (c.live && !this.touched.has(name)) continue;
       const was = this.defaults.get(name);
       let is: CvarValue;
       try { is = c.get(); } catch { continue; }
@@ -195,6 +217,7 @@ export class Registry {
       if (boot === undefined) continue;
       try { c.set(boot); } catch { /* transient system */ }
     }
+    this.touched.clear();
   }
 
   /**

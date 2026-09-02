@@ -260,5 +260,8 @@ export function install(shell: StudioShell) {
   };
   window.addEventListener('keydown', onKey);
 
-  show(null);
+  // `draw`, not `show`: `setSection(null)` returns early because the section is
+  // already null, so `onSection` never fires and the status line, the side list
+  // and the info panel keep whatever the markup gave them. @see mobile/Shell.ts
+  draw(null);
 }

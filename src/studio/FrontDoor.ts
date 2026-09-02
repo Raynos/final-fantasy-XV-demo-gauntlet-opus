@@ -1,5 +1,5 @@
 import './frontdoor.css';
-import { demoActive } from '../engine/Device.ts';
+import { demoActive, touchActive } from '../engine/Device.ts';
 import { el, uiScale } from '../ui/UIKit.ts';
 
 /**
@@ -95,8 +95,19 @@ export class FrontDoor {
     this._highlight(0);
   }
 
+  /**
+   * The door's scale — and on a phone, deliberately none.
+   *
+   * `uiScale` answers one question: how do I fit a HUD authored at 1280x720
+   * onto this screen. On a 390x740 portrait handset the honest answer is
+   * **0.30**, and at `zoom: 0.30` this door rendered its 380 px menu as a
+   * 116 px column of wrapped words -- which is exactly what the phone
+   * screenshot showed. A menu is not a HUD: it has no world behind it to stay
+   * registered with, so it is authored in real screen pixels and the
+   * `(hover: none)` block in `frontdoor.css` owns the phone layout.
+   */
   _scale() {
-    this.root.style.zoom = uiScale(demoActive()).toFixed(4);
+    this.root.style.zoom = touchActive() ? '1' : uiScale(demoActive()).toFixed(4);
   }
 
   _highlight(i: number) {
