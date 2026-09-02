@@ -200,8 +200,11 @@ export function install(shell: StudioShell) {
     info.textContent = '';
     hint.innerHTML = '<b>1-6</b> section &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
     // The filter belongs to the lists, not to the knob panels.
+    // The filter belongs to the lists, not to the knob panels or the menu, and
+    // `side` has to start below it when it is there. `feed()` sets `st-listed`.
     const listed = shell.section === 'model' || shell.section === 'world' || shell.section === 'shots';
-    searchWrap.style.display = listed && shell.section ? '' : 'none';
+    searchWrap.hidden = !(listed && shell.section);
+    side.classList.toggle('st-listed', !!(listed && shell.section));
 
     if (shell.section === 'model') { renderModel(); return; }
     if (shell.section === 'world') { renderWorld(); return; }

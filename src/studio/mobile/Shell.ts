@@ -146,6 +146,8 @@ export function install(shell: StudioShell) {
   /** Feed the engine, then report what the filter did. */
   function feed(rows: Array<ListRow<Row>>) {
     searchWrap.hidden = false;
+    // The list starts below the filter. Without this they are both pinned to
+    // the top of the content area and the first row prints under the field.
     body.classList.add('st-listed');
     list.render(rows);
     searchCount.textContent = list.summary();

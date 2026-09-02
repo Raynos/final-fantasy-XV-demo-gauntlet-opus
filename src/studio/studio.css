@@ -728,3 +728,27 @@
 }
 #studio .st-side.st-tiles .st-thumb { width: 100%; height: 76px; }
 #studio .st-side.st-tiles .st-row:not(.st-asset) { display: none; }
+
+/*
+ * `hidden` has to actually hide it.
+ *
+ * `.st-searchwrap` sets `display: flex`, and an author rule beats the UA's
+ * `[hidden] { display: none }` — so `searchWrap.hidden = true` did nothing and
+ * the filter box sat over the studio menu, with the first row printed under it.
+ * The same trap is already handled for `.st-sheet` and `.st-grab`; this is the
+ * third element to hit it, which is why it is one selector list now.
+ */
+#studio .st-searchwrap[hidden],
+#studio .st-sheet[hidden],
+#studio .st-grab[hidden] { display: none !important; }
+
+/*
+ * A list that is being filtered starts BELOW the filter.
+ *
+ * `.st-side` is pinned to the top of the content area, and the filter is pinned
+ * to the same place — they were drawn on top of each other. The class is set by
+ * the shell's `feed()`, so the offset applies exactly when there is a filter to
+ * clear, and the menu (which has none) keeps the full height.
+ */
+#studio .st-side.st-listed { top: 82px; }
+#studio.st-touch .st-side.st-listed { top: 90px; }
