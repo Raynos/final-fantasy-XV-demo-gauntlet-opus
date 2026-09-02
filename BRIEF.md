@@ -1,7 +1,7 @@
 # FINAL FANTASY XV — Eos. Engineering & art brief
 
 Read this fully before writing code. Every agent works against this contract.
-> **Live: https://dist-three-rho-86.vercel.app** — one build, no query
+> **Live: <https://dist-three-rho-86.vercel.app>** — one build, no query
 > parameters. A desktop gets the full game; a phone or tablet is detected and
 > gets the demo automatically. `?demo=0` / `?demo=1` force either half.
 > Coordinating rather than implementing? Read [`project/HANDOFF.md`](project/HANDOFF.md) first.
