@@ -409,3 +409,171 @@
 #studio.st-touch .st-status { display: none; }
 #studio.st-desk .st-top,
 #studio.st-desk .st-foot { display: none; }
+
+/* =====================================================================
+   The mobile stack's own furniture: a viewport level, a bottom sheet, a
+   gesture catcher, a busy overlay and a plated blank.
+   ===================================================================== */
+
+/*
+ * `view` hands the whole screen to the render.
+ *
+ * The list is `hidden`, the sheet appears, and the scrim pulls back to the top
+ * and bottom bands that hold the chrome legible — a model judged through a
+ * full-frame vignette is a model you cannot judge.
+ */
+#studio.st-touch.st-viewing .st-scrim {
+  background:
+    linear-gradient(180deg, rgba(4, 7, 13, 0.72), transparent 16%),
+    linear-gradient(0deg, rgba(4, 7, 13, 0.80), transparent 34%);
+}
+
+/* The gesture catcher. Between the top bar and the sheet, so a drag can never
+   start on a control, and invisible: it is a hit area, not a surface. */
+#studio .st-grab {
+  position: absolute;
+  left: 0; right: 0;
+  top: 44px;
+  bottom: 116px;
+  pointer-events: auto;
+  touch-action: none;          /* we own pan and pinch here */
+}
+#studio .st-grab[hidden] { display: none; }
+
+/* The bottom sheet: what is on screen and what you can do to it, above the
+   footer's actions and inside the thumb arc. */
+#studio .st-sheet {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: linear-gradient(0deg, rgba(7, 11, 19, 0.86), rgba(7, 11, 19, 0.20));
+}
+#studio .st-sheet[hidden] { display: none; }
+#studio.st-desk .st-sheet, #studio.st-desk .st-grab { display: none; }
+
+#studio .st-sheet .st-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#studio .st-sheet .st-btn {
+  min-width: 46px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+/*
+ * A section with no screen, on something opaque.
+ *
+ * The placeholder used to print grey type across a live turntable: a working
+ * frame under a sentence saying it did not work. Whatever it says, it has to
+ * sit on a plate or the picture contradicts the words.
+ */
+#studio .st-blank {
+  margin: 18% 16px 0;
+  padding: 26px 20px;
+  text-align: center;
+  background: rgba(7, 11, 19, 0.88);
+  border: 1px solid var(--hair);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+#studio .st-blank .st-item-t { margin-bottom: 8px; }
+#studio .st-blank .st-item-d + .st-item-d { margin-top: 14px; opacity: 0.7; }
+
+/*
+ * The busy overlay.
+ *
+ * `StudioShell` has reported boot progress through `onBusy` since v2 and
+ * neither shell drew it, so opening World or Shots held the last frame for
+ * several seconds with no sign of life and every tap queued behind the boot —
+ * which reads exactly like a hang, and was reported as one.
+ */
+#studio .st-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 13, 0.86);
+  pointer-events: auto;        /* a boot is not a moment to accept a stray tap */
+}
+#studio .st-busy[hidden] { display: none; }
+#studio .st-busy-in { width: min(320px, 76vw); text-align: center; }
+#studio .st-busy-t {
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+#studio .st-busy-bar {
+  position: relative;
+  height: 1px;
+  margin-top: 16px;
+  background: var(--hair);
+}
+#studio .st-busy-bar i {
+  position: absolute;
+  inset: 0 100% 0 0;
+  background: linear-gradient(90deg, #5b7fb8, #dfe8ff);
+  transition: right 0.25s linear;
+}
+
+/* Every control on the phone is a real button, so the UA's own styling has to
+   be turned off in one place rather than per rule. @see mobile/Shell.ts */
+#studio button {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------------------------------------------------- look lab + device */
+
+/* A row of exclusive chips: the shape every Look Lab control takes, and the
+   only control shape that survives a thumb without a slider's precision. */
+#studio .st-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px 4px;
+}
+#studio .st-sheet .st-chips { padding: 0; }
+#studio .st-chips .st-btn {
+  min-height: 40px;
+  min-width: 56px;
+  padding: 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* The device readout: a key, a value, and the one line that says why it
+   matters. Three rows rather than a table, because a 390 px screen has no
+   column to spare and the note is the half people actually need. */
+#studio .st-kv {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(206, 224, 250, 0.06);
+}
+#studio .st-kv-k {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+#studio .st-kv-v {
+  margin-top: 3px;
+  font-size: 15px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+#studio .st-kv-n { margin-top: 3px; font-size: 11px; color: var(--ink-4); }
+
+/* A row that names something this profile cannot do. Dim, still tappable —
+   tapping says why rather than doing nothing. @see ShotGallery */
+#studio .st-row.off { opacity: 0.42; }

@@ -6,6 +6,8 @@ import { Freecam } from '../dev/Freecam.ts';
 import { bootStudio, WORLD_SYSTEMS, type Progress } from './StudioBoot.ts';
 import { ModelExplorer } from './ModelExplorer.ts';
 import { WorldExplorer } from './WorldExplorer.ts';
+import { ShotGallery } from './ShotGallery.ts';
+import { LookLab } from './LookLab.ts';
 import { SECTIONS, type SectionId } from './Sections.ts';
 import type { Game } from '../game/Game.ts';
 
@@ -39,6 +41,18 @@ import type { Game } from '../game/Game.ts';
  * own `requestAnimationFrame`, ticks only what it booted, and renders. That is
  * why nothing can wander into a shot: an enemy that does not exist cannot.
  */
+/**
+ * The sections that need a world under them, named once.
+ *
+ * Three now, not two. **Look Lab is one of them**, and its absence was the bug:
+ * `setSection('look')` fell through to the `else` arm, which boots nothing — so
+ * the one section whose entire job is "change how the world reads" opened onto
+ * an empty scene with no sky to set the hour on. A set rather than a chain of
+ * `||` because it is asked in two places (the frame loop and the boot) and two
+ * copies of a condition is exactly how they come to disagree.
+ */
+const WORLD_SECTIONS = new Set<string>(['world', 'shots', 'look']);
+
 export class StudioShell {
   game: Game;
   root: HTMLElement;
@@ -50,6 +64,10 @@ export class StudioShell {
   cam: Freecam;
   model: ModelExplorer;
   world: WorldExplorer;
+  /** The 166 framings, as destinations. @see ShotGallery */
+  gallery: ShotGallery;
+  /** Time, weather, tier and the material overrides. @see LookLab */
+  look: LookLab;
   /** Has the five-system world profile been booted? */
   worldBooted: boolean;
   /** Redraw hook, installed by whichever shell is drawing. @see setSection */
@@ -81,6 +99,8 @@ export class StudioShell {
     this.cam = new Freecam();
     this.model = new ModelExplorer(game);
     this.world = new WorldExplorer(game, this.cam);
+    this.gallery = new ShotGallery(game, this.cam);
+    this.look = new LookLab(game);
     this.onSection = null;
     this.onBusy = null;
     this._raf = 0;
@@ -131,7 +151,7 @@ export class StudioShell {
       g.time.tick();
       g.input.update();
 
-      if (this.worldBooted && (this.section === 'world' || this.section === 'shots')) {
+      if (this.worldBooted && WORLD_SECTIONS.has(this.section as string)) {
         for (const s of g.systems) if (s.update) s.update(dt, g);
       }
 
@@ -170,7 +190,7 @@ export class StudioShell {
     this.section = id;
     this.root.classList.toggle('st-in-section', !!id);
 
-    if (id === 'world' || id === 'shots') {
+    if (WORLD_SECTIONS.has(id as string)) {
       if (!this.worldBooted) {
         const p: Progress = (t, label) => this.onBusy?.(label, t);
         this.onBusy?.('Building the world', 0);

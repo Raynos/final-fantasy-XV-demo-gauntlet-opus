@@ -210,6 +210,21 @@ export class ModelExplorer {
       if (!made || !made.object) throw new Error('no object');
       this._made = made;
       this._framing = this.stage.show(made.object);
+      // The enemy's three-quarter, set once, here.
+      //
+      // `pinFacing` writes `object.rotation.y` every frame for everything else,
+      // and must not for an enemy: `EnemyBase.freeze` rewrites the root's
+      // rotation from `heading` on every pose, so a pin would be overwritten
+      // the moment a pose was applied and the two would fight. v1 set `heading`
+      // and let `freeze` do the turning; v2's `_enemy()` left it at 0 and
+      // nothing put it back, so every creature in the roster staged dead-on —
+      // the least informative angle there is.
+      //
+      // After `show()`, because `subjectYaw()` reads `faceOffset`, which
+      // `show()` derives from the bounds: a long-bodied quadruped needs 1.25 rad
+      // where a biped needs 0.7. Before `applyPose()`, because that is the call
+      // that turns it.
+      if (made.kind === 'enemy') made.enemy.heading = this.stage.subjectYaw();
       this.applyPose();
     } catch (err: unknown) {
       this.error = `${this.family.id}/${key}: ${err instanceof Error ? err.message : String(err)}`;

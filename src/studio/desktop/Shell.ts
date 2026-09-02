@@ -2,6 +2,10 @@ import { demoActive } from '../../engine/Device.ts';
 import { el } from '../../ui/UIKit.ts';
 import { SECTIONS, type SectionId } from '../Sections.ts';
 import { SPEEDS } from '../WorldExplorer.ts';
+import { TIMES, VIEW_MODES } from '../LookLab.ts';
+import { QUALITY_TIERS } from '../../engine/Renderer.ts';
+import { WEATHER_NAMES } from '../../world/Weather.ts';
+import { deviceRows, DOORS, doorHref } from '../DeviceReport.ts';
 import type { StudioShell } from '../StudioShell.ts';
 
 /**
@@ -67,6 +71,28 @@ export function install(shell: StudioShell) {
   const hint = el('div.st-hint');
   root.appendChild(hint);
 
+  /**
+   * Something to look at while five systems boot.
+   *
+   * `StudioShell` has reported progress through `onBusy` since v2 and no shell
+   * ever drew it, so opening World or Shots froze on the last frame for whole
+   * seconds — `_booting` stops the render loop by design — with nothing on
+   * screen to say why. Cheap here, and the difference between "loading" and
+   * "hung" everywhere.
+   */
+  const busyLabel = el('div.st-busy-t', { text: '' });
+  const busyBar = el('i');
+  const busy = el('div.st-busy', {}, [
+    el('div.st-busy-in', {}, [busyLabel, el('div.st-busy-bar', {}, [busyBar])]),
+  ]);
+  busy.hidden = true;
+  root.appendChild(busy);
+  shell.onBusy = (label, t) => {
+    busy.hidden = label == null;
+    if (label != null) busyLabel.textContent = label;
+    busyBar.style.right = `${Math.max(0, 100 - t * 100).toFixed(1)}%`;
+  };
+
   const menu = el('div.st-menu.st-ui', {}, [el('div.st-menu-h', { text: 'Game Studio' })]);
   for (const s of avail) {
     const item = el('button.st-item', {}, [
@@ -103,10 +129,110 @@ export function install(shell: StudioShell) {
 
     if (shell.section === 'model') { renderModel(); return; }
     if (shell.section === 'world') { renderWorld(); return; }
+    if (shell.section === 'shots') { renderShots(); return; }
+    if (shell.section === 'look') { renderLook(); return; }
+    if (shell.section === 'device') { renderDevice(); return; }
     if (!shell.section) return;
 
     const s = SECTIONS.find((x) => x.id === shell.section);
-    info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} — not built yet, this lane is next.` }));
+    info.appendChild(el('div.st-item-d', { text: `${s ? s.title : ''} — no screen for this yet.` }));
+  }
+
+  /* ------------------------------------------------------ shot gallery -- */
+
+  /**
+   * The 166 framings the nightly gate judges, as places to stand.
+   *
+   * A `follow` shot is framed on a character and the studio has none by
+   * construction, so those rows are listed and dimmed with the reason rather
+   * than hidden — a gallery that quietly dropped a third of the corpus would
+   * misrepresent what is judged. @see ShotGallery
+   */
+  function renderShots() {
+    const g = shell.gallery;
+    const c = g.counts();
+    let group = '';
+    for (const row of g.shots()) {
+      if (row.group !== group) {
+        group = row.group;
+        side.appendChild(el('div.st-group', { text: group }));
+      }
+      const r = el('button.st-row.st-ui', {}, [
+        el('span', { text: row.name }),
+        el('span.st-n', { text: row.standable ? `${row.time.toFixed(1)}h` : '—' }),
+      ]);
+      r.classList.toggle('on', g.at === row.name);
+      r.classList.toggle('off', !row.standable);
+      r.title = row.standable ? row.doc : (row.why || '');
+      r.addEventListener('click', () => { if (g.stand(row)) render(); });
+      side.appendChild(r);
+    }
+    const at = g.shots().find((x) => x.name === g.at);
+    info.appendChild(el('div.st-nums', {
+      text: at
+        ? `${at.name}  ·  ${at.doc}  ·  ${at.time.toFixed(1)}h  ·  ${at.fov}°  ·  camera ${shell.world.where()}`
+        : `${c.standable} of ${c.total} framings can be stood in with no characters booted`,
+    }));
+    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>Esc</b> back';
+  }
+
+  /* ---------------------------------------------------------- look lab -- */
+
+  /** Four knobs you can see the result of, and nothing you cannot. */
+  function renderLook() {
+    const L = shell.look;
+    const chips = (label: string, names: readonly string[], on: string | null, pick: (n: string) => void) => {
+      side.appendChild(el('div.st-group', { text: label }));
+      const row = el('div.st-chips');
+      for (const n of names) {
+        const b = el('button.st-btn.st-ui', { text: n });
+        b.classList.toggle('on', n === on);
+        b.addEventListener('click', () => pick(n));
+        row.appendChild(b);
+      }
+      side.appendChild(row);
+    };
+
+    chips('Time of day', TIMES.map((t) => t.label), L.timeLabel(), (label) => {
+      const t = TIMES.find((x) => x.label === label);
+      if (t) { L.setTime(t.h); render(); }
+    });
+    chips(L.hasWeather() ? 'Weather' : 'Weather — boots on first use',
+      [...WEATHER_NAMES], L.hasWeather() ? L.weather() : null,
+      (n) => { void L.setWeather(n as typeof WEATHER_NAMES[number]).then(render); });
+    chips('Quality tier', [...QUALITY_TIERS], L.tier(), (t) => { L.setTier(t as typeof QUALITY_TIERS[number]); render(); });
+    chips('Read the geometry', VIEW_MODES, L.view(), (m) => { L.setView(m); render(); });
+
+    info.appendChild(el('div.st-nums', {
+      text: `${L.timeLabel() || `${L.time().toFixed(1)}h`}  ·  ${L.weather()}  ·  ${L.tier()}  ·  ${L.view()}`,
+    }));
+    hint.innerHTML = '<b>WASD</b> fly &nbsp; <b>drag</b> look &nbsp; <b>Esc</b> back';
+  }
+
+  /* ------------------------------------------------------------ device -- */
+
+  /** What this build decided at boot, read from the running module. */
+  function renderDevice() {
+    for (const r of deviceRows(shell.game)) {
+      side.appendChild(el('div.st-kv', {}, [
+        el('div.st-kv-k', { text: r.k }),
+        el('div.st-kv-v', { text: r.v }),
+        r.note ? el('div.st-kv-n', { text: r.note }) : null,
+      ]));
+    }
+    side.appendChild(el('div.st-group', { text: 'The way back — reloads the page' }));
+    for (const d of DOORS) {
+      const row = el('button.st-row.st-ui', {}, [
+        el('span', { text: d.label }),
+        el('span.st-n', { text: `?${d.param}=${d.value}` }),
+      ]);
+      row.title = d.why;
+      row.addEventListener('click', () => { location.href = doorHref(d); });
+      side.appendChild(row);
+    }
+    info.appendChild(el('div.st-nums', {
+      text: 'Every value is read from the running module, never recomputed here.',
+    }));
   }
 
   /* ----------------------------------------------------- world explorer -- */

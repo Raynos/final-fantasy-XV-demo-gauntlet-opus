@@ -50,6 +50,18 @@ export class Freecam {
   sensitivity!: number;
   speed!: number;
   yaw!: number;
+  /**
+   * Analogue travel, added to the keyboard's — for a device with no keyboard.
+   *
+   * `update` reads `input.key('KeyW')` and friends, which is right for the dev
+   * suite and answers nothing at all on a phone. The studio's mobile shell
+   * writes these instead, in the same -1..1 the key pair produces, so one
+   * integrator serves both and a thumb and a keyboard cannot drift apart.
+   *
+   * Summed rather than switched: a tablet with a keyboard attached should be
+   * able to use both, and the sum is clamped to the unit box below.
+   */
+  axes!: { fwd: number, strafe: number, lift: number };
   constructor() {
     this.enabled = false;
     this.pos = new THREE.Vector3();
@@ -66,6 +78,7 @@ export class Freecam {
     this.sensitivity = 0.0022;
 
     this._vel = new THREE.Vector3();
+    this.axes = { fwd: 0, strafe: 0, lift: 0 };
     this._dx = 0;
     this._dy = 0;
     this._look = false;
@@ -91,6 +104,15 @@ export class Freecam {
       // either uselessly slow or uncontrollable.
       this.speed = THREE.MathUtils.clamp(this.speed * (e.deltaY < 0 ? 1.25 : 0.8), 0.25, 4000);
     };
+  }
+
+  /**
+   * Turn the camera by a raw pointer delta, in the same units `mousemove`
+   * reports. For a drag on a touchscreen, where there is no `movementX`.
+   */
+  look(dx: number, dy: number) {
+    this._dx += dx;
+    this._dy += dy;
   }
 
   /**
@@ -152,9 +174,10 @@ export class Freecam {
     this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI / 2 + 0.001, Math.PI / 2 - 0.001);
 
     const k = (c: string) => (input.key(c) ? 1 : 0);
-    const fwd = k('KeyW') - k('KeyS');
-    const strafe = k('KeyD') - k('KeyA');
-    const lift = k('KeyE') - k('KeyQ');
+    const u = (v: number) => THREE.MathUtils.clamp(v, -1, 1);
+    const fwd = u(k('KeyW') - k('KeyS') + this.axes.fwd);
+    const strafe = u(k('KeyD') - k('KeyA') + this.axes.strafe);
+    const lift = u(k('KeyE') - k('KeyQ') + this.axes.lift);
 
     let mul = this.speed;
     if (input.key('ShiftLeft') || input.key('ShiftRight')) mul *= this.boost;
