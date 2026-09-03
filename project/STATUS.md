@@ -4,10 +4,20 @@
 > `journal/`. Deleting a line that has stopped being true loses nothing.
 > Capped at 150 lines by `.githooks/pre-commit`.
 
-**`main`. `docs/plans/` is EMPTY — no plan is open.** Game Studio v3 closed
-2026-09-02: all nine lanes built, `studiocheck` **20/20**, deployed and looked
-at on a real phone. `project/handoff/game-studio.md` is the live state and
-carries the five things that will bite.
+**`main`. One plan open: `docs/plans/2026-09-02-opus-model-animations.md`
+(PROPOSED).** Game Studio v3 closed 2026-09-02 — nine lanes, `studiocheck`
+**22/22**, deployed and driven on a real phone through a dozen rounds of
+reported bugs. `project/handoff/game-studio.md` is the live state and carries
+eight gotchas; read 1, 2 and 6 before touching the Model Explorer.
+
+**The suite is 24/24 again.** `uxcheck` and `touchcheck` had been red with a
+300 s timeout and no error message: a harness play lease was sitting on the
+studio's front door waiting for somebody to press PLAY. `?play=1` is the
+documented bypass and the daemon puts it on every play lease. Two `expect`
+strings in `check.mts` had also drifted from their gates — `studiocheck` said
+8/8 against 22, `uxcheck` 93/93 against 95 — which is precisely the failure
+`check.mts` exists to prevent, hidden because a gate red for another reason
+never reaches its own tally.
 
 `2026-08-30-fable-to-nine.md` archived DONE on 09-02 — all 20 lanes closed
 across 35 agent-lifetimes. Its five open calls were never lane work and now sit
