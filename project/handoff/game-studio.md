@@ -1,8 +1,9 @@
 # Game Studio — live state
 
-**Plan: `docs/plans/2026-09-02-fable-game-studio-v3.md`.** v2's architecture
-stands verbatim — three boot profiles, no game in the studio — and v3 is the
-audit's order of work. v2 and v1 archived 2026-09-02.
+**Plan: `project/archive/plans/2026-09-02-fable-game-studio-v3.md`, DONE.** v2's
+architecture stands verbatim — three boot profiles, no game in the studio — and
+v3 was the audit's order of work. All three studio plans archived 2026-09-02;
+read v3's status line for the three places the build differed from it.
 
 ## Where it is
 
@@ -44,9 +45,11 @@ each mistaken for a different bug first, and two of them cost a whole lane.
 3. **None of the eight world systems has a single root.** `Terrain` adds
    `clipmap.group`, `Water` four meshes at four points in its life, `Sky` a dome
    *and* a probe light, `Props` from three builders, `Dungeons` one group per
-   entrance. `showWorld` hides every top-level scene child except the model
-   stage, and re-applies when the scene grows — `Props.mega`, `Hammerhead`'s
-   build-on-approach and `Water`'s streaming all arrive late.
+   entrance. So there is nothing to hand a `root: Object3D` getter to, and
+   anything that tries to name the world by property is guessing. What the
+   studio does instead is in gotcha 6 — and the reason it must re-check as the
+   scene grows is here: `Props.mega`, `Hammerhead`'s build-on-approach and
+   `Water`'s streaming all arrive long after the section was opened.
 
 4. **`game-ready` is dispatched by `bootStudio` now.** Three systems defer real
    work to it on the phone (`Props.mega` 624 ms of skyline, `Dungeons` 1061 ms
