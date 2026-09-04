@@ -381,6 +381,7 @@ const fit = await page.evaluate(async () => {
     (2 * Math.atan(Math.tan((fovDeg * Math.PI) / 180 / 2) * aspect) * 180) / Math.PI;
   const cases = [
     { label: 'portrait phone', w: 393, h: 852 },
+    { label: 'square', w: 600, h: 600 },
     { label: 'landscape phone', w: 852, h: 393 },
     { label: 'the corpus itself', w: 1600, h: 900 },
   ];
@@ -397,9 +398,16 @@ const fit = await page.evaluate(async () => {
   });
 });
 
-const drift = Math.max(...fit.map((c) => Math.abs(c.gotH - c.authoredH)));
-ok('a shot keeps its authored horizontal field at any aspect', drift < 0.01,
-  fit.map((c) => `${c.label} ${c.fov.toFixed(1)}deg v, bar ${c.bar.toFixed(0)}`).join(' - '));
+// Narrower than 16:9 is the case the letterbox governs, and there the authored
+// horizontal field must come back EXACTLY. Wider is deliberately not in this
+// assertion: those keep the authored vertical angle and so see MORE than the
+// corpus frame, which is the untouched behaviour the next `ok` pins.
+const narrow = fit.filter((c) => !c.wide);
+const drift = Math.max(...narrow.map((c) => Math.abs(c.gotH - c.authoredH)));
+ok('a narrow viewport keeps the shot\'s authored horizontal field',
+  narrow.length > 0 && drift < 0.01,
+  narrow.map((c) => `${c.label} ${c.fov.toFixed(1)}deg v, bar ${c.bar.toFixed(0)}`).join(' - ')
+  + ` - worst drift ${drift.toFixed(4)}deg`);
 
 // The no-op half, which is what protects every existing capture and every gate
 // that reads one: 16:9 or wider must come back untouched, bars included.
