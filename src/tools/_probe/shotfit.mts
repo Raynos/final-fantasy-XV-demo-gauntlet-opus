@@ -20,7 +20,7 @@ shell.worldBooted = true;          // @see handoff gotcha 9
 await shell.setSection('shots');
 await frames(30);
 
-const want = 'lest_market_day';
+const want = new URLSearchParams(location.search).get('shot') || 'lest_market_day';
 const row = shell.gallery.shots().find((s) => s.name === want);
 if (!row) return 'no such shot';
 out.push(`stand ${row.name} authored fov ${row.fov}`);
@@ -32,7 +32,7 @@ const rows = () => [...document.querySelectorAll('#studio .st-row')];
 const hit = rows().find((r) => (r.textContent || '').includes(want));
 if (!hit) return `no row for ${want} in ${rows().length} rows`;
 hit.click();
-await frames(240);
+await frames(600);
 
 const cv = g.renderer.domElement;
 out.push(`viewport ${cv.clientWidth}x${cv.clientHeight} aspect ${(cv.clientWidth / cv.clientHeight).toFixed(3)}`);

@@ -409,6 +409,11 @@ export class PostFX {
       if (t === 'nodof') this.dof.enabled = false;
       else if (t === 'nobloom') this.bloom.enabled = false;
       else if (t === 'notaa') this.setAA('none');
+      // The inverse, and it is the control `notaa` never had. `setQuality`
+      // runs BEFORE this, and its demo branch forces `setAA('none')` -- so on
+      // the phone path there was no way to ask "how much of this artefact is
+      // the missing TAA?" without editing the file. @see setQuality
+      else if (t === 'taa') this.setAA('taa');
       else if (t === 'smaa') this.setAA('smaa');
       else if (t === 'nogtao') this.gtao.enabled = false;
       else if (t === 'nocontact') this.contact.enabled = false;
