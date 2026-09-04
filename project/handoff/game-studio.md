@@ -178,6 +178,18 @@ reproducible in Chromium — **the harness can only prove no regression here.**
   game HUD's four corners had the same hole. `ui/touch/touch.css.ts` had it
   right all along.
 
+- **Installed, iOS hands the page a viewport one status bar short of its own
+  screen.** `black-translucent` puts the origin at the top of the glass and
+  then sizes the viewport as if it had not, so the page is right at the top and
+  short at the bottom. Measured off three device screenshots: a **62.0 pt** band
+  of `#05060a` — the body background, not black, which is the tell that the page
+  simply ended. `100dvh`, `100vh`, `100lvh` and a `fixed; inset: 0` ICB all
+  report the short height; `screen.width/height` are the only pair that still
+  knows, and they do not swap on rotation on iOS. `ui/standalone.ts` pins
+  `--app-h` from them, standalone-only, only when `screen` is taller, and only
+  for a deficit under 96 px — three guards that each fail to inert, so a tab is
+  character-for-character unaffected. The Device section prints what it decided.
+
 **iPhone Safari has no Fullscreen API and its toolbars only auto-hide on a page
 that scrolls, which a game must not.** Add to Home Screen is the only
 chrome-free path and `DeviceReport` says so in words. A Fullscreen button would
