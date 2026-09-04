@@ -65,63 +65,89 @@ export const SPEC: TrailerSpec = {
       move: { from: [0, 0, 0], to: [8, 1.2, 0], handheld: 0.1, breathe: 0.6, ease: 'outSine' },
     },
 
-    /* ---- Act II: combat. 7.40 - 20.03, score `combat` at 152 bpm ---- */
+    /* ---- Act II: combat. 7.40 - 20.03, score `combat` at 152 bpm ----
+     *
+     * These are DRIVEN, not posed. Every clip carries `unpin` and real held
+     * input, because `Director.setScenario` does not just build a tableau, it
+     * holds one: it pins the VFX clock, sets `combat.scenarioLock` so
+     * `CombatSystem.update` returns immediately, and copies the player's
+     * position back out of `_frozenPlayer` every frame. Measured on the first
+     * build of this trailer, a `warp_strike` take moved the VFX clock 0.00 s
+     * and every one of 26 enemies 0.00 m over two seconds. It was a photograph
+     * with a camera move on it -- and it is why six clips read as the same
+     * cyan arc: it was the same arc, pinned.
+     *
+     * None of these set `move`, deliberately. A `follow:` shot leaves
+     * `CameraRig.followShot` driving, which is the real gameplay chase camera
+     * -- spring arm, velocity look-ahead, speed-reactive FOV, trauma shake. A
+     * world-space dolly would freeze the camera in place while the fight ran
+     * out from under it, which is the opposite of what this act is for.
+     */
     {
-      id: 'b1-warp', dur: 3.0, shot: 'warp_strike', time: DUSK, live: true, settle: 1.5,
-      doc: 'The money shot. Slow-mo through the impact, easing back to real time.',
-      move: { from: [-1.5, 0.3, 1.0], to: [1.5, -0.2, -1.0], handheld: 0.55, breathe: 0.8 },
-      timeScale: [{ t: 0, s: 1 }, { t: 0.55, s: 0.28 }, { t: 1.5, s: 0.28 }, { t: 2.2, s: 1 }],
+      id: 'b1-warp', dur: 3.0, shot: 'warp_strike', time: DUSK,
+      live: true, unpin: true, settle: 1.8,
+      doc: 'Warp-strike, driven: run in, then strike.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 0.5, keys: ['KeyW', 'KeyQ'] }, { at: 1.0, keys: ['KeyQ'] }],
+      timeScale: [{ t: 0, s: 1 }, { t: 0.9, s: 0.35 }, { t: 1.7, s: 0.35 }, { t: 2.3, s: 1 }],
     },
     {
-      id: 'b2-warpwide', dur: 2.8, shot: 'warp_wide', time: DUSK, live: true, settle: 1.2,
-      doc: 'The same verb read across the whole field.',
-      move: { from: [0, 0, 0], to: [-5, 1.0, 3], handheld: 0.4, breathe: 0.7 },
+      id: 'b2-warpwide', dur: 2.8, shot: 'warp_wide', time: DUSK,
+      live: true, unpin: true, settle: 1.5,
+      doc: 'The same verb, wider, with the fight running.',
+      input: [{ at: 0, keys: ['KeyW', 'ShiftLeft'] }, { at: 1.2, keys: ['KeyQ'] }],
     },
     {
-      id: 'b3-fire', dur: 2.0, shot: 'combat_magic_fire', time: DUSK, live: true, settle: 1.2,
-      doc: 'Fire bloom with real light emission.',
-      move: { from: [2.0, 0, 1.5], to: [-1.0, 0.4, -0.5], handheld: 0.6 },
+      id: 'b3-fire', dur: 2.0, shot: 'combat_magic_fire', time: DUSK,
+      live: true, unpin: true, settle: 1.5,
+      doc: 'Elemancy mid-fight.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 0.4, keys: ['Digit1'] }, { at: 0.9, keys: [] }],
     },
     {
-      id: 'b4-ice', dur: 2.0, shot: 'combat_magic_ice', time: DUSK, live: true, settle: 1.2,
-      doc: 'Blizzard, frost spreading over the dirt.',
-      move: { from: [-1.5, 0, 0], to: [1.5, 0.3, -1.0], handheld: 0.6 },
+      id: 'b4-ice', dur: 2.0, shot: 'combat_magic_ice', time: DUSK,
+      live: true, unpin: true, settle: 1.5,
+      doc: 'Blizzard on the flank, frost spreading over the dirt.',
+      input: [{ at: 0, keys: ['Digit2'] }, { at: 0.5, keys: [] }],
     },
     {
-      id: 'b5-stagger', dur: 2.0, shot: 'combat_stagger', time: DUSK, live: true, settle: 1.2,
-      doc: 'A goblin taken off its feet.',
-      move: { from: [0, 0, 1.0], to: [0.5, 0.2, -1.2], handheld: 0.7 },
+      id: 'b5-stagger', dur: 2.0, shot: 'combat_stagger', time: DUSK,
+      live: true, unpin: true, settle: 1.5,
+      doc: 'A combo landing and something going off its feet.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 0.3, keys: ['Space'] }, { at: 1.4, keys: [] }],
     },
     {
-      id: 'b6-imperial', dur: 2.8, shot: 'boss_imperial', time: DUSK, live: true, settle: 2.0,
-      doc: 'MA-X Cuirass venting, with the dropship that brought it.',
-      move: { from: [-3, -0.5, 2], to: [2, 1.5, -2], handheld: 0.45, breathe: 0.6 },
+      id: 'b6-imperial', dur: 2.8, shot: 'boss_imperial', time: DUSK,
+      live: true, unpin: true, settle: 2.2,
+      doc: 'MA-X Cuirass, live rather than posed mid-telegraph.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 1.0, keys: ['Space'] }, { at: 2.0, keys: [] }],
     },
     {
-      id: 'b7-daemons', dur: 2.8, shot: 'daemon_night', live: true, settle: 1.5,
-      doc: 'The tonal turn to blue.',
-      move: { from: [2, 0, 0], to: [-2, 0.5, -1.5], handheld: 0.5 },
+      id: 'b7-daemons', dur: 2.8, shot: 'daemon_night',
+      live: true, unpin: true, settle: 1.8,
+      doc: 'Night, and the things that come out in it.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 1.4, keys: ['Space'] }],
     },
     {
-      id: 'b8-hud', dur: 2.0, shot: 'combat_hud', time: DUSK, live: true, hud: true, settle: 1.2,
-      dom: true,
-      doc: 'The one clip that keeps the HUD: this is a game you play, not a render.',
-      move: { from: [0, 0, 0.8], to: [0.8, 0.2, -0.8], handheld: 0.6 },
+      id: 'b8-hud', dur: 2.0, shot: 'combat_hud', time: DUSK,
+      live: true, unpin: true, hud: true, dom: true, settle: 1.5,
+      doc: 'The one clip that keeps the HUD: this is a game you play.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 0.4, keys: ['Space'] }],
     },
     {
-      id: 'b9-armiger', dur: 2.8, shot: 'combat_armiger', time: DUSK, live: true, settle: 1.5,
-      doc: 'Phantom royal arms orbiting Noctis. Lands on the act’s only crash cymbal.',
-      move: { from: [2.5, -0.3, 1.5], to: [-2.5, 0.8, -1.0], handheld: 0.35, breathe: 0.8 },
+      id: 'b9-armiger', dur: 2.8, shot: 'combat_armiger', time: DUSK,
+      live: true, unpin: true, settle: 1.8,
+      doc: 'Armiger up. Lands on the act\u2019s only crash cymbal.',
+      input: [{ at: 0, keys: ['KeyW'] }, { at: 0.5, keys: ['Space'] }, { at: 1.8, keys: [] }],
     },
     {
       id: 'b10-storm', dur: 2.0, shot: 'storm', settle: 1.5,
-      doc: 'Lightning with its real scene relight.',
+      doc: 'Lightning with its real scene relight. Weather, not a fight.',
       move: { from: [0, 0, 0], to: [5, 0.5, 2], handheld: 0.3, breathe: 0.7 },
     },
     {
-      id: 'b11-wide', dur: 2.0, shot: 'combat_wide', time: DUSK, live: true, settle: 1.2,
+      id: 'b11-wide', dur: 2.0, shot: 'combat_wide', time: DUSK,
+      live: true, unpin: true, settle: 1.5,
       doc: 'Last look at the fight before the dip to black.',
-      move: { from: [-1, 0, 0], to: [2, 0.6, -1.5], handheld: 0.5 },
+      input: [{ at: 0, keys: ['KeyW', 'ShiftLeft'] }, { at: 1.0, keys: ['Space'] }],
     },
 
     /* ---- Act III: the Astral. 20.03 - 26.99, score `boss` ---- */

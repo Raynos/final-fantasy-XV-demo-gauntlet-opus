@@ -65,6 +65,10 @@ import type { CameraShot } from '../game/CameraRig.ts';
 /** What one attempt returns from inside the page. */
 interface InPageTake {
   ok: boolean;
+  /** Metres the world travelled during the body. Zero is a frozen tableau. */
+  travel?: number;
+  /** Seconds the VFX effect clock advanced. Zero means `Director` pinned it. */
+  vfxRan?: number;
   why?: string;
   mime?: string;
   frames?: number;
@@ -289,6 +293,25 @@ async function takeInPage(arg: {
     const en2 = g.get('Enemies');
     if (en2) en2.frozen = false;
   }
+
+  /**
+   * Release the scenario's holds, in the order they were applied.
+   *
+   * Without this the take is a photograph: measured 0.00 s of VFX clock, 0 m of
+   * player travel and 0 m of enemy travel over two seconds.
+   */
+  const unlock = () => {
+    if (!clip.unpin) return;
+    const vfx = g.get('VFX');
+    const cmb = g.get('Combat');
+    if (vfx && typeof vfx.unpin === 'function') vfx.unpin();
+    if (cmb) cmb.scenarioLock = false;
+    if (dir) dir._frozenPlayer = null;
+    if (dir) dir.setLive(true);
+    const en3 = g.get('Enemies');
+    if (en3) en3.frozen = false;
+  };
+  unlock();
   await new Promise((r) => setTimeout(r, 250));
 
   /* ---- freeze the camera on our own move ------------------------------ */
@@ -397,7 +420,21 @@ async function takeInPage(arg: {
   };
 
   const hud = g.get('HUD');
+  const inp = g.input as { keys: Set<string> } | undefined;
+  /** The input entry covering `t`. Held, not tapped: a key must survive frames. */
+  const inputAt = (t: number) => {
+    const r = clip.input;
+    if (!r || !r.length) return null;
+    let cur = r[0];
+    for (const e of r) if (t >= e.at) cur = e;
+    return cur;
+  };
   g.frame = (dt?: number) => {
+    if (driving && clip.input && inp) {
+      const cur = inputAt(sceneT);
+      inp.keys.clear();
+      for (const c of cur?.keys ?? []) inp.keys.add(c);
+    }
     // The combat HUD follows combat state on its own, so on a live page it
     // stands itself down mid-take. The one clip that exists to show the HUD
     // has to keep asking for it.
@@ -420,6 +457,33 @@ async function takeInPage(arg: {
     vtrack.requestFrame();
   };
 
+  /*
+   * How far does the WORLD travel during this take?
+   *
+   * The frame gate answers "did the capture stutter". It cannot answer the
+   * question that sank the first cut: is anything actually moving? A posed
+   * scenario pins the VFX clock, locks combat and copies the player's position
+   * back every frame, so a take can be flawless by every timing measure and
+   * still be a photograph with a camera move over it. Measured on the first
+   * build: 0.00 s of effect clock and 0 m of travel across 26 enemies.
+   */
+  const actors = (): number[][] => {
+    const en = g.get('Enemies');
+    const pl = g.get('Player');
+    const list = (en?.list ?? []) as Array<{ root?: { position: THREE.Vector3 } }>;
+    const out: number[][] = [];
+    const push = (o?: { root?: { position: THREE.Vector3 } }) => {
+      const q = o?.root?.position;
+      if (q) out.push([q.x, q.y, q.z]);
+    };
+    push(pl as unknown as { root?: { position: THREE.Vector3 } });
+    for (const e of list.slice(0, 12)) push(e);
+    return out;
+  };
+  const vfxOf = () => (g.get('VFX')?.clock as number | undefined) ?? 0;
+  const posBefore = actors();
+  const vfxBefore = vfxOf();
+
   for (const r of recs) r.mr.start(1000);
   await new Promise((r) => setTimeout(r, 300));         // preroll: MediaRecorder start latency
   last = performance.now();
@@ -436,6 +500,13 @@ async function takeInPage(arg: {
   try { A.graph.master.disconnect(tapProgram); A.graph.bus.music.disconnect(tapMusic); sfxSum.disconnect(); } catch { /* torn down anyway */ }
 
   /* ---- verdict --------------------------------------------------------- */
+  const posAfter = actors();
+  const travel = posBefore.reduce((sum, a, i) => {
+    const b2 = posAfter[i];
+    return b2 ? sum + Math.hypot(a[0] - b2[0], a[1] - b2[1], a[2] - b2[2]) : sum;
+  }, 0);
+  const vfxRan = +(vfxOf() - vfxBefore).toFixed(2);
+
   const body = deltas.slice(1);
   const sorted = body.slice().sort((a, b) => a - b);
   const hitch = body.filter((d) => d > hitchMs).length;
@@ -462,6 +533,8 @@ async function takeInPage(arg: {
     mime, frames, fps: +fps.toFixed(2), hitch, long,
     p99: +(sorted[Math.floor(sorted.length * 0.99)] ?? 0).toFixed(2),
     stems: recs.map((r) => r.name),
+    travel: +travel.toFixed(2),
+    vfxRan,
     bytes: Object.fromEntries(Object.entries(blobs).map(([k, v]) => [k, Math.floor(v.length * 0.75)])),
   };
 }
@@ -670,8 +743,11 @@ async function main() {
           if (!r.ok && r.why && !r.frames) { console.log(`  ${tag}: FAILED — ${r.why}`); continue; }
           console.log(
             `  ${tag}: ${r.ok ? 'PASS' : 'REJECT'} ${r.fps} fps, ${r.frames} frames, `
-            + `hitch ${r.hitch}, long ${r.long}, p99 ${r.p99} ms  (${((Date.now() - t0) / 1000).toFixed(1)}s)`
-            + (r.ok ? '' : ` — ${r.why}`),
+            + `hitch ${r.hitch}, p99 ${r.p99} ms, moved ${r.travel} m, vfx ${r.vfxRan} s`
+            + `  (${((Date.now() - t0) / 1000).toFixed(1)}s)`
+            + (r.ok ? '' : ` — ${r.why}`)
+            + (clip.unpin && (r.travel ?? 0) < 0.05 && (r.vfxRan ?? 0) < 0.05
+              ? '\n      ^^ NOTHING MOVED — the scenario is still holding the world' : ''),
           );
           attempts.push({ id: clip.id, attempt: attempt + 1, ok: r.ok, why: r.why, frames: r.frames, fps: r.fps, hitch: r.hitch, long: r.long, p99: r.p99 });
 
@@ -700,6 +776,7 @@ async function main() {
           id: clip.id, doc: clip.doc, shot: clip.shot, dur: clip.dur,
           file: best.file, mime: best.mime, frames: best.frames, fps: best.fps,
           hitch: best.hitch, long: best.long, p99: best.p99, degraded: !best.ok,
+          travel: best.travel, vfxRan: best.vfxRan,
           w: ha.w, h: ha.h, build: ha.build,
         });
       }

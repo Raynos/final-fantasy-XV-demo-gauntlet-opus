@@ -64,6 +64,29 @@ export interface ClipSpec {
   hud?: boolean;
   /** Let the encounter loop run, so enemies actually fight. */
   live?: boolean;
+  /**
+   * Release the three locks a posed scenario applies, so the world actually
+   * moves.
+   *
+   * `Director.setScenario` does not merely spawn a tableau, it *holds* one:
+   * `vfx.pin(t)` stops the effect clock (and with it trails and ground FX),
+   * `combat.scenarioLock` makes `CombatSystem.update` return immediately, and
+   * `_frozenPlayer` copies the player's position back every single frame. That
+   * is exactly right for a still and fatal for footage.
+   *
+   * Measured on a `warp_strike` take staged the way the recorder staged it:
+   * over 2 s the VFX clock advanced 0.00 s, the player moved 0 m and all 26
+   * enemies moved 0 m. It was a photograph with a moving camera, which is also
+   * why six Act II clips read as the same cyan arc -- it WAS the same arc.
+   */
+  unpin?: boolean;
+  /**
+   * Real input, held across frames, the way `gameplay.mts` drives the game.
+   *
+   * `at` is seconds into the clip; the keys named are held until the next
+   * entry. Codes are DOM `KeyboardEvent.code` (`KeyW`, `ShiftLeft`, `Space`).
+   */
+  input?: Array<{ at: number, keys?: string[], mouse?: string }>;
   move?: Move;
   /** Piecewise `game.time.scale` ramp, for slow-mo beats. */
   timeScale?: Array<{ t: number, s: number }>;
