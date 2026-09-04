@@ -125,13 +125,12 @@ export function install(shell: StudioShell) {
    * of type is a poor way to recognise a creature and a thumbnail is a good
    * one, and there is no hover here to reveal anything else. @see Thumbs
    */
-  function thumbRow(id: string, label: string, mark: string, click: () => void): Row {
+  function thumbRow(id: string, label: string, click: () => void): Row {
     return {
       make() {
         const n = el('button.st-row.st-asset.st-ui', {}, [
           el('img.st-thumb', { alt: '' }),
           el('span', {}),
-          el('span.st-n', {}),
         ]);
         n.addEventListener('click', click);
         return n;
@@ -142,7 +141,6 @@ export function install(shell: StudioShell) {
         if (src && img.src !== src) img.src = src;
         img.classList.toggle('none', !src);
         (n.children[1] as HTMLElement).textContent = label;
-        (n.children[2] as HTMLElement).textContent = mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '';
       },
     };
   }
@@ -391,20 +389,12 @@ export function install(shell: StudioShell) {
 
     title.textContent = fams[m.familyAt].title;
     const band = fams[m.familyAt].id;
-    feed(m.keys().map((k, i) => {
-      const mark = m.markOf(k);
-      return {
-        key: `asset/${band}/${k}`,
-        text: `${k} ${mark}`,
-        item: thumbRow(`${band}/${k}`, k, mark, () => { m.select(i); level = 'view'; draw(); }),
-      };
-    }));
+    feed(m.keys().map((k, i) => ({
+      key: `asset/${band}/${k}`,
+      text: k,
+      item: thumbRow(`${band}/${k}`, k, () => { m.select(i); level = 'view'; draw(); }),
+    })));
     foot.appendChild(fbtn('Families', () => { familyList = true; draw(); }));
-    foot.appendChild(fbtn(m.unreviewedOnly ? 'Unreviewed only' : 'Show all', () => {
-      m.unreviewedOnly = !m.unreviewedOnly;
-      m.select(0);
-      draw();
-    }, m.unreviewedOnly));
   }
 
   /** The bottom sheet over a staged model: what it costs, and what to do. */
@@ -438,32 +428,7 @@ export function install(shell: StudioShell) {
       sheet.appendChild(row);
     }
 
-    /*
-     * The verdict, in words, above two buttons that were labelled `OK` and
-     * `Flag` and explained nowhere.
-     *
-     * They are the whole reason this is a review tool rather than a viewer: a
-     * pass over 56 assets does not finish unless something remembers which ones
-     * you have already looked at. The line says what this asset is marked as
-     * and how far through the family you are, so the buttons have a subject.
-     */
-    const key = m.current() || '';
-    const mark = m.markOf(key);
-    const keys = m.keys();
-    const done = keys.filter((k) => m.markOf(k) !== 'unreviewed').length;
-    sheet.appendChild(el('div.st-verdict', {}, [
-      el('span', {
-        text: mark === 'ok' ? 'marked as looking right'
-          : mark === 'flag' ? 'flagged for attention'
-            : 'not reviewed yet',
-      }),
-      el('span.st-n', { text: `${done}/${keys.length} reviewed in this family` }),
-    ]));
     foot.appendChild(fbtn('‹ Prev', () => { m.step(-1); draw(); }));
-    foot.appendChild(fbtn(mark === 'ok' ? '✓ Looks right' : 'Looks right',
-      () => { m.mark(mark === 'ok' ? null : 'ok'); draw(); }, mark === 'ok'));
-    foot.appendChild(fbtn(mark === 'flag' ? '⚑ Flagged' : 'Flag it',
-      () => { m.mark(mark === 'flag' ? null : 'flag'); draw(); }, mark === 'flag'));
     foot.appendChild(fbtn('Next ›', () => { m.step(1); draw(); }));
   }
 

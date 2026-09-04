@@ -85,15 +85,6 @@ interface Family {
 
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
-export type ReviewMark = 'ok' | 'flag';
-
-function load<T>(k: string, fallback: T): T {
-  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; }
-}
-function save(k: string, v: unknown) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode; a verdict is not worth throwing over */ }
-}
-
 export class ModelExplorer {
   game: Game;
   stage: ModelStage;
@@ -104,9 +95,6 @@ export class ModelExplorer {
   poseAt: number;
   /** Frozen animation phase, 0..1. */
   phase: number;
-  /** Verdicts by `family/key`, persisted. */
-  status: Record<string, ReviewMark | undefined>;
-  unreviewedOnly: boolean;
   error: string | null;
   _made: Made | null;
   _framing: { size: number } | null;
@@ -125,8 +113,6 @@ export class ModelExplorer {
     this.itemAt = 0;
     this.poseAt = 0;
     this.phase = 0.45;
-    this.status = load('dev.review', {} as Record<string, ReviewMark | undefined>);
-    this.unreviewedOnly = false;
     this.error = null;
     this._made = null;
     this._framing = null;
@@ -151,15 +137,7 @@ export class ModelExplorer {
 
   keys(): string[] {
     if (this.familyAt == null) return [];
-    const all = this.family.keys();
-    if (!this.unreviewedOnly) return all;
-    const some = all.filter((k) => !this.status[`${this.family.id}/${k}`]);
-    return some.length ? some : all;
-  }
-
-  markOf(key: string): string {
-    if (this.familyAt == null) return 'unreviewed';
-    return this.status[`${this.family.id}/${key}`] || 'unreviewed';
+    return this.family.keys();
   }
 
   current(): string | null {
@@ -250,14 +228,6 @@ export class ModelExplorer {
       if (m.kind === 'enemy' && isPoseName(pose)) m.enemy.freeze(pose, this.phase, null);
       else if (m.kind === 'hero') m.character.play(pose, { hold: true });
     } catch (err) { console.warn('[studio] pose failed', pose, err); }
-  }
-
-  mark(v: ReviewMark | null) {
-    const key = this.current();
-    if (this.familyAt == null || !key) return;
-    const id = `${this.family.id}/${key}`;
-    if (v) this.status[id] = v; else delete this.status[id];
-    save('dev.review', this.status);
   }
 
   /* ------------------------------------------------------------------ tick */

@@ -95,12 +95,6 @@ out.push(`staged ${shell.model.current()} pose=${shell.model.pose()} err=${shell
 out.push('cost: ' + JSON.stringify(shell.model.cost()));
 await window.__shot('5-model');
 
-// A verdict, which is the thing that makes this a review tool rather than a
-// viewer -- and the only piece of studio state that outlives the page.
-document.querySelectorAll('#studio .st-btn').forEach((b) => { if (b.textContent === 'Flag') b.click(); });
-await settle(0.4);
-out.push(`verdict on ${shell.model.current()} = ${shell.model.markOf(shell.model.current())}`);
-
 // And a hero, which exercises a different `make` branch and a different pose
 // registry -- a family that builds is not evidence that the next one does.
 await clickRow('Party');

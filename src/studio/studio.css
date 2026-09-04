@@ -811,20 +811,6 @@
   -webkit-touch-callout: none;
 }
 
-/* The verdict line: what this asset is marked as, and how far through the
-   family you are. The two buttons under it had no subject without it. */
-#studio .st-verdict {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 11px;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-#studio .st-verdict .st-n { font-size: 10px; color: var(--ink-4); }
-
 /* =====================================================================
    Flying the World Explorer. @see mobile/Fly.ts
    ===================================================================== */

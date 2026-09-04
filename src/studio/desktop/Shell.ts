@@ -263,13 +263,12 @@ export function install(shell: StudioShell) {
    * shapes would mean the reconcile could not keep a node across the toggle,
    * which is the one thing it is for. @see Thumbs
    */
-  function assetRow(id: string, label: string, mark: string, on: boolean, click: () => void): Row {
+  function assetRow(id: string, label: string, on: boolean, click: () => void): Row {
     return {
       make() {
         const n = el('button.st-row.st-asset.st-ui', {}, [
           el('img.st-thumb', { alt: '' }),
           el('span', {}),
-          el('span.st-n', {}),
         ]);
         n.addEventListener('click', click);
         return n;
@@ -282,7 +281,6 @@ export function install(shell: StudioShell) {
         if (src && img.src !== src) img.src = src;
         img.classList.toggle('none', !src);
         (n.children[1] as HTMLElement).textContent = label;
-        (n.children[2] as HTMLElement).textContent = mark === 'ok' ? 'ok' : mark === 'flag' ? '⚑' : '';
         n.classList.toggle('on', on);
       },
     };
@@ -454,14 +452,13 @@ export function install(shell: StudioShell) {
       const cur = m.current();
       const band = fams[m.familyAt].title;
       keys.forEach((k, i) => {
-        const mark = m.markOf(k);
         const id = `${fams[m.familyAt!].id}/${k}`;
         rows.push({
           key: `asset/${id}`,
-          text: `${k} ${band} ${mark}`,
+          text: `${k} ${band}`,
           item: {
             group: band,
-            ...assetRow(id, k, mark, k === cur, () => { m.select(i); render(); }),
+            ...assetRow(id, k, k === cur, () => { m.select(i); render(); }),
           },
         });
       });
@@ -511,25 +508,9 @@ export function install(shell: StudioShell) {
       controls.appendChild(el('span.st-pose', { text: pose }));
       controls.appendChild(next);
     }
-    // The verdict is what makes this a review tool rather than a viewer: a pass
-    // over 56 assets does not finish unless something remembers which ones you
-    // have already looked at. `OK` and `Flag` were labelled and explained
-    // nowhere, so the state they set is now printed beside them.
-    const mark = m.markOf(cur || '');
-    const keys2 = m.keys();
-    const done = keys2.filter((k) => m.markOf(k) !== 'unreviewed').length;
-    const okB = el('button.st-btn.st-ui', { text: mark === 'ok' ? '✓ Looks right' : 'Looks right' });
-    const flagB = el('button.st-btn.st-ui', { text: mark === 'flag' ? '⚑ Flagged' : 'Flag it' });
-    okB.classList.toggle('on', mark === 'ok');
-    flagB.classList.toggle('on', mark === 'flag');
-    okB.addEventListener('click', () => { m.mark(mark === 'ok' ? null : 'ok'); render(); });
-    flagB.addEventListener('click', () => { m.mark(mark === 'flag' ? null : 'flag'); render(); });
-    controls.appendChild(okB);
-    controls.appendChild(flagB);
-    controls.appendChild(el('span.st-pose', { text: `${done}/${keys2.length} reviewed` }));
     info.appendChild(controls);
 
-    hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>o</b> ok &nbsp; <b>f</b> flag &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
+    hint.innerHTML = '<b>↑↓</b> asset &nbsp; <b>[ ]</b> pose &nbsp; <b>&#8984;K</b> go to &nbsp; <b>Esc</b> back';
   }
 
   /* ------------------------------------------------------------ palette -- */
@@ -609,8 +590,6 @@ export function install(shell: StudioShell) {
     else if (e.key === 'ArrowUp') { m.step(-1); render(); }
     else if (e.key === ']') { m.stepPose(1); render(); }
     else if (e.key === '[') { m.stepPose(-1); render(); }
-    else if (e.key === 'o') { m.mark('ok'); render(); }
-    else if (e.key === 'f') { m.mark('flag'); render(); }
   };
   window.addEventListener('keydown', onKey);
 
