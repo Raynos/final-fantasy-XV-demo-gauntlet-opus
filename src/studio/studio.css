@@ -12,7 +12,29 @@
  * is not a cursor.
  */
 
+/*
+ * `--st-top` is the height of the top bar INCLUDING whatever the device hides
+ * behind, and every rule that offsets from that bar reads it rather than
+ * repeating 44.
+ *
+ * Installed to the home screen the page is genuinely fullscreen -- there is no
+ * browser chrome to sit under -- and `apple-mobile-web-app-status-bar-style:
+ * black-translucent` puts the STATUS bar over the page rather than above it.
+ * That is the point on a 16:9 world, but it means the clock and the Dynamic
+ * Island land on top of whatever is at `top: 0`, which here was the section
+ * title: reported as "the chrome is gone but the UI didn't adjust". In a tab
+ * the inset is 0, because Safari's own URL bar already holds that band, so the
+ * same rule is correct in both and there is no mode to branch on.
+ *
+ * The left/right insets matter in landscape, which is where this shell spends
+ * most of its life -- the notch eats one short edge and the bars have to move
+ * off it.
+ */
 #studio {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --st-top: calc(44px + var(--safe-t));
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -37,7 +59,7 @@
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 10px 16px;
+  padding: calc(10px + var(--safe-t)) calc(16px + var(--safe-r)) 10px calc(16px + var(--safe-l));
   background: linear-gradient(180deg, rgba(7, 11, 19, 0.86), rgba(7, 11, 19, 0.42) 70%, transparent);
 }
 
@@ -310,10 +332,10 @@
 
 #studio.st-touch .st-menu {
   position: absolute;
-  inset: 44px 0 64px;
+  inset: var(--st-top) 0 64px;
   transform: none;
   left: 0;
-  top: 44px;
+  top: var(--st-top);
   width: 100%;
   max-width: none;
   overflow-y: auto;
@@ -332,7 +354,7 @@
 #studio.st-touch .st-item-t { font-size: 14px; letter-spacing: 0.20em; }
 
 #studio.st-touch .st-side {
-  inset: 44px 0 64px;
+  inset: var(--st-top) 0 64px;
   width: 100%;
   background: none;
 }
@@ -346,7 +368,7 @@
   align-items: stretch;
   gap: 1px;
   min-height: 56px;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 0 var(--safe-r) env(safe-area-inset-bottom, 0) var(--safe-l);
   background: linear-gradient(0deg, rgba(7, 11, 19, 0.92), rgba(7, 11, 19, 0.62));
 }
 
@@ -371,8 +393,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 44px;
-  padding: 0 8px 0 4px;
+  min-height: var(--st-top);
+  padding: var(--safe-t) calc(8px + var(--safe-r)) 0 calc(4px + var(--safe-l));
   background: linear-gradient(180deg, rgba(7, 11, 19, 0.90), transparent);
 }
 #studio .st-back {
@@ -433,7 +455,7 @@
 #studio .st-grab {
   position: absolute;
   left: 0; right: 0;
-  top: 44px;
+  top: var(--st-top);
   bottom: 116px;
   pointer-events: auto;
   touch-action: none;          /* we own pan and pinch here */
@@ -621,7 +643,7 @@
   background: rgba(7, 11, 19, 0.72);
   border-bottom: 1px solid var(--hair);
 }
-#studio.st-touch .st-searchwrap { top: 44px; width: 100%; }
+#studio.st-touch .st-searchwrap { top: var(--st-top); width: 100%; }
 #studio .st-search {
   flex: 1;
   min-height: 30px;

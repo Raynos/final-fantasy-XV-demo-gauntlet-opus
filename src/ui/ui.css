@@ -150,15 +150,29 @@
 /* ===================================================================== */
 /* FIELD HUD                                                             */
 /* ===================================================================== */
+/*
+ * The four corners are inset from the glass, and on a phone the glass is not
+ * the safe area: installed to the home screen with a translucent status bar
+ * there is no browser chrome holding that band, so `top: 26px` put the clock
+ * and the location readout UNDER the status bar; in landscape the notch does
+ * the same to whichever short edge it is on. `env()` is 0 on every desktop and
+ * inside a tab, so these are the same numbers they always were there.
+ */
+#hud {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
 .hud-corner { position: absolute; }
 /* One owner for the bottom-left corner: a bottom-anchored column with a fixed
    slot order (combat rail, toasts, party). See `PartyPanel`'s class note. */
-#hud .bl { left: 34px; bottom: 30px; display: flex; flex-direction: column; align-items: flex-start; }
+#hud .bl { left: calc(34px + var(--safe-l)); bottom: calc(30px + var(--safe-b)); display: flex; flex-direction: column; align-items: flex-start; }
 .bl-combat { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 34px; }
 .bl-banter { display: flex; flex-direction: column; align-items: flex-start; }
 .bl-notice { display: flex; flex-direction: column; align-items: flex-start; }
-#hud .br { right: 34px; bottom: 30px; }
-#hud .tr { right: 34px; top: 26px; }
+#hud .br { right: calc(34px + var(--safe-r)); bottom: calc(30px + var(--safe-b)); }
+#hud .tr { right: calc(34px + var(--safe-r)); top: calc(26px + var(--safe-t)); }
 /* a whisper of shade so pale HUD type survives a bright sky */
 #hud .tr::before {
   content: ''; position: absolute; right: -34px; top: -26px; width: 700px; height: 420px;
@@ -170,7 +184,7 @@
   background: radial-gradient(ellipse 100% 100% at 0% 100%, rgba(4,8,15,.36), rgba(4,8,15,.13) 44%, rgba(4,8,15,0) 82%);
   pointer-events: none; z-index: -1;
 }
-#hud .tl { left: 34px; top: 26px; }
+#hud .tl { left: calc(34px + var(--safe-l)); top: calc(26px + var(--safe-t)); }
 /* The bottom-centre strip was the ONLY corner with no shade behind it, which is
    why the control hints were the first thing to disappear when the playtest
    faced the sun: "the bottom control hints, the ARMIGER bar and the
