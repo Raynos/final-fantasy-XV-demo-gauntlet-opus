@@ -65,3 +65,15 @@ interface Window {
     host: HTMLElement,
   };
 }
+
+/**
+ * The trailer recorder's finished takes, base64 per stem, parked on `window`
+ * for the Node side to pull after `MediaRecorder.stop()` has flushed.
+ *
+ * It goes here rather than crossing as an `evaluate` return value because a
+ * take is tens of megabytes: the transfer is sliced, and it happens strictly
+ * *after* the recording, so none of it can cost a frame.
+ */
+interface Window {
+  __TRAILER_BLOBS: Record<string, string>;
+}
