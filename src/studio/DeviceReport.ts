@@ -1,5 +1,6 @@
 import { demoActive, touchActive, renderScale, demoFps, resolveQualityTier } from '../engine/Device.ts';
 import type { Game } from '../game/Game.ts';
+import { standaloneHeightReport } from '../ui/standalone.ts';
 
 /**
  * Device: what this build decided at boot, and the way back out of it.
@@ -81,6 +82,16 @@ export function deviceRows(game: Game): DeviceRow[] {
   const standalone = mq('(display-mode: standalone)')
     || mq('(display-mode: fullscreen)')
     || !!(navigator as unknown as { standalone?: boolean }).standalone;
+  /*
+   * The height correction, in numbers, because it cannot be seen any other way.
+   *
+   * Chromium does not reproduce the iOS standalone viewport at all, so no gate
+   * in this repo can assert this and the only instrument is a person holding
+   * the phone. Printing what it decided turns "does it still have a black bar"
+   * into a reading. @see ui/standalone.ts
+   */
+  if (standalone) rows.push({ k: 'page height', v: standaloneHeightReport() });
+
   rows.push({
     k: 'display',
     v: standalone ? 'fullscreen — installed' : 'in a browser tab',

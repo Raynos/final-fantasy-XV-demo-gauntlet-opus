@@ -47,6 +47,12 @@ if (touchActive()) {
   // the whole Game Studio could all be zoomed by a stray double tap.
   // @see ui/touch/nozoom.ts
   void import('./ui/touch/nozoom.ts').then((m) => m.installNoZoom());
+  // And the other half of "this page owns the glass": an installed iOS web app
+  // is handed a viewport one status bar SHORT of its own screen, which shows
+  // as a band of body colour along the bottom. Standalone-only and self-
+  // disabling; a tab keeps the `100dvh` that is right there.
+  // @see ui/standalone.ts
+  void import('./ui/standalone.ts').then((m) => m.installStandaloneHeight());
 }
 
 /**
