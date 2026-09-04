@@ -56,11 +56,32 @@
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
   html, body { height:100dvh; }
   body { font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
-  #app { position:fixed; inset:0; }
+  /*
+    Every full-bleed layer is sized `height:100dvh`, NOT `inset:0`, and on iOS
+    that is the whole difference between "fills the screen" and "the bottom of
+    the HUD is under the toolbar".
+
+    `position:fixed` resolves against the **initial containing block**, and on
+    iOS 15+ Safari the ICB is the LARGE viewport — the one you would have if the
+    address bar and the bottom toolbar were collapsed. This page can never
+    collapse them, because they only auto-hide on a page that scrolls and a game
+    must not scroll (`overflow:hidden`, three lines up). So `inset:0` made these
+    layers ~50-90 px taller than anything the player could see, `#app` reported
+    that inflated `clientHeight` to `Renderer.resize()`, and the bottom strip of
+    every frame — HUD included — was rendered behind the toolbar and thrown away.
+    It also cost real GPU: those pixels were shaded and never presented.
+
+    `100dvh` is the unit that means "the viewport as it actually is right now",
+    which with the toolbars permanently showing is the visible height. `top:0` is
+    still right: the ICB's top and the visible top coincide on a page that cannot
+    scroll. The `height:100%` line before each is the fallback for anything
+    without `dvh` — on those browsers it matches the old behaviour exactly.
+  */
+  #app, #ui, #boot { position:fixed; left:0; top:0; width:100%; height:100%; height:100dvh; }
   canvas { display:block; width:100%; height:100%; }
-  #ui { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #ui { pointer-events:none; z-index:10; }
   #boot {
-    position:fixed; inset:0; z-index:100; background:#05060a; display:flex;
+    z-index:100; background:#05060a; display:flex;
     flex-direction:column; align-items:center; justify-content:center; color:#cfd6e4;
     letter-spacing:.35em; font-size:12px; text-transform:uppercase; transition:opacity .8s;
   }

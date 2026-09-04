@@ -96,8 +96,28 @@ export class Renderer {
 
     this.scene = new THREE.Scene();
 
-    this._onResize = () => this.resize();
+    // Three ways in, because on a phone `window.resize` is the one that lies.
+    //
+    //   - `visualViewport` is the only thing iOS fires reliably when the
+    //     toolbar band changes size (a keyboard, a rotate, the URL bar
+    //     settling after load). `window.resize` may not fire at all for it,
+    //     which left the canvas sized to the pre-settle viewport for the whole
+    //     session -- a letterbox that never went away until you rotated twice.
+    //   - `orientationchange` fires BEFORE Safari has updated the metrics, so
+    //     reading `clientHeight` in the handler gets the old orientation. The
+    //     rAF re-read is what actually lands the new size; the immediate call
+    //     is kept so a browser that does update synchronously never shows a
+    //     stretched frame in between.
+    //
+    // `resize()` is idempotent and three no-ops a `setSize` to the size it
+    // already has, so firing this three times for one physical change is free.
+    this._onResize = () => {
+      this.resize();
+      requestAnimationFrame(() => this.resize());
+    };
     window.addEventListener('resize', this._onResize);
+    window.addEventListener('orientationchange', this._onResize);
+    window.visualViewport?.addEventListener('resize', this._onResize);
     this._wireContextLoss();
   }
 
