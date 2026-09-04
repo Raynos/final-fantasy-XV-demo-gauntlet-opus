@@ -104,6 +104,7 @@ export const SPEC: TrailerSpec = {
     },
     {
       id: 'b8-hud', dur: 2.0, shot: 'combat_hud', time: DUSK, live: true, hud: true, settle: 1.2,
+      dom: true,
       doc: 'The one clip that keeps the HUD: this is a game you play, not a render.',
       move: { from: [0, 0, 0.8], to: [0.8, 0.2, -0.8], handheld: 0.6 },
     },
@@ -130,13 +131,13 @@ export const SPEC: TrailerSpec = {
       move: { from: [0, 0, 0], to: [-10, 1.5, 6], handheld: 0.12, breathe: 0.5, ease: 'inOutSine' },
     },
     {
-      id: 'c2-astral', dur: 6.2, shot: 'cine_astral', settle: 2.0,
+      id: 'c2-astral', dur: 6.2, shot: 'cine_astral', settle: 2.0, dom: true,
       doc: 'The authored awakening. Camera is the cutscene’s -- no move of ours.',
     },
 
     /* ---- Act IV: the card. 26.99 - 30.0, score `victory` ---- */
     {
-      id: 'd1-title', dur: 3.6, shot: 'menu_title', settle: 1.5,
+      id: 'd1-title', dur: 3.6, shot: 'menu_title', settle: 1.5, dom: true,
       doc: 'The crest draws itself, then the type arrives. The menu does not appear until 2.8 s.',
     },
   ],

@@ -46,7 +46,11 @@
  * not a bar to lower.
  */
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
+
+const execFile = promisify(execFileCb);
 import {
   harnessArgs, pageOpts, withPage, withExclusive, announceBuild,
   isHarnessFlag, runTool,
@@ -236,7 +240,27 @@ async function takeInPage(arg: {
   if (!document.getElementById('__trailer_css')) {
     const st = document.createElement('style');
     st.id = '__trailer_css';
-    st.textContent = '.cine-skip{display:none!important}';
+    /*
+     * Everything the harness draws over the game, hidden.
+     *
+     * The realtime path never needed this: `captureStream` films the canvas,
+     * and all of it is DOM, so none of it was ever in shot. The stepped path
+     * composites the whole page -- which is the entire reason it exists -- and
+     * that means it also composites the dev suite's stats readout and its
+     * keyboard-hint bar, and the cutscene skip prompt.
+     *
+     * `.ti-menu` is the title screen's NEW GAME / CONTINUE list. The lockup
+     * animates for 2.8 s and the menu only fades in afterwards, which a posed
+     * still never reaches -- but a 3.6 s stepped take runs straight past it.
+     */
+    st.textContent = [
+      '.cine-skip{display:none!important}',
+      '#dev{display:none!important}',
+      '.dev-stats{display:none!important}',
+      '.ti-menu{display:none!important}',
+      '.ti-foot{display:none!important}',
+      '.ti-ver{display:none!important}',
+    ].join('');
     document.head.appendChild(st);
   }
 
@@ -442,6 +466,121 @@ async function takeInPage(arg: {
   };
 }
 
+/* --------------------------------------------------- stepped capture -- */
+
+/**
+ * Stage a clip and hand back a per-frame camera driver, for the stepped path.
+ *
+ * The realtime path cannot film DOM, and this game's HUD, title lockup,
+ * letterbox bars and subtitles are all DOM over the canvas. So the clips whose
+ * subject IS the UI are captured the other way: stop the render loop, advance
+ * a fixed timestep by hand, and take a `page.screenshot()` per frame -- which
+ * composites the page the way a player sees it.
+ *
+ * `GAME.stop()` matters. This page is not `?shoot=1`, so its rAF loop is
+ * genuinely running; stepping `frame()` without stopping it first would advance
+ * the world twice per screenshot.
+ */
+async function stageStepped(arg: { clip: ClipSpec, fps: number }) {
+  const { clip, fps } = arg;
+  const g = window.GAME;
+  const { SHOTS, isShotName } = await import('/game/Shots.ts');
+  const { Shot } = await import('/game/cinematics/CameraMove.ts');
+
+  const over = { hud: !!clip.hud, ...(clip.time != null ? { time: clip.time } : {}) };
+  let staged: CorpusShot;
+  if (typeof clip.shot === 'string') {
+    if (!isShotName(clip.shot)) return { ok: false, why: `no shot ${clip.shot}` };
+    const base = SHOTS[clip.shot];
+    staged = base.follow !== undefined ? { ...base, ...over } : { ...(base as FixedShot), ...over };
+  } else if (clip.shot) {
+    staged = { ...(clip.shot as unknown as FixedShot), ...over };
+  } else {
+    return { ok: false, why: 'clip has no shot' };
+  }
+
+  if (!document.getElementById('__trailer_css')) {
+    const st = document.createElement('style');
+    st.id = '__trailer_css';
+    /*
+     * Everything the harness draws over the game, hidden.
+     *
+     * The realtime path never needed this: `captureStream` films the canvas,
+     * and all of it is DOM, so none of it was ever in shot. The stepped path
+     * composites the whole page -- which is the entire reason it exists -- and
+     * that means it also composites the dev suite's stats readout and its
+     * keyboard-hint bar, and the cutscene skip prompt.
+     *
+     * `.ti-menu` is the title screen's NEW GAME / CONTINUE list. The lockup
+     * animates for 2.8 s and the menu only fades in afterwards, which a posed
+     * still never reaches -- but a 3.6 s stepped take runs straight past it.
+     */
+    st.textContent = [
+      '.cine-skip{display:none!important}',
+      '#dev{display:none!important}',
+      '.dev-stats{display:none!important}',
+      '.ti-menu{display:none!important}',
+      '.ti-foot{display:none!important}',
+      '.ti-ver{display:none!important}',
+    ].join('');
+    document.head.appendChild(st);
+  }
+
+  SHOTS.__probe = staged;
+  g.applyShot('__probe');
+  const dir = g.get('Director');
+  if (clip.live && dir) {
+    dir.setLive(true);
+    const en = g.get('Enemies');
+    if (en) en.frozen = false;
+  }
+  await new Promise((r) => setTimeout(r, (clip.settle ?? 1.5) * 1000));
+  // Stage a second time: the live loop has had the whole settle to disagree.
+  g.applyShot('__probe');
+  await new Promise((r) => setTimeout(r, 250));
+
+  // Take the loop. From here the tool owns the clock.
+  g.stop();
+
+  const rig = g.get('Camera');
+  if (!rig) return { ok: false, why: 'no CameraRig' };
+  const cam = g.camera;
+  const basePos = cam.position.clone();
+  const fwd = cam.position.clone().set(0, 0, -1).applyQuaternion(cam.quaternion);
+  const baseTgt = basePos.clone().add(fwd.multiplyScalar(14));
+
+  const live: CameraShot = { pos: [0, 0, 0], target: [0, 0, 0], fov: cam.fov, roll: 0 };
+  let mv: CamShot | null = null;
+  if (clip.move) {
+    const m = clip.move;
+    const at = (o: number[] | undefined, b: THREE.Vector3) =>
+      [b.x + (o?.[0] ?? 0), b.y + (o?.[1] ?? 0), b.z + (o?.[2] ?? 0)] as [number, number, number];
+    mv = new Shot({
+      t0: 0, t1: clip.dur, handheld: m.handheld ?? 0.2, breathe: m.breathe ?? 0.6,
+      keys: [
+        { t: 0, pos: at(m.from, basePos), target: at(m.lookFrom, baseTgt), fov: m.fov?.[0] ?? cam.fov, roll: 0, ease: m.ease },
+        { t: clip.dur, pos: at(m.to, basePos), target: at(m.lookTo, baseTgt), fov: m.fov?.[1] ?? cam.fov, roll: m.roll ?? 0 },
+      ],
+    });
+    rig.followShot = null;
+    rig.setShot(live);
+  }
+
+  const hud = g.get('HUD');
+  window.__TRAILER_STEP = (i: number) => {
+    const t = i / fps;
+    if (clip.hud && hud) hud.setVisible(true);
+    if (mv) {
+      const sm = mv.sample(Math.min(t, clip.dur));
+      live.pos[0] = sm.pos.x; live.pos[1] = sm.pos.y; live.pos[2] = sm.pos.z;
+      live.target[0] = sm.target.x; live.target[1] = sm.target.y; live.target[2] = sm.target.z;
+      live.fov = sm.fov; live.roll = sm.roll;
+    }
+    g.frame(1 / fps);
+  };
+  return { ok: true, frames: Math.round(clip.dur * fps) };
+}
+
 /* --------------------------------------------------------------- main -- */
 
 const EXT: Record<string, string> = { 'video/mp4': 'mp4', 'video/x-matroska': 'mkv', 'video/webm': 'webm' };
@@ -488,6 +627,39 @@ async function main() {
       }
 
       for (const clip of clips) {
+        if (clip.dom) {
+          const st = await page.evaluate(stageStepped, { clip, fps: 60 });
+          if (!st.ok) { console.log(`  ${clip.id}: FAILED — ${st.why}`); continue; }
+          const nFrames = st.frames!;
+          const fdir = path.join(out, `${clip.id}.frames`);
+          await mkdir(fdir, { recursive: true });
+          const t0 = Date.now();
+          for (let i = 0; i < nFrames; i++) {
+            await page.evaluate((k) => window.__TRAILER_STEP(k), i);
+            await writeFile(
+              path.join(fdir, `${String(i).padStart(5, '0')}.jpg`),
+              await page.screenshot({ type: 'jpeg', quality: 92 }),
+            );
+          }
+          await page.evaluate(() => window.GAME.start());
+          const file = path.join(out, `${clip.id}.mp4`);
+          await execFile('/opt/homebrew/bin/ffmpeg', [
+            '-y', '-v', 'error', '-framerate', '60', '-i', path.join(fdir, '%05d.jpg'),
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12',
+            '-pix_fmt', 'yuv420p', '-g', '30', '-keyint_min', '1', '-sc_threshold', '0', file,
+          ]);
+          console.log(
+            `  ${clip.id}: STEPPED ${nFrames} frames @60 (DOM composited)`
+            + `  (${((Date.now() - t0) / 1000).toFixed(1)}s)`,
+          );
+          manifest.push({
+            id: clip.id, doc: clip.doc, shot: clip.shot, dur: clip.dur, file,
+            frames: nFrames, fps: 60, mode: 'stepped', degraded: false,
+            w: ha.w, h: ha.h, build: ha.build,
+          });
+          continue;
+        }
+
         let best: InPageTake | null = null;
         for (let attempt = 0; attempt <= retakes; attempt++) {
           const t0 = Date.now();

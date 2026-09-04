@@ -69,6 +69,21 @@ export interface ClipSpec {
   timeScale?: Array<{ t: number, s: number }>;
   /** Seconds to settle before rolling. Streaming-heavy shots want more. */
   settle?: number;
+  /**
+   * Capture this clip by STEPPING the sim and screenshotting each frame,
+   * instead of recording the canvas in realtime.
+   *
+   * Needed whenever the clip's subject is DOM rather than WebGL. The HUD, the
+   * title lockup, the cutscene letterbox and the subtitles are all DOM layered
+   * over the canvas, and `canvas.captureStream()` sees none of it -- a realtime
+   * take of the title card is a beautiful empty landscape. `page.screenshot()`
+   * composites the whole page, so it sees everything a player does.
+   *
+   * The trade is realtime, and here it costs nothing: these clips carry no
+   * diegetic sound worth keeping, and stepping a fixed timestep makes them
+   * exactly 60 fps and reproducible, which the realtime path can never be.
+   */
+  dom?: boolean;
   /** Free-text note, carried into the manifest. */
   doc?: string;
 }

@@ -76,4 +76,6 @@ interface Window {
  */
 interface Window {
   __TRAILER_BLOBS: Record<string, string>;
+  /** Advance one fixed step of a stepped (DOM-composited) trailer clip. */
+  __TRAILER_STEP: (frame: number) => void;
 }
