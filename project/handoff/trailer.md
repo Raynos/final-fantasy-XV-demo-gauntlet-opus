@@ -8,6 +8,31 @@ and `trailer/cuts.json` (data).
 
 ## The one thing to know before touching this
 
+**Every gate here tested capture quality, not capture content.** The first cut
+shipped an Act II that was entirely static and passed at 60 fps with zero
+dropped frames. A human watched it and said "nothing about this is real
+gameplay, it's still shots with camera movement." He was right.
+
+`Director.setScenario` does not merely spawn a tableau, it **holds** one, three
+ways: `vfx.pin(t)` stops the effect clock and with it trails and ground FX;
+`combat.scenarioLock` makes `CombatSystem.update` return at its first line; and
+`_frozenPlayer` copies the player's position back **every frame**. All three are
+exactly what buys byte-identical stills, and all three are fatal for footage.
+Calling `setLive(true)` and `enemies.frozen = false` -- which is what the
+recorder did -- releases none of them.
+
+Measured before: 0.00 s of effect clock, 0.00 m of player travel, 0.00 m across
+26 enemies, over two seconds. After adding `unpin` and real held input:
+1.4-15.9 m of travel and 2.6-3.5 s of effect clock. It also explains a symptom
+already written down here and misdiagnosed as framing -- six clips reading as
+the same cyan arc. It *was* the same arc.
+
+Every take now reports `travel` and `vfxRan`, and a clip that asked to be
+gameplay and moved nothing says so. Frame timing only ever tested whether the
+*recorder* was healthy.
+
+## The second thing to know before touching this
+
 **`canvas.captureStream()` captures ONLY the WebGL canvas.** The HUD, the title
 lockup, the cutscene letterbox bars and the subtitles are all DOM layered over
 the canvas, so **none of them are in the recording** — while `page.screenshot()`
