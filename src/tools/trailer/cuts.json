@@ -1,0 +1,27 @@
+{
+  "fps": 60, "w": 1920, "h": 1080, "duration": 30.0,
+  "music": { "t0": 0.5204, "plan": [["field",1],["tension",1],["combat",8],["boss",4],["victory",-1]] },
+  "note": "`at` values are the score's own bar grid: field 74 / tension 66 / combat 152 / boss 138 / victory 132 bpm, started at t0 = 0.5204. The act breaks fall at 7.4000, 20.0316 and 26.9881 with no tempo override, and each combat cut is a half-bar of 0.7895 s, which is where Score._perc puts the kick.",
+  "events": [
+    { "id": "a1-dawn",    "at": 0.0000,  "len": 3.2000, "in": 0.60, "fadeIn": 0.70 },
+    { "id": "a2-road",    "at": 3.2000,  "len": 2.1000, "in": 0.50 },
+    { "id": "a3-dusk",    "at": 5.3000,  "len": 2.1000, "in": 0.40 },
+
+    { "id": "b1-warp",    "at": 7.4000,  "len": 1.5790, "in": 0.55 },
+    { "id": "b2-warpwide","at": 8.9790,  "len": 1.5790, "in": 0.40 },
+    { "id": "b3-fire",    "at": 10.5580, "len": 0.7895, "in": 0.60 },
+    { "id": "b4-ice",     "at": 11.3475, "len": 0.7895, "in": 0.60 },
+    { "id": "b5-stagger", "at": 12.1370, "len": 0.7895, "in": 0.60 },
+    { "id": "b6-imperial","at": 12.9265, "len": 1.5790, "in": 0.50 },
+    { "id": "b7-daemons", "at": 14.5055, "len": 1.5790, "in": 0.50 },
+    { "id": "b8-hud",     "at": 16.0845, "len": 0.7895, "in": 0.60 },
+    { "id": "b9-armiger", "at": 16.8740, "len": 1.5790, "in": 0.60 },
+    { "id": "b10-storm",  "at": 18.4530, "len": 0.7895, "in": 0.60 },
+    { "id": "b11-wide",   "at": 19.2425, "len": 0.7895, "in": 0.60, "fadeOut": 0.20 },
+
+    { "id": "c1-disc",    "at": 20.0320, "len": 1.7340, "in": 0.40, "fadeIn": 0.18 },
+    { "id": "c2-astral",  "at": 21.7660, "len": 5.2220, "in": 0.60, "fadeOut": 0.30 },
+
+    { "id": "d1-title",   "at": 26.9880, "len": 3.0120, "in": 0.05, "fadeIn": 0.30, "fadeOut": 0.50 }
+  ]
+}

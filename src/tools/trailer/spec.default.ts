@@ -52,9 +52,12 @@ export const SPEC: TrailerSpec = {
       move: { from: [0, 0, 0], to: [-14, 2.5, 10], handheld: 0.06, breathe: 0.5, ease: 'inOutSine' },
     },
     {
-      id: 'a2-road', dur: 3.2, shot: 'regalia_cruise', settle: 1.5, live: true,
+      id: 'a2-road', dur: 3.2, shot: 'regalia_cruise', settle: 1.5,
+      // NOT `live`. The Regalia is placed by the posed scenario, and handing the
+      // world back to the live encounter loop drives it out of the framing --
+      // the first take of this was three seconds of empty badlands.
       doc: 'The Regalia on Route 1, low and long.',
-      move: { from: [0, 0, 0], to: [6, 0.6, -4], handheld: 0.25, breathe: 0.7 },
+      move: { from: [0, 0, 0], to: [2.5, 0.4, -1.5], handheld: 0.25, breathe: 0.7 },
     },
     {
       id: 'a3-dusk', dur: 3.2, shot: 'galdin_pier_sunset', settle: 1.5,
