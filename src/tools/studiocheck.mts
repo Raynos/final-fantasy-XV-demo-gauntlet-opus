@@ -364,6 +364,51 @@ ok('the model out-reads its backdrop', ratio > 1.3 && contrast.coverage > 0.01,
   + ` over ${(contrast.coverage * 100).toFixed(1)}% of frame`);
 
 /* ------------------------------------------------------------------- 7 */
+/* a 16:9 framing survives a viewport that is not 16:9                     */
+
+/*
+ * The Shot Gallery's letterbox, asserted as ARITHMETIC rather than as pixels.
+ *
+ * `letterbox()` is a pure function of (fov, w, h), and the property that
+ * matters is that the HORIZONTAL field it produces equals the one the shot was
+ * authored with -- that is exactly what a portrait phone was silently throwing
+ * away. It is exact, so the gate can be exact; measuring the bars in a
+ * screenshot would only assert the easy half.
+ */
+const fit = await page.evaluate(async () => {
+  const mod = await import('/studio/ShotGallery.ts');
+  const hFov = (fovDeg: number, aspect: number) =>
+    (2 * Math.atan(Math.tan((fovDeg * Math.PI) / 180 / 2) * aspect) * 180) / Math.PI;
+  const cases = [
+    { label: 'portrait phone', w: 393, h: 852 },
+    { label: 'landscape phone', w: 852, h: 393 },
+    { label: 'the corpus itself', w: 1600, h: 900 },
+  ];
+  return cases.map((c) => {
+    const r = mod.letterbox(42, c.w, c.h);
+    return {
+      label: c.label,
+      authoredH: hFov(42, 16 / 9),
+      gotH: hFov(r.fov, c.w / c.h),
+      bar: r.bar,
+      fov: r.fov,
+      wide: c.w / c.h >= 16 / 9,
+    };
+  });
+});
+
+const drift = Math.max(...fit.map((c) => Math.abs(c.gotH - c.authoredH)));
+ok('a shot keeps its authored horizontal field at any aspect', drift < 0.01,
+  fit.map((c) => `${c.label} ${c.fov.toFixed(1)}deg v, bar ${c.bar.toFixed(0)}`).join(' - '));
+
+// The no-op half, which is what protects every existing capture and every gate
+// that reads one: 16:9 or wider must come back untouched, bars included.
+const wides = fit.filter((c) => c.wide);
+ok('16:9 and wider are left exactly as authored',
+  wides.length > 0 && wides.every((c) => c.bar === 0 && Math.abs(c.fov - 42) < 1e-9),
+  wides.map((c) => `${c.label} fov ${c.fov} bar ${c.bar}`).join(' - '));
+
+/* ------------------------------------------------------------------- 8 */
 /* BRIEF rule 5                                                            */
 
 ok('no page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));

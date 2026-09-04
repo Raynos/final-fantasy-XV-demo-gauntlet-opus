@@ -157,6 +157,11 @@ export class StudioShell {
     this.root = el('div', { id: 'studio' });
     this.root.classList.add(this.touch ? 'st-touch' : 'st-desk');
     this.root.appendChild(el('div.st-scrim'));
+    // Two bars that are 0 px tall everywhere but a Shot Gallery on a screen
+    // narrower than 16:9. Always in the DOM so nothing has to create or
+    // destroy them on a rotate. @see ShotGallery.letterbox
+    this.root.appendChild(el('div.st-letter.st-letter-t'));
+    this.root.appendChild(el('div.st-letter.st-letter-b'));
     document.body.appendChild(this.root);
 
     this._onResize = () => this._scale();
@@ -206,6 +211,12 @@ export class StudioShell {
       this._reapplyWorld();
 
       if (this.section === 'model') this.model.update(dt, this.cam);
+      // Every frame, because a rotate changes the aspect without telling this
+      // class. Zero unless the gallery is open on a narrow screen.
+      const bar = this.section === 'shots'
+        ? this.gallery.reframe(g.renderer.domElement.clientWidth, g.renderer.domElement.clientHeight)
+        : 0;
+      this.root.style.setProperty('--shot-bar', `${Math.round(bar)}px`);
       this.cam.update(dt, g.input);
       this.cam.apply(g.camera);
 

@@ -114,6 +114,32 @@
  * legible everywhere else. Measured against the first capture of this shell,
  * where the section list over a bright Leide horizon was unreadable.
  */
+/*
+ * The Shot Gallery's letterbox.
+ *
+ * `--shot-bar` is written every frame by `StudioShell`'s loop and is 0 px
+ * unless a shot is standing on a screen narrower than 16:9 — so these are two
+ * elements that cost a layout of zero height in every other state. Opaque, not
+ * a scrim: the camera is deliberately rendering MORE than the framing above
+ * and below, and the whole point is that you do not see it.
+ * @see ShotGallery.letterbox
+ */
+#studio .st-letter {
+  position: absolute;
+  left: 0; right: 0;
+  height: var(--shot-bar, 0px);
+  background: #05060a;
+  pointer-events: none;
+  /*
+    `0`, not `1`. Both `0` and `auto` paint in DOM order, so a `0` here stays
+    under the top bar and the footer, which the shells append later. A `1`
+    would put the bars over the studio's own chrome.
+  */
+  z-index: 0;
+}
+#studio .st-letter-t { top: 0; }
+#studio .st-letter-b { bottom: 0; }
+
 #studio .st-scrim {
   position: absolute;
   inset: 0;
