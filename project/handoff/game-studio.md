@@ -196,6 +196,52 @@ chrome-free path and `DeviceReport` says so in words. A Fullscreen button would
 still be worth it for iPad, Android and desktop — nothing in `src/` calls
 `requestFullscreen` today.
 
+## The Shot Gallery, and the two things that made it "not feel good"
+
+Reported off a phone with five screenshots. Two separate causes, one fixed and
+one only diagnosed.
+
+**Fixed: portrait was cropping every composition away.** `stand()` assigned the
+shot's `fov` to the camera verbatim, and three.js's `fov` is the VERTICAL angle.
+Every framing in `Shots.ts` was composed at 16:9 (`shoot.mts` captures 1600x900,
+`framecheck` judges all 166 there), so holding the vertical angle on a 9:19.5
+phone holds the wrong axis and the horizontal field collapses to about a third
+of what the shot was framed for. `lest_market_day` is the case to remember: its
+`doc` promises "stalls, awnings and the city out shopping", at 16:9 it delivers
+exactly that, and on the phone it was an empty plaza with two lamps. The caption
+was never wrong -- the crop was. `ShotGallery.letterbox()` now widens the camera
+to carry the authored HORIZONTAL field and covers the overdraw with two bars;
+`reframe()` runs every frame because a rotate changes the aspect without going
+near the class. **Wider-than-16:9 is arithmetically untouched, bars included**,
+so no existing capture or gate moves. `studiocheck` asserts both halves.
+
+**Diagnosed, NOT fixed: the cloud decks are blocky on the phone because the demo
+path has no TAA.** `PostFX.setQuality` calls `setAA('none')` under
+`demoActive()`, and `Clouds.ts`'s entry-jitter comment says the march
+decorrelates its coarse probe grid per texel and relies on "the eight frames the
+TAA history spans" to average those phases away. No accumulation, no averaging,
+so every march texel keeps the phase it drew -- **the blocks ARE march texels.**
+The ladder, one shot and one frame size throughout:
+
+| render | clouds |
+|---|---|
+| desktop | smooth, wispy -- a rendered volume |
+| `demo=1` | hard rectangular blocks |
+| `demo=1 --ablate nocas` | softer blocks: CAS amplifies, does not cause |
+| `demo=1 --ablate cloudtapmax` | no blocks, but stippled and visibly thinned |
+| `demo=1 --ablate taa` | indistinguishable from desktop |
+
+`?post=taa` is new and is what produced that table -- there was a token to turn
+TAA off and none to turn it on, and `setQuality` runs before `debugToggle`.
+
+**Do not just turn TAA on for the gallery.** It was tried: static camera, static
+geometry, no characters in this profile, so no motion vectors are needed and the
+clouds do come out clean -- and a persistent horizontal smear lands across the
+sky that 600 settle frames do not clear. Understand that smear first.
+
+Also still open, and genuinely per-shot rather than systemic: `haven_dusk` has a
+black foreground rock eating the lower right, and it is there at 16:9 too.
+
 ## Next
 
 `docs/plans/2026-09-02-opus-model-animations.md` — **View Animations**,
