@@ -83,6 +83,16 @@ export class StudioShell {
   worldBooted: boolean;
   /** Redraw hook, installed by whichever shell is drawing. @see setSection */
   onSection: ((id: SectionId | null) => void) | null;
+  /**
+   * The baked tiles landed; whatever list is on screen wants repainting.
+   *
+   * A fetch cannot be awaited before the shell draws — that would put a network
+   * round trip in front of the first frame to decorate a list — so the tiles
+   * arrive after it, and the row reconciler only reads `thumbs.get()` when it
+   * syncs. Without this the first list you opened stayed blank until you
+   * navigated, which is the bug the bake exists to fix.
+   */
+  onThumbs: (() => void) | null;
   /** Progress hook while a section boots what it needs. */
   onBusy: ((label: string | null, t: number) => void) | null;
   /**
@@ -134,6 +144,7 @@ export class StudioShell {
     this.thumbs = new Thumbs();
     this._wantThumb = null;
     this.onSection = null;
+    this.onThumbs = null;
     this.onBusy = null;
     this.onExit = null;
     this._raf = 0;
@@ -475,6 +486,13 @@ export async function openStudio(game: Game): Promise<StudioShell> {
   mod.install(shell);
 
   shell.start();
+  // After `install`, so the shell has an `onThumbs` to call, and deliberately
+  // not awaited: the studio opens at once and the tiles arrive when they
+  // arrive. @see Thumbs.seed
+  void shell.thumbs.seed().then((n) => {
+    if (n && shell.onThumbs) shell.onThumbs();
+    console.info(`[studio] ${n} baked tiles`);
+  });
   // The gate's handle on the studio. `window.GAME` is already a declared
   // contract with `src/tools/**` for exactly this reason (see globals.d.ts);
   // a studio that cannot be driven from `page.evaluate` cannot be gated, and

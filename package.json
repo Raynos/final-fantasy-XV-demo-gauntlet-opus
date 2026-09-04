@@ -14,7 +14,7 @@
     "daemon": "node src/tools/daemon.mts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json",
-    "build:full": "vite build && node src/tools/texbake.mts --canvas && node src/tools/texbake.mts --geo && node src/tools/webpbake.mts && vite build"
+    "build:full": "vite build && node src/tools/texbake.mts --canvas && node src/tools/texbake.mts --geo && node src/tools/webpbake.mts && node src/tools/thumbbake.mts && vite build"
   },
   "keywords": [],
   "author": "",

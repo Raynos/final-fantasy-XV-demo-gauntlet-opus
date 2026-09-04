@@ -177,6 +177,7 @@ export function install(shell: StudioShell) {
   // Any change of section redraws, whoever made it -- a click, a key, or a
   // probe reaching in. @see StudioShell.setSection
   shell.onSection = (id) => draw(id);
+  shell.onThumbs = () => draw(shell.section);
 
   function show(id: SectionId | null) { void shell.setSection(id); }
 

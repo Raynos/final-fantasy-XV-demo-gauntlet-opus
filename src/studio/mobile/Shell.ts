@@ -235,6 +235,9 @@ export function install(shell: StudioShell) {
   /* ------------------------------------------------------------ routing -- */
 
   shell.onSection = () => { level = 'list'; familyList = true; draw(); };
+  // Repaint in place: unlike `onSection` this must not reset the level, or a
+  // late fetch would throw the reviewer back to the family list.
+  shell.onThumbs = () => draw();
 
   function show(id: SectionId | null) { void shell.setSection(id); }
 
