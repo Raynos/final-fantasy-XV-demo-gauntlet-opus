@@ -39,7 +39,22 @@ import type { TrailerSpec } from './types.ts';
  * `dur` is the RECORDED length and is deliberately ~1 s longer than the cut
  * needs, so the edit can slide an in-point to land the action on the beat.
  */
-const DUSK = 19.9;
+/**
+ * Late golden hour, not night.
+ *
+ * The corpus authors combat at 15.5 -- flat overhead light that makes the party
+ * read as mannequins -- so the first pass moved it to 19.9, where the warp
+ * shards were the only bright thing in frame and everything else fell to
+ * silhouette. That looked superb, and it was an artefact: `Director` had PINNED
+ * the VFX clock, so a big frozen cyan burst sat in the middle of every shot
+ * lighting it.
+ *
+ * With the clock actually running there is no permanent burst, and 19.9 is just
+ * dark -- an act of murky blue-black frames with the subject barely legible.
+ * 18.2 keeps the raking warm key and the long shadows that make the silhouettes
+ * read, and still lets the cyan VFX pop against it.
+ */
+const DUSK = 18.2;
 
 export const SPEC: TrailerSpec = {
   version: 1,
