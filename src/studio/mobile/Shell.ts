@@ -602,7 +602,15 @@ export function install(shell: StudioShell) {
 
     // Models only. The world's look lives on the right stick now, which is a
     // rate rather than a delta and can be held. @see mobile/Fly.ts
-    if (shell.section === 'model') shell.model.stage.orbit(-dx * 0.006, -dy * 0.005);
+    //
+    // The two axes have OPPOSITE signs on purpose, and it is not a typo. Yaw is
+    // negated because the model should follow the thumb: drag left and the
+    // near face turns left with it. Pitch is not, because the same "follow the
+    // thumb" reading on the vertical axis is what people call inverted -- drag
+    // DOWN and you want to end up looking DOWN at the model from above, which
+    // means the camera rises and `pitch` goes UP. It was negated here until it
+    // was reported on a phone.
+    if (shell.section === 'model') shell.model.stage.orbit(-dx * 0.006, dy * 0.005);
   });
 
   const lift = (e: PointerEvent) => {
